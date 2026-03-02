@@ -12,48 +12,57 @@ import os
 import sys
 import signal
 import daemon
-from dotenv import load_dotenv
 
-from minibot.agent import AgentLoop, AgentConfig
+from minibot.agent import AgentLoop, AgentConfig as BotAgentConfig
 from minibot.llms import OpenAILLM
+from minibot.storage import MemoryStorage, StorageProvider
 from minibot.queue import MessageQueue
 from minibot.message import UserMessage
+from minibot.config import Config
 
 
 # ============================================
 # 共用設定
 # ============================================
 
-def load_config():
-    """載入設定"""
-    load_dotenv()
+def create_storage(config: Config) -> StorageProvider:
+    """根據設定建立 Storage"""
+    storage_type = config.storage.type
     
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        print("錯誤：請設定 OPENAI_API_KEY")
-        sys.exit(1)
-    
-    return {
-        "api_key": api_key,
-        "model": os.getenv("MODEL", "gpt-4o-mini"),
-        "base_url": os.getenv("BASE_URL", None),
-        "system_prompt": os.getenv("SYSTEM_PROMPT", "你是個有用且簡潔的助理。"),
-    }
+    if storage_type == "memory":
+        return MemoryStorage()
+    elif storage_type == "file":
+        from minibot.storage import FileStorage
+        return FileStorage(base_path=config.storage.path)
+    elif storage_type == "sqlite":
+        from minibot.storage import SQLiteStorage
+        return SQLiteStorage(path=config.storage.path)
+    else:
+        return MemoryStorage()
 
 
-def create_agent(config: dict):
+def create_agent(config: Config):
     """建立 Agent 和 Queue"""
+    # 建立 LLM
     llm = OpenAILLM(
-        api_key=config["api_key"],
-        base_url=config["base_url"],
-        default_model=config["model"]
+        api_key=config.llm.api_key,
+        base_url=config.llm.base_url,
+        default_model=config.llm.model
     )
     
-    agent_config = AgentConfig(
-        system_prompt=config["system_prompt"],
-        model=config["model"]
+    # 建立 Agent 設定
+    agent_config = BotAgentConfig(
+        system_prompt=config.agent.system_prompt,
+        model=config.llm.model,
+        temperature=config.llm.temperature,
+        max_tokens=config.llm.max_tokens,
     )
-    agent = AgentLoop(agent_config, llm)
+    
+    # 建立 Storage
+    storage = create_storage(config)
+    
+    # 建立 Agent
+    agent = AgentLoop(agent_config, llm, storage)
     mq = MessageQueue(agent)
     
     return agent, mq
@@ -63,7 +72,7 @@ def create_agent(config: dict):
 # 前台互動模式
 # ============================================
 
-async def run_foreground(config: dict):
+async def run_foreground(config: Config):
     """前台互動模式"""
     agent, mq = create_agent(config)
     
@@ -122,7 +131,7 @@ async def run_foreground(config: dict):
 class BackgroundRunner:
     """背景執行器"""
     
-    def __init__(self, config: dict, log_file=None):
+    def __init__(self, config: Config, log_file=None):
         self.config = config
         self.log_file = log_file or "/tmp/minibot.log"
         self.agent = None
@@ -168,7 +177,7 @@ class BackgroundRunner:
             f.write("=== mini-bot 已停止 ===\n")
 
 
-async def run_background(config: dict):
+async def run_background(config: Config):
     """背景服務模式"""
     runner = BackgroundRunner(config)
     
@@ -187,7 +196,7 @@ async def run_background(config: dict):
 # Daemon 模式（真正背景執行）
 # ============================================
 
-def run_daemon(config: dict):
+def run_daemon(config: Config):
     """以 daemon 方式執行"""
     log_file = "/tmp/minibot.log"
     
@@ -261,9 +270,9 @@ def stop_daemon():
         print(f"沒有權限停止 PID {pid}")
 
 
-// ============================================
-// 主程式
-// ============================================
+# ============================================
+# 主程式
+# ============================================
 
 def main():
     import argparse
@@ -276,11 +285,22 @@ def main():
         default="foreground",
         help="命令：start=背景啟動, stop=停止, foreground=前台"
     )
+    parser.add_argument(
+        "-c", "--config",
+        help="設定檔路徑（預設 ./config.yaml 或 ~/.config/minibot/config.yaml）"
+    )
     parser.add_argument("--log", "-l", help="日誌檔案")
     
     args = parser.parse_args()
     
-    config = load_config()
+    # 從 YAML 檔案讀取設定
+    config = Config.load(args.config)
+    
+    # 檢查必要設定
+    if not config.is_llm_configured:
+        print("錯誤：請在 config.yaml 設定 OPENAI_API_KEY")
+        print("可以複製 config.yaml.example 到 config.yaml 並填入設定")
+        sys.exit(1)
     
     if args.command == "stop":
         stop_daemon()

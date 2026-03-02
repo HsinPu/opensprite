@@ -1,0 +1,50 @@
+# mini-bot 設定檔（所有欄位都必須填寫）
+
+llm:
+  # OpenAI API Key（必填）
+  api_key: ""
+  
+  # 模型（必填）
+  model: "gpt-4o-mini"
+  
+  # API 端點（可選，用於 OpenRouter 或本地模型）
+  # base_url: "https://openrouter.ai/v1"
+  # base_url: "http://localhost:8000/v1"
+  base_url: null
+  
+  # 溫度 0.0-1.0（必填）
+  temperature: 0.7
+  
+  # 最大 Token 數（必填）
+  max_tokens: 2048
+
+
+# Agent 設定（必填）
+agent:
+  # 系統提示詞（必填）
+  system_prompt: "你是個有用且簡潔的助理。"
+  
+  # 對話歷史最多保留幾筆（必填）
+  max_history: 50
+
+
+# Storage 設定（必填）
+storage:
+  # 存放類型（必填）：memory / file / sqlite
+  type: "memory"
+  
+  # 存放路徑（必填）
+  path: "./data"
+
+
+# Channels 設定（必填）
+channels:
+  telegram:
+    # 啟用（必填）
+    enabled: false
+    # Bot Token（enabled=true 時必填）
+    token: ""
+  
+  console:
+    # 啟用（必填）
+    enabled: true
