@@ -3,15 +3,13 @@ minibot/queue.py - 訊息佇列
 
 設計理念：
 - 支援多個對話同時進行
-- 每個聊天室（chat_id）有自己的對話歷史
+- 對話歷史由 Agent + Storage 管理
 - 用佇列接收訊息，非同步處理
 
 """
 
 import asyncio
-from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Callable, Awaitable
 from minibot.message import UserMessage, AssistantMessage
 
 
@@ -20,11 +18,10 @@ class Conversation:
     """
     單一對話的狀態
     
-    每個聊天室（chat_id）會有一個獨立的 Conversation 物件，
-    包含自己的對話歷史。
+    這裡只追蹤「是否正在處理」，
+    對話歷史由 Agent + Storage 管理。
     """
     chat_id: str
-    messages: list = field(default_factory=list)  # 對話歷史
     pending: asyncio.Event = field(default_factory=asyncio.Event)  # 等待回覆
 
 
@@ -35,8 +32,8 @@ class MessageQueue:
     負責：
     - 接收新訊息
     - 把訊息分發到對應的對話
-    - 維護每個聊天室的對話歷史
     - 非同步處理多個對話
+    - 對話歷史由 Agent + Storage 管理
     """
     
     def __init__(self, agent):
@@ -94,10 +91,11 @@ class MessageQueue:
                     continue
                 
                 # 取得或建立對話
-                chat_id = user_message.chat_id or "console"
+                chat_id = user_message.chat_id or "default"
                 conversation = self.get_or_create_conversation(chat_id)
                 
                 # 把訊息傳給 Agent 處理
+                # （對話歷史由 Agent + Storage 管理）
                 response = await self.agent.process(user_message)
                 
                 # 發送回覆（如果 Adapter 有實作 send）
@@ -111,15 +109,15 @@ class MessageQueue:
         """停止處理"""
         self.running = False
     
-    def reset_conversation(self, chat_id: str) -> None:
+    async def reset_conversation(self, chat_id: str) -> None:
         """
         重置特定對話的歷史
         
         參數：
             chat_id: 聊天室 ID
         """
-        if chat_id in self.conversations:
-            self.conversations[chat_id].messages.clear()
+        # 讓 Agent 去清除 Storage 裡的歷史
+        await self.agent.reset_history(chat_id)
 
 
 # ============================================
@@ -132,66 +130,55 @@ class MessageQueue:
 import asyncio
 from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
+from minibot.storage import MemoryStorage
 from minibot.queue import MessageQueue
 from minibot.message import UserMessage
 
 async def main():
-    # 1. 建立 LLM
+    # 1. 建立 Storage（可替換）
+    storage = MemoryStorage()
+    
+    # 2. 建立 LLM
     llm = OpenAILLM(
         api_key="your-key",
         default_model="gpt-4o-mini"
     )
     
-    # 2. 建立 Agent
+    # 3. 建立 Agent（傳入 storage）
     config = AgentConfig(system_prompt="你是個簡潔的助理。")
-    agent = AgentLoop(config, llm)
+    agent = AgentLoop(config, llm, storage)
     
-    # 3. 建立 Queue
+    # 4. 建立 Queue
     mq = MessageQueue(agent)
     
-    # 4. 定義收到回覆時要做什麼（這裡直接印出）
+    # 5. 定義收到回覆時要做什麼
     async def on_response(response):
         print(f"\n🤖: {response.text}")
     
     mq.on_response = on_response
     
-    # 5. 啟動處理迴圈（在背景執行）
+    # 6. 啟動處理迴圈（在背景執行）
     processor = asyncio.create_task(mq.process_queue())
     
-    # 6. 主執行緒處理輸入
-    print("輸入訊息（格式：@chat_id 訊息，或直接輸入）")
-    print("範例：@123 你好  → 發送到 chat_id=123")
-    print("      你好       → 發送到預設對話")
-    print("      /reset    → 重置對話")
-    print("      /exit     → 離開")
-    
+    # 7. 主執行緒處理輸入
     while True:
-        try:
-            line = input("\n你: ").strip()
-        except EOFError:
-            break
-        
-        if not line:
-            continue
+        line = input("\n你: ").strip()
         
         if line.lower() == "/exit":
             await mq.stop()
-            await processor
             break
         
         if line.lower() == "/reset":
-            mq.reset_conversation("default")
+            await mq.reset_conversation("default")
             print("✅ 歷史已清除")
             continue
         
         # 解析 chat_id
         if line.startswith("@"):
-            # 格式：@chat_id 訊息
             parts = line[1:].split(" ", 1)
             chat_id = parts[0]
             text = parts[1] if len(parts) > 1 else ""
         else:
-            # 預設 chat_id
             chat_id = "default"
             text = line
         
