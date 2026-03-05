@@ -1,4 +1,10 @@
-"""Event types for the message bus."""
+"""
+minibot/bus/events.py - Event types for the message bus
+
+Defines the message structures used by the MessageBus:
+- InboundMessage: message received from a chat channel
+- OutboundMessage: message to send to a chat channel
+"""
 
 from dataclasses import dataclass, field
 from datetime import datetime

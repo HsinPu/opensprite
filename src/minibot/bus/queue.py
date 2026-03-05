@@ -1,4 +1,12 @@
-"""Async message bus for decoupled channel-agent communication."""
+"""
+minibot/bus/queue.py - Async message bus
+
+Implements the MessageBus class with two queues:
+- inbound: messages from channels to agent
+- outbound: responses from agent to channels
+
+This decouples channels from the agent core.
+"""
 
 import asyncio
 

@@ -1,4 +1,12 @@
-"""Workspace helper functions."""
+"""
+minibot/workspace.py - Workspace helper functions
+
+Provides functions to:
+- Get workspace path (default: ~/.minibot/workspace)
+- Sync templates from package to workspace
+- Load bootstrap files (AGENTS.md, SOUL.md, etc.)
+- Load/save memory (memory/MEMORY.md)
+"""
 
 from pathlib import Path
 
