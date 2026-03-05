@@ -12,12 +12,6 @@ import os
 import sys
 import signal
 
-# daemon 只在 Unix 上可用
-try:
-    import daemon
-except ImportError:
-    daemon = None  # Windows 上沒有 daemon
-
 from minibot.agent import AgentLoop, AgentConfig as BotAgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage, StorageProvider
@@ -203,7 +197,10 @@ async def run_background(config: Config):
 
 def run_daemon(config: Config):
     """以 daemon 方式執行（Unix only）"""
-    if daemon is None:
+    # daemon 只在 Unix 上可用
+    try:
+        import daemon
+    except ImportError:
         print("錯誤：daemon 模式只能在 Unix 系統上使用")
         print("請使用 foreground 模式：python -m minibot.main foreground")
         sys.exit(1)
@@ -252,7 +249,10 @@ def run_daemon(config: Config):
 
 def stop_daemon():
     """停止背景服務（Unix only）"""
-    if daemon is None:
+    # daemon 只在 Unix 上可用
+    try:
+        import daemon
+    except ImportError:
         print("錯誤：daemon 模式只能在 Unix 系統上使用")
         sys.exit(1)
     

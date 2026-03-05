@@ -5,7 +5,7 @@ minibot/config/__init__.py - 設定模組
 from minibot.config.schema import (
     Config,
     LLMsConfig,
-    AgentConfig,
+    AgentSettings,
     StorageConfig,
     TelegramConfig,
     ConsoleConfig,
@@ -15,7 +15,7 @@ from minibot.config.schema import (
 __all__ = [
     "Config",
     "LLMsConfig",
-    "AgentConfig",
+    "AgentSettings",
     "StorageConfig",
     "TelegramConfig",
     "ConsoleConfig",
