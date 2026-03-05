@@ -130,10 +130,12 @@ class MessageQueue:
             inbound: InboundMessage
         """
         chat_id = inbound.chat_id
+        print(f"[Debug] _process_message called for chat_id: {chat_id}")
         
         try:
             # 取得或建立對話
             conversation = self.get_or_create_conversation(chat_id)
+            print(f"[Debug] Calling agent.process()...")
             
             # 轉換成 UserMessage 給 Agent
             user_message = UserMessage(
@@ -216,6 +218,7 @@ class MessageQueue:
                         self.bus.consume_inbound(), 
                         timeout=1.0
                     )
+                    print(f"[Debug] Got inbound message: {inbound.content[:20]}...")
                 except asyncio.TimeoutError:
                     continue
                 
