@@ -11,7 +11,12 @@ import asyncio
 import os
 import sys
 import signal
-import daemon
+
+# daemon 只在 Unix 上可用
+try:
+    import daemon
+except ImportError:
+    daemon = None  # Windows 上沒有 daemon
 
 from minibot.agent import AgentLoop, AgentConfig as BotAgentConfig
 from minibot.llms import OpenAILLM
@@ -197,7 +202,12 @@ async def run_background(config: Config):
 # ============================================
 
 def run_daemon(config: Config):
-    """以 daemon 方式執行"""
+    """以 daemon 方式執行（Unix only）"""
+    if daemon is None:
+        print("錯誤：daemon 模式只能在 Unix 系統上使用")
+        print("請使用 foreground 模式：python -m minibot.main foreground")
+        sys.exit(1)
+    
     log_file = "/tmp/minibot.log"
     
     # 建立 PID 檔
@@ -241,7 +251,11 @@ def run_daemon(config: Config):
 # ============================================
 
 def stop_daemon():
-    """停止背景服務"""
+    """停止背景服務（Unix only）"""
+    if daemon is None:
+        print("錯誤：daemon 模式只能在 Unix 系統上使用")
+        sys.exit(1)
+    
     pid_file = "/tmp/minibot.pid"
     
     if not os.path.exists(pid_file):
