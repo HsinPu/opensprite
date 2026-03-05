@@ -27,12 +27,12 @@ class Conversation:
 
 class MessageQueue:
     """
-    訊息佇列管理器
+    訊息佇列管理器（並行版本）
     
     負責：
     - 接收新訊息
     - 把訊息分發到對應的對話
-    - 非同步處理多個對話
+    - **非同步並行處理多個對話**（每個訊息spawn成獨立task）
     - 對話歷史由 Agent + Storage 管理
     """
     
@@ -47,6 +47,8 @@ class MessageQueue:
         self.conversations: dict[str, Conversation] = {}  # chat_id -> Conversation
         self.queue: asyncio.Queue = asyncio.Queue()
         self.running = False
+        # 追蹤所有 active tasks: chat_id -> list of tasks
+        self._active_tasks: dict[str, list[asyncio.Task]] = {}
     
     def get_or_create_conversation(self, chat_id: str) -> Conversation:
         """
@@ -71,11 +73,46 @@ class MessageQueue:
         """
         await self.queue.put(user_message)
     
+    async def _process_message(self, user_message: UserMessage) -> None:
+        """
+        處理單一訊息（會spawn成独立task）
+        
+        參數：
+            user_message: 統一格式的訊息
+        """
+        chat_id = user_message.chat_id or "default"
+        
+        try:
+            # 取得或建立對話
+            conversation = self.get_or_create_conversation(chat_id)
+            
+            # 把訊息傳給 Agent 處理
+            # （對話歷史由 Agent + Storage 管理）
+            response = await self.agent.process(user_message)
+            
+            # 發送回覆（如果 Adapter 有實作 send）
+            if hasattr(self, 'on_response'):
+                await self.on_response(response)
+                
+        except asyncio.CancelledError:
+            # Task 被取消時優雅退出
+            pass
+        except Exception as e:
+            print(f"[{chat_id}] 處理訊息時發生錯誤: {e}")
+            if hasattr(self, 'on_error'):
+                await self.on_error(chat_id, str(e))
+        finally:
+            # 從 active tasks 中移除
+            if chat_id in self._active_tasks:
+                # 這個task會自動被cleanup，這裡只是確保dict不要無限增長
+                pass
+    
     async def process_queue(self) -> None:
         """
         處理佇列中的訊息（非同步迴圈）
         
         這個函式會一直執行，直到 running = False
+        每個訊息都會spawn成独立task並行處理
         """
         self.running = True
         
@@ -90,24 +127,65 @@ class MessageQueue:
                 except asyncio.TimeoutError:
                     continue
                 
-                # 取得或建立對話
                 chat_id = user_message.chat_id or "default"
-                conversation = self.get_or_create_conversation(chat_id)
                 
-                # 把訊息傳給 Agent 處理
-                # （對話歷史由 Agent + Storage 管理）
-                response = await self.agent.process(user_message)
+                # Spawn 成獨立 task（關鍵改動！不再await）
+                task = asyncio.create_task(self._process_message(user_message))
                 
-                # 發送回覆（如果 Adapter 有實作 send）
-                if hasattr(self, 'on_response'):
-                    await self.on_response(response)
+                # 追蹤這個 chat_id 的 tasks
+                if chat_id not in self._active_tasks:
+                    self._active_tasks[chat_id] = []
+                self._active_tasks[chat_id].append(task)
+                
+                # Task 完成後自動清理
+                task.add_done_callback(
+                    lambda t, cid=chat_id: self._active_tasks.get(cid, []).remove(t) 
+                    if t in self._active_tasks.get(cid, []) else None
+                )
                 
             except Exception as e:
-                print(f"處理訊息時發生錯誤: {e}")
+                print(f"Queue處理時發生錯誤: {e}")
+    
+    async def cancel_chat(self, chat_id: str) -> int:
+        """
+        取消特定 chat_id 的所有正在處理的任務
+        
+        參數：
+            chat_id: 聊天室 ID
+        
+        回傳：
+            int: 被取消的任務數量
+        """
+        tasks = self._active_tasks.pop(chat_id, [])
+        cancelled = 0
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+                cancelled += 1
+                # 嘗試等待讓task優雅退出
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        return cancelled
+    
+    async def cancel_all(self) -> int:
+        """
+        取消所有正在處理的任務
+        
+        回傳：
+            int: 被取消的任務數量
+        """
+        total = 0
+        chat_ids = list(self._active_tasks.keys())
+        for chat_id in chat_ids:
+            total += await self.cancel_chat(chat_id)
+        return total
     
     async def stop(self) -> None:
-        """停止處理"""
+        """停止處理並取消所有進行中的任務"""
         self.running = False
+        await self.cancel_all()
     
     async def reset_conversation(self, chat_id: str) -> None:
         """
@@ -116,6 +194,8 @@ class MessageQueue:
         參數：
             chat_id: 聊天室 ID
         """
+        # 先取消這個chat正在處理的任務
+        await self.cancel_chat(chat_id)
         # 讓 Agent 去清除 Storage 裡的歷史
         await self.agent.reset_history(chat_id)
 
