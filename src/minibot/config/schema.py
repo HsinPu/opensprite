@@ -129,27 +129,32 @@ class Config:
         載入設定
         
         參數：
-            path: 設定檔路徑，預設搜尋 src/minibot/config/config.json
+            path: 設定檔路徑，預設從 workspace 讀取 ~/.minibot/workspace/nanobot.json
         """
         if path is None:
-            # 預設路徑搜尋順序
-            possible_paths = [
-                Path("src/minibot/config/config.json"),
-                Path.home() / ".config" / "minibot" / "config.json",
-            ]
+            # 預設從 workspace 讀取
+            workspace = Path.home() / ".minibot" / "workspace"
+            workspace.mkdir(parents=True, exist_ok=True)
+            config_path = workspace / "nanobot.json"
             
-            for p in possible_paths:
-                if p.exists():
-                    path = p
-                    break
-            else:
-                raise FileNotFoundError(
-                    f"找不到設定檔，搜尋過的路徑: {[str(p) for p in possible_paths]}"
-                )
+            # 如果 workspace 裡沒有 config，複製預設範本
+            if not config_path.exists():
+                default_config = Path("src/minibot/config/nanobot.json")
+                if default_config.exists():
+                    import shutil
+                    shutil.copy(default_config, config_path)
+                    print(f"已建立設定檔: {config_path}")
+                else:
+                    raise FileNotFoundError(f"找不到預設設定檔，也沒有現存的設定檔")
+            
+            path = config_path
         
         path = Path(path)
         
-        # 根據副檔名判斷格式
+        if not path.exists():
+            raise FileNotFoundError(f"設定檔不存在: {path}")
+        
+        # 根據副檔名判斷格式（目前只支援 JSON）
         if path.suffix == ".json":
             return cls.from_json(path)
         else:
