@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 # ============================================
 
 class LLMsConfig(BaseModel):
-    """LLM 設定（從 YAML 讀取）"""
+    """LLM 設定（從 JSON 讀取）"""
     
     api_key: str  # 必填
     model: str  # 必填
@@ -30,7 +30,7 @@ class LLMsConfig(BaseModel):
 # ============================================
 
 class AgentConfig(BaseModel):
-    """Agent 設定（從 YAML 讀取）"""
+    """Agent 設定（從 JSON 讀取）"""
     
     system_prompt: str  # 必填
     max_history: int  # 必填
@@ -41,7 +41,7 @@ class AgentConfig(BaseModel):
 # ============================================
 
 class StorageConfig(BaseModel):
-    """Storage 設定（從 YAML 讀取）"""
+    """Storage 設定（從 JSON 讀取）"""
     
     type: str  # 必填：memory / file / sqlite
     path: str  # 必填
@@ -52,20 +52,20 @@ class StorageConfig(BaseModel):
 # ============================================
 
 class TelegramConfig(BaseModel):
-    """Telegram 設定（從 YAML 讀取）"""
+    """Telegram 設定（從 JSON 讀取）"""
     
     enabled: bool  # 必填
     token: str  # 必填（enabled=true 時）
 
 
 class ConsoleConfig(BaseModel):
-    """Console 設定（從 YAML 讀取）"""
+    """Console 設定（從 JSON 讀取）"""
     
     enabled: bool  # 必填
 
 
 class ChannelsConfig(BaseModel):
-    """Channels 設定（從 YAML 讀取）"""
+    """Channels 設定（從 JSON 讀取）"""
     
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
@@ -76,7 +76,7 @@ class ChannelsConfig(BaseModel):
 # ============================================
 
 class Config:
-    """主設定檔（從 YAML 讀取）"""
+    """主設定檔（從 JSON 讀取）"""
     
     def __init__(
         self,
