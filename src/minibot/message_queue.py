@@ -205,6 +205,7 @@ class MessageQueue:
         每個訊息都會spawn成独立task並行處理
         結果會丟到 outbound queue，由 _consume_outbound 發送
         """
+        print("[Debug] process_queue started")
         self.running = True
         
         # 啟動 outbound 消費者
