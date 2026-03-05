@@ -287,20 +287,19 @@ def main():
     )
     parser.add_argument(
         "-c", "--config",
-        help="設定檔路徑（預設 ./config.yaml 或 ~/.config/minibot/config.yaml）"
+        help="設定檔路徑（預設 ~/.minibot/workspace/nanobot.json）"
     )
     parser.add_argument("--log", "-l", help="日誌檔案")
     
     args = parser.parse_args()
     
-    # 從 YAML 檔案讀取設定
+    # 從 JSON 檔案讀取設定
     config = Config.load(args.config)
     
-    # 檢查必要設定
+    # 檢查必要設定（如果沒填 API Key，給警告但允許執行）
     if not config.is_llm_configured:
-        print("錯誤：請在 config.yaml 設定 OPENAI_API_KEY")
-        print("可以複製 config.yaml.example 到 config.yaml 並填入設定")
-        sys.exit(1)
+        print("⚠️  警告：請在 nanobot.json 設定 LLM API Key")
+        print("    位置：~/.minibot/workspace/nanobot.json")
     
     if args.command == "stop":
         stop_daemon()
