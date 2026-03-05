@@ -6,10 +6,12 @@ minibot/llms/__init__.py - LLM 提供者
 
 from minibot.llms.base import LLMProvider, ChatMessage, LLMResponse
 from minibot.llms.openai import OpenAILLM
+from minibot.llms.openrouter import OpenRouterLLM
 
 __all__ = [
     "LLMProvider", 
     "ChatMessage", 
     "LLMResponse",
-    "OpenAILLM"
+    "OpenAILLM",
+    "OpenRouterLLM"
 ]
