@@ -117,10 +117,19 @@ class AgentLoop:
             storage = MemoryStorage()
         self.storage = storage
         
-        # 如果沒給 context_builder，用簡單的 fallback
+        # 如果沒給 context_builder，自動偵測 workspace 建立
         self._context_builder = context_builder
         if context_builder is None:
-            self._use_simple_context = True
+            try:
+                from minibot.workspace import get_workspace_path, sync_templates
+                from minibot.context import FileContextBuilder
+                workspace = get_workspace_path()
+                sync_templates(workspace)  # 同步範本（如果不存在會创建）
+                context_builder = FileContextBuilder(workspace)
+                self._context_builder = context_builder
+                self._use_simple_context = False
+            except Exception:
+                self._use_simple_context = True
         else:
             self._use_simple_context = False
         
