@@ -52,3 +52,47 @@ def sync_templates(workspace: Path, silent: bool = False) -> list[str]:
         print(f"Created template files: {added}")
     
     return added
+
+
+# Bootstrap files to load
+BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md", "TOOLS.md"]
+
+
+def load_bootstrap_files(workspace: Path) -> dict[str, str]:
+    """
+    Load bootstrap files from workspace.
+    
+    Returns dict with filename (without .md) as key, content as value.
+    Empty string if file doesn't exist.
+    """
+    result = {}
+    for filename in BOOTSTRAP_FILES:
+        file_path = workspace / filename
+        if file_path.exists():
+            result[filename.replace(".md", "")] = file_path.read_text(encoding="utf-8")
+        else:
+            result[filename.replace(".md", "")] = ""
+    return result
+
+
+def load_memory(workspace: Path) -> str:
+    """
+    Load long-term memory from workspace.
+    
+    Returns content of memory/MEMORY.md, or empty string if not found.
+    """
+    memory_path = workspace / "memory" / "MEMORY.md"
+    if memory_path.exists():
+        return memory_path.read_text(encoding="utf-8")
+    return ""
+
+
+def save_memory(workspace: Path, content: str) -> None:
+    """
+    Save long-term memory to workspace.
+    
+    Creates directory and file if needed.
+    """
+    memory_path = workspace / "memory" / "MEMORY.md"
+    memory_path.parent.mkdir(parents=True, exist_ok=True)
+    memory_path.write_text(content, encoding="utf-8")
