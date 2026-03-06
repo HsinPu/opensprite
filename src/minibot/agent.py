@@ -20,41 +20,13 @@ minibot/agent.py - Agent Loop
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+
 
 from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
+from minibot.context.builder import ContextBuilder
 from minibot.utils.log import logger
-
-
-class ContextBuilderProtocol(Protocol):
-    """Context builder protocol for type hints."""
-
-    def build_system_prompt(self) -> str: ...
-
-    def build_messages(
-        self,
-        history: list[dict],
-        current_message: str,
-        channel: str | None = None,
-        chat_id: str | None = None,
-    ) -> list[dict]: ...
-
-    def add_tool_result(
-        self,
-        messages: list[dict],
-        tool_call_id: str,
-        tool_name: str,
-        result: str,
-    ) -> list[dict]: ...
-
-    def add_assistant_message(
-        self,
-        messages: list[dict],
-        content: str | None,
-        tool_calls: list[dict] | None = None,
-    ) -> list[dict]: ...
 
 
 @dataclass
@@ -93,7 +65,7 @@ class AgentLoop:
         config: AgentConfig,
         provider: LLMProvider,
         storage: StorageProvider | None = None,
-        context_builder: ContextBuilderProtocol | None = None,
+        context_builder: ContextBuilder | None = None,
     ):
         """
         AgentLoop 的建構函式。
@@ -201,14 +173,17 @@ class AgentLoop:
         ]
 
         # 用 context builder 組 messages
+        logger.info(f"[{chat_id}] 使用 context builder: not simple")
         if self._use_simple_context:
             # Fallback: 簡單的 system prompt
+            logger.info(f"[{chat_id}] 使用 simple context")
             full_messages = [
                 {"role": "system", "content": self._build_simple_system_prompt()},
                 *history_dicts,
             ]
         else:
             # 使用 context builder
+            logger.info(f"[{chat_id}] 使用 context builder")
             full_messages = self._context_builder.build_messages(
                 history=history_dicts,
                 current_message="",  # 這裡不放 content，我們會用 user message
@@ -221,6 +196,17 @@ class AgentLoop:
             ChatMessage(role=m["role"], content=m.get("content", ""))
             for m in full_messages
         ]
+
+        # Log 完整 prompt
+        try:
+            logger.info(f"[{chat_id}] Prompt:\n{'-'*40}")
+            for msg in full_messages:
+                content = msg.get('content', '')[:200] if msg.get('content') else ''
+                role = msg.get('role', 'unknown')
+                logger.info(f"[{chat_id}] {role}: {content}...")
+            logger.info(f"[{chat_id}] {'-'*40}")
+        except Exception as e:
+            logger.error(f"[{chat_id}] Log prompt error: {e}")
 
         # 呼叫 Provider
         logger.info(f"[{chat_id}] 呼叫 LLM...")
@@ -281,57 +267,3 @@ class AgentLoop:
             all_chats = await self.storage.get_all_chats()
             for c in all_chats:
                 await self.storage.clear_messages(c)
-
-
-# ============================================
-# 使用範例
-# ============================================
-
-"""
-使用 ContextBuilder（推薦）：
-
-```python
-from pathlib import Path
-from minibot.agent import AgentLoop, AgentConfig
-from minibot.llms import OpenAILLM
-from minibot.storage import MemoryStorage
-from minibot.context import FileContextBuilder
-from minibot.context.workspace import get_workspace_path
-
-# 1. 建立 ContextBuilder（從 workspace 讀檔案）
-workspace = get_workspace_path()
-context_builder = FileContextBuilder(workspace)
-
-# 2. 建立 Storage
-storage = MemoryStorage()
-
-# 3. 建立 LLM
-llm = OpenAILLM(api_key="your-key")
-
-# 4. 建立 Agent（傳入 context_builder）
-config = AgentConfig()
-agent = AgentLoop(config, llm, storage, context_builder)
-
-# 5. 使用
-user_msg = UserMessage(text="你好", chat_id="123", channel="telegram")
-response = await agent.process(user_msg)
-```
-
-不使用 ContextBuilder（向後相容）：
-
-```python
-from minibot.agent import AgentLoop, AgentConfig
-from minibot.llms import OpenAILLM
-from minibot.storage import MemoryStorage
-
-storage = MemoryStorage()
-llm = OpenAILLM(api_key="your-key")
-config = AgentConfig()
-
-# 不傳 context_builder 也行，會用簡單的 system prompt
-agent = AgentLoop(config, llm, storage)
-
-user_msg = UserMessage(text="你好", chat_id="123")
-response = await agent.process(user_msg)
-```
-"""
