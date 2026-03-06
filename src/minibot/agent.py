@@ -25,13 +25,14 @@ from typing import Protocol
 from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
+from minibot.utils.log import logger
 
 
 class ContextBuilderProtocol(Protocol):
     """Context builder protocol for type hints."""
-    
+
     def build_system_prompt(self) -> str: ...
-    
+
     def build_messages(
         self,
         history: list[dict],
@@ -39,7 +40,7 @@ class ContextBuilderProtocol(Protocol):
         channel: str | None = None,
         chat_id: str | None = None,
     ) -> list[dict]: ...
-    
+
     def add_tool_result(
         self,
         messages: list[dict],
@@ -47,7 +48,7 @@ class ContextBuilderProtocol(Protocol):
         tool_name: str,
         result: str,
     ) -> list[dict]: ...
-    
+
     def add_assistant_message(
         self,
         messages: list[dict],
@@ -70,13 +71,13 @@ class AgentConfig:
 class AgentLoop:
     """
     Agent Loop
-    
+
     這是整個 Agent 的核心類別，負責：
     - 維護對話歷史（透過 Storage）
     - 組 prompt（透過 ContextBuilder）
     - 呼叫 LLM（透過 Provider 介面）
     - 處理使用者輸入並回傳（process）
-    
+
     設計重點：
     - 只認得「統一的訊息格式」：UserMessage、AssistantMessage
     - 只認得「統一的 LLM Provider 介面」
@@ -88,21 +89,21 @@ class AgentLoop:
     """
 
     def __init__(
-        self, 
-        config: AgentConfig, 
+        self,
+        config: AgentConfig,
         provider: LLMProvider,
         storage: StorageProvider | None = None,
         context_builder: ContextBuilderProtocol | None = None,
     ):
         """
         AgentLoop 的建構函式。
-        
+
         參數：
             config: AgentConfig 物件，包含所有設定
             provider: LLMProvider 物件（OpenAI/Anthropic/其他）
             storage: StorageProvider 物件（記憶體/檔案/資料庫），可選
             context_builder: ContextBuilder 物件，可選
-        
+
         初始化時會：
             1. 儲存設定到 self.config
             2. 儲存 LLM Provider
@@ -111,13 +112,13 @@ class AgentLoop:
         """
         self.config = config
         self.provider = provider
-        
+
         # 如果沒給 storage，用記憶體 storage
         if storage is None:
             from minibot.storage import MemoryStorage
             storage = MemoryStorage()
         self.storage = storage
-        
+
         # 如果沒給 context_builder，自動偵測 workspace 建立
         self._context_builder = context_builder
         if context_builder is None:
@@ -133,7 +134,7 @@ class AgentLoop:
                 self._use_simple_context = True
         else:
             self._use_simple_context = False
-        
+
         # 目前處理的 chat_id
         self._current_chat_id: str | None = None
 
@@ -144,16 +145,16 @@ class AgentLoop:
     async def _load_history(self, chat_id: str) -> list[ChatMessage]:
         """
         從 Storage 載入對話歷史
-        
+
         參數：
             chat_id: 聊天室 ID
-        
+
         回傳：
             list[ChatMessage]: 給 LLM 用的訊息格式
         """
         # 從 storage 取訊息
         stored_messages = await self.storage.get_messages(chat_id)
-        
+
         # 轉換成 ChatMessage 格式
         return [
             ChatMessage(role=m.role, content=m.content)
@@ -163,7 +164,7 @@ class AgentLoop:
     async def _save_message(self, chat_id: str, role: str, content: str) -> None:
         """
         把訊息存到 Storage
-        
+
         參數：
             chat_id: 聊天室 ID
             role: user / assistant
@@ -175,29 +176,30 @@ class AgentLoop:
         )
 
     async def call_llm(
-        self, 
+        self,
         chat_id: str,
         channel: str | None = None,
     ) -> str:
         """
         呼叫 LLM（大型語言模型）並取得回應。
-        
+
         參數：
             chat_id: 聊天室 ID（用來取歷史）
             channel: 頻道名稱（可選，用於 context）
-        
+
         回傳：
             str: LLM 回覆的內容文字
         """
         # 從 storage 載入歷史
+        logger.info(f"[{chat_id}] 載入歷史訊息...")
         history_messages = await self._load_history(chat_id)
-        
+
         # 轉換成 dict 格式（給 context builder 用）
         history_dicts = [
             {"role": m.role, "content": m.content}
             for m in history_messages
         ]
-        
+
         # 用 context builder 組 messages
         if self._use_simple_context:
             # Fallback: 簡單的 system prompt
@@ -213,41 +215,48 @@ class AgentLoop:
                 channel=channel,
                 chat_id=chat_id,
             )
-        
+
         # 轉換成 ChatMessage 格式
         chat_messages = [
             ChatMessage(role=m["role"], content=m.get("content", ""))
             for m in full_messages
         ]
-        
+
         # 呼叫 Provider
+        logger.info(f"[{chat_id}] 呼叫 LLM...")
         response = await self.provider.chat(
             messages=chat_messages,
             model=self.config.model,
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens
         )
+        logger.info(f"[{chat_id}] 收到 LLM 回覆: {response.content[:50]}...")
         
         return response.content
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """
         處理使用者訊息的主要入口函式。
-        
+
         參數：
             user_message: UserMessage 統一格式的訊息
-        
+
         回傳：
             AssistantMessage: 統一格式的回覆
         """
         chat_id = user_message.chat_id or "default"
         channel = getattr(user_message, 'channel', None)
         
+        logger.info(f"[{chat_id}] 收到訊息: {user_message.text[:50]}...")
+
         # 1. 把使用者訊息存入 storage
         await self._save_message(chat_id, "user", user_message.text)
 
         # 2. 呼叫 LLM（傳入 channel）
+        logger.info(f"[{chat_id}] 處理中...")
         response = await self.call_llm(chat_id, channel=channel)
+        
+        logger.info(f"[{chat_id}] 回覆: {response[:50]}...")
 
         # 3. 把 AI 回覆存入 storage
         await self._save_message(chat_id, "assistant", response)
@@ -261,7 +270,7 @@ class AgentLoop:
     async def reset_history(self, chat_id: str | None = None) -> None:
         """
         清除對話歷史。
-        
+
         參數：
             chat_id: 聊天室 ID，如果沒給就清除所有
         """

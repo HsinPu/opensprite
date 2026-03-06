@@ -136,6 +136,12 @@ class TelegramAdapter(MessageAdapter):
         from telegram.ext import MessageHandler, filters
         self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_update))
         
+        # 設置 callback 來發送回覆到 Telegram
+        async def on_response(response, channel, chat_id):
+            await self.send(AssistantMessage(text=response.text, chat_id=chat_id))
+        
+        self.mq.on_response = on_response
+        
         # 初始化並啟動
         logger.info("Initializing Telegram app...")
         await self.app.initialize()
