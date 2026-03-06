@@ -52,7 +52,7 @@ def run_bot():
     env["PYTHONPATH"] = str(BOT_DIR / "src")
     env["PYTHONUNBUFFERED"] = "1"
     
-    # 使用虛擬環境的 Python 執行
+    # 使用虛擬環境的 Python 執行（維持在前景）
     python = get_venv_python()
     subprocess.run([str(python), str(MAIN_SCRIPT)], cwd=BOT_DIR, env=env)
 
