@@ -1,11 +1,19 @@
 """
-minibot/message_queue.py - 訊息佇列（Bus 版本）
+minibot/message_queue.py - 訊息排程中心
+
+角色：訊息調度中心
+- 接收外面傳來的訊息，排隊交給 Agent 處理
+- 將 Agent 的回覆排隊發送出去
+- 支援多個對話同時並行處理
 
 設計理念：
 - 支援多個對話同時進行
 - inbound / outbound 分離（解耦）
 - 對話歷史由 Agent + Storage 管理
 - 用 MessageBus 接收/發送訊息
+
+流程：
+  外部 → enqueue() → inbound Queue → Agent → outbound Queue → callback → 外部
 
 """
 
