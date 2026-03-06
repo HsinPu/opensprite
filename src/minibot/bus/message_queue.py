@@ -20,7 +20,7 @@ minibot/message_queue.py - 訊息排程中心
 import asyncio
 from dataclasses import dataclass, field
 from minibot.bus import MessageBus, InboundMessage, OutboundMessage
-from minibot.message import UserMessage, AssistantMessage
+from minibot.bus.message import UserMessage, AssistantMessage
 
 
 @dataclass
@@ -325,8 +325,8 @@ import asyncio
 from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage
-from minibot.message_queue import MessageQueue
-from minibot.message import UserMessage
+from minibot.bus.message_queue import MessageQueue
+from minibot.bus.message import UserMessage
 
 async def main():
     # 1. 建立 Storage（可替換）

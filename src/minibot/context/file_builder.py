@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from minibot.workspace import load_bootstrap_files, load_memory
+from minibot.context.workspace import load_bootstrap_files, load_memory
 
 
 class FileContextBuilder:

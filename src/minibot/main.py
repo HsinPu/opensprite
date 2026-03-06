@@ -15,8 +15,8 @@ import signal
 from minibot.agent import AgentLoop, AgentConfig as BotAgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage, StorageProvider
-from minibot.message_queue import MessageQueue
-from minibot.message import UserMessage
+from minibot.bus.message_queue import MessageQueue
+from minibot.bus.message import UserMessage
 from minibot.config import Config
 
 

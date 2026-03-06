@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from minibot.message import UserMessage, AssistantMessage
+from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 
@@ -122,7 +122,7 @@ class AgentLoop:
         self._context_builder = context_builder
         if context_builder is None:
             try:
-                from minibot.workspace import get_workspace_path, sync_templates
+                from minibot.context.workspace import get_workspace_path, sync_templates
                 from minibot.context import FileContextBuilder
                 workspace = get_workspace_path()
                 sync_templates(workspace)  # 同步範本（如果不存在會创建）
@@ -287,7 +287,7 @@ from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage
 from minibot.context import FileContextBuilder
-from minibot.workspace import get_workspace_path
+from minibot.context.workspace import get_workspace_path
 
 # 1. 建立 ContextBuilder（從 workspace 讀檔案）
 workspace = get_workspace_path()

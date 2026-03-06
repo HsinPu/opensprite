@@ -14,7 +14,7 @@ minibot/channels/telegram.py - Telegram 訊息 Adapter
 from telegram import Update
 from telegram.ext import Application
 
-from minibot.message import MessageAdapter, UserMessage, AssistantMessage
+from minibot.bus.message import MessageAdapter, UserMessage, AssistantMessage
 
 
 class TelegramAdapter(MessageAdapter):
@@ -150,7 +150,7 @@ import asyncio
 from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage
-from minibot.message_queue import MessageQueue
+from minibot.bus.message_queue import MessageQueue
 from minibot.channels.telegram import TelegramAdapter
 
 async def main():
