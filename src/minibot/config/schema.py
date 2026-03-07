@@ -15,21 +15,41 @@ from pydantic import BaseModel, Field
 # LLM 設定
 # ============================================
 
+class ProviderConfig(BaseModel):
+    """單一 LLM Provider 設定"""
+    api_key: str
+    model: str
+    base_url: str | None = None
+
+
 class LLMsConfig(BaseModel):
-    """LLM 設定（從 JSON 讀取）"""
+    """LLM 設定 - 支持多 Provider"""
     
-    api_key: str  # 必填
-    model: str  # 必填
-    base_url: str | None = None  # 可選
-    temperature: float  # 必填
-    max_tokens: int  # 必填
+    # 多 provider 模式
+    providers: dict[str, ProviderConfig] = {}
+    default: str | None = None
+    
+    # 向後兼容：單一 provider
+    api_key: str = ""
+    model: str = ""
+    base_url: str | None = None
+    
+    # 共用
+    temperature: float = 0.7
+    max_tokens: int = 2048
+    
+    def get_active(self) -> ProviderConfig:
+        """取得當前使用的 Provider 設定"""
+        if self.providers and self.default and self.default in self.providers:
+            return self.providers[self.default]
+        return ProviderConfig(api_key=self.api_key, model=self.model, base_url=self.base_url)
 
 
 # ============================================
 # Agent 設定
 # ============================================
 
-class AgentSettings(BaseModel):
+class AgentConfig(BaseModel):
     """Agent 設定（從 JSON 讀取）"""
     
     system_prompt: str  # 必填
@@ -93,7 +113,7 @@ class Config:
     def __init__(
         self,
         llm: LLMsConfig,
-        agent: AgentSettings,
+        agent: AgentConfig,
         storage: StorageConfig,
         channels: ChannelsConfig,
         log: LogConfig | None = None,
@@ -131,7 +151,7 @@ class Config:
         
         # 建立各部分設定（無預設值）
         llm = LLMsConfig(**data["llm"])
-        agent = AgentSettings(**data["agent"])
+        agent = AgentConfig(**data["agent"])
         storage = StorageConfig(**data["storage"])
         channels = ChannelsConfig(**data["channels"])
         
@@ -207,12 +227,25 @@ class Config:
             logger.info(f"設定檔已存在: {path}")
             return path
         
-        # 產生預設設定
+        # 產生預設設定 (多 provider 模式)
         default_config = {
             "llm": {
-                "api_key": "",
-                "model": "openai/gpt-4o-mini",
-                "base_url": "https://openrouter.ai/api/v1",
+                # 多 provider 模式
+                "providers": {
+                    "openrouter": {
+                        "api_key": "",
+                        "model": "openai/gpt-4o-mini",
+                        "base_url": "https://openrouter.ai/api/v1"
+                    },
+                    "openai": {
+                        "api_key": "",
+                        "model": "gpt-4o-mini",
+                        "base_url": "https://api.openai.com/v1"
+                    }
+                },
+                "default": "openrouter",
+                
+                # 共用參數
                 "temperature": 0.7,
                 "max_tokens": 2048
             },
@@ -250,6 +283,8 @@ class Config:
         """轉成 dict"""
         return {
             "llm": {
+                "providers": self.llm.providers,
+                "default": self.llm.default,
                 "api_key": self.llm.api_key,
                 "model": self.llm.model,
                 "base_url": self.llm.base_url,

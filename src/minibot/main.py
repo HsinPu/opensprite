@@ -9,8 +9,9 @@ minibot/main.py - 入口點
 
 import asyncio
 
-from minibot.agent import AgentLoop, AgentConfig as BotAgentConfig
-from minibot.llms import OpenAILLM
+from minibot.agent import AgentLoop
+from minibot.config import AgentConfig
+from minibot.llms import create_llm
 from minibot.storage import MemoryStorage, StorageProvider
 from minibot.bus.message_queue import MessageQueue
 from minibot.config import Config
@@ -39,27 +40,17 @@ def create_storage(config: Config) -> StorageProvider:
 
 def create_agent(config: Config):
     """建立 Agent 和 Queue"""
-    # 根據 base_url 決定用哪個 LLM
-    if config.llm.base_url and "openrouter" in config.llm.base_url:
-        from minibot.llms import OpenRouterLLM
-        llm = OpenRouterLLM(
-            api_key=config.llm.api_key,
-            default_model=config.llm.model
-        )
-    else:
-        from minibot.llms import OpenAILLM
-        llm = OpenAILLM(
-            api_key=config.llm.api_key,
-            base_url=config.llm.base_url,
-            default_model=config.llm.model
-        )
+    # 用 Registry 建立 LLM Provider
+    cfg = config.llm.get_active()
+    llm = create_llm(api_key=cfg.api_key, model=cfg.model, base_url=cfg.base_url or "", provider_name=config.llm.default or "")
     
     # 建立 Agent 設定
-    agent_config = BotAgentConfig(
+    agent_config = AgentConfig(
         system_prompt=config.agent.system_prompt,
         model=config.llm.model,
         temperature=config.llm.temperature,
         max_tokens=config.llm.max_tokens,
+        max_history=config.agent.max_history,
     )
     
     # 建立 Storage
