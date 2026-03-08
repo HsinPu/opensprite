@@ -54,6 +54,9 @@ class AgentConfig(BaseModel):
     
     system_prompt: str  # 必填
     max_history: int  # 必填
+    model: str  # 必填
+    temperature: float  # 必填
+    max_tokens: int  # 必填
 
 
 # ============================================
@@ -198,6 +201,10 @@ class Config:
     @property
     def is_llm_configured(self) -> bool:
         """檢查 LLM 是否已設定"""
+        # 檢查多 provider 模式
+        if self.llm.providers and self.llm.default and self.llm.default in self.llm.providers:
+            return bool(self.llm.providers[self.llm.default].api_key)
+        # 向後兼容：檢查舊格式
         return bool(self.llm.api_key)
     
     @classmethod

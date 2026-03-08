@@ -33,7 +33,7 @@ def create_storage(config: Config) -> StorageProvider:
         return FileStorage(base_path=config.storage.path)
     elif storage_type == "sqlite":
         from minibot.storage import SQLiteStorage
-        return SQLiteStorage(path=config.storage.path)
+        return SQLiteStorage(db_path=config.storage.path)
     else:
         return MemoryStorage()
 
