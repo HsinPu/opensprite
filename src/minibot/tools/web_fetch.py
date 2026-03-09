@@ -1,8 +1,7 @@
-"""Web tools: web_search and web_fetch."""
+"""Web fetch tool for extracting content from URLs."""
 
 import html
 import json
-import os
 import re
 from typing import Any
 from urllib.parse import urlparse
@@ -31,64 +30,6 @@ def _validate_url(url: str) -> tuple[bool, str]:
         return True, ""
     except Exception as e:
         return False, str(e)
-
-
-class WebSearchTool(Tool):
-    """Search the web using Brave Search API."""
-
-    def __init__(self, api_key: str | None = None, max_results: int = 5):
-        self.api_key = api_key or os.environ.get("BRAVE_API_KEY", "")
-        self.max_results = max_results
-
-    @property
-    def name(self) -> str:
-        return "web_search"
-
-    @property
-    def description(self) -> str:
-        return "Search the web using Brave Search. Returns titles, URLs, and snippets."
-
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "count": {"type": "integer", "description": "Number of results (1-10)", "minimum": 1, "maximum": 10}
-            },
-            "required": ["query"]
-        }
-
-    async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
-        if not self.api_key:
-            return (
-                "Error: Brave Search API key not configured. "
-                "Set BRAVE_API_KEY environment variable or configure in settings."
-            )
-
-        try:
-            n = min(max(count or self.max_results, 1), 10)
-            async with httpx.AsyncClient() as client:
-                r = await client.get(
-                    "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": n},
-                    headers={"Accept": "application/json", "X-Subscription-Token": self.api_key},
-                    timeout=10.0
-                )
-                r.raise_for_status()
-
-            results = r.json().get("web", {}).get("results", [])
-            if not results:
-                return f"No results for: {query}"
-
-            lines = [f"Results for: {query}\n"]
-            for i, item in enumerate(results[:n], 1):
-                lines.append(f"{i}. {item.get('title', '')}\n   {item.get('url', '')}")
-                if desc := item.get("description"):
-                    lines.append(f"   {desc}")
-            return "\n".join(lines)
-        except Exception as e:
-            return f"Error: {e}"
 
 
 class WebFetchTool(Tool):
