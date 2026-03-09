@@ -28,7 +28,7 @@ from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
-from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, ExecTool
+from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, ExecTool, WebSearchTool, WebFetchTool
 from minibot.utils.log import logger
 from minibot.config import AgentConfig
 
@@ -116,10 +116,17 @@ class AgentLoop:
         """註冊預設的工具"""
         workspace = getattr(self._context_builder, 'workspace', Path.cwd())
         
+        # 檔案工具
         self.tools.register(ReadFileTool(workspace=workspace))
         self.tools.register(WriteFileTool(workspace=workspace))
         self.tools.register(ListDirTool(workspace=workspace))
+        
+        # 執行命令
         self.tools.register(ExecTool(workspace=workspace))
+        
+        # 網路工具
+        self.tools.register(WebSearchTool())
+        self.tools.register(WebFetchTool())
         
         logger.info(f"已註冊工具: {self.tools.tool_names}")
 
