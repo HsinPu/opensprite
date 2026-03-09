@@ -29,7 +29,7 @@ from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
-from minibot.memory import MemoryStore
+from minibot.memory import MemoryStore, consolidate
 from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool
 from minibot.utils.log import logger
 from minibot.config import AgentConfig
@@ -393,7 +393,8 @@ class AgentLoop:
                 old_messages = messages[last_consolidated:]
                 msg_dicts = [{"role": m.role, "content": m.content} for m in old_messages]
                 
-                success = await self.memory.consolidate(
+                success = await consolidate(
+                    memory_store=self.memory,
                     chat_id=chat_id,
                     messages=msg_dicts,
                     provider=self.provider,
