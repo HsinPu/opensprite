@@ -26,7 +26,7 @@ class LLMsConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
-    max_history: int
+    max_history: int = 50
 
 
 class StorageConfig(BaseModel):
