@@ -5,7 +5,8 @@ minibot/agent.py - Agent Loop
 1. 接收使用者訊息
 2. 用 ContextBuilder 組 prompt
 3. 叫 LLM
-4. 回覆給使用者
+4. 執行 tool calls（如果 LLM 請求）
+5. 回覆給使用者
 
 設計重點：
 - 只認得「統一的訊息格式」：UserMessage、AssistantMessage
@@ -16,16 +17,18 @@ minibot/agent.py - Agent Loop
 - 具体的 LLM 廠商由 Provider 實作
 - 具体的存放方式由 Storage 實作
 - 具体的 prompt 組裝由 ContextBuilder 實作
+- Tool 由 ToolRegistry 管理
 """
 
-from dataclasses import dataclass
+import json
 from pathlib import Path
-
+from typing import Any
 
 from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
+from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, ExecTool
 from minibot.utils.log import logger
 from minibot.config import AgentConfig
 
@@ -38,6 +41,7 @@ class AgentLoop:
     - 維護對話歷史（透過 Storage）
     - 組 prompt（透過 ContextBuilder）
     - 呼叫 LLM（透過 Provider 介面）
+    - 執行 Tool Calls
     - 處理使用者輸入並回傳（process）
 
     設計重點：
@@ -48,7 +52,10 @@ class AgentLoop:
     - 具体的 LLM 廠商由外部注入
     - 具体的存放方式由外部注入
     - 具体的 prompt 組裝由外部注入
+    - Tools 由 ToolRegistry 管理
     """
+
+    MAX_TOOL_ITERATIONS = 10
 
     def __init__(
         self,
@@ -56,6 +63,7 @@ class AgentLoop:
         provider: LLMProvider,
         storage: StorageProvider | None = None,
         context_builder: ContextBuilder | None = None,
+        tools: ToolRegistry | None = None,
     ):
         """
         AgentLoop 的建構函式。
@@ -65,12 +73,14 @@ class AgentLoop:
             provider: LLMProvider 物件（OpenAI/Anthropic/其他）
             storage: StorageProvider 物件（記憶體/檔案/資料庫），可選
             context_builder: ContextBuilder 物件，可選
+            tools: ToolRegistry 物件，可選
 
         初始化時會：
             1. 儲存設定到 self.config
             2. 儲存 LLM Provider
             3. 儲存 Storage Provider（如果沒給，用預設的記憶體）
             4. 儲存 ContextBuilder（如果沒給，用簡單的 fallback）
+            5. 初始化 Tools（如果沒給，用預設的檔案/shell 工具）
         """
         self.config = config
         self.provider = provider
@@ -94,8 +104,24 @@ class AgentLoop:
             except Exception as e:
                 raise RuntimeError(f"無法建立 ContextBuilder: {e}")
 
+        # Tools
+        self.tools = tools or ToolRegistry()
+        if not self.tools.tool_names:
+            self._register_default_tools()
+
         # 目前處理的 chat_id
         self._current_chat_id: str | None = None
+
+    def _register_default_tools(self) -> None:
+        """註冊預設的工具"""
+        workspace = getattr(self._context_builder, 'workspace', Path.cwd())
+        
+        self.tools.register(ReadFileTool(workspace=workspace))
+        self.tools.register(WriteFileTool(workspace=workspace))
+        self.tools.register(ListDirTool(workspace=workspace))
+        self.tools.register(ExecTool(workspace=workspace))
+        
+        logger.info(f"已註冊工具: {self.tools.tool_names}")
 
     async def _load_history(self, chat_id: str) -> list[ChatMessage]:
         """
@@ -137,6 +163,7 @@ class AgentLoop:
         self,
         chat_id: str,
         channel: str | None = None,
+        allow_tools: bool = True,
     ) -> str:
         """
         呼叫 LLM（大型語言模型）並取得回應。
@@ -144,6 +171,7 @@ class AgentLoop:
         參數：
             chat_id: 聊天室 ID（用來取歷史）
             channel: 頻道名稱（可選，用於 context）
+            allow_tools: 是否允許使用工具
 
         回傳：
             str: LLM 回覆的內容文字
@@ -163,9 +191,9 @@ class AgentLoop:
         full_messages = self._context_builder.build_messages(
             history=history_dicts,
             current_message="",  # 這裡不放 content，我們會用 user message
-                channel=channel,
-                chat_id=chat_id,
-            )
+            channel=channel,
+            chat_id=chat_id,
+        )
 
         # 轉換成 ChatMessage 格式
         chat_messages = [
@@ -194,14 +222,58 @@ class AgentLoop:
         except Exception as e:
             logger.error(f"[{chat_id}] Log prompt error: {e}")
 
-        # 呼叫 Provider
-        logger.info(f"[{chat_id}] 呼叫 LLM...")
-        response = await self.provider.chat(
-            messages=chat_messages,
-        )
-        logger.info(f"[{chat_id}] 收到 LLM 回覆: {response.content[:50]}...")
-        
-        return response.content
+        # 準備 tools
+        tools = None
+        if allow_tools and self.tools.tool_names:
+            tools = self.tools.get_definitions()
+            logger.info(f"[{chat_id}] 使用工具: {self.tools.tool_names}")
+
+        # 迴圈：執行 tool calls 直到沒有為止
+        for iteration in range(self.MAX_TOOL_ITERATIONS):
+            # 呼叫 Provider
+            logger.info(f"[{chat_id}] 呼叫 LLM... (iteration {iteration + 1})")
+            response = await self.provider.chat(
+                messages=chat_messages,
+                tools=tools,
+            )
+
+            # 檢查是否有 tool calls
+            if response.tool_calls:
+                logger.info(f"[{chat_id}] LLM 請求執行 {len(response.tool_calls)} 個工具")
+                
+                # 記錄 assistant 訊息（包含 tool calls）
+                chat_messages.append(ChatMessage(
+                    role="assistant",
+                    content=response.content or ""
+                ))
+                
+                # 執行每個 tool call
+                for tc in response.tool_calls:
+                    tool_name = tc.name
+                    tool_args = tc.arguments
+                    
+                    logger.info(f"[{chat_id}] 執行工具: {tool_name}({tool_args})")
+                    
+                    result = await self.tools.execute(tool_name, tool_args)
+                    logger.info(f"[{chat_id}] 工具結果: {result[:200]}...")
+                    
+                    # 將 tool result 加入訊息
+                    chat_messages.append(ChatMessage(
+                        role="tool",
+                        content=result,
+                        tool_call_id=tc.id
+                    ))
+                
+                # 繼續迴圈，讓 LLM 根據 tool results 生成回覆
+                continue
+            
+            # 沒有 tool calls，回覆完成
+            logger.info(f"[{chat_id}] 收到 LLM 回覆: {response.content[:50]}...")
+            return response.content
+
+        # 超過最大迭代次數
+        logger.warning(f"[{chat_id}] 超過最大工具迭代次數 ({self.MAX_TOOL_ITERATIONS})")
+        return "我嘗試完成你的請求，但超過了最大迭代次數。請將任務拆分為較小的步驟。"
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

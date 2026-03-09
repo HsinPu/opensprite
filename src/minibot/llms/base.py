@@ -9,7 +9,16 @@ minibot/llms/base.py - LLM 介面定義
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
+
+
+@dataclass
+class ToolCall:
+    """Tool call request from LLM."""
+    id: str
+    name: str
+    arguments: dict[str, Any]
 
 
 @dataclass
@@ -19,6 +28,7 @@ class LLMResponse:
     """
     content: str  # 回覆的文字內容
     model: str    # 使用的模型名稱
+    tool_calls: list[ToolCall] = field(default_factory=list)  # Tool calls (if any)
 
 
 @dataclass
@@ -28,6 +38,15 @@ class ChatMessage:
     """
     role: str    # "system", "user", "assistant"
     content: str # 訊息內容
+    tool_call_id: str | None = None  # For tool results
+
+
+@dataclass
+class ToolDefinition:
+    """Tool definition for LLM."""
+    name: str
+    description: str
+    parameters: dict[str, Any]
 
 
 class LLMProvider(ABC):
@@ -46,6 +65,7 @@ class LLMProvider(ABC):
     async def chat(
         self, 
         messages: list[ChatMessage], 
+        tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048
@@ -55,6 +75,7 @@ class LLMProvider(ABC):
         
         參數：
             messages: 對話歷史（ChatMessage 清單）
+            tools: Tool 定義清單（可選）
             model: 模型名稱（可選，預設用 Provider 的預設模型）
             temperature: 創意程度
             max_tokens: 最大回覆長度
