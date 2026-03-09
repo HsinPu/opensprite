@@ -90,6 +90,7 @@ class AgentLoop:
         """
         self.config = config
         self.memory_config = memory_config or MemoryConfig()
+        self.brave_api_key = brave_api_key
         self.provider = provider
 
         # 如果沒給 storage，用記憶體 storage
@@ -172,7 +173,7 @@ class AgentLoop:
         self.tools.register(ExecTool(workspace=workspace))
         
         # 網路工具
-        self.tools.register(WebSearchTool(api_key=brave_api_key))
+        self.tools.register(WebSearchTool(api_key=self.brave_api_key))
         self.tools.register(WebFetchTool())
         
         logger.info(f"已註冊工具: {self.tools.tool_names}")
