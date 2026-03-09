@@ -391,7 +391,13 @@ class AgentLoop:
             try:
                 # Get messages to consolidate
                 old_messages = messages[last_consolidated:]
-                msg_dicts = [{"role": m.role, "content": m.content} for m in old_messages]
+                # Convert to dicts (handle both object and dict formats)
+                msg_dicts = []
+                for m in old_messages:
+                    if isinstance(m, dict):
+                        msg_dicts.append({"role": m.get("role", "?"), "content": m.get("content", "")})
+                    else:
+                        msg_dicts.append({"role": m.role, "content": m.content})
                 
                 success = await consolidate(
                     memory_store=self.memory,
