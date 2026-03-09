@@ -8,7 +8,6 @@ import asyncio
 import json
 import os
 from pathlib import Path
-from typing import Any
 
 from minibot.storage.base import StorageProvider, StoredMessage
 
@@ -16,14 +15,23 @@ from minibot.storage.base import StorageProvider, StoredMessage
 class SQLiteStorage(StorageProvider):
     """SQLite Storage 實作"""
 
-    def __init__(self, db_path: str = "data/sessions.db"):
-        self.db_path = db_path
+    DEFAULT_DB_PATH = Path.home() / ".minibot" / "data" / "sessions.db"
+
+    def __init__(self, db_path: str | os.PathLike[str] | None = None):
+        self.db_path = self._resolve_db_path(db_path)
         self._lock = asyncio.Lock()
         self._init_db()
 
+    @classmethod
+    def _resolve_db_path(cls, db_path: str | os.PathLike[str] | None) -> Path:
+        """Resolve db path; expands ~ to user home."""
+        if db_path is None or str(db_path).strip() == "":
+            return cls.DEFAULT_DB_PATH
+        return Path(db_path).expanduser()
+
     def _init_db(self):
         """初始化資料庫"""
-        Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         conn = self._get_conn()
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
@@ -38,7 +46,7 @@ class SQLiteStorage(StorageProvider):
     def _get_conn(self):
         """取得連線"""
         import sqlite3
-        return sqlite3.connect(self.db_path)
+        return sqlite3.connect(str(self.db_path))
 
     async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
         """取得對話歷史"""

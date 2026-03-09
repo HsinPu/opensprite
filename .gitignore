@@ -11,3 +11,6 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+
+# minibot runtime data (should live in user home)
+~/.minibot/
