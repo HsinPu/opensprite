@@ -102,5 +102,6 @@ Extract key facts, preferences, decisions, and important information. Update the
 
         return True
     except Exception as e:
-        logger.error(f"Memory consolidation failed: {e}")
+        import traceback
+        logger.error(f"Memory consolidation failed: {e}\n{traceback.format_exc()}")
         return False
