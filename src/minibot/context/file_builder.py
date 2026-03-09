@@ -4,7 +4,7 @@ minibot/context/file_builder.py - 檔案式 ContextBuilder 實作
 從 workspace 檔案組裝 system prompt：
 - IDENTITY.md（身份設定）
 - AGENTS.md、SOUL.md、USER.md、TOOLS.md（啟動檔案）
-- memory/MEMORY.md（長期記憶）
+- memory/{chat_id}/MEMORY.md（長期記憶）
 """
 
 import platform
@@ -12,7 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from minibot.context.workspace import load_bootstrap_files, load_memory
+from minibot.context.workspace import load_bootstrap_files
+from minibot.memory import MemoryStore
 
 
 class FileContextBuilder:
@@ -22,7 +23,7 @@ class FileContextBuilder:
     Assembles system prompt from:
     - Identity (IDENTITY.md)
     - Bootstrap files (AGENTS.md, SOUL.md, USER.md, TOOLS.md)
-    - Memory (memory/MEMORY.md)
+    - Memory (memory/{chat_id}/MEMORY.md)
     """
     
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md", "TOOLS.md"]
@@ -30,8 +31,9 @@ class FileContextBuilder:
     
     def __init__(self, workspace: Path):
         self.workspace = workspace
+        self.memory_store = MemoryStore(workspace)
     
-    def build_system_prompt(self) -> str:
+    def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build system prompt from workspace files."""
         parts = [self._get_identity()]
         
@@ -41,8 +43,8 @@ class FileContextBuilder:
             if content:
                 parts.append(f"## {key}\n\n{content}")
         
-        # Load memory
-        memory = load_memory(self.workspace)
+        # Load per-chat memory
+        memory = self.memory_store.read(chat_id)
         if memory:
             parts.append(f"# Memory\n\n{memory}")
         
@@ -90,8 +92,9 @@ Your workspace is at: {workspace_path}
         chat_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build complete message list for LLM call."""
+        chat_id = chat_id or "default"
         return [
-            {"role": "system", "content": self.build_system_prompt()},
+            {"role": "system", "content": self.build_system_prompt(chat_id)},
             *history,
             {"role": "user", "content": self._build_runtime_context(channel, chat_id)},
             {"role": "user", "content": current_message},

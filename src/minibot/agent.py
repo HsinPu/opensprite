@@ -114,7 +114,7 @@ class AgentLoop:
         # Memory store (long-term memory)
         workspace = getattr(self._context_builder, 'workspace', Path.cwd())
         self.memory = MemoryStore(workspace)
-        self._last_consolidated = 0  # Track message count for consolidation
+        self._last_consolidated: dict[str, int] = {}  # Per-chat tracking
 
         # Register save_memory tool
         self._register_memory_tool()
@@ -138,17 +138,20 @@ class AgentLoop:
                 "required": ["memory_update"]
             }
             
-            def __init__(self, memory_store: MemoryStore):
+            def __init__(self, memory_store: MemoryStore, get_chat_id: callable):
                 self.memory_store = memory_store
+                self.get_chat_id = get_chat_id
             
             async def execute(self, memory_update: str, **kwargs: Any) -> str:
-                current = self.memory_store.read()
+                chat_id = self.get_chat_id()
+                current = self.memory_store.read(chat_id)
                 if memory_update != current:
-                    self.memory_store.write(memory_update)
+                    self.memory_store.write(chat_id, memory_update)
                     return f"Memory saved ({len(memory_update)} chars)"
                 return "Memory unchanged"
         
-        self.tools.register(SaveMemoryTool(self.memory))
+        # Pass a lambda that returns current chat_id
+        self.tools.register(SaveMemoryTool(self.memory, lambda: self._current_chat_id))
 
     def _register_default_tools(self) -> None:
         """註冊預設的工具"""
@@ -348,6 +351,9 @@ class AgentLoop:
         
         logger.info(f"[{chat_id}] 收到訊息: {user_message.text[:50]}...")
 
+        # Set current chat_id for save_memory tool
+        self._current_chat_id = chat_id
+
         # 1. 把使用者訊息存入 storage
         await self._save_message(chat_id, "user", user_message.text)
 
@@ -375,23 +381,27 @@ class AgentLoop:
         messages = await self.storage.get_messages(chat_id, limit=1000)
         message_count = len(messages)
         
+        # Get last consolidated for this chat
+        last_consolidated = self._last_consolidated.get(chat_id, 0)
+        
         # Check if we should consolidate
-        unconsolidated = message_count - self._last_consolidated
+        unconsolidated = message_count - last_consolidated
         if unconsolidated >= self.config.memory_threshold:
             logger.info(f"[{chat_id}] Consolidating memory ({unconsolidated} messages)")
             try:
                 # Get messages to consolidate
-                old_messages = messages[self._last_consolidated:]
+                old_messages = messages[last_consolidated:]
                 msg_dicts = [{"role": m.role, "content": m.content} for m in old_messages]
                 
                 success = await self.memory.consolidate(
+                    chat_id=chat_id,
                     messages=msg_dicts,
                     provider=self.provider,
                     model=self.provider.get_default_model(),
                 )
                 if success:
-                    self._last_consolidated = message_count
-                    logger.info(f"[{chat_id}] Memory consolidated, last_consolidated={self._last_consolidated}")
+                    self._last_consolidated[chat_id] = message_count
+                    logger.info(f"[{chat_id}] Memory consolidated")
             except Exception as e:
                 logger.error(f"[{chat_id}] Memory consolidation failed: {e}")
 

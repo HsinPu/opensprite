@@ -1,4 +1,4 @@
-"""Memory system for persistent agent memory (long-term)."""
+"""Memory system for persistent agent memory (per-chat long-term)."""
 
 import json
 from pathlib import Path
@@ -31,35 +31,40 @@ _SAVE_MEMORY_TOOL = [
 
 class MemoryStore:
     """
-    Long-term memory stored in MEMORY.md.
-    
-    Reads/writes to a markdown file that gets included in system prompt.
+    Per-chat long-term memory stored in memory/{chat_id}/MEMORY.md.
     """
 
     def __init__(self, workspace: Path):
-        self.memory_dir = workspace / "memory"
-        self.memory_dir.mkdir(parents=True, exist_ok=True)
-        self.memory_file = self.memory_dir / "MEMORY.md"
+        self.memory_base = workspace / "memory"
 
-    def read(self) -> str:
-        """Read long-term memory."""
-        if self.memory_file.exists():
-            return self.memory_file.read_text(encoding="utf-8")
+    def _get_memory_file(self, chat_id: str) -> Path:
+        """Get memory file path for specific chat."""
+        chat_dir = self.memory_base / chat_id
+        chat_dir.mkdir(parents=True, exist_ok=True)
+        return chat_dir / "MEMORY.md"
+
+    def read(self, chat_id: str) -> str:
+        """Read long-term memory for a specific chat."""
+        memory_file = self._get_memory_file(chat_id)
+        if memory_file.exists():
+            return memory_file.read_text(encoding="utf-8")
         return ""
 
-    def write(self, content: str) -> None:
-        """Write long-term memory."""
-        self.memory_file.write_text(content, encoding="utf-8")
+    def write(self, chat_id: str, content: str) -> None:
+        """Write long-term memory for a specific chat."""
+        memory_file = self._get_memory_file(chat_id)
+        memory_file.write_text(content, encoding="utf-8")
 
-    def get_context(self) -> str:
+    def get_context(self, chat_id: str) -> str:
         """Get memory context for system prompt."""
-        memory = self.read()
+        memory = self.read(chat_id)
         if memory:
             return f"# Long-term Memory\n\n{memory}"
         return ""
 
     async def consolidate(
         self,
+        chat_id: str,
         messages: list[dict],
         provider: "LLMProvider",
         model: str,
@@ -68,6 +73,7 @@ class MemoryStore:
         Consolidate old messages into memory via LLM.
         
         Args:
+            chat_id: Chat ID for per-chat memory
             messages: List of conversation messages to process
             provider: LLM provider
             model: Model to use
@@ -87,7 +93,7 @@ class MemoryStore:
             content = m.get("content", "")
             lines.append(f"[{role}]: {content}")
 
-        current_memory = self.read()
+        current_memory = self.read(chat_id)
         prompt = f"""Process this conversation and call the save_memory tool with important information to remember.
 
 Current memory:
@@ -118,8 +124,8 @@ Extract key facts, preferences, decisions, and important information. Update the
 
             if update := args.get("memory_update"):
                 if update != current_memory:
-                    self.write(update)
-                    logger.info("Memory consolidated: {} chars", len(update))
+                    self.write(chat_id, update)
+                    logger.info("Memory consolidated for chat {}: {} chars", chat_id, len(update))
 
             return True
         except Exception as e:
