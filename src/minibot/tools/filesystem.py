@@ -147,3 +147,57 @@ class ListDirTool(Tool):
             return "\n".join(items) if items else "(empty)"
         except Exception as e:
             return f"Error listing directory: {str(e)}"
+
+
+class EditFileTool(Tool):
+    """Tool to edit a file by replacing text."""
+
+    def __init__(self, workspace: Path):
+        self.workspace = workspace
+
+    @property
+    def name(self) -> str:
+        return "edit_file"
+
+    @property
+    def description(self) -> str:
+        return "Edit a file by replacing old_text with new_text. The old_text must exist exactly in the file."
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string", "description": "The file path to edit"},
+                "old_text": {"type": "string", "description": "The exact text to find and replace"},
+                "new_text": {"type": "string", "description": "The text to replace with"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        }
+
+    async def execute(self, path: str, old_text: str, new_text: str, **kwargs: Any) -> str:
+        try:
+            file_path = Path(path)
+            # Security: restrict to workspace
+            if file_path.is_absolute() and not str(file_path).startswith(str(self.workspace)):
+                return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+
+            if not file_path.exists():
+                return f"Error: File not found: {path}"
+
+            content = file_path.read_text(encoding="utf-8")
+
+            if old_text not in content:
+                return f"Error: old_text not found in file. Please provide exact text to replace."
+
+            # Count occurrences
+            count = content.count(old_text)
+            if count > 1:
+                return f"Warning: old_text appears {count} times. Please provide more context to make it unique."
+
+            new_content = content.replace(old_text, new_text, 1)
+            file_path.write_text(new_content, encoding="utf-8")
+
+            return f"Successfully edited {path}"
+        except Exception as e:
+            return f"Error editing file: {str(e)}"

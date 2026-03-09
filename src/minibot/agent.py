@@ -28,7 +28,7 @@ from minibot.bus.message import UserMessage, AssistantMessage
 from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
-from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, ExecTool, WebSearchTool, WebFetchTool
+from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool
 from minibot.utils.log import logger
 from minibot.config import AgentConfig
 
@@ -119,6 +119,7 @@ class AgentLoop:
         # 檔案工具
         self.tools.register(ReadFileTool(workspace=workspace))
         self.tools.register(WriteFileTool(workspace=workspace))
+        self.tools.register(EditFileTool(workspace=workspace))
         self.tools.register(ListDirTool(workspace=workspace))
         
         # 執行命令
