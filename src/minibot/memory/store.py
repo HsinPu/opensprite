@@ -1,11 +1,13 @@
-"""Memory store for per-chat long-term memory."""
+"""File-based memory storage implementation."""
 
 from pathlib import Path
 
+from minibot.memory.base import MemoryStorage
 
-class MemoryStore:
+
+class FileMemoryStorage(MemoryStorage):
     """
-    Per-chat long-term memory stored in memory/{chat_id}/MEMORY.md.
+    File-based memory stored in memory/{chat_id}/MEMORY.md.
     """
 
     def __init__(self, workspace: Path):
@@ -18,14 +20,14 @@ class MemoryStore:
         return chat_dir / "MEMORY.md"
 
     def read(self, chat_id: str) -> str:
-        """Read long-term memory for a specific chat."""
+        """Read memory for a specific chat."""
         memory_file = self._get_memory_file(chat_id)
         if memory_file.exists():
             return memory_file.read_text(encoding="utf-8")
         return ""
 
     def write(self, chat_id: str, content: str) -> None:
-        """Write long-term memory for a specific chat."""
+        """Write memory for a specific chat."""
         memory_file = self._get_memory_file(chat_id)
         memory_file.write_text(content, encoding="utf-8")
 
@@ -35,3 +37,7 @@ class MemoryStore:
         if memory:
             return f"# Long-term Memory\n\n{memory}"
         return ""
+
+
+# Alias for backward compatibility
+MemoryStore = FileMemoryStorage
