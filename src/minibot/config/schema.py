@@ -28,9 +28,6 @@ class LLMsConfig(BaseModel):
 class AgentConfig(BaseModel):
     system_prompt: str
     max_history: int
-    model: str
-    temperature: float
-    max_tokens: int
 
 
 class StorageConfig(BaseModel):
