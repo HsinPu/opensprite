@@ -175,12 +175,22 @@ class AgentLoop:
 
         # Log 完整 prompt
         try:
-            logger.info(f"[{chat_id}] Prompt:\n{'-'*40}")
+            # 找出 system prompt
+            system_msg = next((m for m in full_messages if m.get("role") == "system"), None)
+            if system_msg:
+                logger.info(f"[{chat_id}] === SYSTEM PROMPT ===")
+                logger.info(f"[{chat_id}] {system_msg.get('content', '')}")
+                logger.info(f"[{chat_id}] ====================")
+            
+            # 其他訊息（完整印出）
+            logger.info(f"[{chat_id}] === MESSAGES ===")
             for msg in full_messages:
-                content = msg.get('content', '')[:200] if msg.get('content') else ''
                 role = msg.get('role', 'unknown')
-                logger.info(f"[{chat_id}] {role}: {content}...")
-            logger.info(f"[{chat_id}] {'-'*40}")
+                if role == "system":
+                    continue
+                content = msg.get('content', '')  # 完整印出
+                logger.info(f"[{chat_id}] {role}: {content}")
+            logger.info(f"[{chat_id}] ==============")
         except Exception as e:
             logger.error(f"[{chat_id}] Log prompt error: {e}")
 
