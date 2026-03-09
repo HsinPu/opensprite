@@ -57,11 +57,18 @@ class OpenAILLM(LLMProvider):
         # 轉換成 OpenAI 格式
         api_messages = []
         for m in messages:
-            msg = {"role": m.role, "content": m.content}
-            if m.tool_call_id:
-                msg["tool_call_id"] = m.tool_call_id
-            if m.tool_calls:
-                msg["tool_calls"] = m.tool_calls
+            if isinstance(m, dict):
+                msg = {"role": m.get("role", "?"), "content": m.get("content", "")}
+                if m.get("tool_call_id"):
+                    msg["tool_call_id"] = m["tool_call_id"]
+                if m.get("tool_calls"):
+                    msg["tool_calls"] = m["tool_calls"]
+            else:
+                msg = {"role": m.role, "content": m.content}
+                if m.tool_call_id:
+                    msg["tool_call_id"] = m.tool_call_id
+                if m.tool_calls:
+                    msg["tool_calls"] = m.tool_calls
             api_messages.append(msg)
         
         # API 參數
