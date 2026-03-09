@@ -54,10 +54,16 @@ async def consolidate(
     # Build prompt with messages
     lines = []
     for m in messages:
-        if not m.get("content"):
+        # Support both dict and object formats
+        if isinstance(m, dict):
+            content = m.get("content", "")
+            role = m.get("role", "?").upper()
+        else:
+            content = getattr(m, "content", "")
+            role = getattr(m, "role", "?").upper()
+        
+        if not content:
             continue
-        role = m.get("role", "?").upper()
-        content = m.get("content", "")
         lines.append(f"[{role}]: {content}")
 
     current_memory = memory_store.read(chat_id)
