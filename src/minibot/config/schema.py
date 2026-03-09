@@ -29,6 +29,7 @@ class AgentConfig(BaseModel):
     system_prompt: str
     max_history: int
     memory_threshold: int = 30  # Trigger consolidation after this many messages
+    brave_api_key: str = ""  # Brave Search API key for web search
 
 
 class StorageConfig(BaseModel):
@@ -47,14 +48,20 @@ class LogConfig(BaseModel):
     level: str = "INFO"
 
 
+class ToolsConfig(BaseModel):
+    """Tool configurations."""
+    brave_api_key: str = ""
+
+
 class Config:
     def __init__(self, llm: LLMsConfig, agent: AgentConfig, storage: StorageConfig,
-                 channels: ChannelsConfig, log: LogConfig | None = None):
+                 channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None):
         self.llm = llm
         self.agent = agent
         self.storage = storage
         self.channels = channels
         self.log = log or LogConfig()
+        self.tools = tools or ToolsConfig()
 
     @classmethod
     def from_json(cls, path: str | Path) -> "Config":
@@ -73,7 +80,8 @@ class Config:
             agent=AgentConfig(**data["agent"]),
             storage=StorageConfig(**data["storage"]),
             channels=ChannelsConfig(**data["channels"]),
-            log=LogConfig(**data["log"]) if "log" in data else None
+            log=LogConfig(**data["log"]) if "log" in data else None,
+            tools=ToolsConfig(**data.get("tools", {})) if "tools" in data else None,
         )
 
     @classmethod
@@ -125,7 +133,8 @@ class Config:
             "agent": {"system_prompt": "你是個有用且簡潔的助理。", "max_history": 50},
             "storage": {"type": "sqlite", "path": "~/.minibot/data/sessions.db"},
             "channels": {"telegram": {"enabled": False, "token": ""}, "console": {"enabled": True}},
-            "log": {"enabled": True, "retention_days": 365, "level": "INFO"}
+            "log": {"enabled": True, "retention_days": 365, "level": "INFO"},
+            "tools": {"brave_api_key": ""}
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(default_config, f, indent=2, ensure_ascii=False)
@@ -149,6 +158,7 @@ class Config:
                 "console": {"enabled": self.channels.console.get("enabled", True)},
             },
             "log": {"enabled": self.log.enabled, "retention_days": self.log.retention_days, "level": self.log.level},
+            "tools": {"brave_api_key": self.tools.brave_api_key},
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

@@ -10,6 +10,7 @@ from minibot.config.schema import (
     StorageConfig,
     ChannelsConfig,
     LogConfig,
+    ToolsConfig,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "StorageConfig",
     "ChannelsConfig",
     "LogConfig",
+    "ToolsConfig",
 ]

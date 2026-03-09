@@ -48,6 +48,7 @@ def create_agent(config: Config):
     agent_config = AgentConfig(
         system_prompt=config.agent.system_prompt,
         max_history=config.agent.max_history,
+        brave_api_key=config.tools.brave_api_key if hasattr(config, 'tools') else "",
     )
     
     # 建立 Storage
