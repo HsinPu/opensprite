@@ -8,6 +8,7 @@ class ProviderConfig(BaseModel):
     api_key: str
     model: str = ""
     base_url: str | None = None
+    enabled: bool = True
 
 
 class LLMsConfig(BaseModel):
