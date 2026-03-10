@@ -1,6 +1,6 @@
 """mini-bot - Ultra-lightweight personal AI assistant"""
 
-from minibot.core import AgentLoop
+from minibot.agent import AgentLoop
 from minibot.config import AgentConfig
 from minibot.bus.message import UserMessage, AssistantMessage, MessageAdapter
 from minibot.llms import LLMProvider, ChatMessage, LLMResponse, OpenAILLM

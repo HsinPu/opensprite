@@ -9,7 +9,7 @@ minibot/main.py - 入口點
 
 import asyncio
 
-from minibot.core import AgentLoop
+from minibot.agent import AgentLoop
 from minibot.config import AgentConfig
 from minibot.llms import create_llm
 from minibot.storage import MemoryStorage, StorageProvider

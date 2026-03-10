@@ -171,7 +171,7 @@ class TelegramAdapter(MessageAdapter):
 
 ```python
 import asyncio
-from minibot.core import AgentLoop, AgentConfig
+from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage
 from minibot.bus.message_queue import MessageQueue

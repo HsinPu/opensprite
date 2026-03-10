@@ -323,7 +323,7 @@ class MessageQueue:
 # 建立 Queue 版本（Bus 版）
 
 import asyncio
-from minibot.core import AgentLoop, AgentConfig
+from minibot.agent import AgentLoop, AgentConfig
 from minibot.llms import OpenAILLM
 from minibot.storage import MemoryStorage
 from minibot.bus.message_queue import MessageQueue
