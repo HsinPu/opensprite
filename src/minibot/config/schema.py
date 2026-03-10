@@ -142,7 +142,7 @@ class Config:
             },
             "storage": {"type": "sqlite", "path": "~/.minibot/data/sessions.db"},
             "channels": {"telegram": {"enabled": False, "token": ""}, "console": {"enabled": True}},
-            "log": {"enabled": True, "retention_days": 365, "level": "INFO", "log_prompt": True, "log_prompt_lines": 0},
+            "log": {"enabled": True, "retention_days": 365, "level": "INFO", "log_system_prompt": True, "log_system_prompt_lines": 0},
             "tools": {"brave_api_key": "", "max_tool_iterations": 100},
             "memory": {"max_history": 50, "threshold": 30}
         }
