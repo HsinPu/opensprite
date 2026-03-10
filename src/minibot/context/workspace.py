@@ -57,16 +57,18 @@ def sync_templates(workspace: Path, silent: bool = False) -> list[str]:
             if item.name.endswith(".md"):
                 _write(item, memory_dir / item.name)
 
-    # Sync skills (default skills at workspace/skills/)
+    # Sync default skills to ~/.minibot/skills/ (system-wide)
+    default_skills_dir = Path.home() / ".minibot" / "skills"
     skills_tpl = pkg_files("minibot") / "skills"
     if skills_tpl.is_dir():
-        skills_dir = workspace / "skills"
+        default_skills_dir.mkdir(parents=True, exist_ok=True)
         for skill_folder in skills_tpl.iterdir():
             if not skill_folder.is_dir():
                 continue
-            skill_dest = skills_dir / skill_folder.name
+            skill_dest = default_skills_dir / skill_folder.name
+            skill_dest.mkdir(parents=True, exist_ok=True)
             for item in skill_folder.iterdir():
-                if item.name.endswith(".md"):
+                if item.suffix in (".md", ".py"):
                     _write(item, skill_dest / item.name)
 
     if added and not silent:
