@@ -32,7 +32,7 @@ from minibot.context.builder import ContextBuilder
 from minibot.memory import MemoryStore, consolidate
 from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool
 from minibot.utils.log import logger
-from minibot.config import AgentConfig, MemoryConfig
+from minibot.config import AgentConfig, MemoryConfig, ToolsConfig
 
 
 class AgentLoop:
@@ -67,29 +67,12 @@ class AgentLoop:
         context_builder: ContextBuilder | None = None,
         tools: ToolRegistry | None = None,
         memory_config: MemoryConfig | None = None,
+        tools_config: ToolsConfig | None = None,
         brave_api_key: str = "",
     ):
         ...
-        self.memory_config = memory_config or {"max_history": 50, "threshold": 30}
-        """
-        AgentLoop 的建構函式。
-
-        參數：
-            config: AgentConfig 物件，包含所有設定
-            provider: LLMProvider 物件（OpenAI/Anthropic/其他）
-            storage: StorageProvider 物件（記憶體/檔案/資料庫），可選
-            context_builder: ContextBuilder 物件，可選
-            tools: ToolRegistry 物件，可選
-
-        初始化時會：
-            1. 儲存設定到 self.config
-            2. 儲存 LLM Provider
-            3. 儲存 Storage Provider（如果沒給，用預設的記憶體）
-            4. 儲存 ContextBuilder（如果沒給，用簡單的 fallback）
-            5. 初始化 Tools（如果沒給，用預設的檔案/shell 工具）
-        """
-        self.config = config
         self.memory_config = memory_config or MemoryConfig()
+        self.tools_config = tools_config or ToolsConfig()
         self.brave_api_key = brave_api_key
         self.provider = provider
 
@@ -293,7 +276,7 @@ class AgentLoop:
         tool_results_history = []
 
         # 迴圈：執行 tool calls 直到沒有為止
-        for iteration in range(self.MAX_TOOL_ITERATIONS):
+        for iteration in range(self.tools_config.max_tool_iterations):
             # 呼叫 Provider
             logger.info(f"[{chat_id}] 呼叫 LLM... (iteration {iteration + 1})")
             response = await self.provider.chat(
@@ -351,14 +334,14 @@ class AgentLoop:
             return response.content
 
         # 超過最大迭代次數
-        logger.warning(f"[{chat_id}] 超過最大工具迭代次數 ({self.MAX_TOOL_ITERATIONS})")
+        logger.warning(f"[{chat_id}] 超過最大工具迭代次數 ({self.tools_config.max_tool_iterations})")
         
         # 回報問題並附上工具執行歷史
         history_msg = ""
         if tool_results_history:
             history_msg = f"\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(f"- {r}" for r in tool_results_history[-5:])
         
-        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.MAX_TOOL_ITERATIONS}次）。請將任務拆分為較小的步驟。{history_msg}"
+        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.tools_config.max_tool_iterations}次）。請將任務拆分為較小的步驟。{history_msg}"
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

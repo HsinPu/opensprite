@@ -52,7 +52,7 @@ def create_agent(config: Config):
     
     # 建立 Agent
     brave_api_key = config.tools.brave_api_key if hasattr(config, 'tools') else ""
-    agent = AgentLoop(agent_config, llm, storage, memory_config=config.memory, brave_api_key=brave_api_key)
+    agent = AgentLoop(agent_config, llm, storage, memory_config=config.memory, tools_config=config.tools, brave_api_key=brave_api_key)
     mq = MessageQueue(agent)
     
     return agent, mq
