@@ -37,6 +37,7 @@ class SQLiteStorage(StorageProvider):
             CREATE TABLE IF NOT EXISTS sessions (
                 chat_id TEXT PRIMARY KEY,
                 messages TEXT DEFAULT '[]',
+                consolidated_index INTEGER DEFAULT 0,
                 created_at REAL,
                 updated_at REAL
             )
@@ -107,6 +108,23 @@ class SQLiteStorage(StorageProvider):
         async with self._lock:
             conn = self._get_conn()
             conn.execute("DELETE FROM sessions WHERE chat_id = ?", (chat_id,))
+            conn.commit()
+            conn.close()
+
+    async def get_consolidated_index(self, chat_id: str) -> int:
+        """取得 consolidation 標記"""
+        async with self._lock:
+            conn = self._get_conn()
+            cur = conn.execute("SELECT consolidated_index FROM sessions WHERE chat_id = ?", (chat_id,))
+            row = cur.fetchone()
+            conn.close()
+            return row[0] if row else 0
+
+    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+        """設定 consolidation 標記"""
+        async with self._lock:
+            conn = self._get_conn()
+            conn.execute("UPDATE sessions SET consolidated_index = ? WHERE chat_id = ?", (index, chat_id))
             conn.commit()
             conn.close()
 

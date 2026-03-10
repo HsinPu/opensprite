@@ -21,6 +21,7 @@ class MemoryStorage(StorageProvider):
     def __init__(self):
         """初始化"""
         self._messages: dict[str, list[StoredMessage]] = defaultdict(list)
+        self._consolidated_index: dict[str, int] = {}  # Per-chat consolidation tracking
     
     async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
         """
@@ -47,6 +48,14 @@ class MemoryStorage(StorageProvider):
         """
         if chat_id in self._messages:
             self._messages[chat_id].clear()
+    
+    async def get_consolidated_index(self, chat_id: str) -> int:
+        """取得 consolidation 標記"""
+        return self._consolidated_index.get(chat_id, 0)
+    
+    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+        """設定 consolidation 標記"""
+        self._consolidated_index[chat_id] = index
     
     async def get_all_chats(self) -> list[str]:
         """

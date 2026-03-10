@@ -103,8 +103,6 @@ class AgentLoop:
         # Memory store (long-term memory)
         workspace = getattr(self._context_builder, 'workspace', Path.cwd())
         self.memory = MemoryStore(workspace)
-        self._last_consolidated: dict[str, int] = {}  # Per-chat tracking
-
         # Register save_memory tool
         self._register_memory_tool()
 
@@ -393,7 +391,7 @@ class AgentLoop:
         message_count = len(messages)
         
         # Get last consolidated for this chat
-        last_consolidated = self._last_consolidated.get(chat_id, 0)
+        last_consolidated = await self.storage.get_consolidated_index(chat_id)
         
         # Check if we should consolidate
         unconsolidated = message_count - last_consolidated
@@ -418,7 +416,7 @@ class AgentLoop:
                     model=self.provider.get_default_model(),
                 )
                 if success:
-                    self._last_consolidated[chat_id] = message_count
+                    await self.storage.set_consolidated_index(chat_id, message_count)
                     logger.info(f"[{chat_id}] Memory consolidated")
             except Exception as e:
                 logger.error(f"[{chat_id}] Memory consolidation failed: {e}")

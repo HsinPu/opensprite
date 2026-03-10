@@ -22,6 +22,7 @@ class StoredMessage:
     content: str   # 訊息內容
     timestamp: float  # 時間戳記
     tool_name: str | None = None  # 如果是 tool，記錄用了什麼工具
+    is_consolidated: bool = False  # 是否已被 consolidate 過
 
 
 class StorageProvider(ABC):
@@ -34,6 +35,8 @@ class StorageProvider(ABC):
         - get_messages(): 取得對話歷史
         - add_message(): 加入訊息
         - clear_messages(): 清除歷史
+        - get_consolidated_index(): 取得 consolidation 標記
+        - set_consolidated_index(): 設定 consolidation 標記
     """
     
     @abstractmethod
