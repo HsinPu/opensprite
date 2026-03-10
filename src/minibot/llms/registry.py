@@ -45,8 +45,11 @@ def find_provider(api_key: str = "", base_url: str = "", model: str = "", provid
     return PROVIDERS[1]  # openai
 
 
-def create_llm(api_key: str, model: str, base_url: str = "", provider_name: str = "") -> LLMProvider:
+def create_llm(api_key: str, model: str, base_url: str = "", provider_name: str = "", enabled: bool = True) -> LLMProvider:
     """建立 LLM Provider"""
+    if not enabled:
+        raise ValueError(f"Provider {provider_name} is disabled")
+    
     spec = find_provider(api_key, base_url, model, provider_name)
     
     if spec.name == "openrouter":

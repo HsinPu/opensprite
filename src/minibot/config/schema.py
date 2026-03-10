@@ -22,7 +22,7 @@ class LLMsConfig(BaseModel):
     def get_active(self) -> ProviderConfig:
         if self.providers and self.default and self.default in self.providers:
             return self.providers[self.default]
-        return ProviderConfig(api_key=self.api_key, model=self.model, base_url=self.base_url)
+        return ProviderConfig(api_key=self.api_key, model=self.model, base_url=self.base_url, enabled=True)
 
 
 class AgentConfig(BaseModel):
