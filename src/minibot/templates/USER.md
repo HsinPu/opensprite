@@ -1,16 +1,49 @@
-# USER.md - About Your Human
+# User Profile
 
-_Learn about the person you're helping. Update this as you go._
+Information about the user to help personalize interactions.
 
-- **Name:**
-- **What to call them:**
-- **Pronouns:** _(optional)_
-- **Timezone:**
+## Basic Information
 
-## Context
+- **Name**: 
+- **Timezone**: (e.g., UTC+8)
+- **Language**: 
 
-_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
+## Preferences
+
+### Communication Style
+
+- [ ] Casual
+- [ ] Professional
+- [ ] Technical
+
+### Response Length
+
+- [ ] Brief and concise
+- [ ] Detailed explanations
+- [ ] Adaptive based on question
+
+### Technical Level
+
+- [ ] Beginner
+- [ ] Intermediate
+- [ ] Expert
+
+## Work Context
+
+- **Primary Role**: (e.g., developer, researcher)
+- **Main Projects**: (what you're working on)
+- **Tools You Use**: (IDEs, languages, frameworks)
+
+## Topics of Interest
+
+- 
+- 
+- 
+
+## Special Instructions
+
+(Any specific instructions for how the assistant should behave)
 
 ---
 
-The more you know, the better you can help.
+*Edit this file to customize mini-bot's behavior for your needs.*

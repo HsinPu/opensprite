@@ -1,29 +1,29 @@
-# TOOLS.md - Local Notes
+# Tool Usage Notes
 
-Skills define _how_ tools work. This file is for _your_ specifics — the stuff that's unique to your setup.
+Tool signatures are provided automatically via function calling.
+This file documents non-obvious constraints and usage patterns.
 
-## What Goes Here
+## Files
 
-Things like:
+- **read_file**: Read file content (limited to workspace)
+- **write_file**: Write/create files (limited to workspace)
+- **edit_file**: Edit files by replacing exact text (limited to workspace)
+- **list_dir**: List directory contents
 
-- Camera names and locations
-- SSH hosts and aliases
-- Device nicknames
-- Anything environment-specific
+## System
 
-## Examples
+- **exec**: Execute shell commands
+  - Timeout: 60 seconds
+  - Limited to workspace directory
+  - Dangerous commands are blocked:
+    - `rm -rf`, `del /f`, `rmdir /s`
+    - `format`, `mkfs`, `diskpart`
+    - `dd` (direct disk access)
+    - Writing to `/dev/sd*`
+    - `shutdown`, `reboot`, `poweroff`
+    - Fork bombs
 
-```markdown
-### Cameras
+## Web
 
-- living-room → Main area, 180° wide angle
-- front-door → Entrance, motion-triggered
-
-### SSH
-
-- home-server → 192.168.1.100, user: admin
-```
-
----
-
-Add whatever helps you do your job. This is your cheat sheet.
+- **web_search**: Search the web (requires Brave API key)
+- **web_fetch**: Fetch web page content
