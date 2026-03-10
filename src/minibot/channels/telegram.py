@@ -88,9 +88,16 @@ class TelegramAdapter(MessageAdapter):
         if message.chat_id is None:
             raise ValueError("AssistantMessage 缺少 chat_id，無法發送")
         
+        text = message.text
+        max_length = 4000
+        
+        # 截斷過長的訊息
+        if len(text) > max_length:
+            text = text[:max_length] + f"\n\n... (訊息太長，已截斷，共 {len(message.text)} 字)"
+        
         await self.app.bot.send_message(
             chat_id=message.chat_id,
-            text=message.text
+            text=text
         )
     
     async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str) -> None:
