@@ -36,8 +36,12 @@ class ReadFileTool(Tool):
     async def execute(self, path: str, **kwargs: Any) -> str:
         try:
             file_path = Path(path)
-            # Security: restrict to workspace if absolute path
-            if file_path.is_absolute() and not str(file_path).startswith(str(self.workspace)):
+            # If relative path, prepend workspace
+            if not file_path.is_absolute():
+                file_path = self.workspace / file_path
+            
+            # Security: restrict to workspace
+            if not str(file_path).startswith(str(self.workspace)):
                 return f"Error: Access denied. Path must be within workspace: {self.workspace}"
             
             if not file_path.exists():
@@ -86,8 +90,12 @@ class WriteFileTool(Tool):
     async def execute(self, path: str, content: str, **kwargs: Any) -> str:
         try:
             file_path = Path(path)
+            # If relative path, prepend workspace
+            if not file_path.is_absolute():
+                file_path = self.workspace / file_path
+            
             # Security: restrict to workspace
-            if file_path.is_absolute() and not str(file_path).startswith(str(self.workspace)):
+            if not str(file_path).startswith(str(self.workspace)):
                 return f"Error: Access denied. Path must be within workspace: {self.workspace}"
             
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -178,8 +186,12 @@ class EditFileTool(Tool):
     async def execute(self, path: str, old_text: str, new_text: str, **kwargs: Any) -> str:
         try:
             file_path = Path(path)
+            # If relative path, prepend workspace
+            if not file_path.is_absolute():
+                file_path = self.workspace / file_path
+            
             # Security: restrict to workspace
-            if file_path.is_absolute() and not str(file_path).startswith(str(self.workspace)):
+            if not str(file_path).startswith(str(self.workspace)):
                 return f"Error: Access denied. Path must be within workspace: {self.workspace}"
 
             if not file_path.exists():
