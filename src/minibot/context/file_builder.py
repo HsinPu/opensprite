@@ -4,6 +4,7 @@ minibot/context/file_builder.py - 檔案式 ContextBuilder 實作
 從 workspace 檔案組裝 system prompt：
 - IDENTITY.md（身份設定）
 - AGENTS.md、SOUL.md、USER.md、TOOLS.md（啟動檔案）
+- Skills（技能說明）
 - memory/{chat_id}/MEMORY.md（長期記憶）
 """
 
@@ -14,6 +15,7 @@ from typing import Any
 
 from minibot.context.workspace import load_bootstrap_files
 from minibot.memory import MemoryStore
+from minibot.skills import SkillsLoader
 
 
 class FileContextBuilder:
@@ -23,6 +25,7 @@ class FileContextBuilder:
     Assembles system prompt from:
     - Identity (IDENTITY.md)
     - Bootstrap files (AGENTS.md, SOUL.md, USER.md, TOOLS.md)
+    - Skills (skills/*/SKILL.md)
     - Memory (memory/{chat_id}/MEMORY.md)
     """
     
@@ -32,6 +35,7 @@ class FileContextBuilder:
     def __init__(self, workspace: Path):
         self.workspace = workspace
         self.memory_store = MemoryStore(workspace)
+        self.skills_loader = SkillsLoader(workspace)
     
     def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build system prompt from workspace files."""
@@ -42,6 +46,17 @@ class FileContextBuilder:
         for key, content in bootstrap.items():
             if content:
                 parts.append(f"## {key}\n\n{content}")
+        
+        # Load always-on skills
+        always_skills = self.skills_loader.get_always_skills()
+        if always_skills:
+            skill_contents = []
+            for skill_name in always_skills:
+                content = self.skills_loader.load_skill_content(skill_name)
+                if content:
+                    skill_contents.append(f"# Skill: {skill_name}\n\n{content}")
+            if skill_contents:
+                parts.append(f"# Skills\n\n" + "\n\n".join(skill_contents))
         
         # Load per-chat memory
         memory = self.memory_store.read(chat_id)
