@@ -289,6 +289,9 @@ class AgentLoop:
             tools = self.tools.get_definitions()
             logger.info(f"[{chat_id}] 使用工具: {self.tools.tool_names}")
 
+        # 追蹤 tool 執行結果
+        tool_results_history = []
+
         # 迴圈：執行 tool calls 直到沒有為止
         for iteration in range(self.MAX_TOOL_ITERATIONS):
             # 呼叫 Provider
@@ -330,6 +333,9 @@ class AgentLoop:
                     result = await self.tools.execute(tool_name, tool_args)
                     logger.info(f"[{chat_id}] 工具結果: {result[:200]}...")
                     
+                    # 記錄 tool 結果
+                    tool_results_history.append(f"{tool_name}: {result[:200]}")
+                    
                     # 將 tool result 加入訊息
                     chat_messages.append(ChatMessage(
                         role="tool",
@@ -346,7 +352,13 @@ class AgentLoop:
 
         # 超過最大迭代次數
         logger.warning(f"[{chat_id}] 超過最大工具迭代次數 ({self.MAX_TOOL_ITERATIONS})")
-        return "我嘗試完成你的請求，但超過了最大迭代次數。請將任務拆分為較小的步驟。"
+        
+        # 回報問題並附上工具執行歷史
+        history_msg = ""
+        if tool_results_history:
+            history_msg = f"\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(f"- {r}" for r in tool_results_history[-5:])
+        
+        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.MAX_TOOL_ITERATIONS}次）。請將任務拆分為較小的步驟。{history_msg}"
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """
