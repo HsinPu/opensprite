@@ -153,7 +153,14 @@ class AgentLoop:
         self.tools.register(SaveMemoryTool(self.memory, lambda: self._current_chat_id))
 
     def _register_default_tools(self) -> None:
-        """註冊預設的工具"""
+        """
+        註冊代理人的預設工具。
+        
+        Register default tools for the agent.
+        
+        註冊檔案系統工具、Shell 執行、網頁搜尋和網頁抓取。
+        Registers filesystem tools, shell execution, web search, and web fetch.
+        """
         workspace = getattr(self._context_builder, 'workspace', Path.cwd())
         skills_loader = getattr(self._context_builder, 'skills_loader', None)
         
@@ -178,13 +185,16 @@ class AgentLoop:
 
     async def _load_history(self, chat_id: str) -> list[ChatMessage]:
         """
-        從 Storage 載入對話歷史
-
-        參數：
-            chat_id: 聊天室 ID
-
-        回傳：
-            list[ChatMessage]: 給 LLM 用的訊息格式
+        從儲存區載入對話歷史。
+        
+        Load conversation history from storage.
+        
+        Args:
+            chat_id: 聊天室 ID。The chat session ID.
+        
+        Returns:
+            ChatMessage 物件列表，供 LLM 使用。
+            List of ChatMessage objects for LLM consumption.
         """
         # 從 storage 取訊息（使用 max_history 限制數量）
         stored_messages = await self.storage.get_messages(
@@ -204,13 +214,17 @@ class AgentLoop:
 
     async def _save_message(self, chat_id: str, role: str, content: str, tool_name: str | None = None) -> None:
         """
-        把訊息存到 Storage
-
-        參數：
-            chat_id: 聊天室 ID
-            role: user / assistant / tool
-            content: 訊息內容
-            tool_name: 如果是 tool，記錄用了什麼工具
+        儲存訊息到儲存區。
+        
+        Save a message to storage.
+        
+        Args:
+            chat_id: 聊天室 ID。The chat session ID.
+            role: 訊息角色（"user"、"assistant" 或 "tool"）。
+                  Message role ("user", "assistant", or "tool").
+            content: 訊息內容。Message content.
+            tool_name: 如果是工具結果，記錄工具名稱。
+                       Tool name if this is a tool result.
         """
         await self.storage.add_message(
             chat_id,
@@ -224,15 +238,27 @@ class AgentLoop:
         allow_tools: bool = True,
     ) -> str:
         """
-        呼叫 LLM（大型語言模型）並取得回應。
-
-        參數：
-            chat_id: 聊天室 ID（用來取歷史）
-            channel: 頻道名稱（可選，用於 context）
-            allow_tools: 是否允許使用工具
-
-        回傳：
-            str: LLM 回覆的內容文字
+        呼叫 LLM 生成對話回應。
+        
+        Call LLM to generate a response for the current conversation.
+        
+        如果 LLM 請求工具呼叫，會處理工具執行迴圈。
+        Handles tool execution loop if LLM requests tool calls.
+        
+        Args:
+            chat_id: 聊天室 ID，用於載入歷史。
+                      The chat session ID for loading history.
+            channel: 頻道名稱（例如 "telegram"、"console"）。用於上下文。
+                      Channel name (e.g., "telegram", "console"). Used in context.
+            allow_tools: 是否允許使用工具。
+                         Whether to allow tool execution.
+        
+        Returns:
+            LLM 的文字回應。The LLM's text response.
+        
+        Raises:
+            RuntimeError: 如果工具執行失敗或超過最大迭代次數。
+                          If tool execution fails or exceeds max iterations.
         """
         # 從 storage 載入歷史
         logger.info(f"[{chat_id}] 載入歷史訊息...")
@@ -426,7 +452,18 @@ class AgentLoop:
         )
 
     async def _maybe_consolidate_memory(self, chat_id: str) -> None:
-        """Check if memory consolidation is needed and run it."""
+        """
+        檢查是否需要進行記憶整合並執行。
+        
+        Check if memory consolidation is needed and run it.
+        
+        當訊息數量超過閾值時，將未整合的訊息整合到長期記憶中。
+        Consolidates unconsolidated messages into long-term memory when
+        the message count exceeds the threshold.
+        
+        Args:
+            chat_id: 聊天室 ID。The chat session ID.
+        """
         # Get total message count
         messages = await self.storage.get_messages(chat_id, limit=1000)
         message_count = len(messages)
@@ -465,9 +502,12 @@ class AgentLoop:
     async def reset_history(self, chat_id: str | None = None) -> None:
         """
         清除對話歷史。
-
-        參數：
-            chat_id: 聊天室 ID，如果沒給就清除所有
+        
+        Clear conversation history.
+        
+        Args:
+            chat_id: 聊天室 ID。如果為 None 則清除所有聊天室。
+                      The chat session ID. If None, clears all chats.
         """
         if chat_id:
             await self.storage.clear_messages(chat_id)
