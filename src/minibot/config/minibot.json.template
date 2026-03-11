@@ -1,0 +1,55 @@
+{
+  "llm": {
+    "providers": {
+      "openrouter": {
+        "api_key": "",
+        "enabled": false,
+        "model": "",
+        "base_url": "https://openrouter.ai/api/v1"
+      },
+      "openai": {
+        "api_key": "",
+        "enabled": false,
+        "model": "",
+        "base_url": "https://api.openai.com/v1"
+      },
+      "minimax": {
+        "api_key": "",
+        "enabled": false,
+        "model": "",
+        "base_url": "https://api.minimax.io/v1"
+      }
+    },
+    "default": "openrouter",
+    "temperature": 0.7,
+    "max_tokens": 8192
+  },
+  "storage": {
+    "type": "sqlite",
+    "path": "~/.minibot/data/sessions.db"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "token": ""
+    },
+    "console": {
+      "enabled": true
+    }
+  },
+  "log": {
+    "enabled": true,
+    "retention_days": 365,
+    "level": "INFO",
+    "log_system_prompt": true,
+    "log_system_prompt_lines": 0
+  },
+  "tools": {
+    "brave_api_key": "",
+    "max_tool_iterations": 100
+  },
+  "memory": {
+    "max_history": 50,
+    "threshold": 30
+  }
+}

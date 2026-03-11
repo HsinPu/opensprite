@@ -97,11 +97,11 @@ class Config:
     @classmethod
     def load(cls, path: str | Path | None = None) -> "Config":
         if path is None:
-            workspace = Path.home() / ".minibot" / "workspace"
+            workspace = Path.home() / ".minibot"
             workspace.mkdir(parents=True, exist_ok=True)
             path = workspace / "minibot.json"
             if not path.exists():
-                cls.generate_template(path)
+                cls.copy_template(path)
                 from minibot.utils.log import logger
                 logger.info(f"已建立設定檔：{path}")
         path = Path(path)
@@ -118,40 +118,21 @@ class Config:
         return bool(self.llm.api_key)
 
     @classmethod
-    def generate_template(cls, path: str | Path | None = None) -> Path:
-        if path is None:
-            workspace = Path.home() / ".minibot" / "workspace"
-            workspace.mkdir(parents=True, exist_ok=True)
-            path = workspace / "minibot.json"
-        else:
-            path = Path(path)
-            path.parent.mkdir(parents=True, exist_ok=True)
-        if path.exists():
-            from minibot.utils.log import logger
-            logger.info(f"設定檔已存在：{path}")
-            return path
-        default_config = {
-            "llm": {
-                "providers": {
-                    "openrouter": {"api_key": "", "enabled": True, "model": "", "base_url": "https://openrouter.ai/api/v1"},
-                    "openai": {"api_key": "", "enabled": False, "model": "", "base_url": "https://api.openai.com/v1"},
-                    "minimax": {"api_key": "", "enabled": False, "model": "MiniMax-M2.5", "base_url": "https://api.minimax.io/v1"}
-                },
-                "default": "openrouter",
-                "temperature": 0.7,
-                "max_tokens": 8192
-            },
-            "storage": {"type": "sqlite", "path": "~/.minibot/data/sessions.db"},
-            "channels": {"telegram": {"enabled": False, "token": ""}, "console": {"enabled": True}},
-            "log": {"enabled": True, "retention_days": 365, "level": "INFO", "log_system_prompt": True, "log_system_prompt_lines": 0},
-            "tools": {"brave_api_key": "", "max_tool_iterations": 100},
-            "memory": {"max_history": 50, "threshold": 30}
-        }
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(default_config, f, indent=2, ensure_ascii=False)
+    def copy_template(cls, path: str | Path) -> Path:
+        """Copy template config file from package."""
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        
+        import shutil
+        template_path = Path(__file__).parent / "minibot.json.template"
+        
+        if template_path.exists():
+            shutil.copy2(template_path, path)
+        
         return path
 
     def save(self, path: str | Path):
+        """Save config to JSON file."""
         path = Path(path)
         if path.suffix != ".json":
             raise ValueError(f"不支援的格式：{path.suffix}")
