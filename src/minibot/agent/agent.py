@@ -30,7 +30,7 @@ from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
 from minibot.memory import MemoryStore, consolidate
-from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool
+from minibot.tools import ToolRegistry, ReadFileTool, WriteFileTool, ListDirTool, EditFileTool, ExecTool, WebSearchTool, WebFetchTool, ReadSkillTool
 from minibot.utils.log import logger
 from minibot.config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig
 
@@ -145,12 +145,17 @@ class AgentLoop:
     def _register_default_tools(self) -> None:
         """註冊預設的工具"""
         workspace = getattr(self._context_builder, 'workspace', Path.cwd())
+        skills_loader = getattr(self._context_builder, 'skills_loader', None)
         
         # 檔案工具
-        self.tools.register(ReadFileTool(workspace=workspace))
+        self.tools.register(ReadFileTool(workspace=workspace, skills_loader=skills_loader))
         self.tools.register(WriteFileTool(workspace=workspace))
         self.tools.register(EditFileTool(workspace=workspace))
         self.tools.register(ListDirTool(workspace=workspace))
+        
+        # 技能工具
+        if skills_loader:
+            self.tools.register(ReadSkillTool(skills_loader=skills_loader))
         
         # 執行命令
         self.tools.register(ExecTool(workspace=workspace))

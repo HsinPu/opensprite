@@ -87,7 +87,7 @@ class SkillsLoader:
         if not skills:
             return ""
         
-        lines = ["Available skills:"]
+        lines = ["Available skills (use read_skill tool to read instructions):"]
         for s in skills:
             always = " (always on)" if s.always else ""
             lines.append(f"- {s.name}: {s.description}{always}")
@@ -112,6 +112,24 @@ class SkillsLoader:
                         break
                 return "\n".join(lines[start:]).strip()
         return ""
+    
+    def get_skill_path(self, skill_name: str) -> Path | None:
+        """Get the file path for a skill's SKILL.md."""
+        for skills_dir in [self.custom_skills_dir, self.default_skills_dir]:
+            if not skills_dir.exists():
+                continue
+            skill_file = skills_dir / skill_name / "SKILL.md"
+            if skill_file.exists():
+                return skill_file.resolve()
+        return None
+    
+    def skill_exists(self, skill_name: str) -> bool:
+        """Check if a skill exists."""
+        return self.get_skill_path(skill_name) is not None
+    
+    def get_valid_skill_names(self) -> list[str]:
+        """Get list of valid skill names for validation."""
+        return [s.name for s in self.get_skills()]
     
     def _parse_frontmatter(self, content: str) -> dict[str, Any]:
         """Parse YAML frontmatter from SKILL.md."""

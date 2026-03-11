@@ -3,14 +3,16 @@
 from pathlib import Path
 from typing import Any
 
+from minibot.skills import SkillsLoader
 from minibot.tools.base import Tool
 
 
 class ReadFileTool(Tool):
     """Tool to read file contents."""
 
-    def __init__(self, workspace: Path):
+    def __init__(self, workspace: Path, skills_loader: SkillsLoader | None = None):
         self.workspace = workspace
+        self.skills_loader = skills_loader
 
     @property
     def name(self) -> str:
@@ -43,6 +45,18 @@ class ReadFileTool(Tool):
             # Security: restrict to workspace
             if not str(file_path).startswith(str(self.workspace)):
                 return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+            
+            # Check if reading a skill file -> redirect to read_skill
+            if self.skills_loader and file_path.name == "SKILL.md":
+                path_str = str(file_path)
+                if "/skills/" in path_str or "\\skills\\" in path_str:
+                    parts = file_path.parts
+                    for i, part in enumerate(parts):
+                        if part == "skills" and i + 1 < len(parts):
+                            skill_name = parts[i + 1]
+                            if self.skills_loader.skill_exists(skill_name):
+                                content = self.skills_loader.load_skill_content(skill_name)
+                                return f"[Note: Use read_skill tool instead]\n\n{content}"
             
             if not file_path.exists():
                 return f"Error: File not found: {path}"
