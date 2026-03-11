@@ -37,12 +37,17 @@ def sync_templates(workspace: Path, silent: bool = False) -> list[str]:
 
     added: list[str] = []
 
-    def _write(src, dest: Path):
+    def _write(src, dest: Path, track_relative: bool = True):
         if dest.exists():
             return
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_text(src.read_text(encoding="utf-8") if src else "", encoding="utf-8")
-        added.append(str(dest.relative_to(workspace)))
+        if track_relative:
+            try:
+                added.append(str(dest.relative_to(workspace)))
+            except ValueError:
+                # File is outside workspace, use absolute path
+                added.append(str(dest))
 
     for item in tpl.iterdir():
         if item.name.endswith(".md"):
