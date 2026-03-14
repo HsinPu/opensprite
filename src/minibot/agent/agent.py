@@ -38,7 +38,7 @@ from minibot.tools import (
     EditFileTool,
     ExecTool,
     WebSearchTool,
-    WebFetcher,
+    WebFetchTool,
     ReadSkillTool,
 )
 from minibot.utils.log import logger
@@ -186,7 +186,7 @@ class AgentLoop:
             web_fetch_config = self.tools_config.web_fetch or {}
         
         self.tools.register(WebSearchTool(config=web_search_config))
-        self.tools.register(WebFetcher(
+        self.tools.register(WebFetchTool(
             max_chars=web_fetch_config.get("max_chars", 50000),
             timeout=web_fetch_config.get("timeout", 30),
             prefer_trafilatura=web_fetch_config.get("prefer_trafilatura", True),
