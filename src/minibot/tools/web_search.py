@@ -87,7 +87,7 @@ class WebSearchTool(Tool):
         return self.config.get("api_key", "") or os.environ.get("BRAVE_API_KEY", "")
 
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
-        n = min(max(count or 5, 1), 10)
+        n = min(max(count or 10, 1), 10)
 
         provider = self.provider
 
