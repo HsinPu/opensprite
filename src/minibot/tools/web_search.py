@@ -83,8 +83,16 @@ class WebSearchTool(Tool):
         return self.config.get("provider", "brave").strip().lower() or "brave"
 
     @property
-    def api_key(self) -> str:
-        return self.config.get("api_key", "") or os.environ.get("BRAVE_API_KEY", "")
+    def brave_api_key(self) -> str:
+        return self.config.get("brave_api_key", "") or os.environ.get("BRAVE_API_KEY", "")
+
+    @property
+    def tavily_api_key(self) -> str:
+        return self.config.get("tavily_api_key", "") or os.environ.get("TAVILY_API_KEY", "")
+
+    @property
+    def jina_api_key(self) -> str:
+        return self.config.get("jina_api_key", "") or os.environ.get("JINA_API_KEY", "")
 
     @property
     def max_results(self) -> int:
@@ -109,9 +117,9 @@ class WebSearchTool(Tool):
             return f"Error: unknown search provider '{provider}'"
 
     async def _search_brave(self, query: str, n: int) -> str:
-        api_key = self.api_key
+        api_key = self.brave_api_key
         if not api_key:
-            logger.warning("BRAVE_API_KEY not set, falling back to DuckDuckGo")
+            logger.warning("Brave API key not set, falling back to DuckDuckGo")
             return await self._search_duckduckgo(query, n)
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
@@ -155,9 +163,9 @@ class WebSearchTool(Tool):
             return f"Error: {e}"
 
     async def _search_tavily(self, query: str, n: int) -> str:
-        api_key = os.environ.get("TAVILY_API_KEY", "")
+        api_key = self.tavily_api_key
         if not api_key:
-            logger.warning("TAVILY_API_KEY not set, falling back to DuckDuckGo")
+            logger.warning("Tavily API key not set, falling back to DuckDuckGo")
             return await self._search_duckduckgo(query, n)
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
@@ -191,9 +199,13 @@ class WebSearchTool(Tool):
 
     async def _search_jina(self, query: str, n: int) -> str:
         try:
+            headers = {"User-Agent": USER_AGENT}
+            if self.jina_api_key:
+                headers["Authorization"] = f"Bearer {self.jina_api_key}"
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
                     f"https://s.jina.ai/http://duckduckgo.com/?q={query}&format=json",
+                    headers=headers,
                     timeout=10.0
                 )
             # Jina AI summarization endpoint

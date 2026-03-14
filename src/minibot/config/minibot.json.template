@@ -45,13 +45,15 @@
     "log_system_prompt_lines": 0
   },
   "tools": {
-    "brave_api_key": "",
     "max_tool_iterations": 100,
     "web_search": {
       "provider": "brave",
-      "api_key": "",
+      "brave_api_key": "",
+      "tavily_api_key": "",
+      "jina_api_key": "",
       "searxng_url": "https://searx.be",
-      "max_results": 10
+      "max_results": 10,
+      "proxy": ""
     },
     "web_fetch": {
       "max_chars": 50000,

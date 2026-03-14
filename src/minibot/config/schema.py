@@ -60,10 +60,9 @@ class LogConfig(BaseModel):
 
 class ToolsConfig(BaseModel):
     """Tool configurations."""
-    brave_api_key: str = ""
     max_tool_iterations: int = 100
     # Web search config
-    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavly|searxng|jina", "api_key": "", "searxng_url": "", "max_results": 10, "proxy": ""}
+    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavily|searxng|jina", "brave_api_key": "", "tavily_api_key": "", "jina_api_key": "", "searxng_url": "", "max_results": 10, "proxy": ""}
     # Web fetch config
     web_fetch: dict = {}  # {"max_chars": 50000, "timeout": 30, "prefer_trafilatura": true, "firecrawl_api_key": ""}
 
@@ -163,7 +162,11 @@ class Config:
                 "console": {"enabled": self.channels.console.get("enabled", True)},
             },
             "log": {"enabled": self.log.enabled, "retention_days": self.log.retention_days, "level": self.log.level, "log_system_prompt": self.log.log_system_prompt, "log_system_prompt_lines": self.log.log_system_prompt_lines},
-            "tools": {"brave_api_key": self.tools.brave_api_key, "max_tool_iterations": self.tools.max_tool_iterations},
+            "tools": {
+                "max_tool_iterations": self.tools.max_tool_iterations,
+                "web_search": self.tools.web_search or {},
+                "web_fetch": self.tools.web_fetch or {},
+            },
             "memory": {"max_history": self.memory.max_history, "threshold": self.memory.threshold},
         }
         with open(path, "w", encoding="utf-8") as f:

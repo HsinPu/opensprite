@@ -79,13 +79,11 @@ class AgentLoop:
         memory_config: MemoryConfig | None = None,
         tools_config: ToolsConfig | None = None,
         log_config: LogConfig | None = None,
-        brave_api_key: str = "",
     ):
         ...
         self.memory_config = memory_config or MemoryConfig()
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
-        self.brave_api_key = brave_api_key
         self.provider = provider
 
         # 如果沒給 storage，用記憶體 storage
@@ -184,7 +182,7 @@ class AgentLoop:
             web_search_config = self.tools_config.web_search or {}
         if hasattr(self.tools_config, 'web_fetch'):
             web_fetch_config = self.tools_config.web_fetch or {}
-        
+
         self.tools.register(WebSearchTool(config=web_search_config))
         self.tools.register(WebFetchTool(
             max_chars=web_fetch_config.get("max_chars", 50000),
