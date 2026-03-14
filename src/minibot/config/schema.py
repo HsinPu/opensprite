@@ -62,6 +62,8 @@ class ToolsConfig(BaseModel):
     """Tool configurations."""
     brave_api_key: str = ""
     max_tool_iterations: int = 100
+    # Web search config
+    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavily|searxng|jina", "api_key": "", "searxng_url": ""}
 
 
 class MemoryConfig(BaseModel):

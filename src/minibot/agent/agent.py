@@ -178,8 +178,11 @@ class AgentLoop:
         self.tools.register(ExecTool(workspace=workspace))
         
         # 網路工具
-        self.tools.register(WebSearchTool(api_key=self.brave_api_key))
-        self.tools.register(WebFetchTool())
+        web_search_config = {}
+        if hasattr(self.tools_config, 'web_search'):
+            web_search_config = self.tools_config.web_search or {}
+        self.tools.register(WebSearchTool(config=web_search_config))
+        self.tools.register(WebFetchTool(config=web_search_config))
         
         logger.info(f"已註冊工具: {self.tools.tool_names}")
 
