@@ -470,6 +470,54 @@ def extract_with_trafilatura(url: str, mode: str = 'markdown') -> dict:
 DEFAULT_FIRECRAWL_BASE_URL = "https://api.firecrawl.dev"
 
 
+def extract_with_jina(url: str, timeout: int = 20) -> dict | None:
+    """使用 Jina Reader API 擷取網頁（免費）
+    
+    參考: https://github.com/HKXU/quick-jina-reader
+    
+    參數:
+        url: 要擷取的網址
+        timeout: 超時秒數
+    
+    回傳:
+        dict: {'text': str, 'title': str, 'extractor': 'jina'}
+    """
+    import httpx
+    
+    jina_url = f"https://r.jina.ai/{url}"
+    
+    try:
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+        }
+        
+        response = httpx.get(jina_url, headers=headers, timeout=timeout, follow_redirects=True)
+        
+        if response.status_code == 200:
+            data = response.json()
+            
+            title = data.get("data", {}).get("title", "") or ""
+            text = data.get("data", {}).get("content", "")
+            
+            if text:
+                # 如果有標題，加上標題
+                if title:
+                    text = f"# {title}\n\n{text}"
+                
+                return {
+                    "text": text,
+                    "title": title,
+                    "extractor": "jina"
+                }
+        
+        return None
+        
+    except Exception as e:
+        print(f"Jina extraction failed: {e}")
+        return None
+
+
 def extract_with_firecrawl(url: str, mode: str = 'markdown', 
                            api_key: str = None, 
                            timeout: int = 30) -> dict:
@@ -668,7 +716,15 @@ class WebFetcher:
                     result['text'] = readability_result['content']
                     result['extractor'] = 'readability'
             
-            # 4. 如果全部都失敗，使用 Firecrawl (最後手段，付費服務)
+            # 4. Jina Reader (免費，自動 fallback)
+            if not result['text'] or len(result['text']) < 50:
+                jina_result = extract_with_jina(url)
+                if jina_result and jina_result.get('text'):
+                    result['title'] = jina_result.get('title', result.get('title'))
+                    result['text'] = jina_result['text']
+                    result['extractor'] = 'jina'
+            
+            # 5. 如果全部都失敗，使用 Firecrawl (最後手段，付費服務)
             if (not result['text'] or len(result['text']) < 50) and self.firecrawl_api_key:
                 firecrawl_result = extract_with_firecrawl(url, mode, self.firecrawl_api_key, self.timeout)
                 if firecrawl_result and firecrawl_result.get('text'):
