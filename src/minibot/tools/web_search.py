@@ -76,7 +76,7 @@ class WebSearchTool(Tool):
 
     def __init__(self, config: dict | None = None, proxy: str | None = None):
         self.config = config or {}
-        self.proxy = proxy
+        self.proxy = proxy or self.config.get("proxy", "")
 
     @property
     def provider(self) -> str:
@@ -219,7 +219,7 @@ class WebFetchTool(Tool):
 
     def __init__(self, config: dict | None = None, proxy: str | None = None):
         self.config = config or {}
-        self.proxy = proxy
+        self.proxy = proxy or self.config.get("proxy", "")
 
     async def execute(self, url: str, max_chars: int = 5000, **kwargs: Any) -> str:
         is_valid, error_msg = _validate_url(url)

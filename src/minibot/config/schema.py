@@ -63,7 +63,7 @@ class ToolsConfig(BaseModel):
     brave_api_key: str = ""
     max_tool_iterations: int = 100
     # Web search config
-    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavly|searxng|jina", "api_key": "", "searxng_url": "", "max_results": 10}
+    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavly|searxng|jina", "api_key": "", "searxng_url": "", "max_results": 10, "proxy": ""}
     # Web fetch config
     web_fetch: dict = {}  # {"max_chars": 50000, "timeout": 30, "prefer_trafilatura": true, "firecrawl_api_key": ""}
 
