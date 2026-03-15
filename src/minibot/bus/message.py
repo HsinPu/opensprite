@@ -25,11 +25,13 @@ class UserMessage:
         text: 訊息文字內容
         sender: 發送者是誰（例如 user_id 或 username）
         chat_id: 聊天室 ID（例如 group 或 channel）
+        images: 圖片列表（base64 格式）
         raw: （可選）原始訊息物件，讓某些工具需要知道來源時使用
     """
     text: str
     sender: str | None = None
     chat_id: str | None = None
+    images: list[str] | None = None  # base64 編碼的圖片列表
     raw: Any = None  # 原始訊息物件，可選
 
 

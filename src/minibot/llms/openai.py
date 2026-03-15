@@ -64,7 +64,13 @@ class OpenAILLM(LLMProvider):
                 if m.get("tool_calls"):
                     msg["tool_calls"] = m["tool_calls"]
             else:
-                msg = {"role": m.role, "content": m.content}
+                # 支援混合內容（文字+圖片）
+                if isinstance(m.content, list):
+                    # 已經是混合格式，直接傳遞
+                    msg = {"role": m.role, "content": m.content}
+                else:
+                    msg = {"role": m.role, "content": m.content}
+                
                 if m.tool_call_id:
                     msg["tool_call_id"] = m.tool_call_id
                 if m.tool_calls:

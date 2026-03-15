@@ -24,6 +24,7 @@ class ContextBuilder(Protocol):
         self,
         history: list[dict],
         current_message: str,
+        current_images: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
     ) -> list[dict]:
@@ -33,6 +34,7 @@ class ContextBuilder(Protocol):
         Args:
             history: Conversation history
             current_message: Current user message
+            current_images: Current user images (base64 data URLs)
             channel: Channel name (e.g., "telegram", "discord")
             chat_id: Chat/room ID
             

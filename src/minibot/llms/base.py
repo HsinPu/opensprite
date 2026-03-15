@@ -35,11 +35,35 @@ class LLMResponse:
 class ChatMessage:
     """
     單筆對話訊息（給 LLM 用）
+    
+    支援文字和圖片內容。
+    圖片格式：base64 編碼的 data URL
     """
     role: str    # "system", "user", "assistant", "tool"
-    content: str # 訊息內容
+    content: str | list[dict] = ""  # 字串或混合內容（文字+圖片）
     tool_call_id: str | None = None  # For tool results
     tool_calls: list[dict] | None = None  # For assistant messages with tool calls
+    
+    @staticmethod
+    def create_user_message(text: str, images: list[str] | None = None) -> "ChatMessage":
+        """
+        建立使用者訊息（支援文字+圖片）
+        
+        參數：
+            text: 文字內容
+            images: 圖片清單（base64 data URL）
+        
+        回傳：
+            ChatMessage: 使用者訊息
+        """
+        if images:
+            # 混合內容格式（文字 + 圖片）
+            content = [{"type": "text", "text": text}]
+            for img in images:
+                content.append({"type": "image_url", "image_url": {"url": img}})
+            return ChatMessage(role="user", content=content)
+        else:
+            return ChatMessage(role="user", content=text)
 
 
 @dataclass

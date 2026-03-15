@@ -66,12 +66,57 @@ class TelegramAdapter(MessageAdapter):
         # 取出聊天室 ID
         chat_id = str(message.chat.id) if message.chat else None
         
+        # 處理圖片
+        images = []
+        if message.photo:
+            images = self._download_images(message.photo, raw_update.bot)
+        
         return UserMessage(
             text=text,
             sender=sender,
             chat_id=chat_id,
+            images=images if images else None,
             raw=raw_update
         )
+    
+    async def _download_images(self, photos, bot) -> list[str]:
+        """
+        下載圖片並轉成 base64
+        
+        參數：
+            photos: telegram photo 清單
+            bot: telegram bot 實例
+        
+        回傳：
+            list: base64 編碼的圖片清單
+        """
+        import base64
+        import io
+        
+        images = []
+        
+        # 取最大張的圖片
+        photo = photos[-1]
+        
+        try:
+            # 取得檔案
+            file = await bot.get_file(photo.file_id)
+            
+            # 下載到記憶體
+            file_content = await file.download_as_bytearray()
+            
+            # 轉 base64
+            b64 = base64.b64encode(bytes(file_content)).decode('utf-8')
+            
+            # 偵測 MIME type
+            mime_type = photo.mime_type or "image/jpeg"
+            
+            images.append(f"data:{mime_type};base64,{b64}")
+            
+        except Exception as e:
+            logger.warning(f"下載圖片失敗: {e}")
+        
+        return images
     
     async def send(self, message: AssistantMessage) -> None:
         """

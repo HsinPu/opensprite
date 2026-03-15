@@ -112,16 +112,27 @@ Your workspace is at: {workspace_path}
         self,
         history: list[dict[str, Any]],
         current_message: str,
+        current_images: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build complete message list for LLM call."""
         chat_id = chat_id or "default"
+        
+        # 處理圖片
+        if current_images:
+            content = [{"type": "text", "text": current_message}]
+            for img in current_images:
+                content.append({"type": "image_url", "image_url": {"url": img}})
+            user_message = {"role": "user", "content": content}
+        else:
+            user_message = {"role": "user", "content": current_message}
+        
         return [
             {"role": "system", "content": self.build_system_prompt(chat_id)},
             *history,
             {"role": "user", "content": self._build_runtime_context(channel, chat_id)},
-            {"role": "user", "content": current_message},
+            user_message,
         ]
     
     def add_tool_result(

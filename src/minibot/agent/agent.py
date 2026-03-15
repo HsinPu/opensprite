@@ -246,6 +246,7 @@ class AgentLoop:
         chat_id: str,
         channel: str | None = None,
         allow_tools: bool = True,
+        user_images: list[str] | None = None,
     ) -> str:
         """
         呼叫 LLM 生成對話回應。
@@ -300,6 +301,7 @@ class AgentLoop:
         full_messages = self._context_builder.build_messages(
             history=history_dicts,
             current_message="",  # 這裡不放 content，我們會用 user message
+            current_images=user_images,
             channel=channel,
             chat_id=chat_id,
         )
@@ -449,9 +451,13 @@ class AgentLoop:
         # 1. 把使用者訊息存入 storage
         await self._save_message(chat_id, "user", user_message.text)
 
-        # 2. 呼叫 LLM（傳入 channel）
+        # 2. 呼叫 LLM（傳入 channel 和圖片）
         logger.info(f"[{chat_id}] 處理中...")
-        response = await self.call_llm(chat_id, channel=channel)
+        response = await self.call_llm(
+            chat_id, 
+            channel=channel,
+            user_images=user_message.images
+        )
         
         logger.info(f"[{chat_id}] 回覆: {response[:50]}...")
 
