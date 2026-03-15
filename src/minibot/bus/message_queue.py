@@ -86,6 +86,20 @@ class MessageQueue:
         if chat_id not in self.conversations:
             self.conversations[chat_id] = Conversation(chat_id=chat_id)
         return self.conversations[chat_id]
+
+    @staticmethod
+    def build_session_chat_id(channel: str | None, chat_id: str | None) -> str:
+        """Build an internal session ID namespaced by channel."""
+        normalized_channel = (channel or "unknown").strip() or "unknown"
+        normalized_chat_id = (chat_id or "default").strip() or "default"
+        return f"{normalized_channel}:{normalized_chat_id}"
+
+    @classmethod
+    def resolve_session_chat_id(cls, chat_id: str, channel: str | None = None) -> str:
+        """Resolve external or already-namespaced chat IDs to internal session IDs."""
+        if ":" in chat_id:
+            return chat_id
+        return cls.build_session_chat_id(channel or "cli", chat_id)
     
     async def enqueue(self, user_message: UserMessage) -> None:
         """
@@ -95,12 +109,17 @@ class MessageQueue:
             user_message: 統一格式的訊息
         """
         # 轉換成 InboundMessage
+        channel = user_message.raw.get("channel") if user_message.raw else "unknown"
+        metadata = {"session_chat_id": self.build_session_chat_id(channel, user_message.chat_id)}
+        if user_message.raw:
+            metadata["raw"] = user_message.raw
+
         inbound = InboundMessage(
-            channel=user_message.raw.get("channel") if user_message.raw else "unknown",
+            channel=channel,
             sender_id=user_message.sender or "unknown",
             chat_id=user_message.chat_id or "default",
             content=user_message.text,
-            metadata={"raw": user_message.raw} if user_message.raw else {}
+            metadata=metadata,
         )
         await self.bus.publish_inbound(inbound)
     
@@ -127,7 +146,7 @@ class MessageQueue:
             sender_id=sender_id,
             chat_id=chat_id,
             content=content,
-            metadata=metadata or {}
+            metadata={**(metadata or {}), "session_chat_id": self.build_session_chat_id(channel, chat_id)}
         )
         await self.bus.publish_inbound(inbound)
     
@@ -138,16 +157,17 @@ class MessageQueue:
         參數：
             inbound: InboundMessage
         """
-        chat_id = inbound.chat_id
+        transport_chat_id = inbound.chat_id
+        session_chat_id = inbound.metadata.get("session_chat_id") or self.build_session_chat_id(inbound.channel, transport_chat_id)
         
         try:
             # 取得或建立對話
-            conversation = self.get_or_create_conversation(chat_id)
+            self.get_or_create_conversation(session_chat_id)
             
             # 轉換成 UserMessage 給 Agent
             user_message = UserMessage(
                 text=inbound.content,
-                chat_id=inbound.chat_id,
+                chat_id=session_chat_id,
                 sender=inbound.sender_id,  # UserMessage 用 sender 不是 sender_id
                 raw=inbound.metadata  # 把 metadata 放 raw 裡
             )
@@ -158,7 +178,7 @@ class MessageQueue:
             # 放到 outbound queue（而不是直接發送）
             outbound = OutboundMessage(
                 channel=inbound.channel,
-                chat_id=inbound.chat_id,
+                chat_id=transport_chat_id,
                 content=response.text,
                 metadata={"sender_id": inbound.sender_id}
             )
@@ -168,16 +188,16 @@ class MessageQueue:
             # Task 被取消時優雅退出
             pass
         except Exception as e:
-            logger.error(f"[{chat_id}] 處理訊息時發生錯誤: {e}")
+            logger.error(f"[{session_chat_id}] 處理訊息時發生錯誤: {e}")
             # 發送錯誤訊息到 outbound
             outbound = OutboundMessage(
                 channel=inbound.channel,
-                chat_id=inbound.chat_id,
+                chat_id=transport_chat_id,
                 content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}"
             )
             await self.bus.publish_outbound(outbound)
             if hasattr(self, 'on_error'):
-                await self.on_error(chat_id, str(e))
+                await self.on_error(session_chat_id, str(e))
     
     async def _consume_outbound(self) -> None:
         """
@@ -228,7 +248,7 @@ class MessageQueue:
                 except asyncio.TimeoutError:
                     continue
                 
-                chat_id = inbound.chat_id
+                chat_id = inbound.metadata.get("session_chat_id") or self.build_session_chat_id(inbound.channel, inbound.chat_id)
                 
                 # Spawn 成獨立 task（不再await）
                 task = asyncio.create_task(self._process_message(inbound))
@@ -247,7 +267,7 @@ class MessageQueue:
             except Exception as e:
                 logger.error(f"Inbound consumer 發生錯誤: {e}")
     
-    async def cancel_chat(self, chat_id: str) -> int:
+    async def cancel_chat(self, chat_id: str, channel: str | None = None) -> int:
         """
         取消特定 chat_id 的所有正在處理的任務
         
@@ -257,7 +277,8 @@ class MessageQueue:
         回傳：
             int: 被取消的任務數量
         """
-        tasks = self._active_tasks.pop(chat_id, [])
+        session_chat_id = self.resolve_session_chat_id(chat_id, channel)
+        tasks = self._active_tasks.pop(session_chat_id, [])
         cancelled = 0
         for task in tasks:
             if not task.done():
@@ -297,7 +318,7 @@ class MessageQueue:
         # 取消所有處理中的任務
         await self.cancel_all()
     
-    async def reset_conversation(self, chat_id: str) -> None:
+    async def reset_conversation(self, chat_id: str, channel: str | None = None) -> None:
         """
         重置特定對話的歷史
         
@@ -305,9 +326,10 @@ class MessageQueue:
             chat_id: 聊天室 ID
         """
         # 先取消這個chat正在處理的任務
-        await self.cancel_chat(chat_id)
+        session_chat_id = self.resolve_session_chat_id(chat_id, channel)
+        await self.cancel_chat(session_chat_id)
         # 讓 Agent 去清除 Storage 裡的歷史
-        await self.agent.reset_history(chat_id)
+        await self.agent.reset_history(session_chat_id)
     
     @property
     def queue_sizes(self) -> tuple[int, int]:
