@@ -22,6 +22,7 @@ minibot/agent.py - Agent Loop
 
 import json
 import asyncio
+import time
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,7 @@ from minibot.llms import LLMProvider, ChatMessage
 from minibot.storage import StorageProvider, StoredMessage
 from minibot.context.builder import ContextBuilder
 from minibot.memory import MemoryStore, consolidate
+from minibot.search import SearchStore
 from minibot.tools import (
     ToolRegistry,
     ReadFileTool,
@@ -37,12 +39,14 @@ from minibot.tools import (
     ListDirTool,
     EditFileTool,
     ExecTool,
+    SearchHistoryTool,
+    SearchKnowledgeTool,
     WebSearchTool,
     WebFetchTool,
     ReadSkillTool,
 )
 from minibot.utils.log import logger
-from minibot.config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig
+from minibot.config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig
 
 
 class AgentLoop:
@@ -79,12 +83,17 @@ class AgentLoop:
         memory_config: MemoryConfig | None = None,
         tools_config: ToolsConfig | None = None,
         log_config: LogConfig | None = None,
+        search_store: SearchStore | None = None,
+        search_config: SearchConfig | None = None,
     ):
         ...
         self.memory_config = memory_config or MemoryConfig()
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
+        self.search_config = search_config or SearchConfig()
+        self.search_store = search_store
         self.provider = provider
+        self._current_chat_id: str | None = None
 
         # 如果沒給 storage，用記憶體 storage
         if storage is None:
@@ -115,9 +124,6 @@ class AgentLoop:
         self.memory = MemoryStore(workspace)
         # Register save_memory tool
         self._register_memory_tool()
-
-        # 目前處理的 chat_id
-        self._current_chat_id: str | None = None
 
     def _register_memory_tool(self) -> None:
         """Register the save_memory tool."""
@@ -190,6 +196,22 @@ class AgentLoop:
             prefer_trafilatura=web_fetch_config.get("prefer_trafilatura", True),
             firecrawl_api_key=web_fetch_config.get("firecrawl_api_key")
         ))
+
+        if self.search_store is not None:
+            self.tools.register(
+                SearchHistoryTool(
+                    store=self.search_store,
+                    get_chat_id=lambda: self._current_chat_id,
+                    default_limit=self.search_config.history_top_k,
+                )
+            )
+            self.tools.register(
+                SearchKnowledgeTool(
+                    store=self.search_store,
+                    get_chat_id=lambda: self._current_chat_id,
+                    default_limit=self.search_config.knowledge_top_k,
+                )
+            )
         
         logger.info(f"已註冊工具: {self.tools.tool_names}")
 
@@ -236,10 +258,22 @@ class AgentLoop:
             tool_name: 如果是工具結果，記錄工具名稱。
                        Tool name if this is a tool result.
         """
+        created_at = time.time()
         await self.storage.add_message(
             chat_id,
-            StoredMessage(role=role, content=content, timestamp=0, tool_name=tool_name)
+            StoredMessage(role=role, content=content, timestamp=created_at, tool_name=tool_name)
         )
+        if self.search_store is not None:
+            try:
+                await self.search_store.index_message(
+                    chat_id=chat_id,
+                    role=role,
+                    content=content,
+                    tool_name=tool_name,
+                    created_at=created_at,
+                )
+            except Exception as e:
+                logger.warning("[{}] Failed to index message for search: {}", chat_id, e)
 
     async def call_llm(
         self,
@@ -406,6 +440,11 @@ class AgentLoop:
                     
                     # 存到歷史訊息
                     await self._save_message(chat_id, "tool", result, tool_name=tool_name)
+                    if self.search_store is not None:
+                        try:
+                            await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result)
+                        except Exception as e:
+                            logger.warning("[{}] Failed to index tool result for search: {}", chat_id, e)
                 
                 # 繼續迴圈，讓 LLM 根據 tool results 生成回覆
                 continue
@@ -533,8 +572,18 @@ class AgentLoop:
         """
         if chat_id:
             await self.storage.clear_messages(chat_id)
+            if self.search_store is not None:
+                try:
+                    await self.search_store.clear_chat(chat_id)
+                except Exception as e:
+                    logger.warning("[{}] Failed to clear search index: {}", chat_id, e)
         else:
             # 清除所有聊天室
             all_chats = await self.storage.get_all_chats()
             for c in all_chats:
                 await self.storage.clear_messages(c)
+                if self.search_store is not None:
+                    try:
+                        await self.search_store.clear_chat(c)
+                    except Exception as e:
+                        logger.warning("[{}] Failed to clear search index: {}", c, e)

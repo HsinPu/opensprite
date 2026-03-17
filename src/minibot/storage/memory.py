@@ -48,6 +48,7 @@ class MemoryStorage(StorageProvider):
         """
         if chat_id in self._messages:
             self._messages[chat_id].clear()
+        self._consolidated_index.pop(chat_id, None)
     
     async def get_consolidated_index(self, chat_id: str) -> int:
         """取得 consolidation 標記"""

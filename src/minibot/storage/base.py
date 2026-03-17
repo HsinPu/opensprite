@@ -73,6 +73,16 @@ class StorageProvider(ABC):
             chat_id: 聊天室 ID
         """
         pass
+
+    @abstractmethod
+    async def get_consolidated_index(self, chat_id: str) -> int:
+        """Get the last consolidated message index for a chat."""
+        pass
+
+    @abstractmethod
+    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+        """Persist the last consolidated message index for a chat."""
+        pass
     
     @abstractmethod
     async def get_all_chats(self) -> list[str]:

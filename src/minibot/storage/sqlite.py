@@ -68,7 +68,9 @@ class SQLiteStorage(StorageProvider):
                 StoredMessage(
                     role=m.get("role", "user"),
                     content=m.get("content", ""),
-                    timestamp=m.get("timestamp", 0)
+                    timestamp=m.get("timestamp", 0),
+                    tool_name=m.get("tool_name"),
+                    is_consolidated=m.get("is_consolidated", False),
                 )
                 for m in messages
             ]
@@ -95,7 +97,9 @@ class SQLiteStorage(StorageProvider):
             messages.append({
                 "role": message.role,
                 "content": message.content,
-                "timestamp": message.timestamp or now
+                "timestamp": message.timestamp or now,
+                "tool_name": message.tool_name,
+                "is_consolidated": message.is_consolidated,
             })
 
             conn.execute(

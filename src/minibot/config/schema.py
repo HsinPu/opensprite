@@ -73,10 +73,20 @@ class MemoryConfig(BaseModel):
     threshold: int = 30  # Trigger consolidation after this many messages
 
 
+class SearchConfig(BaseModel):
+    """Search index configuration."""
+
+    enabled: bool = False
+    provider: str = "lancedb"
+    path: str = "~/.minibot/data/lancedb"
+    history_top_k: int = 5
+    knowledge_top_k: int = 5
+
+
 class Config:
     def __init__(self, llm: LLMsConfig, agent: AgentConfig, storage: StorageConfig,
                  channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None,
-                 memory: MemoryConfig | None = None):
+                 memory: MemoryConfig | None = None, search: SearchConfig | None = None):
         self.llm = llm
         self.agent = agent
         self.storage = storage
@@ -84,6 +94,7 @@ class Config:
         self.log = log or LogConfig()
         self.tools = tools or ToolsConfig()
         self.memory = memory or MemoryConfig()
+        self.search = search or SearchConfig()
 
     @classmethod
     def from_json(cls, path: str | Path) -> "Config":
@@ -105,6 +116,7 @@ class Config:
             log=LogConfig(**data["log"]) if "log" in data else None,
             tools=ToolsConfig(**data.get("tools", {})) if "tools" in data else None,
             memory=MemoryConfig(**data.get("memory", {})) if "memory" in data else None,
+            search=SearchConfig(**data.get("search", {})) if "search" in data else None,
         )
 
     @classmethod
@@ -168,6 +180,13 @@ class Config:
                 "web_fetch": self.tools.web_fetch or {},
             },
             "memory": {"max_history": self.memory.max_history, "threshold": self.memory.threshold},
+            "search": {
+                "enabled": self.search.enabled,
+                "provider": self.search.provider,
+                "path": self.search.path,
+                "history_top_k": self.search.history_top_k,
+                "knowledge_top_k": self.search.knowledge_top_k,
+            },
         }
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)

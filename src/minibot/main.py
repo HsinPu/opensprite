@@ -16,6 +16,7 @@ from minibot.agent import AgentLoop
 from minibot.config import AgentConfig
 from minibot.llms import create_llm
 from minibot.storage import MemoryStorage, StorageProvider
+from minibot.search import LanceDBSearchStore, SearchStore
 from minibot.bus.message_queue import MessageQueue
 from minibot.config import Config
 from minibot.utils.log import logger
@@ -69,7 +70,23 @@ def create_storage(config: Config) -> StorageProvider:
         return MemoryStorage()
 
 
-def create_agent(config: Config):
+def create_search_store(config: Config) -> SearchStore | None:
+    """Create the optional search store."""
+    if not getattr(config, "search", None) or not config.search.enabled:
+        return None
+
+    provider = (config.search.provider or "lancedb").strip().lower()
+    if provider != "lancedb":
+        raise ValueError(f"Unsupported search provider: {provider}")
+
+    return LanceDBSearchStore(
+        path=config.search.path,
+        history_top_k=config.search.history_top_k,
+        knowledge_top_k=config.search.knowledge_top_k,
+    )
+
+
+async def create_agent(config: Config):
     """建立 Agent 和 Queue"""
     # 用 Registry 建立 LLM Provider
     cfg = config.llm.get_active()
@@ -80,9 +97,25 @@ def create_agent(config: Config):
     
     # 建立 Storage
     storage = create_storage(config)
+    search_store = create_search_store(config)
+    if search_store is not None:
+        try:
+            await search_store.sync_from_storage(storage)
+        except Exception as e:
+            logger.warning("Search store sync failed; continuing without search: {}", e)
+            search_store = None
     
     # 建立 Agent
-    agent = AgentLoop(agent_config, llm, storage, memory_config=config.memory, tools_config=config.tools, log_config=config.log)
+    agent = AgentLoop(
+        agent_config,
+        llm,
+        storage,
+        memory_config=config.memory,
+        tools_config=config.tools,
+        log_config=config.log,
+        search_store=search_store,
+        search_config=config.search,
+    )
     mq = MessageQueue(agent)
     
     return agent, mq
@@ -106,7 +139,7 @@ async def run():
         return
     
     # 建立 Agent + MessageQueue
-    agent, mq = create_agent(config)
+    agent, mq = await create_agent(config)
     
     # 啟動訊息處理迴圈
     processor = asyncio.create_task(mq.process_queue())

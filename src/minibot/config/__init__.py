@@ -12,6 +12,7 @@ from minibot.config.schema import (
     LogConfig,
     ToolsConfig,
     MemoryConfig,
+    SearchConfig,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "LogConfig",
     "ToolsConfig",
     "MemoryConfig",
+    "SearchConfig",
 ]

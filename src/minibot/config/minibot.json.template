@@ -65,5 +65,12 @@
   "memory": {
     "max_history": 50,
     "threshold": 30
+  },
+  "search": {
+    "enabled": false,
+    "provider": "lancedb",
+    "path": "~/.minibot/data/lancedb",
+    "history_top_k": 5,
+    "knowledge_top_k": 5
   }
 }

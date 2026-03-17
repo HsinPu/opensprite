@@ -143,6 +143,13 @@ python -m minibot.main
   "memory": {
     "max_history": 50,
     "threshold": 30
+  },
+  "search": {
+    "enabled": false,
+    "provider": "lancedb",
+    "path": "~/.minibot/data/lancedb",
+    "history_top_k": 5,
+    "knowledge_top_k": 5
   }
 }
 ```
@@ -359,12 +366,34 @@ src/minibot/
 - `web_fetch.prefer_trafilatura`: 優先使用 trafilatura
 - `web_fetch.firecrawl_api_key`: Firecrawl API key
 
+### Search 設定
+
+```json
+{
+  "search": {
+    "enabled": false,
+    "provider": "lancedb",
+    "path": "~/.minibot/data/lancedb",
+    "history_top_k": 5,
+    "knowledge_top_k": 5
+  }
+}
+```
+
+- `search.enabled`: 是否啟用 per-chat 搜尋索引
+- `search.provider`: 目前支援 `lancedb`
+- `search.path`: LanceDB 索引存放路徑
+- `search.history_top_k`: `search_history` 預設回傳筆數
+- `search.knowledge_top_k`: `search_knowledge` 預設回傳筆數
+- 啟用後會保留 `MEMORY.md` 作為每次對話都帶入的長期記憶，另外把對話歷史與 `web_search` / `web_fetch` 結果寫進 LanceDB 供需要時搜尋
+
 ## 依賴
 
 ```txt
 aiohttp>=3.0.0
 beautifulsoup4>=4.0
 html2text>=2020.1.16
+lancedb>=0.29.0
 loguru>=0.7.0
 markdown>=3.0
 openai>=1.0.0
