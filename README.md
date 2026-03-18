@@ -118,6 +118,21 @@ python -m minibot.main
     "path": "~/.minibot/data/sessions.db"
   },
   "channels": {
+    "telegram": {
+      "enabled": false,
+      "token": "",
+      "connect_timeout": 10,
+      "read_timeout": 30,
+      "write_timeout": 30,
+      "pool_timeout": 30,
+      "get_updates_connect_timeout": 10,
+      "get_updates_read_timeout": 30,
+      "get_updates_write_timeout": 30,
+      "get_updates_pool_timeout": 30,
+      "poll_timeout": 10,
+      "bootstrap_retries": 3,
+      "drop_pending_updates": false
+    },
     "console": {
       "enabled": true
     }

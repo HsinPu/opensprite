@@ -46,7 +46,21 @@ class StorageConfig(BaseModel):
 
 
 class ChannelsConfig(BaseModel):
-    telegram: dict[str, Any] = Field(default_factory=lambda: {"enabled": False, "token": ""})
+    telegram: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False,
+        "token": "",
+        "connect_timeout": 10,
+        "read_timeout": 30,
+        "write_timeout": 30,
+        "pool_timeout": 30,
+        "get_updates_connect_timeout": 10,
+        "get_updates_read_timeout": 30,
+        "get_updates_write_timeout": 30,
+        "get_updates_pool_timeout": 30,
+        "poll_timeout": 10,
+        "bootstrap_retries": 3,
+        "drop_pending_updates": False,
+    })
     console: dict[str, Any] = Field(default_factory=lambda: {"enabled": True})
 
 
@@ -170,8 +184,8 @@ class Config:
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels": {
-                "telegram": {"enabled": self.channels.telegram.get("enabled", False), "token": self.channels.telegram.get("token", "")},
-                "console": {"enabled": self.channels.console.get("enabled", True)},
+                "telegram": dict(self.channels.telegram),
+                "console": dict(self.channels.console),
             },
             "log": {"enabled": self.log.enabled, "retention_days": self.log.retention_days, "level": self.log.level, "log_system_prompt": self.log.log_system_prompt, "log_system_prompt_lines": self.log.log_system_prompt_lines},
             "tools": {
