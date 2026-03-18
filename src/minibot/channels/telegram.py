@@ -302,10 +302,6 @@ class TelegramAdapter(MessageAdapter):
                 timeout=self._get_int("poll_timeout"),
                 bootstrap_retries=self._get_int("bootstrap_retries"),
                 drop_pending_updates=self._get_bool("drop_pending_updates"),
-                read_timeout=self._get_int("get_updates_read_timeout"),
-                write_timeout=self._get_int("get_updates_write_timeout"),
-                connect_timeout=self._get_int("get_updates_connect_timeout"),
-                pool_timeout=self._get_int("get_updates_pool_timeout"),
             )
             logger.info("Telegram polling started!")
         except (TimedOut, NetworkError) as exc:
