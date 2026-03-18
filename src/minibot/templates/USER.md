@@ -1,49 +1,69 @@
 # User Profile
 
-Information about the user to help personalize interactions.
+Use this file to describe the person you are helping.
+Keep it practical, short, and easy to update.
+Avoid storing secrets here unless you explicitly want them remembered.
 
-## Basic Information
+## Identity
 
-- **Name**: 
-- **Timezone**: (e.g., UTC+8)
-- **Language**: 
+- Name:
+- Timezone:
+- Primary language:
+- Secondary language(s):
 
-## Preferences
+## Communication Preferences
 
-### Communication Style
-
-- [ ] Casual
-- [ ] Professional
-- [ ] Technical
-
-### Response Length
-
-- [ ] Brief and concise
-- [ ] Detailed explanations
-- [ ] Adaptive based on question
-
-### Technical Level
-
-- [ ] Beginner
-- [ ] Intermediate
-- [ ] Expert
+- Tone: (for example: casual, professional, direct)
+- Response style: (for example: concise by default, detailed when needed)
+- Technical depth: (for example: beginner, intermediate, expert)
+- Ask vs act: (for example: act first when safe; ask only when blocked)
+- Formatting preferences: (for example: bullets, code-first, step-by-step)
 
 ## Work Context
 
-- **Primary Role**: (e.g., developer, researcher)
-- **Main Projects**: (what you're working on)
-- **Tools You Use**: (IDEs, languages, frameworks)
+- Primary role:
+- Current focus:
+- Main projects:
+- Typical tasks:
+- Tools and stack:
+- OS / environment:
+
+## Coding Preferences
+
+- Preferred languages:
+- Preferred frameworks:
+- Style expectations:
+- Testing expectations:
+- Git workflow preferences:
+
+## Constraints
+
+- Hard requirements:
+- Things to avoid:
+- Security or privacy expectations:
+- Time or quality tradeoffs:
+
+## Reusable Context
+
+- Repeated workflows:
+- Frequently used commands:
+- Important file paths or repos:
+- Known project conventions:
 
 ## Topics of Interest
 
-- 
-- 
-- 
+-
+-
+-
 
 ## Special Instructions
 
-(Any specific instructions for how the assistant should behave)
+-
 
 ---
 
-*Edit this file to customize mini-bot's behavior for your needs.*
+Tips:
+
+- Prefer explicit sentences over checklists.
+- Write only what helps the assistant make better decisions.
+- Update this file when your preferences or projects change.
