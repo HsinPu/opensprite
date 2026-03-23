@@ -2,9 +2,34 @@
 
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .base import Tool
+
+
+WorkspaceResolver = Callable[[], Path]
+
+
+def _resolve_workspace_root(workspace: Path) -> Path:
+    """Resolve and ensure the workspace root directory exists."""
+    root = Path(workspace).expanduser().resolve(strict=False)
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _build_workspace_resolver(
+    workspace: Path | None = None,
+    workspace_resolver: WorkspaceResolver | None = None,
+) -> WorkspaceResolver:
+    """Build a normalized workspace resolver."""
+    if workspace_resolver is not None:
+        return lambda: _resolve_workspace_root(workspace_resolver())
+
+    if workspace is None:
+        raise ValueError("workspace or workspace_resolver is required")
+
+    root = _resolve_workspace_root(workspace)
+    return lambda: root
 
 
 class ExecTool(Tool):
@@ -25,14 +50,18 @@ class ExecTool(Tool):
 
     def __init__(
         self,
-        workspace: Path,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
         timeout: int = 60,
         deny_patterns: list[str] | None = None,
     ):
-        self.workspace = Path(workspace).expanduser().resolve(strict=False)
-        self.workspace.mkdir(parents=True, exist_ok=True)
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
         self.timeout = timeout
         self.deny_patterns = deny_patterns or self.DENY_PATTERNS
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
 
     @property
     def name(self) -> str:
@@ -65,12 +94,13 @@ class ExecTool(Tool):
                 return "Error: Command blocked by safety guard (dangerous pattern detected)"
         
         try:
+            workspace = self._get_workspace()
             # Security: run in workspace directory
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.workspace)
+                cwd=str(workspace)
             )
             
             try:

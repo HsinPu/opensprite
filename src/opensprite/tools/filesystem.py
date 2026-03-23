@@ -1,10 +1,13 @@
 """Filesystem tools for reading and writing files."""
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..skills import SkillsLoader
 from .base import Tool
+
+
+WorkspaceResolver = Callable[[], Path]
 
 
 def _resolve_workspace_root(workspace: Path) -> Path:
@@ -29,12 +32,36 @@ def _resolve_workspace_path(workspace: Path, path: str) -> Path | None:
     return candidate
 
 
+def _build_workspace_resolver(
+    workspace: Path | None = None,
+    workspace_resolver: WorkspaceResolver | None = None,
+) -> WorkspaceResolver:
+    """Build a normalized workspace resolver."""
+    if workspace_resolver is not None:
+        return lambda: _resolve_workspace_root(workspace_resolver())
+
+    if workspace is None:
+        raise ValueError("workspace or workspace_resolver is required")
+
+    root = _resolve_workspace_root(workspace)
+    return lambda: root
+
+
 class ReadFileTool(Tool):
     """Tool to read file contents."""
 
-    def __init__(self, workspace: Path, skills_loader: SkillsLoader | None = None):
-        self.workspace = _resolve_workspace_root(workspace)
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+        skills_loader: SkillsLoader | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
         self.skills_loader = skills_loader
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
 
     @property
     def name(self) -> str:
@@ -60,9 +87,10 @@ class ReadFileTool(Tool):
     async def execute(self, **kwargs: Any) -> str:
         try:
             path = str(kwargs["path"])
-            file_path = _resolve_workspace_path(self.workspace, path)
+            workspace = self._get_workspace()
+            file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
             
             # Check if reading a skill file -> redirect to read_skill
             if self.skills_loader and file_path.name == "SKILL.md":
@@ -91,8 +119,16 @@ class ReadFileTool(Tool):
 class WriteFileTool(Tool):
     """Tool to write content to a file."""
 
-    def __init__(self, workspace: Path):
-        self.workspace = _resolve_workspace_root(workspace)
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
 
     @property
     def name(self) -> str:
@@ -123,9 +159,10 @@ class WriteFileTool(Tool):
         try:
             path = str(kwargs["path"])
             content = str(kwargs["content"])
-            file_path = _resolve_workspace_path(self.workspace, path)
+            workspace = self._get_workspace()
+            file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
             
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
@@ -137,8 +174,16 @@ class WriteFileTool(Tool):
 class ListDirTool(Tool):
     """Tool to list directory contents."""
 
-    def __init__(self, workspace: Path):
-        self.workspace = _resolve_workspace_root(workspace)
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
 
     @property
     def name(self) -> str:
@@ -163,9 +208,10 @@ class ListDirTool(Tool):
     async def execute(self, **kwargs: Any) -> str:
         try:
             path = str(kwargs.get("path", "."))
-            dir_path = _resolve_workspace_path(self.workspace, path)
+            workspace = self._get_workspace()
+            dir_path = _resolve_workspace_path(workspace, path)
             if dir_path is None:
-                return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
             
             if not dir_path.exists():
                 return f"Error: Directory not found: {path}"
@@ -186,8 +232,16 @@ class ListDirTool(Tool):
 class EditFileTool(Tool):
     """Tool to edit a file by replacing text."""
 
-    def __init__(self, workspace: Path):
-        self.workspace = _resolve_workspace_root(workspace)
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
 
     @property
     def name(self) -> str:
@@ -214,9 +268,10 @@ class EditFileTool(Tool):
             path = str(kwargs["path"])
             old_text = str(kwargs["old_text"])
             new_text = str(kwargs["new_text"])
-            file_path = _resolve_workspace_path(self.workspace, path)
+            workspace = self._get_workspace()
+            file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {self.workspace}"
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
 
             if not file_path.exists():
                 return f"Error: File not found: {path}"

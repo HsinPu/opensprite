@@ -22,6 +22,7 @@ opensprite/agent.py - Agent Loop
 
 import json
 import asyncio
+from contextvars import ContextVar
 import re
 import time
 from pathlib import Path
@@ -106,7 +107,7 @@ class AgentLoop:
         self.search_config = search_config or SearchConfig()
         self.search_store = search_store
         self.provider = provider
-        self._current_chat_id: str | None = None
+        self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
 
         # 如果沒給 storage，用記憶體 storage
         if storage is None:
@@ -173,6 +174,8 @@ class AgentLoop:
             
             async def execute(self, memory_update: str, **kwargs: Any) -> str:
                 chat_id = self.get_chat_id()
+                if not chat_id:
+                    return "Error: current chat_id is unavailable. save_memory requires an active chat context."
                 current = self.memory_store.read(chat_id)
                 if memory_update != current:
                     self.memory_store.write(chat_id, memory_update)
@@ -180,7 +183,19 @@ class AgentLoop:
                 return "Memory unchanged"
         
         # Pass a lambda that returns current chat_id
-        self.tools.register(SaveMemoryTool(self.memory, lambda: self._current_chat_id))
+        self.tools.register(SaveMemoryTool(self.memory, self._get_current_chat_id))
+
+    def _get_current_chat_id(self) -> str | None:
+        """Return the current task-local chat id."""
+        return self._current_chat_id.get()
+
+    def _get_current_workspace(self) -> Path:
+        """Resolve the current task-local workspace."""
+        from ..context.paths import get_chat_workspace
+
+        workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
+        chat_id = self._get_current_chat_id() or "default"
+        return get_chat_workspace(chat_id, workspace_root=workspace_root)
 
     def _register_default_tools(self) -> None:
         """
@@ -191,21 +206,20 @@ class AgentLoop:
         註冊檔案系統工具、Shell 執行、網頁搜尋和網頁抓取。
         Registers filesystem tools, shell execution, web search, and web fetch.
         """
-        workspace = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
         skills_loader = getattr(self._context_builder, "skills_loader", None)
         
         # 檔案工具
-        self.tools.register(ReadFileTool(workspace=workspace, skills_loader=skills_loader))
-        self.tools.register(WriteFileTool(workspace=workspace))
-        self.tools.register(EditFileTool(workspace=workspace))
-        self.tools.register(ListDirTool(workspace=workspace))
+        self.tools.register(ReadFileTool(workspace_resolver=self._get_current_workspace, skills_loader=skills_loader))
+        self.tools.register(WriteFileTool(workspace_resolver=self._get_current_workspace))
+        self.tools.register(EditFileTool(workspace_resolver=self._get_current_workspace))
+        self.tools.register(ListDirTool(workspace_resolver=self._get_current_workspace))
         
         # 技能工具
         if skills_loader:
             self.tools.register(ReadSkillTool(skills_loader=skills_loader))
         
         # 執行命令
-        self.tools.register(ExecTool(workspace=workspace))
+        self.tools.register(ExecTool(workspace_resolver=self._get_current_workspace))
         
         # 網路工具
         web_search_config = {}
@@ -227,14 +241,14 @@ class AgentLoop:
             self.tools.register(
                 SearchHistoryTool(
                     store=self.search_store,
-                    get_chat_id=lambda: self._current_chat_id,
+                    get_chat_id=self._get_current_chat_id,
                     default_limit=self.search_config.history_top_k,
                 )
             )
             self.tools.register(
                 SearchKnowledgeTool(
                     store=self.search_store,
-                    get_chat_id=lambda: self._current_chat_id,
+                    get_chat_id=self._get_current_chat_id,
                     default_limit=self.search_config.knowledge_top_k,
                 )
             )
@@ -534,42 +548,43 @@ class AgentLoop:
         }
         user_metadata = {key: value for key, value in user_metadata.items() if value is not None}
 
-        # Set current chat_id for save_memory tool
-        self._current_chat_id = session_chat_id
+        token = self._current_chat_id.set(session_chat_id)
+        try:
+            # 1. 把使用者訊息存入 storage
+            await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
 
-        # 1. 把使用者訊息存入 storage
-        await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
+            # 2. 呼叫 LLM（傳入 channel 和圖片）
+            logger.info(f"[{session_chat_id}] 處理中...")
+            response = await self.call_llm(
+                session_chat_id,
+                channel=channel,
+                user_images=user_message.images
+            )
+            
+            logger.info(f"[{session_chat_id}] 回覆: {response[:50]}...")
 
-        # 2. 呼叫 LLM（傳入 channel 和圖片）
-        logger.info(f"[{session_chat_id}] 處理中...")
-        response = await self.call_llm(
-            session_chat_id,
-            channel=channel,
-            user_images=user_message.images
-        )
-        
-        logger.info(f"[{session_chat_id}] 回覆: {response[:50]}...")
+            assistant_metadata = {
+                "channel": channel,
+                "transport_chat_id": user_message.chat_id,
+            }
+            assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
 
-        assistant_metadata = {
-            "channel": channel,
-            "transport_chat_id": user_message.chat_id,
-        }
-        assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
+            # 3. 把 AI 回覆存入 storage
+            await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
 
-        # 3. 把 AI 回覆存入 storage
-        await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
+            # 4. 檢查是否需要 consolidation
+            await self._maybe_consolidate_memory(session_chat_id)
 
-        # 4. 檢查是否需要 consolidation
-        await self._maybe_consolidate_memory(session_chat_id)
-
-        # 5. 回傳
-        return AssistantMessage(
-            text=response,
-            channel=channel or "unknown",
-            chat_id=user_message.chat_id,
-            session_chat_id=session_chat_id,
-            metadata=assistant_metadata,
-        )
+            # 5. 回傳
+            return AssistantMessage(
+                text=response,
+                channel=channel or "unknown",
+                chat_id=user_message.chat_id,
+                session_chat_id=session_chat_id,
+                metadata=assistant_metadata,
+            )
+        finally:
+            self._current_chat_id.reset(token)
 
     async def _maybe_consolidate_memory(self, chat_id: str) -> None:
         """

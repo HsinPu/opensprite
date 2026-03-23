@@ -16,7 +16,7 @@ class ContextBuilder(Protocol):
     Implement this to create different ways of building context/prompts.
     """
     
-    def build_system_prompt(self) -> str:
+    def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build the system prompt."""
         ...
     

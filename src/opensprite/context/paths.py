@@ -4,12 +4,15 @@ opensprite/context/paths.py - Path helpers and template sync.
 Path layout:
 - app home: ~/.opensprite
 - bootstrap files: ~/.opensprite/bootstrap/*.md
-- memory: ~/.opensprite/memory/{chat_id}/MEMORY.md
+- memory: ~/.opensprite/memory/<chat>/MEMORY.md
 - default skills: ~/.opensprite/skills/*/SKILL.md
-- tool workspace: ~/.opensprite/workspace
+- workspace root: ~/.opensprite/workspace
+- per-chat workspaces: ~/.opensprite/workspace/chats/{channel}/{chat_id}
 """
 
+import hashlib
 import logging
+import re
 import shutil
 from pathlib import Path
 
@@ -21,6 +24,7 @@ BOOTSTRAP_DIRNAME = "bootstrap"
 MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
 WORKSPACE_DIRNAME = "workspace"
+WORKSPACE_CHATS_DIRNAME = "chats"
 
 BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md", "TOOLS.md"]
 
@@ -53,7 +57,7 @@ def get_skills_dir(app_home: str | Path | None = None) -> Path:
 
 
 def get_tool_workspace(app_home: str | Path | None = None) -> Path:
-    """Get the tool workspace directory used by file and shell tools."""
+    """Get the shared root directory that contains per-chat workspaces."""
     return ensure_dir(get_app_home(app_home) / WORKSPACE_DIRNAME)
 
 
@@ -64,8 +68,52 @@ def get_workspace_path(workspace: str | Path | None = None) -> Path:
     return get_tool_workspace()
 
 
+def split_session_chat_id(session_chat_id: str | None) -> tuple[str, str]:
+    """Split a session chat id into channel and raw chat id."""
+    value = (session_chat_id or "default").strip() or "default"
+    if ":" in value:
+        channel, chat_id = value.split(":", 1)
+        return channel.strip() or "default", chat_id.strip() or "default"
+    return "default", value
+
+
+def _sanitize_path_segment(value: str, default: str = "default", max_length: int = 48) -> str:
+    """Sanitize a path segment while keeping collisions unlikely."""
+    raw = (value or "").strip() or default
+    normalized = re.sub(r"\s+", "-", raw)
+    slug = re.sub(r"[^A-Za-z0-9._-]", "-", normalized)
+    slug = re.sub(r"-+", "-", slug).strip(" ._-") or default
+
+    needs_hash = slug != raw or len(slug) > max_length
+    slug = slug[:max_length].rstrip(" ._-") or default
+    if needs_hash:
+        digest = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:8]
+        slug = f"{slug}-{digest}"[: max_length + 9].rstrip(" ._-")
+    return slug or default
+
+
+def get_chat_workspace(
+    chat_id: str | None,
+    *,
+    workspace_root: str | Path | None = None,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the isolated workspace directory for a chat session."""
+    root = ensure_dir(Path(workspace_root).expanduser()) if workspace_root is not None else get_tool_workspace(app_home)
+    channel, raw_chat_id = split_session_chat_id(chat_id)
+    safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
+    safe_chat_id = _sanitize_path_segment(raw_chat_id, default="default")
+    return ensure_dir(root / WORKSPACE_CHATS_DIRNAME / safe_channel / safe_chat_id)
+
+
 def get_memory_file(memory_dir: str | Path, chat_id: str = "default") -> Path:
     """Get the memory file path for a chat without creating it."""
+    safe_chat_id = _sanitize_path_segment(chat_id, default="default", max_length=72)
+    return Path(memory_dir).expanduser() / safe_chat_id / "MEMORY.md"
+
+
+def get_legacy_memory_file(memory_dir: str | Path, chat_id: str = "default") -> Path:
+    """Get the legacy raw memory file path used before chat ids were sanitized."""
     return Path(memory_dir).expanduser() / chat_id / "MEMORY.md"
 
 
@@ -229,6 +277,10 @@ def load_memory(memory_dir: str | Path, chat_id: str = "default") -> str:
     target = get_memory_file(memory_dir, chat_id)
     if target.exists():
         return target.read_text(encoding="utf-8")
+
+    legacy_target = get_legacy_memory_file(memory_dir, chat_id)
+    if legacy_target.exists():
+        return legacy_target.read_text(encoding="utf-8")
 
     if chat_id == "default":
         legacy_default = Path(memory_dir).expanduser() / "MEMORY.md"

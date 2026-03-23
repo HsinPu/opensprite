@@ -4,7 +4,7 @@ opensprite/context/file_builder.py - File-based ContextBuilder.
 Assembles the system prompt from:
 - bootstrap/*.md startup files
 - skill metadata and always-on skill content
-- memory/{chat_id}/MEMORY.md long-term memory
+- memory/<chat>/MEMORY.md long-term memory
 """
 
 import platform
@@ -15,6 +15,7 @@ from typing import Any
 from .paths import (
     get_app_home,
     get_bootstrap_dir,
+    get_chat_workspace,
     get_memory_dir,
     get_memory_file,
     get_skills_dir,
@@ -59,6 +60,10 @@ class FileContextBuilder:
             custom_skills_dir=custom_skills_dir or self.tool_workspace / "skills",
         )
 
+    def get_chat_workspace(self, chat_id: str = "default") -> Path:
+        """Resolve the current chat's isolated workspace."""
+        return get_chat_workspace(chat_id, workspace_root=self.tool_workspace)
+
     def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
         parts = [self._get_identity(chat_id)]
@@ -97,7 +102,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         """Get the core identity section."""
         app_home_path = str(self.app_home.expanduser().resolve())
         bootstrap_path = str(self.bootstrap_dir.expanduser().resolve())
-        workspace_path = str(self.tool_workspace.expanduser().resolve())
+        workspace_path = str(self.get_chat_workspace(chat_id).expanduser().resolve())
         memory_path = str(get_memory_file(self.memory_dir, chat_id).expanduser().resolve())
         system = platform.system()
         runtime = f"{system} {platform.machine()}, Python {platform.python_version()}"
