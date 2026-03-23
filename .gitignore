@@ -13,5 +13,5 @@ venv/
 .ruff_cache/
 *.egg-info/
 
-# minibot runtime data (should live in user home)
-~/.minibot/
+# opensprite runtime data (should live in user home)
+~/.opensprite/

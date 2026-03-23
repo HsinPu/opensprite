@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mini-bot 啟動入口"""
+"""OpenSprite 啟動入口"""
 
 import os
 import sys
@@ -9,7 +9,7 @@ from pathlib import Path
 
 BOT_DIR = Path(__file__).parent
 VENV_DIR = BOT_DIR / ".venv"
-MAIN_SCRIPT = BOT_DIR / "src" / "minibot" / "main.py"
+MAIN_MODULE = "opensprite.main"
 
 
 def setup_venv():
@@ -27,9 +27,16 @@ def get_venv_python():
     return VENV_DIR / "bin" / "python"
 
 
+def get_venv_pip():
+    """取得虛擬環境的 pip 路徑"""
+    if os.name == "nt":
+        return VENV_DIR / "Scripts" / "pip.exe"
+    return VENV_DIR / "bin" / "pip"
+
+
 def install_deps():
     """安裝依賴"""
-    pip = VENV_DIR / "bin" / "pip"
+    pip = get_venv_pip()
     req_file = BOT_DIR / "requirements.txt"
     
     # 檢查依賴是否已安裝
@@ -45,16 +52,16 @@ def install_deps():
 
 def run_bot():
     """啟動機器人"""
-    print("🚀 啟動 mini-bot...", flush=True)
+    print("🚀 啟動 OpenSprite...", flush=True)
     
     # 把 src 目錄加入 Python 路徑
     env = os.environ.copy()
     env["PYTHONPATH"] = str(BOT_DIR / "src")
     env["PYTHONUNBUFFERED"] = "1"
     
-    # 使用虛擬環境的 Python 執行（維持在前景）
+    # 使用虛擬環境的 Python 以 module 方式執行（維持在前景）
     python = get_venv_python()
-    subprocess.run([str(python), str(MAIN_SCRIPT)], cwd=BOT_DIR, env=env)
+    subprocess.run([str(python), "-m", MAIN_MODULE], cwd=BOT_DIR, env=env)
 
 
 def main():
