@@ -6,7 +6,7 @@ opensprite/channels/telegram.py - Telegram 訊息 Adapter
 流程：
 1. 收到 Telegram Update
 2. 用 TelegramAdapter.to_user_message() 轉成 UserMessage
-3. 丟到 MessageQueue（enqueue_raw）
+3. 丟到 MessageQueue（enqueue）
 4. Queue 處理完後，on_response callback 會把回覆發送到 Telegram
 
 """
@@ -160,7 +160,7 @@ class TelegramAdapter(MessageAdapter):
         except Exception:
             pass
     
-    def to_user_message(self, raw_update: Update) -> UserMessage:
+    async def to_user_message(self, raw_update: Update) -> UserMessage:
         """
         把 Telegram Update 轉成統一的 UserMessage
         
@@ -175,14 +175,25 @@ class TelegramAdapter(MessageAdapter):
         # 取出訊息內容
         message = raw_update.message
         if message is None:
-            return UserMessage(text="", sender=None, chat_id=None, raw=raw_update)
+            return UserMessage(
+                text="",
+                channel="telegram",
+                metadata={"update_id": raw_update.update_id},
+                raw=raw_update,
+            )
         
-        text = message.text or ""
+        text = message.text or message.caption or ""
         
         # 取出發送者資訊
-        sender = None
+        sender_id = None
+        sender_name = None
         if message.from_user:
-            sender = message.from_user.username or message.from_user.name or str(message.from_user.id)
+            sender_id = str(message.from_user.id)
+            sender_name = (
+                message.from_user.username
+                or getattr(message.from_user, "full_name", None)
+                or sender_id
+            )
         
         # 取出聊天室 ID
         chat_id = str(message.chat.id) if message.chat else None
@@ -190,13 +201,24 @@ class TelegramAdapter(MessageAdapter):
         # 處理圖片
         images = []
         if message.photo:
-            images = self._download_images(message.photo, raw_update.bot)
-        
+            images = await self._download_images(message.photo, raw_update.bot)
+
+        metadata = {
+            "update_id": raw_update.update_id,
+            "message_id": message.message_id,
+            "chat_type": getattr(message.chat, "type", None),
+        }
+        if message.from_user is not None:
+            metadata["username"] = message.from_user.username
+
         return UserMessage(
             text=text,
-            sender=sender,
+            channel="telegram",
             chat_id=chat_id,
+            sender_id=sender_id,
+            sender_name=sender_name,
             images=images if images else None,
+            metadata=metadata,
             raw=raw_update
         )
     
@@ -297,9 +319,7 @@ class TelegramAdapter(MessageAdapter):
         """
         Queue 的回調：收到 Agent 回覆後發送到 Telegram
         """
-        # 轉換成 AssistantMessage
-        msg = AssistantMessage(text=response.text, chat_id=chat_id)
-        await self.send(msg)
+        await self.send(response)
     
     async def run(self):
         """
@@ -321,31 +341,26 @@ class TelegramAdapter(MessageAdapter):
         # 註冊訊息 handler
         async def handle_update(update: Update, context):
             # 轉換成統一格式
-            user_msg = self.to_user_message(update)
+            user_msg = await self.to_user_message(update)
             
             # 檢查是否是空訊息
-            if not user_msg.text:
+            if not user_msg.text and not user_msg.images:
                 return
             
             if self.mq:
                 # === 新方式：走 MessageQueue ===
-                await self.mq.enqueue_raw(
-                    content=user_msg.text,
-                    chat_id=user_msg.chat_id,
-                    channel="telegram",
-                    sender_id=user_msg.sender or "unknown"
-                )
+                await self.mq.enqueue(user_msg)
             else:
                 # === 舊方式：直接叫 agent（向後相容）===
                 # 這裡需要傳入 agent，暫時不支援
                 raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
         
         from telegram.ext import MessageHandler, filters
-        self.app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_update))
+        self.app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_update))
         
         # 設置 callback 來發送回覆到 Telegram
         async def on_response(response, channel, chat_id):
-            await self.send(AssistantMessage(text=response.text, chat_id=chat_id))
+            await self.send(response)
         
         self.mq.on_response = on_response
         

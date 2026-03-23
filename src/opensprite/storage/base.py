@@ -9,7 +9,7 @@ opensprite/storage/base.py - Storage 介面定義
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -23,6 +23,7 @@ class StoredMessage:
     timestamp: float  # 時間戳記
     tool_name: str | None = None  # 如果是 tool，記錄用了什麼工具
     is_consolidated: bool = False  # 是否已被 consolidate 過
+    metadata: dict[str, Any] = field(default_factory=dict)  # 額外欄位（channel、sender、transport chat id...）
 
 
 class StorageProvider(ABC):

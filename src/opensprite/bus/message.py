@@ -8,7 +8,7 @@ opensprite/message.py - 統一訊息格式
 
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -23,16 +23,29 @@ class UserMessage:
     
     屬性：
         text: 訊息文字內容
-        sender: 發送者是誰（例如 user_id 或 username）
-        chat_id: 聊天室 ID（例如 group 或 channel）
-        images: 圖片列表（base64 格式）
-        raw: （可選）原始訊息物件，讓某些工具需要知道來源時使用
+        channel: 訊息來源（telegram、discord、console...）
+        chat_id: 平台原始聊天室 ID
+        session_chat_id: 內部標準化 session ID（通常是 channel:chat_id）
+        sender_id: 平台原始使用者 ID
+        sender_name: 顯示名稱或 username
+        images: 圖片列表（base64 data URL）
+        metadata: 跨 channel 通用的附加 metadata
+        raw: （可選）原始訊息物件，保留給 adapter / debug 使用
     """
     text: str
-    sender: str | None = None
+    channel: str = "unknown"
     chat_id: str | None = None
+    session_chat_id: str | None = None
+    sender_id: str | None = None
+    sender_name: str | None = None
     images: list[str] | None = None  # base64 編碼的圖片列表
+    metadata: dict[str, Any] = field(default_factory=dict)
     raw: Any = None  # 原始訊息物件，可選
+
+    @property
+    def sender(self) -> str | None:
+        """Backward-compatible sender view."""
+        return self.sender_name or self.sender_id
 
 
 @dataclass
@@ -44,11 +57,17 @@ class AssistantMessage:
     
     屬性：
         text: 回覆文字
-        chat_id: 要發送到哪個聊天室
+        channel: 要送回哪個頻道
+        chat_id: 平台原始聊天室 ID（用於實際發送）
+        session_chat_id: 內部標準化 session ID（用於 storage / tracing）
+        metadata: 額外 metadata
         raw: （可選）可放入平台特定的回覆物件
     """
     text: str
+    channel: str = "unknown"
     chat_id: str | None = None
+    session_chat_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     raw: Any = None
 
 
@@ -65,7 +84,7 @@ class MessageAdapter(ABC):
     """
     
     @abstractmethod
-    def to_user_message(self, raw_message: Any) -> UserMessage:
+    async def to_user_message(self, raw_message: Any) -> UserMessage:
         """
         把平台收到的原始訊息轉換成統一的 UserMessage
         

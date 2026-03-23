@@ -19,6 +19,7 @@ opensprite/bus/dispatcher.py - 訊息排程中心
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import Any
 from . import MessageBus, InboundMessage, OutboundMessage
 from .message import UserMessage, AssistantMessage
 from ..utils.log import logger
@@ -108,18 +109,21 @@ class MessageQueue:
         參數：
             user_message: 統一格式的訊息
         """
-        # 轉換成 InboundMessage
-        channel = user_message.raw.get("channel") if user_message.raw else "unknown"
-        metadata = {"session_chat_id": self.build_session_chat_id(channel, user_message.chat_id)}
-        if user_message.raw:
-            metadata["raw"] = user_message.raw
+        channel = (user_message.channel or "unknown").strip() or "unknown"
+        transport_chat_id = (user_message.chat_id or "default").strip() or "default"
+        session_chat_id = user_message.session_chat_id or self.build_session_chat_id(channel, transport_chat_id)
+        metadata = dict(user_message.metadata or {})
 
         inbound = InboundMessage(
             channel=channel,
-            sender_id=user_message.sender or "unknown",
-            chat_id=user_message.chat_id or "default",
+            sender_id=user_message.sender_id or user_message.sender or "unknown",
+            sender_name=user_message.sender_name,
+            chat_id=transport_chat_id,
+            session_chat_id=session_chat_id,
             content=user_message.text,
+            images=list(user_message.images or []),
             metadata=metadata,
+            raw=user_message.raw,
         )
         await self.bus.publish_inbound(inbound)
     
@@ -129,7 +133,11 @@ class MessageQueue:
         chat_id: str = "default",
         channel: str = "cli",
         sender_id: str = "user",
-        metadata: dict | None = None
+        sender_name: str | None = None,
+        images: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+        raw: Any = None,
+        session_chat_id: str | None = None,
     ) -> None:
         """
         直接發送原始訊息到 inbound queue（不需 UserMessage 格式）
@@ -141,14 +149,19 @@ class MessageQueue:
             sender_id: 發送者 ID
             metadata: 額外資料
         """
-        inbound = InboundMessage(
-            channel=channel,
-            sender_id=sender_id,
-            chat_id=chat_id,
-            content=content,
-            metadata={**(metadata or {}), "session_chat_id": self.build_session_chat_id(channel, chat_id)}
+        await self.enqueue(
+            UserMessage(
+                text=content,
+                channel=channel,
+                chat_id=chat_id,
+                session_chat_id=session_chat_id,
+                sender_id=sender_id,
+                sender_name=sender_name,
+                images=images,
+                metadata=dict(metadata or {}),
+                raw=raw,
+            )
         )
-        await self.bus.publish_inbound(inbound)
     
     async def _process_message(self, inbound: InboundMessage) -> None:
         """
@@ -158,7 +171,7 @@ class MessageQueue:
             inbound: InboundMessage
         """
         transport_chat_id = inbound.chat_id
-        session_chat_id = inbound.metadata.get("session_chat_id") or self.build_session_chat_id(inbound.channel, transport_chat_id)
+        session_chat_id = inbound.session_chat_id or self.build_session_chat_id(inbound.channel, transport_chat_id)
         
         try:
             # 取得或建立對話
@@ -167,20 +180,28 @@ class MessageQueue:
             # 轉換成 UserMessage 給 Agent
             user_message = UserMessage(
                 text=inbound.content,
-                chat_id=session_chat_id,
-                sender=inbound.sender_id,  # UserMessage 用 sender 不是 sender_id
-                raw=inbound.metadata  # 把 metadata 放 raw 裡
+                channel=inbound.channel,
+                chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
+                sender_id=inbound.sender_id,
+                sender_name=inbound.sender_name,
+                images=inbound.images or None,
+                metadata=dict(inbound.metadata),
+                raw=inbound.raw,
             )
             
             # 把訊息傳給 Agent 處理
             response = await self.agent.process(user_message)
+            response_channel = response.channel if response.channel and response.channel != "unknown" else inbound.channel
             
             # 放到 outbound queue（而不是直接發送）
             outbound = OutboundMessage(
-                channel=inbound.channel,
-                chat_id=transport_chat_id,
+                channel=response_channel,
+                chat_id=response.chat_id or transport_chat_id,
+                session_chat_id=response.session_chat_id or session_chat_id,
                 content=response.text,
-                metadata={"sender_id": inbound.sender_id}
+                metadata=dict(response.metadata or {}),
+                raw=response.raw,
             )
             await self.bus.publish_outbound(outbound)
                 
@@ -193,6 +214,7 @@ class MessageQueue:
             outbound = OutboundMessage(
                 channel=inbound.channel,
                 chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
                 content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}"
             )
             await self.bus.publish_outbound(outbound)
@@ -216,7 +238,11 @@ class MessageQueue:
                     # 轉換成 AssistantMessage 格式
                     response = AssistantMessage(
                         text=outbound.content,
-                        chat_id=outbound.chat_id
+                        channel=outbound.channel,
+                        chat_id=outbound.chat_id,
+                        session_chat_id=outbound.session_chat_id,
+                        metadata=dict(outbound.metadata),
+                        raw=outbound.raw,
                     )
                     await self.on_response(response, outbound.channel, outbound.chat_id)
                     
@@ -248,7 +274,7 @@ class MessageQueue:
                 except asyncio.TimeoutError:
                     continue
                 
-                chat_id = inbound.metadata.get("session_chat_id") or self.build_session_chat_id(inbound.channel, inbound.chat_id)
+                chat_id = inbound.session_chat_id or self.build_session_chat_id(inbound.channel, inbound.chat_id)
                 
                 # Spawn 成獨立 task（不再await）
                 task = asyncio.create_task(self._process_message(inbound))

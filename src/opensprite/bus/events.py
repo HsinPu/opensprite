@@ -17,16 +17,19 @@ class InboundMessage:
 
     channel: str  # telegram, discord, slack, whatsapp
     sender_id: str  # User identifier
-    chat_id: str  # Chat/channel identifier
+    chat_id: str  # Transport chat/channel identifier
     content: str  # Message text
+    session_chat_id: str | None = None  # Internal normalized chat/session identifier
+    sender_name: str | None = None
     timestamp: datetime = field(default_factory=datetime.now)
-    media: list[str] = field(default_factory=list)  # Media URLs
+    images: list[str] = field(default_factory=list)  # base64 image data URLs
     metadata: dict[str, Any] = field(default_factory=dict)  # Channel-specific data
+    raw: Any = None
 
     @property
     def session_key(self) -> str:
         """Unique key for session identification."""
-        return f"{self.channel}:{self.chat_id}"
+        return self.session_chat_id or f"{self.channel}:{self.chat_id}"
 
 
 @dataclass
@@ -34,8 +37,10 @@ class OutboundMessage:
     """Message to send to a chat channel."""
 
     channel: str
-    chat_id: str
+    chat_id: str  # Transport chat/channel identifier
     content: str
+    session_chat_id: str | None = None
     reply_to: str | None = None
-    media: list[str] = field(default_factory=list)
+    images: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    raw: Any = None

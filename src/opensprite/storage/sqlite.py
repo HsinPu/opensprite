@@ -49,6 +49,17 @@ class SQLiteStorage(StorageProvider):
         import sqlite3
         return sqlite3.connect(str(self.db_path))
 
+    @classmethod
+    def _json_safe(cls, value):
+        """Convert metadata into JSON-serializable structures."""
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return {str(key): cls._json_safe(val) for key, val in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [cls._json_safe(item) for item in value]
+        return str(value)
+
     async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
         """取得對話歷史"""
         async with self._lock:
@@ -71,6 +82,7 @@ class SQLiteStorage(StorageProvider):
                     timestamp=m.get("timestamp", 0),
                     tool_name=m.get("tool_name"),
                     is_consolidated=m.get("is_consolidated", False),
+                    metadata=m.get("metadata", {}),
                 )
                 for m in messages
             ]
@@ -100,6 +112,7 @@ class SQLiteStorage(StorageProvider):
                 "timestamp": message.timestamp or now,
                 "tool_name": message.tool_name,
                 "is_consolidated": message.is_consolidated,
+                "metadata": self._json_safe(message.metadata),
             })
 
             conn.execute(

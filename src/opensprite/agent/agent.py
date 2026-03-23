@@ -270,7 +270,14 @@ class AgentLoop:
         
         return chat_messages
 
-    async def _save_message(self, chat_id: str, role: str, content: str, tool_name: str | None = None) -> None:
+    async def _save_message(
+        self,
+        chat_id: str,
+        role: str,
+        content: str,
+        tool_name: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
         """
         儲存訊息到儲存區。
         
@@ -287,7 +294,13 @@ class AgentLoop:
         created_at = time.time()
         await self.storage.add_message(
             chat_id,
-            StoredMessage(role=role, content=content, timestamp=created_at, tool_name=tool_name)
+            StoredMessage(
+                role=role,
+                content=content,
+                timestamp=created_at,
+                tool_name=tool_name,
+                metadata=dict(metadata or {}),
+            )
         )
         if self.search_store is not None:
             try:
@@ -500,43 +513,62 @@ class AgentLoop:
         回傳：
             AssistantMessage: 統一格式的回覆
         """
-        chat_id = user_message.chat_id or "default"
-        channel = getattr(user_message, 'channel', None)
+        session_chat_id = user_message.session_chat_id or user_message.chat_id or "default"
+        channel = user_message.channel or None
 
-        if ":" not in chat_id:
+        if ":" not in session_chat_id:
             logger.warning(
                 "Received non-namespaced chat_id '{}' in Agent.process; this may mix sessions if MessageQueue is bypassed",
-                chat_id,
+                session_chat_id,
             )
         
-        logger.info(f"[{chat_id}] 收到訊息: {user_message.text[:50]}...")
+        logger.info(f"[{session_chat_id}] 收到訊息: {user_message.text[:50]}...")
+
+        user_metadata = {
+            **dict(user_message.metadata or {}),
+            "channel": channel,
+            "transport_chat_id": user_message.chat_id,
+            "sender_id": user_message.sender_id,
+            "sender_name": user_message.sender_name,
+            "images_count": len(user_message.images or []),
+        }
+        user_metadata = {key: value for key, value in user_metadata.items() if value is not None}
 
         # Set current chat_id for save_memory tool
-        self._current_chat_id = chat_id
+        self._current_chat_id = session_chat_id
 
         # 1. 把使用者訊息存入 storage
-        await self._save_message(chat_id, "user", user_message.text)
+        await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
 
         # 2. 呼叫 LLM（傳入 channel 和圖片）
-        logger.info(f"[{chat_id}] 處理中...")
+        logger.info(f"[{session_chat_id}] 處理中...")
         response = await self.call_llm(
-            chat_id, 
+            session_chat_id,
             channel=channel,
             user_images=user_message.images
         )
         
-        logger.info(f"[{chat_id}] 回覆: {response[:50]}...")
+        logger.info(f"[{session_chat_id}] 回覆: {response[:50]}...")
+
+        assistant_metadata = {
+            "channel": channel,
+            "transport_chat_id": user_message.chat_id,
+        }
+        assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
 
         # 3. 把 AI 回覆存入 storage
-        await self._save_message(chat_id, "assistant", response)
+        await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
 
         # 4. 檢查是否需要 consolidation
-        await self._maybe_consolidate_memory(chat_id)
+        await self._maybe_consolidate_memory(session_chat_id)
 
         # 5. 回傳
         return AssistantMessage(
             text=response,
-            chat_id=chat_id
+            channel=channel or "unknown",
+            chat_id=user_message.chat_id,
+            session_chat_id=session_chat_id,
+            metadata=assistant_metadata,
         )
 
     async def _maybe_consolidate_memory(self, chat_id: str) -> None:
