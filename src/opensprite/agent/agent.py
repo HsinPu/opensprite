@@ -22,6 +22,7 @@ opensprite/agent.py - Agent Loop
 
 import json
 import asyncio
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,12 @@ from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig
 
 
+PRIVATE_REASONING_RE = re.compile(
+    r"<(?:think|thinking)\b[^>]*>.*?</(?:think|thinking)>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
 class AgentLoop:
     """
     Agent Loop
@@ -72,6 +79,12 @@ class AgentLoop:
     """
 
     MAX_TOOL_ITERATIONS = 10
+
+    @staticmethod
+    def _sanitize_response_content(content: str) -> str:
+        """Remove provider-internal reasoning blocks from visible replies."""
+        cleaned = PRIVATE_REASONING_RE.sub("", content or "")
+        return cleaned.strip()
 
     def __init__(
         self,
@@ -408,6 +421,7 @@ class AgentLoop:
                 messages=chat_messages,
                 tools=tools,
             )
+            response.content = self._sanitize_response_content(response.content)
 
             # 檢查是否有 tool calls
             if response.tool_calls:
