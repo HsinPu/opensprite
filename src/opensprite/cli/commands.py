@@ -181,24 +181,6 @@ def onboard(
     _run_onboard(config=config, force=force)
 
 
-@app.command(name="init")
-def init_command(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Reset the config to the packaged defaults instead of refreshing missing fields.",
-    ),
-) -> None:
-    """Alias for `opensprite onboard`."""
-    _run_onboard(config=config, force=force)
-
-
 @app.command()
 def status(
     config: str | None = typer.Option(
@@ -296,19 +278,6 @@ def gateway(
     ),
 ) -> None:
     """Start the OpenSprite gateway."""
-    _start_gateway(config=config)
-
-
-@app.command()
-def run(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-) -> None:
-    """Alias for `opensprite gateway`."""
     _start_gateway(config=config)
 
 

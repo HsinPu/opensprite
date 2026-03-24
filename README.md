@@ -21,7 +21,6 @@ This repository is now package-first.
 - Install command: `python -m pip install .`
 - Default command: `opensprite` shows help
 - Start command: `opensprite gateway`
-- Legacy alias: `opensprite run`
 - Runtime mode: foreground process; stop it with `Ctrl+C`
 
 ## Requirements
@@ -81,8 +80,6 @@ Or via the module entrypoint:
 ```bash
 python -m opensprite gateway
 ```
-
-`opensprite run` is still available as a compatibility alias.
 
 The process stays attached to the current terminal and does not daemonize itself.
 
@@ -278,12 +275,6 @@ opensprite status --json
 
 # module entrypoint
 python -m opensprite gateway
-
-# compatibility alias
-opensprite run
-
-# alias for onboard
-opensprite init
 
 # uninstall from current environment
 python -m pip uninstall opensprite
