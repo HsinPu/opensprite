@@ -108,7 +108,7 @@ It also prepares these directories:
 
 ## Minimal Configuration
 
-Edit `~/.opensprite/opensprite.json` and enable one provider.
+Edit `~/.opensprite/opensprite.json`, enable one provider, and set `llm.default` to the provider you want to use.
 
 Example using OpenRouter:
 

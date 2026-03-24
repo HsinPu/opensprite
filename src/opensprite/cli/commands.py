@@ -111,7 +111,7 @@ def _emit_status(payload: dict[str, object], json_output: bool) -> None:
     typer.echo(f"LLM Configured: {_format_presence(bool(payload['llm_configured']))}")
     typer.echo(
         "Provider: "
-        f"{provider['name']} "
+        f"{provider['name'] or '<unset>'} "
         f"(enabled={_format_presence(bool(provider['enabled']))}, "
         f"api_key={_format_presence(bool(provider['api_key_configured']))})"
     )
@@ -247,11 +247,16 @@ def status(
             typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1) from exc
 
-    provider_name = loaded.llm.default or "legacy"
-    active_provider = loaded.llm.get_active()
-    provider_enabled = getattr(active_provider, "enabled", True)
-    provider_has_key = bool(active_provider.api_key)
-    model_name = active_provider.model or "<unset>"
+    selected_provider = loaded.llm.default if loaded.llm.default in loaded.llm.providers else None
+    if selected_provider is not None:
+        active_provider = loaded.llm.providers[selected_provider]
+        provider_enabled = bool(getattr(active_provider, "enabled", False))
+        provider_has_key = bool(active_provider.api_key)
+        model_name = active_provider.model or "<unset>"
+    else:
+        provider_enabled = False
+        provider_has_key = False
+        model_name = "<unset>"
     storage_path = Path(loaded.storage.path).expanduser()
     search_path = Path(loaded.search.path).expanduser()
     channels = {name: enabled for name, enabled in _iter_channel_status(loaded)}
@@ -261,7 +266,7 @@ def status(
             "config_loaded": True,
             "llm_configured": loaded.is_llm_configured,
             "provider": {
-                "name": provider_name,
+                "name": selected_provider,
                 "enabled": provider_enabled,
                 "api_key_configured": provider_has_key,
                 "model": model_name,
