@@ -1,6 +1,5 @@
-"""Global USER.md profile update helpers."""
+"""Compatibility exports for global USER.md profile helpers."""
 
-from .consolidate import UserProfileConsolidator, consolidate_user_profile
-from .store import UserProfileStore
+from ..documents.user_profile import UserProfileConsolidator, UserProfileStore, consolidate_user_profile
 
 __all__ = ["UserProfileConsolidator", "UserProfileStore", "consolidate_user_profile"]

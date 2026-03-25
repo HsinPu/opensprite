@@ -32,8 +32,8 @@ from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
 from ..context.builder import ContextBuilder
-from ..memory import MemoryStore, consolidate
-from ..profile import UserProfileConsolidator, UserProfileStore
+from ..documents.memory import MemoryStore, consolidate
+from ..documents.user_profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
 from ..tools import (
     ToolRegistry,

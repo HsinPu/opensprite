@@ -1,7 +1,6 @@
-"""Memory system for per-chat long-term memory."""
+"""Compatibility exports for per-chat long-term memory."""
 
-from .base import MemoryStorage
-from .store import FileMemoryStorage, MemoryStore
-from .consolidate import consolidate
+from ..documents.base import ConversationDocumentStore as MemoryStorage
+from ..documents.memory import FileMemoryStorage, MemoryStore, consolidate
 
 __all__ = ["MemoryStorage", "FileMemoryStorage", "MemoryStore", "consolidate"]

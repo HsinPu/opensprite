@@ -22,7 +22,7 @@ from .paths import (
     get_tool_workspace,
     load_bootstrap_files,
 )
-from ..memory import MemoryStore
+from ..documents.memory import MemoryStore
 from ..skills import SkillsLoader
 
 
