@@ -80,6 +80,7 @@ async def create_agent(config: Config):
         log_config=config.log,
         search_store=search_store,
         search_config=config.search,
+        user_profile_config=config.user_profile,
     )
     mq = MessageQueue(agent)
     

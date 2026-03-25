@@ -4,6 +4,14 @@ Use this file to describe the person you are helping.
 Keep it practical, short, and easy to update.
 Avoid storing secrets here unless you explicitly want them remembered.
 
+## Auto-managed Profile
+
+This section is maintained by OpenSprite. Review it and edit the manual sections below if needed.
+
+<!-- OPENSPRITE:USER_PROFILE:START -->
+- No learned user profile details yet.
+<!-- OPENSPRITE:USER_PROFILE:END -->
+
 ## Identity
 
 - Name:

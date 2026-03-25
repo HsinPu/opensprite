@@ -25,6 +25,7 @@ MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
 WORKSPACE_DIRNAME = "workspace"
 WORKSPACE_CHATS_DIRNAME = "chats"
+USER_PROFILE_STATE_FILENAME = ".user_profile_state.json"
 
 BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md", "TOOLS.md"]
 
@@ -44,6 +45,16 @@ def get_app_home(app_home: str | Path | None = None) -> Path:
 def get_bootstrap_dir(app_home: str | Path | None = None) -> Path:
     """Get the bootstrap directory that stores startup markdown files."""
     return ensure_dir(get_app_home(app_home) / BOOTSTRAP_DIRNAME)
+
+
+def get_user_profile_file(app_home: str | Path | None = None) -> Path:
+    """Get the global USER.md profile file path."""
+    return get_bootstrap_dir(app_home) / "USER.md"
+
+
+def get_user_profile_state_file(app_home: str | Path | None = None) -> Path:
+    """Get the persisted state file for USER.md auto-updates."""
+    return get_bootstrap_dir(app_home) / USER_PROFILE_STATE_FILENAME
 
 
 def get_memory_dir(app_home: str | Path | None = None) -> Path:

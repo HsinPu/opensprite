@@ -77,6 +77,11 @@
     "max_history": 50,
     "threshold": 30
   },
+  "user_profile": {
+    "enabled": true,
+    "threshold": 30,
+    "lookback_messages": 50
+  },
   "search": {
     "enabled": false,
     "provider": "lancedb",

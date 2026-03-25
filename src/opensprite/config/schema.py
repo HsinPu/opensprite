@@ -87,6 +87,14 @@ class MemoryConfig(BaseModel):
     threshold: int = 30  # Trigger consolidation after this many messages
 
 
+class UserProfileConfig(BaseModel):
+    """Global USER.md profile update configuration."""
+
+    enabled: bool = True
+    threshold: int = 30
+    lookback_messages: int = 50
+
+
 class SearchConfig(BaseModel):
     """Search index configuration."""
 
@@ -100,7 +108,8 @@ class SearchConfig(BaseModel):
 class Config:
     def __init__(self, llm: LLMsConfig, agent: AgentConfig, storage: StorageConfig,
                  channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None,
-                 memory: MemoryConfig | None = None, search: SearchConfig | None = None):
+                 memory: MemoryConfig | None = None, search: SearchConfig | None = None,
+                 user_profile: UserProfileConfig | None = None):
         self.llm = llm
         self.agent = agent
         self.storage = storage
@@ -109,6 +118,7 @@ class Config:
         self.tools = tools or ToolsConfig()
         self.memory = memory or MemoryConfig()
         self.search = search or SearchConfig()
+        self.user_profile = user_profile or UserProfileConfig()
 
     @classmethod
     def from_json(cls, path: str | Path) -> "Config":
@@ -131,6 +141,7 @@ class Config:
             tools=ToolsConfig(**data.get("tools", {})) if "tools" in data else None,
             memory=MemoryConfig(**data.get("memory", {})) if "memory" in data else None,
             search=SearchConfig(**data.get("search", {})) if "search" in data else None,
+            user_profile=UserProfileConfig(**data.get("user_profile", {})) if "user_profile" in data else None,
         )
 
     @classmethod
@@ -213,6 +224,11 @@ class Config:
                 "path": self.search.path,
                 "history_top_k": self.search.history_top_k,
                 "knowledge_top_k": self.search.knowledge_top_k,
+            },
+            "user_profile": {
+                "enabled": self.user_profile.enabled,
+                "threshold": self.user_profile.threshold,
+                "lookback_messages": self.user_profile.lookback_messages,
             },
         }
         with open(path, "w", encoding="utf-8") as f:

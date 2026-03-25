@@ -33,6 +33,7 @@ from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
 from ..context.builder import ContextBuilder
 from ..memory import MemoryStore, consolidate
+from ..profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
 from ..tools import (
     ToolRegistry,
@@ -48,7 +49,7 @@ from ..tools import (
     ReadSkillTool,
 )
 from ..utils.log import logger
-from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig
+from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig
 
 
 PRIVATE_REASONING_RE = re.compile(
@@ -100,12 +101,14 @@ class AgentLoop:
         log_config: LogConfig | None = None,
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
+        user_profile_config: UserProfileConfig | None = None,
     ):
         ...
         self.memory_config = memory_config or MemoryConfig()
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
         self.search_config = search_config or SearchConfig()
+        self.user_profile_config = user_profile_config or UserProfileConfig()
         self.search_store = search_store
         self.provider = provider
         self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
@@ -150,8 +153,26 @@ class AgentLoop:
         # Memory store (long-term memory)
         memory_dir = getattr(self._context_builder, "memory_dir", Path.cwd() / "memory")
         self.memory = MemoryStore(memory_dir)
+        self.user_profile: UserProfileConsolidator | None = None
         # Register save_memory tool
         self._register_memory_tool()
+
+        if self.app_home is not None:
+            from ..context.paths import get_user_profile_file, get_user_profile_state_file
+
+            profile_store = UserProfileStore(
+                user_profile_file=get_user_profile_file(self.app_home),
+                state_file=get_user_profile_state_file(self.app_home),
+            )
+            self.user_profile = UserProfileConsolidator(
+                storage=self.storage,
+                provider=self.provider,
+                model=self.provider.get_default_model(),
+                profile_store=profile_store,
+                threshold=self.user_profile_config.threshold,
+                lookback_messages=self.user_profile_config.lookback_messages,
+                enabled=self.user_profile_config.enabled,
+            )
 
     def _register_memory_tool(self) -> None:
         """Register the save_memory tool."""
@@ -579,6 +600,7 @@ class AgentLoop:
 
             # 4. 檢查是否需要 consolidation
             await self._maybe_consolidate_memory(session_chat_id)
+            await self._maybe_update_user_profile(session_chat_id)
 
             # 5. 回傳
             return AssistantMessage(
@@ -638,6 +660,16 @@ class AgentLoop:
                     logger.info(f"[{chat_id}] Memory consolidated")
             except Exception as e:
                 logger.error(f"[{chat_id}] Memory consolidation failed: {e}")
+
+    async def _maybe_update_user_profile(self, chat_id: str) -> None:
+        """Check whether the global USER.md profile should be refreshed."""
+        if self.user_profile is None:
+            return
+
+        try:
+            await self.user_profile.maybe_update(chat_id)
+        except Exception as e:
+            logger.error(f"[{chat_id}] User profile update failed: {e}")
 
     async def reset_history(self, chat_id: str | None = None) -> None:
         """

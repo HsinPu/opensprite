@@ -13,6 +13,7 @@ from .schema import (
     ToolsConfig,
     MemoryConfig,
     SearchConfig,
+    UserProfileConfig,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "ToolsConfig",
     "MemoryConfig",
     "SearchConfig",
+    "UserProfileConfig",
 ]
