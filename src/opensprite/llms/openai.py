@@ -17,6 +17,14 @@ def _safe_len(value: Any) -> str:
         return "n/a"
 
 
+def _coerce_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return str(content)
+
+
 class OpenAILLM(LLMProvider):
     """
     OpenAI LLM 實作
@@ -119,28 +127,50 @@ class OpenAILLM(LLMProvider):
                 _safe_len(choices),
                 repr(choices)[:500],
             )
-            raise
+            return LLMResponse(
+                content="",
+                model=getattr(response, "model", model or self.default_model),
+                tool_calls=[],
+            )
+
+        if message is None:
+            logger.warning("OpenAI response missing message payload; returning empty response")
+            return LLMResponse(
+                content="",
+                model=getattr(response, "model", model or self.default_model),
+                tool_calls=[],
+            )
         
         # 解析 tool calls
         tool_calls = []
-        if message.tool_calls:
+        if getattr(message, "tool_calls", None):
             for tc in message.tool_calls:
+                function = getattr(tc, "function", None)
+                if function is None:
+                    logger.warning("OpenAI tool call missing function payload; skipping")
+                    continue
                 # Parse arguments
                 import json
                 try:
-                    args = json.loads(tc.function.arguments)
+                    raw_args = getattr(function, "arguments", None)
+                    if isinstance(raw_args, str):
+                        args = json.loads(raw_args) if raw_args.strip() else {}
+                    elif isinstance(raw_args, dict):
+                        args = raw_args
+                    else:
+                        args = {}
                 except:
                     args = {}
                 
                 tool_calls.append(ToolCall(
-                    id=tc.id,
-                    name=tc.function.name,
+                    id=getattr(tc, "id", "") or f"tool_call_{len(tool_calls) + 1}",
+                    name=getattr(function, "name", "") or "",
                     arguments=args
                 ))
         
         return LLMResponse(
-            content=message.content or "",
-            model=response.model,
+            content=_coerce_content(getattr(message, "content", "")),
+            model=getattr(response, "model", model or self.default_model),
             tool_calls=tool_calls
         )
     
