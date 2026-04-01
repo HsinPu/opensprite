@@ -502,23 +502,24 @@ class AgentLoop:
                     logger.info(f"[{chat_id}] 執行工具: {tool_name}({tool_args})")
                     
                     result = await self.tools.execute(tool_name, tool_args)
-                    logger.info(f"[{chat_id}] 工具結果: {result[:200]}...")
+                    result_text = str(result) if result is not None else "Error: tool returned no result"
+                    logger.info(f"[{chat_id}] 工具結果: {result_text[:200]}...")
                     
                     # 記錄 tool 結果
-                    tool_results_history.append(f"{tool_name}: {result[:200]}")
+                    tool_results_history.append(f"{tool_name}: {result_text[:200]}")
                     
                     # 將 tool result 加入訊息
                     chat_messages.append(ChatMessage(
                         role="tool",
-                        content=result,
+                        content=result_text,
                         tool_call_id=tc.id
                     ))
                     
                     # 存到歷史訊息
-                    await self._save_message(chat_id, "tool", result, tool_name=tool_name)
+                    await self._save_message(chat_id, "tool", result_text, tool_name=tool_name)
                     if self.search_store is not None:
                         try:
-                            await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result)
+                            await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result_text)
                         except Exception as e:
                             logger.warning("[{}] Failed to index tool result for search: {}", chat_id, e)
                 

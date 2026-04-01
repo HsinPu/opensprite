@@ -23,15 +23,23 @@ class ToolRegistry:
         """Get all tool definitions in OpenAI format."""
         return [tool.to_schema() for tool in self._tools.values()]
 
-    async def execute(self, name: str, params: dict[str, Any]) -> str:
+    async def execute(self, name: str, params: dict[str, Any] | None) -> str:
         """Execute a tool by name with given parameters."""
         tool = self._tools.get(name)
         if not tool:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
+
+        if params is None:
+            return f"Error executing {name}: tool arguments are missing"
+
+        if not isinstance(params, dict):
+            return f"Error executing {name}: tool arguments must be an object, got {type(params).__name__}"
         
         try:
             result = await tool.execute(**params)
-            return result
+            if result is None:
+                return f"Error executing {name}: tool returned no result"
+            return str(result)
         except Exception as e:
             return f"Error executing {name}: {str(e)}"
 
