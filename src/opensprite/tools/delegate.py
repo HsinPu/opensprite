@@ -40,8 +40,11 @@ class DelegateTool(Tool):
     }
 
     def __init__(self, provider, workspace_resolver=None):
+        import os
         self.provider = provider
-        self.workspace_resolver = workspace_resolver or (lambda: WORKSPACE)
+        # 優先使用傳入的 resolver，fallback 從環境變數取得
+        default_resolver = lambda: os.environ.get("OPENSPRITE_WORKSPACE") or WORKSPACE
+        self.workspace_resolver = workspace_resolver or default_resolver
 
     async def execute(self, task: str, prompt_type: str = "writer", **kwargs: Any) -> str:
         # 組建 system prompt

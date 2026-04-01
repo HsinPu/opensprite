@@ -6,7 +6,16 @@ from pathlib import Path
 PROMPTS_DIR = Path(__file__).parent
 
 # 工作區路徑（預設）
-WORKSPACE = str(Path.home() / ".opensprite" / "workspace" / "chats" / "telegram" / "441751273")
+# 從 agent 動態取得 workspace
+def get_current_workspace():
+    import os
+    workspace = os.environ.get("OPENSPRITE_WORKSPACE")
+    if workspace:
+        return workspace
+    # fallback
+    return str(Path(__file__).parent.parent / "workspace" / "chats" / "telegram" / "441751273")
+
+WORKSPACE = get_current_workspace()
 
 
 def _parse_frontmatter(content: str) -> dict:
