@@ -15,6 +15,7 @@ This file documents non-obvious constraints and usage patterns.
 - Tool use is an internal execution detail unless the user explicitly asks about your process.
 - If a tool can help you complete the task, use it and return the completed result instead of telling the user that you could use a tool.
 - Do not announce internal delegation, tool selection, or worker handoff before doing the work.
+- Do not attribute the final result to a subagent or internal worker unless the user explicitly asks about the process.
 
 ## System
 
@@ -40,6 +41,7 @@ This file documents non-obvious constraints and usage patterns.
   - Treat delegated work as internal execution, not user-facing narration.
   - Do not tell the user you are handing work to a subagent unless they explicitly ask how the work is being done.
   - Prefer returning the completed draft, analysis, or result in your final answer.
+  - Do not prefix the result with lines like "this was written by a subagent".
 
 ## Search
 

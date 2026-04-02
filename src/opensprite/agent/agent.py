@@ -56,6 +56,17 @@ PRIVATE_REASONING_RE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+INTERNAL_REMINDER_RE = re.compile(
+    r"<system-reminder\b[^>]*>.*?</system-reminder>",
+    re.IGNORECASE | re.DOTALL,
+)
+
+LEADING_INTERNAL_ATTRIBUTION_RE = re.compile(
+    r"^\s*(?:以下是|這是|這篇是|這份是|Here is|This is).{0,80}?"
+    r"(?:subagent|子代理|delegate|內部\s*worker|internal\s*worker).{0,80}?[：:]\s*",
+    re.IGNORECASE | re.DOTALL,
+)
+
 
 class AgentLoop:
     """
@@ -86,6 +97,8 @@ class AgentLoop:
     def _sanitize_response_content(content: str) -> str:
         """Remove provider-internal reasoning blocks from visible replies."""
         cleaned = PRIVATE_REASONING_RE.sub("", content or "")
+        cleaned = INTERNAL_REMINDER_RE.sub("", cleaned)
+        cleaned = LEADING_INTERNAL_ATTRIBUTION_RE.sub("", cleaned, count=1)
         return cleaned.strip()
 
     @staticmethod

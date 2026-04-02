@@ -18,6 +18,7 @@ def _build_description(subagents: dict[str, str]) -> str:
 
 子代理會自行載入對應 prompt 並組合執行時 context。
 不要對使用者提到委派、subagent 或內部 worker；直接用結果完成回覆。
+不要加上「這是 subagent 寫的」這類來源說明。
 """
 
 
