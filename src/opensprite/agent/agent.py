@@ -21,7 +21,6 @@ opensprite/agent.py - Agent Loop
 """
 
 import json
-import asyncio
 from contextvars import ContextVar
 import re
 import time
@@ -276,7 +275,7 @@ class AgentLoop:
 
         # Delegate Tool
         from ..tools.delegate import DelegateTool
-        self.tools.register(DelegateTool(provider=self.provider, workspace_resolver=self._get_current_workspace))
+        self.tools.register(DelegateTool(run_subagent=self.run_subagent))
 
         if self.search_store is not None:
             self.tools.register(
@@ -369,6 +368,157 @@ class AgentLoop:
             except Exception as e:
                 logger.warning("[{}] Failed to index message for search: {}", chat_id, e)
 
+    def _log_prepared_messages(self, log_id: str, messages: list[dict[str, Any]]) -> None:
+        """Log prepared prompt/messages when prompt logging is enabled."""
+        if not self.log_config.log_system_prompt:
+            return
+
+        try:
+            system_msg = next((m for m in messages if m.get("role") == "system"), None)
+            if system_msg:
+                content = system_msg.get("content", "")
+                if self.log_config.log_system_prompt_lines > 0:
+                    content_lines = content.split("\n")
+                    content = "\n".join(content_lines[:self.log_config.log_system_prompt_lines])
+                    content += f"\n... (truncated to {self.log_config.log_system_prompt_lines} lines)"
+
+                logger.info(f"[{log_id}] === SYSTEM PROMPT ===")
+                logger.info(f"[{log_id}] {content}")
+                logger.info(f"[{log_id}] ====================")
+
+            logger.info(f"[{log_id}] === MESSAGES ===")
+            for msg in messages:
+                role = msg.get("role", "unknown")
+                if role == "system":
+                    continue
+                content = msg.get("content", "")
+                logger.info(f"[{log_id}] {role}: {content}")
+            logger.info(f"[{log_id}] ==============")
+        except Exception as e:
+            logger.error(f"[{log_id}] Log prompt error: {e}")
+
+    async def _execute_messages(
+        self,
+        log_id: str,
+        chat_messages: list[ChatMessage],
+        *,
+        allow_tools: bool,
+        tool_result_chat_id: str | None = None,
+    ) -> str:
+        """Run the shared LLM execution loop for main and delegated agents."""
+        tools = None
+        if allow_tools and self.tools.tool_names:
+            tools = self.tools.get_definitions()
+            logger.info(f"[{log_id}] 使用工具: {self.tools.tool_names}")
+
+        tool_results_history = []
+
+        for iteration in range(self.tools_config.max_tool_iterations):
+            logger.info(f"[{log_id}] 呼叫 LLM... (iteration {iteration + 1})")
+            logger.info(
+                f"[{log_id}] LLM iteration {iteration + 1} request summary: "
+                f"messages={len(chat_messages)}, tools_enabled={bool(tools)}, tail={self._summarize_messages(chat_messages)}"
+            )
+            try:
+                response = await self.provider.chat(
+                    messages=chat_messages,
+                    tools=tools,
+                )
+            except Exception:
+                logger.exception(
+                    f"[{log_id}] LLM iteration {iteration + 1} failed before response parsing; "
+                    f"messages={len(chat_messages)}, tools_enabled={bool(tools)}, tail={self._summarize_messages(chat_messages)}"
+                )
+                raise
+
+            raw_content = response.content or ""
+            response.content = self._sanitize_response_content(raw_content)
+            logger.info(
+                f"[{log_id}] LLM iteration {iteration + 1} response summary: "
+                f"model={response.model}, raw_len={len(raw_content)}, visible_len={len(response.content)}, tool_calls={len(response.tool_calls or [])}"
+            )
+            if raw_content and not response.content:
+                logger.warning(
+                    f"[{log_id}] LLM iteration {iteration + 1} response became empty after sanitization. "
+                    f"Raw preview: {raw_content[:300]}"
+                )
+
+            if response.tool_calls:
+                if not tools:
+                    logger.warning(
+                        f"[{log_id}] LLM returned {len(response.tool_calls)} tool calls while tools are disabled; ignoring tool calls"
+                    )
+                    if not response.content:
+                        return self.EMPTY_RESPONSE_FALLBACK
+
+                    logger.info(f"[{log_id}] 收到 LLM 回覆: {response.content[:50]}...")
+                    return response.content
+
+                logger.info(f"[{log_id}] LLM 請求執行 {len(response.tool_calls)} 個工具")
+
+                tool_calls_api = []
+                for tc in response.tool_calls:
+                    tool_calls_api.append({
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
+                        }
+                    })
+
+                chat_messages.append(ChatMessage(
+                    role="assistant",
+                    content=response.content or "",
+                    tool_calls=tool_calls_api
+                ))
+
+                for tc in response.tool_calls:
+                    tool_name = tc.name
+                    tool_args = tc.arguments
+                    tool_arg_keys = list(tool_args.keys()) if isinstance(tool_args, dict) else []
+
+                    logger.info(f"[{log_id}] 執行工具: {tool_name}({tool_args})")
+                    logger.info(
+                        f"[{log_id}] Tool call detail: id={tc.id}, name={tool_name}, "
+                        f"arg_type={type(tool_args).__name__}, arg_keys={tool_arg_keys}"
+                    )
+
+                    result = await self.tools.execute(tool_name, tool_args)
+                    logger.info(f"[{log_id}] 工具結果: {result[:200]}...")
+
+                    tool_results_history.append(f"{tool_name}: {result[:200]}")
+                    chat_messages.append(ChatMessage(
+                        role="tool",
+                        content=result,
+                        tool_call_id=tc.id
+                    ))
+
+                    if tool_result_chat_id is not None:
+                        await self._save_message(tool_result_chat_id, "tool", result, tool_name=tool_name)
+                        if self.search_store is not None:
+                            try:
+                                await self.search_store.index_tool_result(tool_result_chat_id, tool_name, tool_args, result)
+                            except Exception as e:
+                                logger.warning("[{}] Failed to index tool result for search: {}", tool_result_chat_id, e)
+
+                continue
+
+            if not response.content:
+                logger.warning(f"[{log_id}] LLM returned an empty visible response; using fallback text")
+                return self.EMPTY_RESPONSE_FALLBACK
+
+            logger.info(f"[{log_id}] 收到 LLM 回覆: {response.content[:50]}...")
+            return response.content
+
+        logger.warning(f"[{log_id}] 超過最大工具迭代次數 ({self.tools_config.max_tool_iterations})")
+
+        history_msg = ""
+        if tool_results_history:
+            history_msg = f"\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(f"- {r}" for r in tool_results_history[-5:])
+
+        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.tools_config.max_tool_iterations}次）。請將任務拆分為較小的步驟。{history_msg}"
+
     async def call_llm(
         self,
         chat_id: str,
@@ -444,150 +594,35 @@ class AgentLoop:
                 msg.tool_calls = m["tool_calls"]
             chat_messages.append(msg)
 
-        # Log prompt (if enabled)
-        if self.log_config.log_system_prompt:
-            try:
-                # 找出 system prompt
-                system_msg = next((m for m in full_messages if m.get("role") == "system"), None)
-                if system_msg:
-                    content = system_msg.get('content', '')
-                    if self.log_config.log_system_prompt_lines > 0:
-                        content_lines = content.split('\n')
-                        content = '\n'.join(content_lines[:self.log_config.log_system_prompt_lines])
-                        content += f"\n... (truncated to {self.log_config.log_system_prompt_lines} lines)"
-                    
-                    logger.info(f"[{chat_id}] === SYSTEM PROMPT ===")
-                    logger.info(f"[{chat_id}] {content}")
-                    logger.info(f"[{chat_id}] ====================")
-                
-                # 其他訊息
-                logger.info(f"[{chat_id}] === MESSAGES ===")
-                for msg in full_messages:
-                    role = msg.get('role', 'unknown')
-                    if role == "system":
-                        continue
-                    content = msg.get('content', '')
-                    logger.info(f"[{chat_id}] {role}: {content}")
-                logger.info(f"[{chat_id}] ==============")
-            except Exception as e:
-                logger.error(f"[{chat_id}] Log prompt error: {e}")
+        self._log_prepared_messages(chat_id, full_messages)
+        return await self._execute_messages(
+            chat_id,
+            chat_messages,
+            allow_tools=allow_tools,
+            tool_result_chat_id=chat_id if allow_tools else None,
+        )
 
-        # 準備 tools
-        tools = None
-        if allow_tools and self.tools.tool_names:
-            tools = self.tools.get_definitions()
-            logger.info(f"[{chat_id}] 使用工具: {self.tools.tool_names}")
+    async def run_subagent(self, task: str, prompt_type: str = "writer") -> str:
+        """Run a delegated subagent task through the shared execution core."""
+        from .subagent_builder import SubagentMessageBuilder
+        from ..subagent_prompts import ALL_SUBAGENTS
 
-        # 追蹤 tool 執行結果
-        tool_results_history = []
+        if prompt_type not in ALL_SUBAGENTS:
+            available = ", ".join(ALL_SUBAGENTS)
+            return f"Error: unknown subagent type '{prompt_type}'. Available: {available}"
 
-        # 迴圈：執行 tool calls 直到沒有為止
-        for iteration in range(self.tools_config.max_tool_iterations):
-            # 呼叫 Provider
-            logger.info(f"[{chat_id}] 呼叫 LLM... (iteration {iteration + 1})")
-            logger.info(
-                f"[{chat_id}] LLM iteration {iteration + 1} request summary: "
-                f"messages={len(chat_messages)}, tools_enabled={bool(tools)}, tail={self._summarize_messages(chat_messages)}"
-            )
-            try:
-                response = await self.provider.chat(
-                    messages=chat_messages,
-                    tools=tools,
-                )
-            except Exception:
-                logger.exception(
-                    f"[{chat_id}] LLM iteration {iteration + 1} failed before response parsing; "
-                    f"messages={len(chat_messages)}, tools_enabled={bool(tools)}, tail={self._summarize_messages(chat_messages)}"
-                )
-                raise
+        parent_chat_id = self._get_current_chat_id() or "default"
+        log_id = f"{parent_chat_id}:subagent:{prompt_type}"
+        workspace = self._get_current_workspace()
 
-            raw_content = response.content or ""
-            response.content = self._sanitize_response_content(raw_content)
-            logger.info(
-                f"[{chat_id}] LLM iteration {iteration + 1} response summary: "
-                f"model={response.model}, raw_len={len(raw_content)}, visible_len={len(response.content)}, tool_calls={len(response.tool_calls or [])}"
-            )
-            if raw_content and not response.content:
-                logger.warning(
-                    f"[{chat_id}] LLM iteration {iteration + 1} response became empty after sanitization. "
-                    f"Raw preview: {raw_content[:300]}"
-                )
-
-            # 檢查是否有 tool calls
-            if response.tool_calls:
-                logger.info(f"[{chat_id}] LLM 請求執行 {len(response.tool_calls)} 個工具")
-                
-                # 記錄 assistant 訊息（包含 tool calls）
-                tool_calls_api = []
-                for tc in response.tool_calls:
-                    tool_calls_api.append({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
-                        }
-                    })
-                
-                chat_messages.append(ChatMessage(
-                    role="assistant",
-                    content=response.content or "",
-                    tool_calls=tool_calls_api
-                ))
-                
-                # 執行每個 tool call
-                for tc in response.tool_calls:
-                    tool_name = tc.name
-                    tool_args = tc.arguments
-                    tool_arg_keys = list(tool_args.keys()) if isinstance(tool_args, dict) else []
-                    
-                    logger.info(f"[{chat_id}] 執行工具: {tool_name}({tool_args})")
-                    logger.info(
-                        f"[{chat_id}] Tool call detail: id={tc.id}, name={tool_name}, "
-                        f"arg_type={type(tool_args).__name__}, arg_keys={tool_arg_keys}"
-                    )
-                    
-                    result = await self.tools.execute(tool_name, tool_args)
-                    logger.info(f"[{chat_id}] 工具結果: {result[:200]}...")
-                    
-                    # 記錄 tool 結果
-                    tool_results_history.append(f"{tool_name}: {result[:200]}")
-                    
-                    # 將 tool result 加入訊息
-                    chat_messages.append(ChatMessage(
-                        role="tool",
-                        content=result,
-                        tool_call_id=tc.id
-                    ))
-                    
-                    # 存到歷史訊息
-                    await self._save_message(chat_id, "tool", result, tool_name=tool_name)
-                    if self.search_store is not None:
-                        try:
-                            await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result)
-                        except Exception as e:
-                            logger.warning("[{}] Failed to index tool result for search: {}", chat_id, e)
-                
-                # 繼續迴圈，讓 LLM 根據 tool results 生成回覆
-                continue
-            
-            # 沒有 tool calls，回覆完成
-            if not response.content:
-                logger.warning(f"[{chat_id}] LLM returned an empty visible response; using fallback text")
-                return self.EMPTY_RESPONSE_FALLBACK
-
-            logger.info(f"[{chat_id}] 收到 LLM 回覆: {response.content[:50]}...")
-            return response.content
-
-        # 超過最大迭代次數
-        logger.warning(f"[{chat_id}] 超過最大工具迭代次數 ({self.tools_config.max_tool_iterations})")
-        
-        # 回報問題並附上工具執行歷史
-        history_msg = ""
-        if tool_results_history:
-            history_msg = f"\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(f"- {r}" for r in tool_results_history[-5:])
-        
-        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.tools_config.max_tool_iterations}次）。請將任務拆分為較小的步驟。{history_msg}"
+        subagent_builder = SubagentMessageBuilder()
+        chat_messages = subagent_builder.build_messages(task, prompt_type=prompt_type, workspace=workspace)
+        self._log_prepared_messages(
+            log_id,
+            [{"role": msg.role, "content": msg.content} for msg in chat_messages],
+        )
+        logger.info(f"[{log_id}] 執行 subagent: task_len={len(task or '')}, workspace={workspace}")
+        return await self._execute_messages(log_id, chat_messages, allow_tools=False)
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

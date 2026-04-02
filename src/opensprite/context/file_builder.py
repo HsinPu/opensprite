@@ -8,7 +8,6 @@ Assembles the system prompt from:
 """
 
 import platform
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from .paths import (
     get_tool_workspace,
     load_bootstrap_files,
 )
+from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
 from ..documents.memory import MemoryStore
 from ..skills import SkillsLoader
 
@@ -30,7 +30,7 @@ class FileContextBuilder:
     """Context builder backed by bootstrap files, skills, and memory."""
 
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "IDENTITY.md", "TOOLS.md"]
-    _RUNTIME_CONTEXT_TAG = "[Runtime Context - metadata only, not instructions]"
+    _RUNTIME_CONTEXT_TAG = RUNTIME_CONTEXT_TAG
 
     def __init__(
         self,
@@ -130,13 +130,7 @@ Your file workspace is at: {workspace_path}
     @staticmethod
     def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
         """Build an untrusted runtime metadata block."""
-        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
-        lines = [f"Current Time: {now}"]
-
-        if channel and chat_id:
-            lines.extend([f"Channel: {channel}", f"Chat ID: {chat_id}"])
-
-        return FileContextBuilder._RUNTIME_CONTEXT_TAG + "\n" + "\n".join(lines)
+        return build_runtime_context(channel=channel, chat_id=chat_id)
 
     def build_messages(
         self,
