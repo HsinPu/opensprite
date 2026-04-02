@@ -522,6 +522,7 @@ class AgentLoop:
     async def call_llm(
         self,
         chat_id: str,
+        current_message: str,
         channel: str | None = None,
         allow_tools: bool = True,
         user_images: list[str] | None = None,
@@ -537,6 +538,8 @@ class AgentLoop:
         Args:
             chat_id: 聊天室 ID，用於載入歷史。
                       The chat session ID for loading history.
+            current_message: 本輪使用者輸入內容。
+                             The current user message for this turn.
             channel: 頻道名稱（例如 "telegram"、"console"）。用於上下文。
                       Channel name (e.g., "telegram", "console"). Used in context.
             allow_tools: 是否允許使用工具。
@@ -561,6 +564,15 @@ class AgentLoop:
                 filtered.append(m)
         history_messages = filtered
 
+        # The current user message is already passed explicitly to the context builder.
+        # Drop the newest persisted user message for this turn to avoid duplicate/blank user entries.
+        if history_messages:
+            latest = history_messages[-1]
+            latest_role = latest.get("role", "?") if isinstance(latest, dict) else getattr(latest, "role", "?")
+            latest_content = latest.get("content", "") if isinstance(latest, dict) else getattr(latest, "content", "")
+            if latest_role == "user" and latest_content == current_message:
+                history_messages = history_messages[:-1]
+
         # 轉換成 dict 格式（給 context builder 用）
         history_dicts = []
         for m in history_messages:
@@ -578,7 +590,7 @@ class AgentLoop:
         logger.info(f"[{chat_id}] 使用 context builder")
         full_messages = self._context_builder.build_messages(
             history=history_dicts,
-            current_message="",  # 這裡不放 content，我們會用 user message
+            current_message=current_message,
             current_images=user_images,
             channel=channel,
             chat_id=chat_id,
@@ -664,6 +676,7 @@ class AgentLoop:
             logger.info(f"[{session_chat_id}] 處理中...")
             response = await self.call_llm(
                 session_chat_id,
+                current_message=user_message.text,
                 channel=channel,
                 user_images=user_message.images
             )
