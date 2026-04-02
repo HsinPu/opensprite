@@ -1,4 +1,4 @@
-"""Subagent prompt registry and loaders."""
+"""Subagent prompt registry and prompt-loading helpers."""
 
 from pathlib import Path
 
@@ -22,14 +22,19 @@ def _split_frontmatter(content: str) -> tuple[dict, str]:
 
 
 def _parse_frontmatter(content: str) -> dict:
-    """解析 YAML frontmatter"""
+    """Parse YAML frontmatter metadata from a prompt file."""
     metadata, _ = _split_frontmatter(content)
     return metadata
 
 
+def _get_prompt_path(prompt_type: str) -> Path:
+    """Return the markdown file path for a prompt type."""
+    return PROMPTS_DIR / f"{prompt_type}.md"
+
+
 def load_metadata(prompt_type: str = "writer") -> dict:
-    """載入指定 prompt 類型的 metadata"""
-    md_path = PROMPTS_DIR / f"{prompt_type}.md"
+    """Load frontmatter metadata for a prompt type."""
+    md_path = _get_prompt_path(prompt_type)
     if not md_path.exists():
         return {}
     
@@ -40,8 +45,8 @@ def load_metadata(prompt_type: str = "writer") -> dict:
 
 
 def load_prompt(prompt_type: str = "writer") -> str:
-    """載入指定 prompt 類型的 markdown 內容（不含 frontmatter）"""
-    md_path = PROMPTS_DIR / f"{prompt_type}.md"
+    """Load prompt markdown content without frontmatter."""
+    md_path = _get_prompt_path(prompt_type)
     if not md_path.exists():
         return ""
 
@@ -53,16 +58,33 @@ def load_prompt(prompt_type: str = "writer") -> str:
 
 
 def load_all_metadata() -> dict:
-    """載入所有 subagent 的 metadata，回傳 {prompt_type: description}"""
+    """Load prompt descriptions as {prompt_type: description}."""
     result = {}
     for md_file in PROMPTS_DIR.glob("*.md"):
         metadata = load_metadata(md_file.stem)
         description = metadata.get("description", md_file.stem)
         result[md_file.stem] = description
-    return result
+    return dict(sorted(result.items()))
 
 
-# 所有可用的 subagent 類型及其描述
+def get_prompt_types() -> list[str]:
+    """Return all available prompt types."""
+    return list(load_all_metadata().keys())
+
+
+def has_prompt(prompt_type: str) -> bool:
+    """Check whether a prompt file exists for the given type."""
+    return _get_prompt_path(prompt_type).exists()
+
+
+# Available subagent prompt types and descriptions.
 ALL_SUBAGENTS = load_all_metadata()
 
-__all__ = ["load_metadata", "load_prompt", "load_all_metadata", "ALL_SUBAGENTS"]
+__all__ = [
+    "load_metadata",
+    "load_prompt",
+    "load_all_metadata",
+    "get_prompt_types",
+    "has_prompt",
+    "ALL_SUBAGENTS",
+]
