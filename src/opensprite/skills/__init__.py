@@ -70,6 +70,35 @@ class SkillsLoader:
 
         return skills
 
+    def _split_frontmatter(self, content: str) -> tuple[dict[str, Any], str]:
+        """Split YAML frontmatter from the markdown body."""
+        lines = content.split("\n")
+        if len(lines) < 3 or lines[0] != "---":
+            return {}, content
+
+        frontmatter: dict[str, Any] = {}
+        end_index = 0
+        for index, line in enumerate(lines[1:], start=1):
+            if line == "---":
+                end_index = index
+                break
+            if ":" not in line:
+                continue
+
+            key, value = line.split(":", 1)
+            parsed_value: Any = value.strip()
+            if parsed_value == "true":
+                parsed_value = True
+            elif parsed_value == "false":
+                parsed_value = False
+            frontmatter[key.strip()] = parsed_value
+
+        if end_index == 0:
+            return {}, content
+
+        body = "\n".join(lines[end_index + 1 :]).strip()
+        return frontmatter, body
+
     def _iter_skill_dirs(self) -> list[Path]:
         """Return unique skill directories in priority order."""
         candidates = [self.custom_skills_dir, self.default_skills_dir]
@@ -103,9 +132,13 @@ class SkillsLoader:
 
         return skills
 
+    def get_loaded_skills(self) -> list[str]:
+        """Get names of skills that are loaded into the main system prompt."""
+        return [skill.name for skill in self.get_skills()]
+
     def get_always_skills(self) -> list[str]:
-        """Get names of skills that should always be loaded."""
-        return [skill.name for skill in self.get_skills() if skill.always]
+        """Backward-compatible alias for skills loaded into the system prompt."""
+        return self.get_loaded_skills()
 
     def build_skills_summary(self) -> str:
         """Build a summary of available skills."""
@@ -115,8 +148,7 @@ class SkillsLoader:
 
         lines = ["Available skills (use read_skill tool to read instructions):"]
         for skill in skills:
-            always = " (always on)" if skill.always else ""
-            lines.append(f"- {skill.name}: {skill.description}{always}")
+            lines.append(f"- {skill.name}: {skill.description}")
 
         return "\n".join(lines)
 
@@ -128,13 +160,8 @@ class SkillsLoader:
                 continue
 
             content = skill_file.read_text(encoding="utf-8")
-            lines = content.split("\n")
-            start = 0
-            for index, line in enumerate(lines):
-                if line == "---":
-                    start = index + 1
-                    break
-            return "\n".join(lines[start:]).strip()
+            _, body = self._split_frontmatter(content)
+            return body
 
         return ""
 
@@ -156,23 +183,5 @@ class SkillsLoader:
 
     def _parse_frontmatter(self, content: str) -> dict[str, Any]:
         """Parse YAML frontmatter from SKILL.md."""
-        lines = content.split("\n")
-        if len(lines) < 3 or lines[0] != "---":
-            return {}
-
-        frontmatter: dict[str, Any] = {}
-        for line in lines[1:]:
-            if line == "---":
-                break
-            if ":" not in line:
-                continue
-
-            key, value = line.split(":", 1)
-            parsed_value: Any = value.strip()
-            if parsed_value == "true":
-                parsed_value = True
-            elif parsed_value == "false":
-                parsed_value = False
-            frontmatter[key.strip()] = parsed_value
-
+        frontmatter, _ = self._split_frontmatter(content)
         return frontmatter

@@ -73,24 +73,15 @@ class FileContextBuilder:
             if content:
                 parts.append(f"## {key}\n\n{content}")
 
-        always_skills = self.skills_loader.get_always_skills()
-        if always_skills:
+        loaded_skills = self.skills_loader.get_loaded_skills()
+        if loaded_skills:
             skill_contents = []
-            for skill_name in always_skills:
+            for skill_name in loaded_skills:
                 content = self.skills_loader.load_skill_content(skill_name)
                 if content:
                     skill_contents.append(f"# Skill: {skill_name}\n\n{content}")
             if skill_contents:
                 parts.append("# Skills\n\n" + "\n\n".join(skill_contents))
-
-        skills_summary = self.skills_loader.build_skills_summary()
-        if skills_summary:
-            parts.append(f"""# Available Skills
-
-To use a skill, read its SKILL.md file using the read_skill tool.
-
-{skills_summary}
-""")
 
         memory = self.memory_store.read(chat_id)
         if memory:

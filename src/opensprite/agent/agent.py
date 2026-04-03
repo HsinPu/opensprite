@@ -52,7 +52,7 @@ from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchCo
 
 
 INTERNAL_CONTROL_BLOCK_RE = re.compile(
-    r"<(?:think|thinking|system-reminder)\b[^>]*>.*?</(?:think|thinking|system-reminder)>",
+    r"<(?:think|thinking)\b[^>]*>.*?</(?:think|thinking)>",
     re.IGNORECASE | re.DOTALL,
 )
 
