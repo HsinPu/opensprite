@@ -7,10 +7,9 @@ from typing import Any
 class Skill:
     """A skill that extends agent capabilities."""
 
-    def __init__(self, name: str, description: str, always: bool = False):
+    def __init__(self, name: str, description: str):
         self.name = name
         self.description = description
-        self.always = always
 
 
 class SkillsLoader:
@@ -19,6 +18,10 @@ class SkillsLoader:
     Looks in two places:
     - Default user skills: ~/.opensprite/skills/
     - Optional workspace override: <workspace>/skills/
+
+    Skills are intended for on-demand loading: the agent should first see the
+    available skill names and descriptions, then load a full SKILL.md only when
+    the task clearly matches that skill.
     """
 
     def __init__(
@@ -62,7 +65,6 @@ class SkillsLoader:
                     Skill(
                         name=frontmatter.get("name", skill_dir.name),
                         description=frontmatter.get("description", ""),
-                        always=frontmatter.get("always", False),
                     )
                 )
             except Exception:
@@ -132,16 +134,12 @@ class SkillsLoader:
 
         return skills
 
-    def get_loaded_skills(self) -> list[str]:
-        """Get names of skills that are loaded into the main system prompt."""
-        return [skill.name for skill in self.get_skills()]
-
-    def get_always_skills(self) -> list[str]:
-        """Backward-compatible alias for skills loaded into the system prompt."""
-        return self.get_loaded_skills()
-
     def build_skills_summary(self) -> str:
-        """Build a summary of available skills."""
+        """Build lightweight skill metadata for the main system prompt.
+
+        Only skill names and descriptions are included here. Full skill content
+        should be loaded later via the read_skill tool when needed.
+        """
         skills = self.get_skills()
         if not skills:
             return ""

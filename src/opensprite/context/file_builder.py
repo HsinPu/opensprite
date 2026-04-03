@@ -3,7 +3,7 @@ opensprite/context/file_builder.py - File-based ContextBuilder.
 
 Assembles the system prompt from:
 - bootstrap/*.md startup files
-- skill metadata and always-on skill content
+- skill metadata summaries (full skill content loads on demand)
 - memory/<chat>/MEMORY.md long-term memory
 """
 
@@ -73,15 +73,17 @@ class FileContextBuilder:
             if content:
                 parts.append(f"## {key}\n\n{content}")
 
-        loaded_skills = self.skills_loader.get_loaded_skills()
-        if loaded_skills:
-            skill_contents = []
-            for skill_name in loaded_skills:
-                content = self.skills_loader.load_skill_content(skill_name)
-                if content:
-                    skill_contents.append(f"# Skill: {skill_name}\n\n{content}")
-            if skill_contents:
-                parts.append("# Skills\n\n" + "\n\n".join(skill_contents))
+        # Skills follow the on-demand model from OpenCode docs: list available
+        # skill metadata in the main prompt, then load a full SKILL.md only when
+        # the model decides a skill is relevant via read_skill.
+        skills_summary = self.skills_loader.build_skills_summary()
+        if skills_summary:
+            parts.append(f"""# Available Skills
+
+To use a skill, read its SKILL.md file using the read_skill tool.
+
+{skills_summary}
+""")
 
         memory = self.memory_store.read(chat_id)
         if memory:

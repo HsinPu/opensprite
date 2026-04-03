@@ -1,7 +1,6 @@
 ---
 name: coding
 description: Coding best practices. Always read full context before making changes.
-always: true
 ---
 
 # Coding Guidelines

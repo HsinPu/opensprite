@@ -1,7 +1,6 @@
 ---
 name: memory
 description: Persistent memory with auto-consolidation. Important facts are automatically saved and loaded across sessions.
-always: true
 ---
 
 # Memory
