@@ -84,6 +84,28 @@ class AgentLoop:
     MAX_TOOL_ITERATIONS = 10
     EMPTY_RESPONSE_FALLBACK = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
 
+    def _get_system_prompt_log_path(self) -> Path:
+        """Return the daily file path for full system prompt logs."""
+        logs_root = (self.app_home or Path.home() / ".opensprite") / "logs" / "system-prompts"
+        logs_root.mkdir(parents=True, exist_ok=True)
+        filename = f"system-prompts-{time.strftime('%Y-%m-%d')}.log"
+        return logs_root / filename
+
+    def _write_full_system_prompt_log(self, log_id: str, content: str) -> None:
+        """Append the full system prompt to a dedicated log file."""
+        try:
+            log_path = self._get_system_prompt_log_path()
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            entry = (
+                f"[{timestamp}] [{log_id}] prompt.system.begin\n"
+                f"{content}\n"
+                f"[{timestamp}] [{log_id}] prompt.system.end\n\n"
+            )
+            with log_path.open("a", encoding="utf-8") as f:
+                f.write(entry)
+        except Exception as e:
+            logger.error(f"[{log_id}] prompt.file.error | error={e}")
+
     @staticmethod
     def _sanitize_response_content(content: str) -> str:
         """Remove provider-internal control blocks from visible replies."""
@@ -417,6 +439,7 @@ class AgentLoop:
         try:
             system_msg = next((m for m in messages if m.get("role") == "system"), None)
             if system_msg:
+                self._write_full_system_prompt_log(log_id, str(system_msg.get("content", "")))
                 max_chars = 240
                 if self.log_config.log_system_prompt_lines > 0:
                     max_chars = max(120, self.log_config.log_system_prompt_lines * 120)
