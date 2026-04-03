@@ -51,12 +51,7 @@ from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig
 
 
-PRIVATE_REASONING_RE = re.compile(
-    r"<(?:think|thinking)\b[^>]*>.*?</(?:think|thinking)>",
-    re.IGNORECASE | re.DOTALL,
-)
-
-LOG_CONTROL_BLOCK_RE = re.compile(
+INTERNAL_CONTROL_BLOCK_RE = re.compile(
     r"<(?:think|thinking|system-reminder)\b[^>]*>.*?</(?:think|thinking|system-reminder)>",
     re.IGNORECASE | re.DOTALL,
 )
@@ -91,8 +86,8 @@ class AgentLoop:
 
     @staticmethod
     def _sanitize_response_content(content: str) -> str:
-        """Remove provider-internal reasoning blocks from visible replies."""
-        cleaned = PRIVATE_REASONING_RE.sub("", content or "")
+        """Remove provider-internal control blocks from visible replies."""
+        cleaned = INTERNAL_CONTROL_BLOCK_RE.sub("", content or "")
         return cleaned.strip()
 
     @staticmethod
@@ -115,7 +110,7 @@ class AgentLoop:
                     other_items += 1
 
             text = " ".join(part for part in text_parts if part)
-            text = LOG_CONTROL_BLOCK_RE.sub("", text)
+            text = INTERNAL_CONTROL_BLOCK_RE.sub("", text)
             text = LOG_WHITESPACE_RE.sub(" ", text).strip() or "<multimodal>"
             suffix_parts = []
             if image_count:
@@ -125,7 +120,7 @@ class AgentLoop:
             if suffix_parts:
                 text = f"{text} [{' '.join(suffix_parts)}]"
         else:
-            text = LOG_CONTROL_BLOCK_RE.sub("", str(content or ""))
+            text = INTERNAL_CONTROL_BLOCK_RE.sub("", str(content or ""))
             text = LOG_WHITESPACE_RE.sub(" ", text).strip()
 
         if not text:
