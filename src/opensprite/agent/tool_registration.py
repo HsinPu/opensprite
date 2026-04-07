@@ -73,10 +73,20 @@ def register_filesystem_tools(
     registry.register(ListDirTool(workspace_resolver=workspace_resolver))
 
 
-def register_skill_tools(registry: ToolRegistry, *, skills_loader: Any = None) -> None:
+def register_skill_tools(
+    registry: ToolRegistry,
+    *,
+    skills_loader: Any = None,
+    workspace_resolver: Callable[[], Path],
+) -> None:
     """Register optional skill-loading tools."""
     if skills_loader:
-        registry.register(ReadSkillTool(skills_loader=skills_loader))
+        registry.register(
+            ReadSkillTool(
+                skills_loader=skills_loader,
+                personal_skills_dir_resolver=lambda: workspace_resolver() / "skills",
+            )
+        )
 
 
 def register_shell_tools(
@@ -163,7 +173,11 @@ def register_default_tools(
         workspace_resolver=workspace_resolver,
         skills_loader=skills_loader,
     )
-    register_skill_tools(registry, skills_loader=skills_loader)
+    register_skill_tools(
+        registry,
+        skills_loader=skills_loader,
+        workspace_resolver=workspace_resolver,
+    )
     register_shell_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=tools_config)
     register_delegate_tools(registry, run_subagent=run_subagent)

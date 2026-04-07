@@ -8,6 +8,7 @@ Path layout:
 - default skills: ~/.opensprite/skills/*/SKILL.md
 - workspace root: ~/.opensprite/workspace
 - per-chat workspaces: ~/.opensprite/workspace/chats/{channel}/{chat_id}
+- per-chat skills: ~/.opensprite/workspace/chats/{channel}/{chat_id}/skills/*/SKILL.md
 """
 
 import hashlib
@@ -115,6 +116,16 @@ def get_chat_workspace(
     safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
     safe_chat_id = _sanitize_path_segment(raw_chat_id, default="default")
     return ensure_dir(root / WORKSPACE_CHATS_DIRNAME / safe_channel / safe_chat_id)
+
+
+def get_chat_skills_dir(
+    chat_id: str | None,
+    *,
+    workspace_root: str | Path | None = None,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the personal/per-chat skills directory for a chat session."""
+    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / SKILLS_DIRNAME
 
 
 def get_memory_file(memory_dir: str | Path, chat_id: str = "default") -> Path:

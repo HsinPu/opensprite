@@ -96,12 +96,13 @@ class ReadFileTool(Tool):
             if self.skills_loader and file_path.name == "SKILL.md":
                 path_str = str(file_path)
                 if "/skills/" in path_str or "\\skills\\" in path_str:
+                    personal_skills_dir = workspace / "skills"
                     parts = file_path.parts
                     for i, part in enumerate(parts):
                         if part == "skills" and i + 1 < len(parts):
                             skill_name = parts[i + 1]
-                            if self.skills_loader.skill_exists(skill_name):
-                                content = self.skills_loader.load_skill_content(skill_name)
+                            if self.skills_loader.skill_exists(skill_name, personal_skills_dir):
+                                content = self.skills_loader.load_skill_content(skill_name, personal_skills_dir)
                                 return f"[Note: Use read_skill tool instead]\n\n{content}"
             
             if not file_path.exists():

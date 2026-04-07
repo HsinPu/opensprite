@@ -3,7 +3,7 @@ opensprite/context/file_builder.py - File-based ContextBuilder.
 
 Assembles the system prompt from:
 - bootstrap/*.md startup files
-- skill metadata summaries (full skill content loads on demand)
+- global + per-chat skill metadata summaries (full skill content loads on demand)
 - memory/<chat>/MEMORY.md long-term memory
 """
 
@@ -15,6 +15,7 @@ from .paths import (
     get_app_home,
     get_bootstrap_dir,
     get_chat_workspace,
+    get_chat_skills_dir,
     get_memory_dir,
     get_memory_file,
     get_skills_dir,
@@ -42,6 +43,7 @@ class FileContextBuilder:
         tool_workspace: Path | None = None,
         skills_loader: SkillsLoader | None = None,
         default_skills_dir: Path | None = None,
+        personal_skills_dir: Path | None = None,
         custom_skills_dir: Path | None = None,
     ):
         self.app_home = get_app_home(app_home)
@@ -55,14 +57,18 @@ class FileContextBuilder:
         self.workspace = self.tool_workspace
         self.memory_store = MemoryStore(self.memory_dir)
         self.skills_loader = skills_loader or SkillsLoader(
-            workspace=self.tool_workspace,
             default_skills_dir=default_skills_dir or get_skills_dir(self.app_home),
-            custom_skills_dir=custom_skills_dir or self.tool_workspace / "skills",
+            personal_skills_dir=personal_skills_dir,
+            custom_skills_dir=custom_skills_dir,
         )
 
     def get_chat_workspace(self, chat_id: str = "default") -> Path:
         """Resolve the current chat's isolated workspace."""
         return get_chat_workspace(chat_id, workspace_root=self.tool_workspace)
+
+    def get_chat_skills_dir(self, chat_id: str = "default") -> Path:
+        """Resolve the personal skills directory for the current chat."""
+        return get_chat_skills_dir(chat_id, workspace_root=self.tool_workspace)
 
     def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
@@ -80,7 +86,9 @@ class FileContextBuilder:
         # Skills follow the on-demand model from OpenCode docs: list available
         # skill metadata in the main prompt, then load a full SKILL.md only when
         # the model decides a skill is relevant via read_skill.
-        skills_summary = self.skills_loader.build_skills_summary()
+        skills_summary = self.skills_loader.build_skills_summary(
+            personal_skills_dir=self.get_chat_skills_dir(chat_id)
+        )
         if skills_summary:
             parts.append(f"""# Available Skills
 

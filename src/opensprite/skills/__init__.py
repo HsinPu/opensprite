@@ -14,11 +14,11 @@ class Skill:
 
 
 class SkillsLoader:
-    """Load skills from default and optional workspace directories.
+    """Load skills from global and optional personal/per-chat directories.
 
     Looks in two places:
-    - Default user skills: ~/.opensprite/skills/
-    - Optional workspace override: <workspace>/skills/
+    - Default global skills: ~/.opensprite/skills/
+    - Optional personal/per-chat override: <chat-workspace>/skills/
 
     Skills are intended for on-demand loading: the agent should first see the
     available skill names and descriptions, then load a full SKILL.md only when
@@ -30,6 +30,7 @@ class SkillsLoader:
         workspace: Path | None = None,
         *,
         default_skills_dir: Path | None = None,
+        personal_skills_dir: Path | None = None,
         custom_skills_dir: Path | None = None,
     ):
         self.workspace = Path(workspace).expanduser() if workspace else None
@@ -38,12 +39,14 @@ class SkillsLoader:
             if default_skills_dir is not None
             else Path.home() / ".opensprite" / "skills"
         )
-        if custom_skills_dir is not None:
-            self.custom_skills_dir = Path(custom_skills_dir).expanduser()
-        elif self.workspace is not None:
-            self.custom_skills_dir = self.workspace / "skills"
-        else:
-            self.custom_skills_dir = None
+        personal_dir = personal_skills_dir if personal_skills_dir is not None else custom_skills_dir
+        self.personal_skills_dir = Path(personal_dir).expanduser() if personal_dir is not None else None
+
+    def _resolve_personal_skills_dir(self, personal_skills_dir: Path | None = None) -> Path | None:
+        """Resolve the personal/per-chat skills directory for this request."""
+        if personal_skills_dir is not None:
+            return Path(personal_skills_dir).expanduser()
+        return self.personal_skills_dir
 
     def _load_skills_from_dir(self, skills_dir: Path) -> list[Skill]:
         """Load skills from a directory."""
@@ -103,9 +106,9 @@ class SkillsLoader:
         body = "\n".join(lines[end_index + 1 :]).strip()
         return frontmatter, body
 
-    def _iter_skill_dirs(self) -> list[Path]:
+    def _iter_skill_dirs(self, personal_skills_dir: Path | None = None) -> list[Path]:
         """Return unique skill directories in priority order."""
-        candidates = [self.custom_skills_dir, self.default_skills_dir]
+        candidates = [self._resolve_personal_skills_dir(personal_skills_dir), self.default_skills_dir]
         dirs: list[Path] = []
         seen: set[Path] = set()
 
@@ -122,12 +125,12 @@ class SkillsLoader:
 
         return dirs
 
-    def get_skills(self) -> list[Skill]:
-        """Get all available skills from custom then default directories."""
+    def get_skills(self, personal_skills_dir: Path | None = None) -> list[Skill]:
+        """Get all available skills from personal then global directories."""
         skills: list[Skill] = []
         seen_names: set[str] = set()
 
-        for skills_dir in self._iter_skill_dirs():
+        for skills_dir in self._iter_skill_dirs(personal_skills_dir):
             for skill in self._load_skills_from_dir(skills_dir):
                 if skill.name in seen_names:
                     continue
@@ -136,13 +139,13 @@ class SkillsLoader:
 
         return skills
 
-    def build_skills_summary(self) -> str:
+    def build_skills_summary(self, personal_skills_dir: Path | None = None) -> str:
         """Build lightweight skill metadata for the main system prompt.
 
         Only skill names and descriptions are included here. Full skill content
         should be loaded later via the read_skill tool when needed.
         """
-        skills = self.get_skills()
+        skills = self.get_skills(personal_skills_dir)
         if not skills:
             return ""
 
@@ -152,16 +155,16 @@ class SkillsLoader:
 
         return "\n".join(lines)
 
-    def _get_skill(self, skill_name: str) -> Skill | None:
+    def _get_skill(self, skill_name: str, personal_skills_dir: Path | None = None) -> Skill | None:
         """Return the discovered skill metadata for a skill name."""
-        for skill in self.get_skills():
+        for skill in self.get_skills(personal_skills_dir):
             if skill.name == skill_name:
                 return skill
         return None
 
-    def load_skill_content(self, skill_name: str) -> str:
+    def load_skill_content(self, skill_name: str, personal_skills_dir: Path | None = None) -> str:
         """Load the full content of a skill's SKILL.md."""
-        skill = self._get_skill(skill_name)
+        skill = self._get_skill(skill_name, personal_skills_dir)
         if skill is None:
             return ""
 
@@ -169,18 +172,18 @@ class SkillsLoader:
         _, body = self._split_frontmatter(content)
         return body
 
-    def get_skill_path(self, skill_name: str) -> Path | None:
+    def get_skill_path(self, skill_name: str, personal_skills_dir: Path | None = None) -> Path | None:
         """Get the file path for a skill's SKILL.md."""
-        skill = self._get_skill(skill_name)
+        skill = self._get_skill(skill_name, personal_skills_dir)
         return skill.path if skill is not None else None
 
-    def skill_exists(self, skill_name: str) -> bool:
+    def skill_exists(self, skill_name: str, personal_skills_dir: Path | None = None) -> bool:
         """Check if a skill exists."""
-        return self._get_skill(skill_name) is not None
+        return self._get_skill(skill_name, personal_skills_dir) is not None
 
-    def get_valid_skill_names(self) -> list[str]:
+    def get_valid_skill_names(self, personal_skills_dir: Path | None = None) -> list[str]:
         """Get valid skill names for validation."""
-        return [skill.name for skill in self.get_skills()]
+        return [skill.name for skill in self.get_skills(personal_skills_dir)]
 
     def _parse_frontmatter(self, content: str) -> dict[str, Any]:
         """Parse YAML frontmatter from SKILL.md."""
