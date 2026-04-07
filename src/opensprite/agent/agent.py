@@ -20,7 +20,6 @@ opensprite/agent.py - Agent Loop
 - Tool 由 ToolRegistry 管理
 """
 
-import json
 from contextvars import ContextVar
 import re
 import time
@@ -31,24 +30,15 @@ from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
 from ..context.builder import ContextBuilder
-from ..documents.memory import MemoryStore, consolidate
+from ..documents.memory import MemoryStore
 from ..documents.user_profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
-from ..tools import (
-    ToolRegistry,
-    ReadFileTool,
-    WriteFileTool,
-    ListDirTool,
-    EditFileTool,
-    ExecTool,
-    SearchHistoryTool,
-    SearchKnowledgeTool,
-    WebSearchTool,
-    WebFetchTool,
-    ReadSkillTool,
-)
+from ..tools import ToolRegistry
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig
+from .consolidation import MemoryConsolidationService, UserProfileUpdateService
+from .execution import ExecutionEngine
+from .tool_registration import register_default_tools, register_memory_tool
 
 
 INTERNAL_CONTROL_BLOCK_RE = re.compile(
@@ -230,9 +220,26 @@ class AgentLoop:
         # Memory store (long-term memory)
         memory_dir = getattr(self._context_builder, "memory_dir", Path.cwd() / "memory")
         self.memory = MemoryStore(memory_dir)
-        self.user_profile: UserProfileConsolidator | None = None
+        self.memory_consolidation = MemoryConsolidationService(
+            storage=self.storage,
+            memory_store=self.memory,
+            provider=self.provider,
+            threshold=self.memory_config.threshold,
+        )
+        user_profile_consolidator: UserProfileConsolidator | None = None
         # Register save_memory tool
         self._register_memory_tool()
+        self.execution_engine = ExecutionEngine(
+            provider=self.provider,
+            tools=self.tools,
+            tools_config=self.tools_config,
+            search_store=self.search_store,
+            empty_response_fallback=self.EMPTY_RESPONSE_FALLBACK,
+            save_message=self._save_message,
+            format_log_preview=self._format_log_preview,
+            summarize_messages=self._summarize_messages,
+            sanitize_response_content=self._sanitize_response_content,
+        )
 
         if self.app_home is not None:
             from ..context.paths import get_user_profile_file, get_user_profile_state_file
@@ -241,7 +248,7 @@ class AgentLoop:
                 user_profile_file=get_user_profile_file(self.app_home),
                 state_file=get_user_profile_state_file(self.app_home),
             )
-            self.user_profile = UserProfileConsolidator(
+            user_profile_consolidator = UserProfileConsolidator(
                 storage=self.storage,
                 provider=self.provider,
                 model=self.provider.get_default_model(),
@@ -251,38 +258,11 @@ class AgentLoop:
                 enabled=self.user_profile_config.enabled,
             )
 
+        self.user_profile_update = UserProfileUpdateService(user_profile_consolidator)
+
     def _register_memory_tool(self) -> None:
         """Register the save_memory tool."""
-        # Dynamic tool for saving memory
-        from ..tools.base import Tool
-        
-        class SaveMemoryTool(Tool):
-            name = "save_memory"
-            description = "Save important information to long-term memory. Include all existing facts plus new ones."
-            parameters = {
-                "type": "object",
-                "properties": {
-                    "memory_update": {"type": "string", "description": "Updated memory as markdown"}
-                },
-                "required": ["memory_update"]
-            }
-            
-            def __init__(self, memory_store: MemoryStore, get_chat_id: callable):
-                self.memory_store = memory_store
-                self.get_chat_id = get_chat_id
-            
-            async def execute(self, memory_update: str, **kwargs: Any) -> str:
-                chat_id = self.get_chat_id()
-                if not chat_id:
-                    return "Error: current chat_id is unavailable. save_memory requires an active chat context."
-                current = self.memory_store.read(chat_id)
-                if memory_update != current:
-                    self.memory_store.write(chat_id, memory_update)
-                    return f"Memory saved ({len(memory_update)} chars)"
-                return "Memory unchanged"
-        
-        # Pass a lambda that returns current chat_id
-        self.tools.register(SaveMemoryTool(self.memory, self._get_current_chat_id))
+        register_memory_tool(self.tools, self.memory, self._get_current_chat_id)
 
     def _get_current_chat_id(self) -> str | None:
         """Return the current task-local chat id."""
@@ -305,56 +285,16 @@ class AgentLoop:
         註冊檔案系統工具、Shell 執行、網頁搜尋和網頁抓取。
         Registers filesystem tools, shell execution, web search, and web fetch.
         """
-        skills_loader = getattr(self._context_builder, "skills_loader", None)
-        
-        # 檔案工具
-        self.tools.register(ReadFileTool(workspace_resolver=self._get_current_workspace, skills_loader=skills_loader))
-        self.tools.register(WriteFileTool(workspace_resolver=self._get_current_workspace))
-        self.tools.register(EditFileTool(workspace_resolver=self._get_current_workspace))
-        self.tools.register(ListDirTool(workspace_resolver=self._get_current_workspace))
-        
-        # 技能工具
-        if skills_loader:
-            self.tools.register(ReadSkillTool(skills_loader=skills_loader))
-        
-        # 執行命令
-        self.tools.register(ExecTool(workspace_resolver=self._get_current_workspace))
-        
-        # 網路工具
-        web_search_config = {}
-        web_fetch_config = {}
-        if hasattr(self.tools_config, 'web_search'):
-            web_search_config = self.tools_config.web_search or {}
-        if hasattr(self.tools_config, 'web_fetch'):
-            web_fetch_config = self.tools_config.web_fetch or {}
-
-        self.tools.register(WebSearchTool(config=web_search_config))
-        self.tools.register(WebFetchTool(
-            max_chars=web_fetch_config.get("max_chars", 50000),
-            timeout=web_fetch_config.get("timeout", 30),
-            prefer_trafilatura=web_fetch_config.get("prefer_trafilatura", True),
-            firecrawl_api_key=web_fetch_config.get("firecrawl_api_key")
-        ))
-
-        # Delegate Tool
-        from ..tools.delegate import DelegateTool
-        self.tools.register(DelegateTool(run_subagent=self.run_subagent))
-
-        if self.search_store is not None:
-            self.tools.register(
-                SearchHistoryTool(
-                    store=self.search_store,
-                    get_chat_id=self._get_current_chat_id,
-                    default_limit=self.search_config.history_top_k,
-                )
-            )
-            self.tools.register(
-                SearchKnowledgeTool(
-                    store=self.search_store,
-                    get_chat_id=self._get_current_chat_id,
-                    default_limit=self.search_config.knowledge_top_k,
-                )
-            )
+        register_default_tools(
+            self.tools,
+            workspace_resolver=self._get_current_workspace,
+            get_chat_id=self._get_current_chat_id,
+            run_subagent=self.run_subagent,
+            skills_loader=getattr(self._context_builder, "skills_loader", None),
+            tools_config=self.tools_config,
+            search_store=self.search_store,
+            search_config=self.search_config,
+        )
         
         logger.info(f"agent.init | tools={', '.join(self.tools.tool_names)}")
 
@@ -466,112 +406,12 @@ class AgentLoop:
         tool_result_chat_id: str | None = None,
     ) -> str:
         """Run the shared LLM execution loop for main and delegated agents."""
-        tools = None
-        if allow_tools and self.tools.tool_names:
-            tools = self.tools.get_definitions()
-            logger.info(f"[{log_id}] tools.enabled | names={', '.join(self.tools.tool_names)}")
-
-        tool_results_history = []
-
-        for iteration in range(self.tools_config.max_tool_iterations):
-            logger.info(
-                f"[{log_id}] llm.request | iter={iteration + 1} messages={len(chat_messages)} "
-                f"tools={'on' if tools else 'off'} tail={self._summarize_messages(chat_messages)}"
-            )
-            try:
-                response = await self.provider.chat(
-                    messages=chat_messages,
-                    tools=tools,
-                )
-            except Exception:
-                logger.exception(
-                    f"[{log_id}] llm.error | iter={iteration + 1} messages={len(chat_messages)} "
-                    f"tools={'on' if tools else 'off'} tail={self._summarize_messages(chat_messages)}"
-                )
-                raise
-
-            raw_content = response.content or ""
-            response.content = self._sanitize_response_content(raw_content)
-            logger.info(
-                f"[{log_id}] llm.response | iter={iteration + 1} model={response.model} raw_len={len(raw_content)} "
-                f"visible_len={len(response.content)} tool_calls={len(response.tool_calls or [])} "
-                f"preview={self._format_log_preview(response.content)}"
-            )
-            if raw_content and not response.content:
-                logger.warning(
-                    f"[{log_id}] llm.sanitized-empty | iter={iteration + 1} raw_preview={self._format_log_preview(raw_content, max_chars=240)}"
-                )
-
-            if response.tool_calls:
-                if not tools:
-                    logger.warning(
-                        f"[{log_id}] llm.tool-calls-ignored | iter={iteration + 1} count={len(response.tool_calls)} tools=off"
-                    )
-                    if not response.content:
-                        return self.EMPTY_RESPONSE_FALLBACK
-
-                    return response.content
-
-                logger.info(f"[{log_id}] llm.tool-calls | iter={iteration + 1} count={len(response.tool_calls)}")
-
-                tool_calls_api = []
-                for tc in response.tool_calls:
-                    tool_calls_api.append({
-                        "id": tc.id,
-                        "type": "function",
-                        "function": {
-                            "name": tc.name,
-                            "arguments": json.dumps(tc.arguments, ensure_ascii=False)
-                        }
-                    })
-
-                chat_messages.append(ChatMessage(
-                    role="assistant",
-                    content=response.content or "",
-                    tool_calls=tool_calls_api
-                ))
-
-                for tc in response.tool_calls:
-                    tool_name = tc.name
-                    tool_args = tc.arguments
-                    args_preview = self._format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
-                    logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
-
-                    result = await self.tools.execute(tool_name, tool_args)
-                    logger.info(
-                        f"[{log_id}] tool.result | name={tool_name} preview={self._format_log_preview(result, max_chars=200)}"
-                    )
-
-                    tool_results_history.append(f"{tool_name}: {result[:200]}")
-                    chat_messages.append(ChatMessage(
-                        role="tool",
-                        content=result,
-                        tool_call_id=tc.id
-                    ))
-
-                    if tool_result_chat_id is not None:
-                        await self._save_message(tool_result_chat_id, "tool", result, tool_name=tool_name)
-                        if self.search_store is not None:
-                            try:
-                                await self.search_store.index_tool_result(tool_result_chat_id, tool_name, tool_args, result)
-                            except Exception as e:
-                                logger.warning("[{}] Failed to index tool result for search: {}", tool_result_chat_id, e)
-
-                continue
-
-            if not response.content:
-                logger.warning(f"[{log_id}] llm.empty-visible-response | using_fallback=true")
-                return self.EMPTY_RESPONSE_FALLBACK
-
-            return response.content
-
-        logger.warning(f"[{log_id}] llm.max-iterations | limit={self.tools_config.max_tool_iterations}")
-
-        history_msg = ""
-        if tool_results_history:
-            history_msg = f"\n\n我嘗試了以下工具但未能完成任務：\n" + "\n".join(f"- {r}" for r in tool_results_history[-5:])
-
-        return f"我嘗試完成你的請求，但超過了最大迭代次數（{self.tools_config.max_tool_iterations}次）。請將任務拆分為較小的步驟。{history_msg}"
+        return await self.execution_engine.execute_messages(
+            log_id,
+            chat_messages,
+            allow_tools=allow_tools,
+            tool_result_chat_id=tool_result_chat_id,
+        )
 
     async def call_llm(
         self,
@@ -790,50 +630,11 @@ class AgentLoop:
         Args:
             chat_id: 聊天室 ID。The chat session ID.
         """
-        # Get total message count
-        messages = await self.storage.get_messages(chat_id, limit=1000)
-        message_count = len(messages)
-        
-        # Get last consolidated for this chat
-        last_consolidated = await self.storage.get_consolidated_index(chat_id)
-        
-        # Check if we should consolidate
-        unconsolidated = message_count - last_consolidated
-        if unconsolidated >= self.memory_config.threshold:
-            logger.info(f"[{chat_id}] memory.consolidate | pending={unconsolidated}")
-            try:
-                # Get messages to consolidate
-                old_messages = messages[last_consolidated:]
-                # Convert to dicts (handle both object and dict formats)
-                msg_dicts = []
-                for m in old_messages:
-                    if isinstance(m, dict):
-                        msg_dicts.append({"role": m.get("role", "?"), "content": m.get("content", "")})
-                    else:
-                        msg_dicts.append({"role": m.role, "content": m.content})
-                
-                success = await consolidate(
-                    memory_store=self.memory,
-                    chat_id=chat_id,
-                    messages=msg_dicts,
-                    provider=self.provider,
-                    model=self.provider.get_default_model(),
-                )
-                if success:
-                    await self.storage.set_consolidated_index(chat_id, message_count)
-                    logger.info(f"[{chat_id}] memory.consolidated | total_messages={message_count}")
-            except Exception as e:
-                logger.error(f"[{chat_id}] memory.consolidate.error | error={e}")
+        await self.memory_consolidation.maybe_consolidate(chat_id)
 
     async def _maybe_update_user_profile(self, chat_id: str) -> None:
         """Check whether the global USER.md profile should be refreshed."""
-        if self.user_profile is None:
-            return
-
-        try:
-            await self.user_profile.maybe_update(chat_id)
-        except Exception as e:
-            logger.error(f"[{chat_id}] profile.update.error | error={e}")
+        await self.user_profile_update.maybe_update(chat_id)
 
     async def reset_history(self, chat_id: str | None = None) -> None:
         """
