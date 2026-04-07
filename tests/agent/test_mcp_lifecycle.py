@@ -1,0 +1,191 @@
+import asyncio
+from pathlib import Path
+
+from opensprite.agent.agent import AgentLoop
+from opensprite.bus.message import UserMessage
+from opensprite.config.schema import AgentConfig, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.storage.base import StoredMessage
+from opensprite.tools.base import Tool
+from opensprite.tools.registry import ToolRegistry
+
+
+class FakeContextBuilder:
+    def __init__(self, workspace: Path):
+        self.workspace = workspace
+        self.memory_dir = workspace / "memory"
+
+    def build_system_prompt(self, chat_id: str = "default") -> str:
+        return "system"
+
+    def build_messages(self, history, current_message, current_images=None, channel=None, chat_id=None):
+        return [{"role": "user", "content": current_message}]
+
+    def add_tool_result(self, messages, tool_call_id, tool_name, result):
+        return messages
+
+    def add_assistant_message(self, messages, content, tool_calls=None):
+        return messages
+
+
+class FakeProvider:
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+        raise AssertionError("provider.chat should not be called in this test")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
+class FakeStorage:
+    def __init__(self):
+        self.saved = []
+
+    async def get_messages(self, chat_id, limit=None):
+        return []
+
+    async def add_message(self, chat_id, message: StoredMessage):
+        self.saved.append((chat_id, message.role, message.content))
+
+    async def clear_messages(self, chat_id):
+        return None
+
+    async def get_consolidated_index(self, chat_id):
+        return 0
+
+    async def set_consolidated_index(self, chat_id, index):
+        return None
+
+    async def get_all_chats(self):
+        return []
+
+
+class DummyTool(Tool):
+    def __init__(self, name: str = "dummy"):
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return self._name
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        return "ok"
+
+
+def _make_agent(tmp_path: Path, tools_config: ToolsConfig | None = None) -> AgentLoop:
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    return AgentLoop(
+        config=AgentConfig(),
+        provider=FakeProvider(),
+        storage=FakeStorage(),
+        context_builder=FakeContextBuilder(tmp_path),
+        tools=registry,
+        memory_config=MemoryConfig(),
+        tools_config=tools_config or ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(enabled=False),
+    )
+
+
+def test_connect_mcp_registers_tools_once(tmp_path, monkeypatch):
+    calls = []
+
+    async def fake_connect(servers, registry, stack):
+        calls.append(sorted(servers.keys()))
+        registry.register(DummyTool("mcp_demo_echo"))
+
+    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+
+    agent = _make_agent(
+        tmp_path,
+        ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
+    )
+
+    asyncio.run(agent.connect_mcp())
+    asyncio.run(agent.connect_mcp())
+
+    assert calls == [["demo"]]
+    assert agent._mcp_connected is True
+    assert "mcp_demo_echo" in agent.tools.tool_names
+
+
+def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
+    agent = _make_agent(tmp_path)
+    order = []
+
+    async def fake_connect_mcp():
+        order.append("connect")
+        assert agent.storage.saved == []
+
+    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True):
+        order.append("call_llm")
+        assert order[0] == "connect"
+        return "assistant reply"
+
+    async def fake_consolidate(chat_id):
+        order.append("memory")
+
+    async def fake_update_profile(chat_id):
+        order.append("profile")
+
+    agent.connect_mcp = fake_connect_mcp
+    agent.call_llm = fake_call_llm
+    agent._maybe_consolidate_memory = fake_consolidate
+    agent._maybe_update_user_profile = fake_update_profile
+
+    response = asyncio.run(
+        agent.process(
+            UserMessage(
+                text="hello",
+                channel="telegram",
+                chat_id="room-1",
+                session_chat_id="telegram:room-1",
+            )
+        )
+    )
+
+    assert order == ["connect", "call_llm", "memory", "profile"]
+    assert response.text == "assistant reply"
+
+
+def test_close_mcp_resets_state_and_closes_stack(tmp_path, monkeypatch):
+    class FakeStack:
+        def __init__(self):
+            self.closed = False
+
+        async def __aenter__(self):
+            return self
+
+        async def aclose(self):
+            self.closed = True
+
+    async def fake_connect(servers, registry, stack):
+        return None
+
+    monkeypatch.setattr("opensprite.agent.agent.AsyncExitStack", FakeStack)
+    monkeypatch.setattr("opensprite.tools.mcp.connect_mcp_servers", fake_connect)
+
+    agent = _make_agent(
+        tmp_path,
+        ToolsConfig(mcp_servers={"demo": {"command": "npx", "args": ["demo-mcp"]}}),
+    )
+
+    asyncio.run(agent.connect_mcp())
+    stack = agent._mcp_stack
+
+    assert stack is not None
+    assert agent._mcp_connected is True
+
+    asyncio.run(agent.close_mcp())
+
+    assert stack.closed is True
+    assert agent._mcp_stack is None
+    assert agent._mcp_connected is False

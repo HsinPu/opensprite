@@ -103,27 +103,31 @@ async def run(config_path: str | Path | None = None) -> None:
     
     # 建立 Agent + MessageQueue
     agent, mq = await create_agent(config)
+
+    # 啟動前先連 MCP，讓外部 tools 在服務運行時就緒
+    await agent.connect_mcp()
     
     # 啟動訊息處理迴圈
     processor = asyncio.create_task(mq.process_queue())
-    
-    # 啟動所有頻道
-    from .channels import start_channels
-    await start_channels(mq, config.channels)
-    
-    logger.info("OpenSprite gateway 啟動完成！")
-    logger.info("按 Ctrl+C 停止")
-    
-    # 等待直到被中斷
+
     try:
+        # 啟動所有頻道
+        from .channels import start_channels
+
+        await start_channels(mq, config.channels)
+
+        logger.info("OpenSprite gateway 啟動完成！")
+        logger.info("按 Ctrl+C 停止")
+
+        # 等待直到被中斷
         await asyncio.Event().wait()
     except KeyboardInterrupt:
         logger.info("正在關閉...")
-    
-    # 關閉
-    await mq.stop()
-    await processor
-    logger.info("再見！")
+    finally:
+        await mq.stop()
+        await processor
+        await agent.close_mcp()
+        logger.info("再見！")
 
 
 # ============================================

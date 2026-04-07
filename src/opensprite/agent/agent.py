@@ -20,7 +20,9 @@ opensprite/agent.py - Agent Loop
 - Tool 由 ToolRegistry 管理
 """
 
+import asyncio
 from contextvars import ContextVar
+from contextlib import AsyncExitStack
 import re
 import time
 from pathlib import Path
@@ -181,6 +183,11 @@ class AgentLoop:
         self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
+        self._mcp_servers = dict(self.tools_config.mcp_servers)
+        self._mcp_stack: AsyncExitStack | None = None
+        self._mcp_connected = False
+        self._mcp_connecting = False
+        self._mcp_connect_lock = asyncio.Lock()
 
         self.storage = self._setup_storage(storage)
         self._context_builder = self._setup_context_builder(context_builder)
@@ -284,6 +291,53 @@ class AgentLoop:
     def _register_memory_tool(self) -> None:
         """Register the save_memory tool."""
         register_memory_tool(self.tools, self.memory, self._get_current_chat_id)
+
+    async def connect_mcp(self) -> None:
+        """Connect configured MCP servers once and register their tools."""
+        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+            return
+
+        async with self._mcp_connect_lock:
+            if self._mcp_connected or self._mcp_connecting or not self._mcp_servers:
+                return
+
+            self._mcp_connecting = True
+            stack: AsyncExitStack | None = None
+            try:
+                from ..tools.mcp import connect_mcp_servers
+
+                stack = AsyncExitStack()
+                await stack.__aenter__()
+                await connect_mcp_servers(self._mcp_servers, self.tools, stack)
+                self._mcp_stack = stack
+                self._mcp_connected = True
+                logger.info("agent.mcp.connected | tools={}", ", ".join(self.tools.tool_names))
+            except BaseException as exc:
+                logger.error("agent.mcp.connect.error | error={}", exc)
+                if stack is not None:
+                    try:
+                        await stack.aclose()
+                    except Exception:
+                        pass
+                self._mcp_stack = None
+            finally:
+                self._mcp_connecting = False
+
+    async def close_mcp(self) -> None:
+        """Close any active MCP sessions and reset lifecycle flags."""
+        async with self._mcp_connect_lock:
+            stack = self._mcp_stack
+            self._mcp_stack = None
+            self._mcp_connected = False
+            self._mcp_connecting = False
+
+        if stack is None:
+            return
+
+        try:
+            await stack.aclose()
+        except Exception as exc:
+            logger.warning("agent.mcp.close.error | error={}", exc)
 
     def _get_current_chat_id(self) -> str | None:
         """Return the current task-local chat id."""
@@ -592,6 +646,8 @@ class AgentLoop:
 
         token = self._current_chat_id.set(session_chat_id)
         try:
+            await self.connect_mcp()
+
             # 1. 把使用者訊息存入 storage
             await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
 
