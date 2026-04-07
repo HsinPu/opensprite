@@ -1,7 +1,7 @@
 """opensprite/config/schema.py - 設定檔定義"""
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
@@ -40,8 +40,8 @@ class AgentConfig(BaseModel):
 
 class StorageConfig(BaseModel):
     """Storage configuration."""
-    
-    type: str
+
+    type: Literal["memory", "sqlite"]
     path: str
 
 

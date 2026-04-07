@@ -7,7 +7,7 @@ opensprite/channels/telegram.py - Telegram 訊息 Adapter
 1. 收到 Telegram Update
 2. 用 TelegramAdapter.to_user_message() 轉成 UserMessage
 3. 丟到 MessageQueue（enqueue）
-4. Queue 處理完後，on_response callback 會把回覆發送到 Telegram
+4. Queue 處理完後，會依 channel route 把回覆發送到 Telegram
 
 """
 
@@ -518,9 +518,9 @@ class TelegramAdapter(MessageAdapter):
 
         return "\n".join(rendered)
     
-    async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str) -> None:
+    async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str | None) -> None:
         """
-        Queue 的回調：收到 Agent 回覆後發送到 Telegram
+        Telegram channel 的 outbound handler。
         """
         await self.send(response)
     
@@ -530,7 +530,7 @@ class TelegramAdapter(MessageAdapter):
         
         使用 MessageQueue 時：
         - 訊息會丟到 Queue 處理
-        - 回覆會透過 _on_response 發送
+        - 回覆會透過 telegram channel handler 發送
         """
         logger.info("Preparing Telegram adapter startup: {}", self._describe_startup_config())
         if not self.bot_token:
@@ -560,12 +560,10 @@ class TelegramAdapter(MessageAdapter):
         
         from telegram.ext import MessageHandler, filters
         self.app.add_handler(MessageHandler((filters.TEXT | filters.PHOTO) & ~filters.COMMAND, handle_update))
-        
-        # 設置 callback 來發送回覆到 Telegram
-        async def on_response(response, channel, chat_id):
-            await self.send(response)
-        
-        self.mq.on_response = on_response
+
+        if self.mq is None:
+            raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
+        self.mq.register_response_handler("telegram", self._on_response)
         
         # 初始化並啟動
         stage = "initialize"
@@ -663,6 +661,6 @@ asyncio.run(main())
 
 這樣：
 - 收到 Telegram 訊息 → 丟到 Queue
-- Agent 處理完 → Queue 的 on_response 會發送到 Telegram
+- Agent 處理完 → Queue 會依 `telegram` channel handler 發送回 Telegram
 - 支援多訊息並行處理
 """

@@ -13,13 +13,13 @@ opensprite/bus/dispatcher.py - 訊息排程中心
 - 用 MessageBus 接收/發送訊息
 
 流程：
-  外部 → enqueue() → inbound Queue → Agent → outbound Queue → callback → 外部
+  外部 → enqueue() → inbound Queue → Agent → outbound Queue → channel handler → 外部
 
 """
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Awaitable, Callable
 from . import MessageBus, InboundMessage, OutboundMessage
 from .message import UserMessage, AssistantMessage
 from ..utils.log import logger
@@ -35,6 +35,9 @@ class Conversation:
     """
     chat_id: str
     pending: asyncio.Event = field(default_factory=asyncio.Event)  # 等待回覆
+
+
+ResponseHandler = Callable[[AssistantMessage, str, str | None], Awaitable[None]]
 
 
 class MessageQueue:
@@ -54,7 +57,7 @@ class MessageQueue:
     └──────────────┘      └──────────────┘      └──────────────┘
                                                             │
                                                             ▼
-                                                    on_response callback
+                                             channel response handlers
     """
     
     def __init__(self, agent, bus: MessageBus | None = None):
@@ -71,8 +74,14 @@ class MessageQueue:
         self.running = False
         # 追蹤所有 active tasks: chat_id -> list of tasks
         self._active_tasks: dict[str, list[asyncio.Task]] = {}
+        self._response_handlers: dict[str, ResponseHandler] = {}
         # Outbound 消費者任務
         self._outbound_task: asyncio.Task | None = None
+
+    @staticmethod
+    def normalize_channel(channel: str | None) -> str:
+        """Normalize channel names for routing."""
+        return (channel or "unknown").strip() or "unknown"
     
     def get_or_create_conversation(self, chat_id: str) -> Conversation:
         """
@@ -91,7 +100,7 @@ class MessageQueue:
     @staticmethod
     def build_session_chat_id(channel: str | None, chat_id: str | None) -> str:
         """Build an internal session ID namespaced by channel."""
-        normalized_channel = (channel or "unknown").strip() or "unknown"
+        normalized_channel = MessageQueue.normalize_channel(channel)
         normalized_chat_id = (chat_id or "default").strip() or "default"
         return f"{normalized_channel}:{normalized_chat_id}"
 
@@ -101,6 +110,16 @@ class MessageQueue:
         if ":" in chat_id:
             return chat_id
         return cls.build_session_chat_id(channel or "cli", chat_id)
+
+    def register_response_handler(self, channel: str, handler: ResponseHandler) -> None:
+        """Register the outbound response handler for a channel."""
+        normalized_channel = self.normalize_channel(channel)
+        self._response_handlers[normalized_channel] = handler
+
+    def unregister_response_handler(self, channel: str) -> None:
+        """Remove the outbound response handler for a channel."""
+        normalized_channel = self.normalize_channel(channel)
+        self._response_handlers.pop(normalized_channel, None)
     
     async def enqueue(self, user_message: UserMessage) -> None:
         """
@@ -109,7 +128,7 @@ class MessageQueue:
         參數：
             user_message: 統一格式的訊息
         """
-        channel = (user_message.channel or "unknown").strip() or "unknown"
+        channel = self.normalize_channel(user_message.channel)
         transport_chat_id = (user_message.chat_id or "default").strip() or "default"
         session_chat_id = user_message.session_chat_id or self.build_session_chat_id(channel, transport_chat_id)
         metadata = dict(user_message.metadata or {})
@@ -223,8 +242,8 @@ class MessageQueue:
     
     async def _consume_outbound(self) -> None:
         """
-        消費 outbound queue的任務（獨立運作）
-        不斷從 outbound 取訊息並呼叫 on_response
+        消費 outbound queue 的任務（獨立運作）
+        不斷從 outbound 取訊息並依 channel 分派
         """
         while self.running:
             try:
@@ -232,20 +251,28 @@ class MessageQueue:
                     self.bus.consume_outbound(),
                     timeout=1.0
                 )
-                
-                # 呼叫 on_response callback
-                if hasattr(self, 'on_response'):
-                    # 轉換成 AssistantMessage 格式
-                    response = AssistantMessage(
-                        text=outbound.content,
-                        channel=outbound.channel,
-                        chat_id=outbound.chat_id,
-                        session_chat_id=outbound.session_chat_id,
-                        metadata=dict(outbound.metadata),
-                        raw=outbound.raw,
-                    )
-                    await self.on_response(response, outbound.channel, outbound.chat_id)
-                    
+
+                normalized_channel = self.normalize_channel(outbound.channel)
+                response = AssistantMessage(
+                    text=outbound.content,
+                    channel=normalized_channel,
+                    chat_id=outbound.chat_id,
+                    session_chat_id=outbound.session_chat_id,
+                    metadata=dict(outbound.metadata),
+                    raw=outbound.raw,
+                )
+
+                handler = self._response_handlers.get(normalized_channel)
+                if handler is not None:
+                    await handler(response, normalized_channel, outbound.chat_id)
+                    continue
+
+                if hasattr(self, "on_response"):
+                    await self.on_response(response, normalized_channel, outbound.chat_id)
+                    continue
+
+                logger.warning("No outbound handler registered for channel '{}'", normalized_channel)
+
             except asyncio.TimeoutError:
                 continue
             except Exception as e:
@@ -395,11 +422,10 @@ async def main():
     mq = MessageQueue(agent)
     
     # 5. 定義收到回覆時要做什麼
-    # 注意：現在多了 channel 參數
     async def on_response(response, channel, chat_id):
         logger.info(f"[{channel}] 🤖: {response.text}")
-    
-    mq.on_response = on_response
+
+    mq.register_response_handler("cli", on_response)
     
     # 6. 啟動處理迴圈（在背景執行）
     processor = asyncio.create_task(mq.process_queue())

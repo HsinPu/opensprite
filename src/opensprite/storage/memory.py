@@ -63,26 +63,3 @@ class MemoryStorage(StorageProvider):
         取得所有聊天室
         """
         return list(self._messages.keys())
-
-
-# ============================================
-# 之後可擴充：File Storage
-# ============================================
-
-"""
-未來要加入檔案儲存時：
-
-class FileStorage(StorageProvider):
-    async def get_messages(self, chat_id, limit):
-        # 從檔案讀取
-        pass
-    
-    async def add_message(self, chat_id, message):
-        # 寫入檔案
-        pass
-    
-    async def clear_messages(self, chat_id):
-        # 刪除檔案
-        pass
-
-"""

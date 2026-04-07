@@ -20,17 +20,14 @@ from .utils.log import logger
 def create_storage(config: Config) -> StorageProvider:
     """根據設定建立 Storage"""
     storage_type = config.storage.type
-    
+
     if storage_type == "memory":
         return MemoryStorage()
-    elif storage_type == "file":
-        from .storage import FileStorage
-        return FileStorage(base_path=config.storage.path)
-    elif storage_type == "sqlite":
+    if storage_type == "sqlite":
         from .storage import SQLiteStorage
         return SQLiteStorage(db_path=config.storage.path)
-    else:
-        return MemoryStorage()
+
+    raise ValueError(f"Unsupported storage provider: {storage_type}")
 
 
 def create_search_store(config: Config) -> SearchStore | None:
@@ -112,7 +109,7 @@ async def run(config_path: str | Path | None = None) -> None:
     
     # 啟動所有頻道
     from .channels import start_channels
-    await start_channels(mq, config.channels.telegram)
+    await start_channels(mq, config.channels)
     
     logger.info("OpenSprite gateway 啟動完成！")
     logger.info("按 Ctrl+C 停止")
