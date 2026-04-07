@@ -72,13 +72,27 @@ class LogConfig(BaseModel):
     log_system_prompt_lines: int = 0  # 印出多少行，0 = 全部
 
 
+class MCPServerConfig(BaseModel):
+    """MCP server connection configuration."""
+
+    type: Literal["stdio", "sse", "streamableHttp"] | None = None
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    url: str = ""
+    headers: dict[str, str] = Field(default_factory=dict)
+    tool_timeout: int = 30
+    enabled_tools: list[str] = Field(default_factory=lambda: ["*"])
+
+
 class ToolsConfig(BaseModel):
     """Tool configurations."""
     max_tool_iterations: int = 100
     # Web search config
-    web_search: dict = {}  # {"provider": "brave|duckduckgo|tavily|searxng|jina", "brave_api_key": "", "tavily_api_key": "", "jina_api_key": "", "searxng_url": "", "max_results": 10, "proxy": null}
+    web_search: dict[str, Any] = Field(default_factory=dict)  # {"provider": "brave|duckduckgo|tavily|searxng|jina", "brave_api_key": "", "tavily_api_key": "", "jina_api_key": "", "searxng_url": "", "max_results": 10, "proxy": null}
     # Web fetch config
-    web_fetch: dict = {}  # {"max_chars": 50000, "timeout": 30, "prefer_trafilatura": true, "firecrawl_api_key": ""}
+    web_fetch: dict[str, Any] = Field(default_factory=dict)  # {"max_chars": 50000, "timeout": 30, "prefer_trafilatura": true, "firecrawl_api_key": ""}
+    mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
 class MemoryConfig(BaseModel):
@@ -216,6 +230,10 @@ class Config:
                 "max_tool_iterations": self.tools.max_tool_iterations,
                 "web_search": self.tools.web_search or {},
                 "web_fetch": self.tools.web_fetch or {},
+                "mcp_servers": {
+                    name: server.model_dump()
+                    for name, server in self.tools.mcp_servers.items()
+                },
             },
             "memory": {"max_history": self.memory.max_history, "threshold": self.memory.threshold},
             "search": {

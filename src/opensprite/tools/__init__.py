@@ -8,6 +8,7 @@ from .shell import ExecTool
 from .search import SearchHistoryTool, SearchKnowledgeTool
 from .web_search import WebSearchTool
 from .web_fetch import WebFetchTool
+from .mcp import MCPToolWrapper, connect_mcp_servers
 
 __all__ = [
     "Tool",
@@ -22,4 +23,6 @@ __all__ = [
     "SearchKnowledgeTool",
     "WebSearchTool",
     "WebFetchTool",
+    "MCPToolWrapper",
+    "connect_mcp_servers",
 ]

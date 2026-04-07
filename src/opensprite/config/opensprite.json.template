@@ -71,7 +71,8 @@
       "timeout": 30,
       "prefer_trafilatura": true,
       "firecrawl_api_key": ""
-    }
+    },
+    "mcp_servers": {}
   },
   "memory": {
     "max_history": 50,
