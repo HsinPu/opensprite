@@ -160,7 +160,29 @@ Example using OpenRouter:
 }
 ```
 
-The template still contains a `console` section, but the current startup path actively launches the Telegram adapter.
+The template still contains a `console` section, but there is no `ConsoleAdapter` yet. The runtime now boots enabled channels through the channel registry, and currently only `telegram` is implemented.
+
+## Architecture
+
+OpenSprite uses an agent-centric architecture with ports-and-adapters boundaries.
+
+- `AgentLoop` is the main orchestrator. It owns the end-to-end request flow: store the inbound message, build context, call the execution engine, trigger maintenance work, and return one unified assistant response.
+- `ExecutionEngine` runs the LLM and tool-calling loop. It handles repeated LLM calls, tool execution, fallback handling, and iteration limits.
+- `ToolResultPersistence` stores tool outputs back into conversation history and optionally indexes them into the search store.
+- `tool_registration` builds the default tool set for the agent, including filesystem, shell, web, delegate, memory, and optional search tools.
+- `consolidation` contains maintenance services for long-term memory updates and global `USER.md` profile refreshes.
+- `channels`, `llms`, `storage`, and `search` are adapter layers around external systems. The agent core talks to these through shared interfaces rather than implementation-specific code.
+
+At a high level, the runtime flow looks like this:
+
+```text
+Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
+                                      |               |
+                                      |               -> ToolResultPersistence -> Storage / Search
+                                      -> Consolidation Services -> Memory / USER.md
+```
+
+This keeps the agent decision flow stable while letting channels, providers, storage backends, and search infrastructure evolve independently.
 
 ## Telegram Setup
 
@@ -242,7 +264,7 @@ The default agent registers tools for:
 ```text
 src/opensprite/
 ├── cli/            # Typer CLI entrypoints
-├── agent/          # Agent loop and tool orchestration
+├── agent/          # Agent orchestration, execution, and maintenance services
 ├── bus/            # Message queue and message models
 ├── channels/       # External channel adapters
 ├── config/         # Config schema and default template
