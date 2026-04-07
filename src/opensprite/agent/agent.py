@@ -179,18 +179,28 @@ class AgentLoop:
         self.search_store = search_store
         self.provider = provider
         self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
-
-        # 如果沒給 storage，用記憶體 storage
-        if storage is None:
-            from ..storage import MemoryStorage
-            storage = MemoryStorage()
-        self.storage = storage
-
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
 
-        # 如果沒給 context_builder，自動建立 app home / bootstrap / workspace
-        self._context_builder = context_builder
+        self.storage = self._setup_storage(storage)
+        self._context_builder = self._setup_context_builder(context_builder)
+        self.tools = self._setup_tools(tools)
+        self.memory = self._setup_memory_store()
+        self.memory_consolidation = self._setup_memory_consolidation()
+        self._register_memory_tool()
+        self.execution_engine = self._setup_execution_engine()
+        self.user_profile_update = self._setup_user_profile_update()
+
+    def _setup_storage(self, storage: StorageProvider | None) -> StorageProvider:
+        """Resolve the storage provider used by the agent."""
+        if storage is None:
+            from ..storage import MemoryStorage
+
+            return MemoryStorage()
+        return storage
+
+    def _setup_context_builder(self, context_builder: ContextBuilder | None) -> ContextBuilder:
+        """Resolve or bootstrap the context builder and workspace paths."""
         if context_builder is None:
             try:
                 from ..context.paths import get_app_home, get_tool_workspace, sync_templates
@@ -199,37 +209,45 @@ class AgentLoop:
                 self.app_home = get_app_home()
                 self.tool_workspace = get_tool_workspace(self.app_home)
                 sync_templates(self.app_home)
-                context_builder = FileContextBuilder(
+                return FileContextBuilder(
                     app_home=self.app_home,
                     tool_workspace=self.tool_workspace,
                 )
-                self._context_builder = context_builder
             except Exception as e:
                 raise RuntimeError(f"無法建立 ContextBuilder: {e}")
-        else:
-            self.app_home = getattr(context_builder, "app_home", None)
-            self.tool_workspace = getattr(context_builder, "tool_workspace", None)
-            if self.tool_workspace is None:
-                self.tool_workspace = getattr(context_builder, "workspace", Path.cwd())
 
-        # Tools
-        self.tools = tools or ToolRegistry()
-        if not self.tools.tool_names:
+        self.app_home = getattr(context_builder, "app_home", None)
+        self.tool_workspace = getattr(context_builder, "tool_workspace", None)
+        if self.tool_workspace is None:
+            self.tool_workspace = getattr(context_builder, "workspace", Path.cwd())
+        return context_builder
+
+    def _setup_tools(self, tools: ToolRegistry | None) -> ToolRegistry:
+        """Resolve the tool registry and populate defaults when needed."""
+        registry = tools or ToolRegistry()
+        if not registry.tool_names:
+            self.tools = registry
             self._register_default_tools()
+            return self.tools
+        return registry
 
-        # Memory store (long-term memory)
+    def _setup_memory_store(self) -> MemoryStore:
+        """Create the long-term memory store."""
         memory_dir = getattr(self._context_builder, "memory_dir", Path.cwd() / "memory")
-        self.memory = MemoryStore(memory_dir)
-        self.memory_consolidation = MemoryConsolidationService(
+        return MemoryStore(memory_dir)
+
+    def _setup_memory_consolidation(self) -> MemoryConsolidationService:
+        """Create the memory consolidation maintenance service."""
+        return MemoryConsolidationService(
             storage=self.storage,
             memory_store=self.memory,
             provider=self.provider,
             threshold=self.memory_config.threshold,
         )
-        user_profile_consolidator: UserProfileConsolidator | None = None
-        # Register save_memory tool
-        self._register_memory_tool()
-        self.execution_engine = ExecutionEngine(
+
+    def _setup_execution_engine(self) -> ExecutionEngine:
+        """Create the execution engine used for the LLM/tool loop."""
+        return ExecutionEngine(
             provider=self.provider,
             tools=self.tools,
             tools_config=self.tools_config,
@@ -241,6 +259,9 @@ class AgentLoop:
             sanitize_response_content=self._sanitize_response_content,
         )
 
+    def _setup_user_profile_update(self) -> UserProfileUpdateService:
+        """Create the optional USER.md update service."""
+        consolidator: UserProfileConsolidator | None = None
         if self.app_home is not None:
             from ..context.paths import get_user_profile_file, get_user_profile_state_file
 
@@ -248,7 +269,7 @@ class AgentLoop:
                 user_profile_file=get_user_profile_file(self.app_home),
                 state_file=get_user_profile_state_file(self.app_home),
             )
-            user_profile_consolidator = UserProfileConsolidator(
+            consolidator = UserProfileConsolidator(
                 storage=self.storage,
                 provider=self.provider,
                 model=self.provider.get_default_model(),
@@ -258,7 +279,7 @@ class AgentLoop:
                 enabled=self.user_profile_config.enabled,
             )
 
-        self.user_profile_update = UserProfileUpdateService(user_profile_consolidator)
+        return UserProfileUpdateService(consolidator)
 
     def _register_memory_tool(self) -> None:
         """Register the save_memory tool."""
