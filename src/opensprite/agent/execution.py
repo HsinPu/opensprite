@@ -12,6 +12,38 @@ from ..tools import ToolRegistry
 from ..utils.log import logger
 
 
+class ToolResultPersistence:
+    """Persist tool execution results to storage and optional search indexes."""
+
+    def __init__(
+        self,
+        *,
+        save_message: Callable[[str, str, str, str | None], Awaitable[None]],
+        search_store: SearchStore | None = None,
+    ):
+        self.save_message = save_message
+        self.search_store = search_store
+
+    async def persist(
+        self,
+        *,
+        chat_id: str | None,
+        tool_name: str,
+        tool_args: dict[str, Any],
+        result: str,
+    ) -> None:
+        """Persist a single tool result when a target chat is available."""
+        if chat_id is None:
+            return
+
+        await self.save_message(chat_id, "tool", result, tool_name)
+        if self.search_store is not None:
+            try:
+                await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result)
+            except Exception as e:
+                logger.warning("[{}] Failed to index tool result for search: {}", chat_id, e)
+
+
 class ExecutionEngine:
     """Run the LLM and tool-calling loop for prepared chat messages."""
 
@@ -33,10 +65,13 @@ class ExecutionEngine:
         self.tools_config = tools_config or ToolsConfig()
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
-        self.save_message = save_message
         self.format_log_preview = format_log_preview
         self.summarize_messages = summarize_messages
         self.sanitize_response_content = sanitize_response_content
+        self.tool_result_persistence = ToolResultPersistence(
+            save_message=save_message,
+            search_store=search_store,
+        )
 
     async def execute_messages(
         self,
@@ -130,13 +165,12 @@ class ExecutionEngine:
                         tool_call_id=tc.id,
                     ))
 
-                    if tool_result_chat_id is not None:
-                        await self.save_message(tool_result_chat_id, "tool", result, tool_name)
-                        if self.search_store is not None:
-                            try:
-                                await self.search_store.index_tool_result(tool_result_chat_id, tool_name, tool_args, result)
-                            except Exception as e:
-                                logger.warning("[{}] Failed to index tool result for search: {}", tool_result_chat_id, e)
+                    await self.tool_result_persistence.persist(
+                        chat_id=tool_result_chat_id,
+                        tool_name=tool_name,
+                        tool_args=tool_args,
+                        result=result,
+                    )
 
                 continue
 
