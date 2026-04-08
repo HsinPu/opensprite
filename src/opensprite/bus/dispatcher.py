@@ -123,6 +123,12 @@ class MessageQueue:
         command = (text or "").strip().split(maxsplit=1)[0].lower()
         return command in {"/stop", "/stop@openspritebot"}
 
+    @staticmethod
+    def is_reset_command(text: str | None) -> bool:
+        """Return whether a message should reset the current session."""
+        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        return command in {"/reset", "/reset@openspritebot"}
+
     async def _publish_stop_response(
         self,
         *,
@@ -133,6 +139,27 @@ class MessageQueue:
     ) -> None:
         """Publish the acknowledgement for an immediate stop command."""
         content = "已停止目前這段對話。" if cancelled > 0 else "目前沒有正在執行的對話可停止。"
+        await self.bus.publish_outbound(
+            OutboundMessage(
+                channel=channel,
+                chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
+                content=content,
+            )
+        )
+
+    async def _publish_reset_response(
+        self,
+        *,
+        channel: str,
+        transport_chat_id: str,
+        session_chat_id: str,
+        cancelled: int,
+    ) -> None:
+        """Publish the acknowledgement for an immediate reset command."""
+        content = "已重置目前這段對話。"
+        if cancelled > 0:
+            content += " 進行中的任務也已停止。"
         await self.bus.publish_outbound(
             OutboundMessage(
                 channel=channel,
@@ -162,6 +189,17 @@ class MessageQueue:
         if self.is_stop_command(user_message.text):
             cancelled = await self.cancel_chat(session_chat_id)
             await self._publish_stop_response(
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
+                cancelled=cancelled,
+            )
+            return
+
+        if self.is_reset_command(user_message.text):
+            cancelled = await self.cancel_chat(session_chat_id)
+            await self.agent.reset_history(session_chat_id)
+            await self._publish_reset_response(
                 channel=channel,
                 transport_chat_id=transport_chat_id,
                 session_chat_id=session_chat_id,

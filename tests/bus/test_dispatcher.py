@@ -229,3 +229,79 @@ def test_stop_command_reports_when_nothing_is_running():
     responses = asyncio.run(scenario())
 
     assert responses == [("telegram:idle-chat", "目前沒有正在執行的對話可停止。")]
+
+
+def test_reset_command_clears_session_history_and_replies_immediately():
+    class ResettableAgent(FakeAgent):
+        def __init__(self):
+            super().__init__()
+            self.reset_calls = []
+
+        async def reset_history(self, chat_id):
+            self.reset_calls.append(chat_id)
+
+    async def scenario():
+        agent = ResettableAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, chat_id):
+            responses.append((message.session_chat_id, message.text))
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="/reset", chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(event.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses, agent.reset_calls
+
+    responses, reset_calls = asyncio.run(scenario())
+
+    assert reset_calls == ["telegram:same-chat"]
+    assert responses == [("telegram:same-chat", "已重置目前這段對話。")]
+
+
+def test_reset_command_cancels_running_session_before_clearing_history():
+    class ResettableStoppableAgent(StoppableAgent):
+        def __init__(self):
+            super().__init__()
+            self.reset_calls = []
+
+        async def reset_history(self, chat_id):
+            self.reset_calls.append(chat_id)
+            assert self.cancelled.is_set() is True
+
+    async def scenario():
+        agent = ResettableStoppableAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, chat_id):
+            responses.append((message.session_chat_id, message.text))
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="long task", chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(agent.started.wait(), timeout=2)
+            await queue.enqueue_raw(content="/reset", chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(event.wait(), timeout=2)
+            await asyncio.wait_for(agent.cancelled.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses, agent.reset_calls
+
+    responses, reset_calls = asyncio.run(scenario())
+
+    assert reset_calls == ["telegram:same-chat"]
+    assert responses == [("telegram:same-chat", "已重置目前這段對話。 進行中的任務也已停止。")]
