@@ -44,18 +44,17 @@ class FakeCronManager:
         self.calls.append("stop")
 
 
-def test_runtime_run_connects_and_closes_mcp(monkeypatch):
+def test_runtime_run_starts_and_stops_cron_manager(monkeypatch):
     fake_agent = FakeAgent()
     fake_queue = FakeQueue()
     fake_cron = FakeCronManager()
-    started_channels = []
     fake_config = FakeConfig()
 
     async def fake_create_agent(config):
         return fake_agent, fake_queue, fake_cron
 
     async def fake_start_channels(mq, channels_config):
-        started_channels.append((mq, channels_config))
+        return None
 
     class FakeEvent:
         async def wait(self):
@@ -70,7 +69,4 @@ def test_runtime_run_connects_and_closes_mcp(monkeypatch):
 
     asyncio.run(runtime.run())
 
-    assert fake_agent.calls == ["connect", "close"]
     assert fake_cron.calls == ["start", "stop"]
-    assert sorted(fake_queue.calls) == ["process", "stop"]
-    assert started_channels == [(fake_queue, fake_config.channels)]

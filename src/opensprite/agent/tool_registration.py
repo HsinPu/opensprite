@@ -7,10 +7,12 @@ from typing import Any, Awaitable, Callable
 
 from ..config import SearchConfig, ToolsConfig
 from ..documents.memory import MemoryStore
+from ..cron import CronManager
 from ..search.base import SearchStore
 from ..tools import (
     Tool,
     ToolRegistry,
+    CronTool,
     ReadFileTool,
     WriteFileTool,
     ListDirTool,
@@ -156,6 +158,21 @@ def register_search_tools(
     )
 
 
+def register_cron_tools(
+    registry: ToolRegistry,
+    *,
+    cron_manager: CronManager | None = None,
+    get_chat_id: Callable[[], str | None],
+) -> None:
+    """Register per-session cron scheduling tools when cron is enabled."""
+    registry.register(
+        CronTool(
+            cron_manager,
+            get_chat_id=get_chat_id,
+        )
+    )
+
+
 def register_default_tools(
     registry: ToolRegistry,
     *,
@@ -166,6 +183,7 @@ def register_default_tools(
     tools_config: ToolsConfig | None = None,
     search_store: SearchStore | None = None,
     search_config: SearchConfig | None = None,
+    cron_manager: CronManager | None = None,
 ) -> None:
     """Register the built-in tools used by AgentLoop."""
     register_filesystem_tools(
@@ -185,5 +203,10 @@ def register_default_tools(
         registry,
         search_store=search_store,
         search_config=search_config,
+        get_chat_id=get_chat_id,
+    )
+    register_cron_tools(
+        registry,
+        cron_manager=cron_manager,
         get_chat_id=get_chat_id,
     )

@@ -4,7 +4,11 @@ import asyncio
 from pathlib import Path
 
 from .agent import AgentLoop
+from .bus.events import OutboundMessage
+from .bus.message import UserMessage
 from .config import AgentConfig
+from .context.paths import split_session_chat_id
+from .cron import CronManager, CronJob
 from .llms import create_llm
 from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
@@ -78,10 +82,48 @@ async def create_agent(config: Config):
         search_store=search_store,
         search_config=config.search,
         user_profile_config=config.user_profile,
+        cron_manager=None,
     )
     mq = MessageQueue(agent)
+    cron_manager = create_cron_manager(config, agent, mq)
+    agent.cron_manager = cron_manager
+    cron_tool = agent.tools.get("cron")
+    if cron_tool is not None:
+        cron_tool.set_cron_manager(cron_manager)
     
-    return agent, mq
+    return agent, mq, cron_manager
+
+
+def create_cron_manager(config: Config, agent: AgentLoop, mq: MessageQueue) -> CronManager:
+    """Create the per-session cron manager bound to the running agent."""
+
+    async def on_job(session_chat_id: str, job: CronJob) -> str | None:
+        channel, raw_chat_id = split_session_chat_id(session_chat_id)
+        user_message = UserMessage(
+            text=job.payload.message,
+            channel=job.payload.channel or channel,
+            chat_id=job.payload.chat_id or raw_chat_id,
+            session_chat_id=session_chat_id,
+            sender_id="system:cron",
+            sender_name="cron",
+            metadata={"source": "cron", "job_id": job.id},
+        )
+        response = await agent.process(user_message)
+        if job.payload.deliver and response.text and job.payload.channel and job.payload.chat_id:
+            await mq.bus.publish_outbound(
+                OutboundMessage(
+                    channel=job.payload.channel,
+                    chat_id=job.payload.chat_id,
+                    session_chat_id=session_chat_id,
+                    content=response.text,
+                )
+            )
+        return response.text
+
+    return CronManager(
+        workspace_root=Path(agent.tool_workspace or Path.home() / ".opensprite" / "workspace"),
+        on_job=on_job,
+    )
 
 
 # ============================================
@@ -102,10 +144,11 @@ async def run(config_path: str | Path | None = None) -> None:
         return
     
     # 建立 Agent + MessageQueue
-    agent, mq = await create_agent(config)
+    agent, mq, cron_manager = await create_agent(config)
 
     # 啟動前先連 MCP，讓外部 tools 在服務運行時就緒
     await agent.connect_mcp()
+    await cron_manager.start()
     
     # 啟動訊息處理迴圈
     processor = asyncio.create_task(mq.process_queue())
@@ -126,6 +169,7 @@ async def run(config_path: str | Path | None = None) -> None:
     finally:
         await mq.stop()
         await processor
+        await cron_manager.stop()
         await agent.close_mcp()
         logger.info("再見！")
 

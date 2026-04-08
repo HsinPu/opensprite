@@ -9,6 +9,14 @@ async def _fake_run_subagent(task: str, prompt_type: str) -> str:
     return f"{prompt_type}:{task}"
 
 
+class FakeSearchStore:
+    async def search_history(self, chat_id: str, query: str, limit: int = 5):
+        return []
+
+    async def search_knowledge(self, chat_id: str, query: str, limit: int = 5):
+        return []
+
+
 def test_register_default_tools_includes_optional_skill_and_search_tools():
     registry = ToolRegistry()
 
@@ -18,7 +26,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools():
         get_chat_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
         skills_loader=object(),
-        search_store=object(),
+        search_store=FakeSearchStore(),
         search_config=SearchConfig(history_top_k=7, knowledge_top_k=9),
     )
 
@@ -34,6 +42,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools():
         "delegate",
         "search_history",
         "search_knowledge",
+        "cron",
     ]
 
 
@@ -56,4 +65,5 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "web_search",
         "web_fetch",
         "delegate",
+        "cron",
     ]

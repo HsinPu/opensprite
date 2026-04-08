@@ -9,6 +9,7 @@ from .search import SearchHistoryTool, SearchKnowledgeTool
 from .web_search import WebSearchTool
 from .web_fetch import WebFetchTool
 from .mcp import MCPToolWrapper, connect_mcp_servers
+from .cron import CronTool
 
 __all__ = [
     "Tool",
@@ -25,4 +26,5 @@ __all__ = [
     "WebFetchTool",
     "MCPToolWrapper",
     "connect_mcp_servers",
+    "CronTool",
 ]

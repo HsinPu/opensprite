@@ -15,6 +15,7 @@ authors = [
 dependencies = [
     "aiohttp>=3.0.0",
     "beautifulsoup4>=4.0",
+    "croniter>=6.0.0",
     "httpx>=0.28.0,<1.0.0",
     "html2text>=2020.1.16",
     "lancedb>=0.29.0",

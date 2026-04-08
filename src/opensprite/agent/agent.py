@@ -181,6 +181,7 @@ class AgentLoop:
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
         user_profile_config: UserProfileConfig | None = None,
+        cron_manager: Any | None = None,
     ):
         ...
         self.memory_config = memory_config or MemoryConfig()
@@ -189,6 +190,7 @@ class AgentLoop:
         self.search_config = search_config or SearchConfig()
         self.user_profile_config = user_profile_config or UserProfileConfig()
         self.search_store = search_store
+        self.cron_manager = cron_manager
         self.provider = provider
         self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
         self.app_home: Path | None = None
@@ -379,6 +381,7 @@ class AgentLoop:
             tools_config=self.tools_config,
             search_store=self.search_store,
             search_config=self.search_config,
+            cron_manager=self.cron_manager,
         )
         
         logger.info(f"agent.init | tools={', '.join(self.tools.tool_names)}")
