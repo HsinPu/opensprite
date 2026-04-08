@@ -74,6 +74,7 @@ class MessageQueue:
         self.running = False
         # 追蹤所有 active tasks: chat_id -> list of tasks
         self._active_tasks: dict[str, list[asyncio.Task]] = {}
+        self._session_tails: dict[str, asyncio.Task] = {}
         self._response_handlers: dict[str, ResponseHandler] = {}
         # Outbound 消費者任務
         self._outbound_task: asyncio.Task | None = None
@@ -116,6 +117,31 @@ class MessageQueue:
         normalized_channel = self.normalize_channel(channel)
         self._response_handlers[normalized_channel] = handler
 
+    @staticmethod
+    def is_stop_command(text: str | None) -> bool:
+        """Return whether a message should interrupt the current session."""
+        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        return command in {"/stop", "/stop@openspritebot"}
+
+    async def _publish_stop_response(
+        self,
+        *,
+        channel: str,
+        transport_chat_id: str,
+        session_chat_id: str,
+        cancelled: int,
+    ) -> None:
+        """Publish the acknowledgement for an immediate stop command."""
+        content = "已停止目前這段對話。" if cancelled > 0 else "目前沒有正在執行的對話可停止。"
+        await self.bus.publish_outbound(
+            OutboundMessage(
+                channel=channel,
+                chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
+                content=content,
+            )
+        )
+
     def unregister_response_handler(self, channel: str) -> None:
         """Remove the outbound response handler for a channel."""
         normalized_channel = self.normalize_channel(channel)
@@ -132,6 +158,16 @@ class MessageQueue:
         transport_chat_id = (user_message.chat_id or "default").strip() or "default"
         session_chat_id = user_message.session_chat_id or self.build_session_chat_id(channel, transport_chat_id)
         metadata = dict(user_message.metadata or {})
+
+        if self.is_stop_command(user_message.text):
+            cancelled = await self.cancel_chat(session_chat_id)
+            await self._publish_stop_response(
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+                session_chat_id=session_chat_id,
+                cancelled=cancelled,
+            )
+            return
 
         inbound = InboundMessage(
             channel=channel,
@@ -239,6 +275,23 @@ class MessageQueue:
             await self.bus.publish_outbound(outbound)
             if hasattr(self, 'on_error'):
                 await self.on_error(session_chat_id, str(e))
+
+    async def _run_session_message(
+        self,
+        inbound: InboundMessage,
+        session_chat_id: str,
+        previous_task: asyncio.Task | None,
+    ) -> None:
+        """Serialize processing within one session while keeping sessions concurrent."""
+        if previous_task is not None:
+            try:
+                await previous_task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+        await self._process_message(inbound)
     
     async def _consume_outbound(self) -> None:
         """
@@ -282,7 +335,7 @@ class MessageQueue:
         """
         處理 inbound queue 中的訊息（非同步迴圈）
         
-        每個訊息都會spawn成独立task並行處理
+        不同 session 會並行處理；同一個 session 會依序處理
         結果會丟到 outbound queue，由 _consume_outbound 發送
         """
         self.running = True
@@ -303,8 +356,9 @@ class MessageQueue:
                 
                 chat_id = inbound.session_chat_id or self.build_session_chat_id(inbound.channel, inbound.chat_id)
                 
-                # Spawn 成獨立 task（不再await）
-                task = asyncio.create_task(self._process_message(inbound))
+                previous_task = self._session_tails.get(chat_id)
+                task = asyncio.create_task(self._run_session_message(inbound, chat_id, previous_task))
+                self._session_tails[chat_id] = task
                 
                 # 追蹤這個 chat_id 的 tasks
                 if chat_id not in self._active_tasks:
@@ -315,6 +369,10 @@ class MessageQueue:
                 task.add_done_callback(
                     lambda t, cid=chat_id: self._active_tasks.get(cid, []).remove(t) 
                     if t in self._active_tasks.get(cid, []) else None
+                )
+                task.add_done_callback(
+                    lambda t, cid=chat_id: self._session_tails.pop(cid, None)
+                    if self._session_tails.get(cid) is t else None
                 )
                 
             except Exception as e:
