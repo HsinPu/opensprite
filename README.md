@@ -89,6 +89,50 @@ python -m opensprite gateway
 
 The process stays attached to the current terminal and does not daemonize itself.
 
+## Linux Service
+
+On Linux, you can install OpenSprite as a `systemd --user` service after you have confirmed that `opensprite gateway` starts correctly in the foreground.
+
+Install and start the service:
+
+```bash
+opensprite service install
+```
+
+Install against a specific config file:
+
+```bash
+opensprite service install --config ~/.opensprite/opensprite.json
+```
+
+Common service commands:
+
+```bash
+opensprite service status
+opensprite service restart
+opensprite service stop
+opensprite service start
+opensprite service uninstall
+```
+
+The service file is written to:
+
+```text
+~/.config/systemd/user/opensprite-gateway.service
+```
+
+To keep the user service running after logout, enable lingering once:
+
+```bash
+loginctl enable-linger "$USER"
+```
+
+To inspect runtime logs from systemd:
+
+```bash
+journalctl --user -u opensprite-gateway.service -n 100 --no-pager
+```
+
 ## First Run
 
 Run `opensprite onboard` first. By default it creates the app directories and then opens menu-based prompts for provider, model, API key, and chat channel selection.

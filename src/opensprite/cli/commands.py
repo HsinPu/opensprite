@@ -9,6 +9,7 @@ import typer
 
 from .. import __version__
 from ..runtime import gateway as run_gateway
+from . import service_linux
 from .onboard import run_onboard
 
 app = typer.Typer(
@@ -18,6 +19,9 @@ app = typer.Typer(
     context_settings={"help_option_names": ["-h", "--help"]},
     help="OpenSprite CLI.",
 )
+
+service_app = typer.Typer(help="Manage the Linux systemd user service.")
+app.add_typer(service_app, name="service")
 
 
 def version_callback(value: bool) -> None:
@@ -299,6 +303,98 @@ def gateway(
 ) -> None:
     """Start the OpenSprite gateway."""
     _start_gateway(config=config)
+
+
+def _handle_service_error(exc: Exception) -> None:
+    """Render a service-management error and exit non-zero."""
+    typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1) from exc
+
+
+@service_app.command("install")
+def service_install(
+    config: str | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to an OpenSprite JSON config file.",
+    ),
+    start: bool = typer.Option(
+        True,
+        "--start/--no-start",
+        help="Start the service immediately after installation.",
+    ),
+) -> None:
+    """Install OpenSprite as a Linux systemd user service."""
+    try:
+        config_path = _resolve_config_path(config)
+        service_file = service_linux.install_service(config_path, start=start)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        _handle_service_error(exc)
+
+    typer.echo(f"Installed service: {service_file}")
+    typer.echo(f"Config: {config_path}")
+    typer.echo(f"Started: {'yes' if start else 'no'}")
+    typer.echo("Tip: run `loginctl enable-linger $USER` if you want the user service to stay up after logout.")
+
+
+@service_app.command("uninstall")
+def service_uninstall() -> None:
+    """Uninstall the OpenSprite Linux systemd user service."""
+    try:
+        removed = service_linux.uninstall_service()
+    except RuntimeError as exc:
+        _handle_service_error(exc)
+
+    if removed:
+        typer.echo("Removed OpenSprite service.")
+    else:
+        typer.echo("OpenSprite service is not installed.")
+
+
+@service_app.command("start")
+def service_start() -> None:
+    """Start the installed OpenSprite Linux systemd user service."""
+    try:
+        service_linux.start_service()
+    except (FileNotFoundError, RuntimeError) as exc:
+        _handle_service_error(exc)
+    typer.echo("Started OpenSprite service.")
+
+
+@service_app.command("stop")
+def service_stop() -> None:
+    """Stop the installed OpenSprite Linux systemd user service."""
+    try:
+        service_linux.stop_service()
+    except (FileNotFoundError, RuntimeError) as exc:
+        _handle_service_error(exc)
+    typer.echo("Stopped OpenSprite service.")
+
+
+@service_app.command("restart")
+def service_restart() -> None:
+    """Restart the installed OpenSprite Linux systemd user service."""
+    try:
+        service_linux.restart_service()
+    except (FileNotFoundError, RuntimeError) as exc:
+        _handle_service_error(exc)
+    typer.echo("Restarted OpenSprite service.")
+
+
+@service_app.command("status")
+def service_status() -> None:
+    """Show OpenSprite Linux systemd user service status."""
+    try:
+        status = service_linux.get_service_status()
+    except RuntimeError as exc:
+        _handle_service_error(exc)
+
+    typer.echo("OpenSprite Service")
+    typer.echo(f"Service File: {status.service_file}")
+    typer.echo(f"Installed: {_format_presence(status.installed)}")
+    typer.echo(f"Enabled: {_format_presence(status.enabled)}")
+    typer.echo(f"Active: {_format_presence(status.active)}")
 
 
 if __name__ == "__main__":
