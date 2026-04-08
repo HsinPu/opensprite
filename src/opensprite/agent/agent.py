@@ -76,24 +76,34 @@ class AgentLoop:
     MAX_TOOL_ITERATIONS = 10
     EMPTY_RESPONSE_FALLBACK = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
 
-    def _get_system_prompt_log_path(self) -> Path:
-        """Return the daily file path for full system prompt logs."""
+    @staticmethod
+    def _sanitize_log_filename(value: str) -> str:
+        """Sanitize a string for use in per-prompt log filenames."""
+        cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-._")
+        return cleaned[:80] or "prompt"
+
+    def _get_system_prompt_log_path(self, log_id: str) -> Path:
+        """Return a unique file path for one full system prompt log entry."""
         logs_root = (self.app_home or Path.home() / ".opensprite") / "logs" / "system-prompts"
-        logs_root.mkdir(parents=True, exist_ok=True)
-        filename = f"system-prompts-{time.strftime('%Y-%m-%d')}.log"
-        return logs_root / filename
+        dated_root = logs_root / time.strftime("%Y-%m-%d")
+        dated_root.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%H-%M-%S")
+        suffix = str(time.time_ns())[-6:]
+        safe_log_id = self._sanitize_log_filename(log_id)
+        filename = f"{timestamp}_{safe_log_id}_{suffix}.md"
+        return dated_root / filename
 
     def _write_full_system_prompt_log(self, log_id: str, content: str) -> None:
-        """Append the full system prompt to a dedicated log file."""
+        """Write the full system prompt to a dedicated per-prompt log file."""
         try:
-            log_path = self._get_system_prompt_log_path()
+            log_path = self._get_system_prompt_log_path(log_id)
             timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
             entry = (
                 f"[{timestamp}] [{log_id}] prompt.system.begin\n"
                 f"{content}\n"
-                f"[{timestamp}] [{log_id}] prompt.system.end\n\n"
+                f"[{timestamp}] [{log_id}] prompt.system.end\n"
             )
-            with log_path.open("a", encoding="utf-8") as f:
+            with log_path.open("w", encoding="utf-8") as f:
                 f.write(entry)
         except Exception as e:
             logger.error(f"[{log_id}] prompt.file.error | error={e}")
