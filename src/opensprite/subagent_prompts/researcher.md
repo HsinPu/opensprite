@@ -1,7 +1,6 @@
 ---
 name: researcher
 description: 將主題、需求與既有素材整理成研究摘要、重點資料與待補問題；適用於寫作前期的資料蒐整與脈絡建立。
-always: true
 version: "1.0"
 scope: research
 language: zh-TW

@@ -1,7 +1,6 @@
 ---
 name: outliner
 description: 將主題、研究資料與寫作目標整理成清楚的大綱與章節結構；適用於文章寫作前的架構規劃。
-always: true
 version: "1.0"
 scope: outlining
 language: zh-TW
