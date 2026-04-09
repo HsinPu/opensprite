@@ -69,6 +69,20 @@ This file defines when to use tools, how to choose between them, and what constr
   - Use to retrieve previously stored `web_search` and `web_fetch` results from the current chat.
   - Prefer this when the user refers to earlier research rather than current local files.
 
+## Scheduling Tool
+
+- `cron`
+  - Use when the user wants work to happen later, on a recurring interval, or on a calendar schedule.
+  - Use `at` for one-time future tasks.
+  - Use `every_seconds` for fixed recurring intervals.
+  - Use `cron_expr` for calendar-style schedules such as daily or weekday runs.
+  - If the requested time or timezone is ambiguous, ask one short clarifying question before creating the job.
+  - Prefer `deliver=true` when the user expects a reminder or a pushed result in chat.
+  - Prefer `deliver=false` when the job is only meant to update local state or prepare work silently.
+  - Before creating a schedule, make sure the task message is explicit enough that a future agent run can execute it without missing context.
+  - Use `list` before claiming there are no scheduled jobs.
+  - Use `remove` when the user asks to cancel or delete a previously scheduled job.
+
 ## Delegation
 
 - `delegate`
