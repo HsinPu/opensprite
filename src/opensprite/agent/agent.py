@@ -492,6 +492,7 @@ class AgentLoop:
         *,
         allow_tools: bool,
         tool_result_chat_id: str | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> str:
         """Run the shared LLM execution loop for main and delegated agents."""
         return await self.execution_engine.execute_messages(
@@ -499,7 +500,12 @@ class AgentLoop:
             chat_messages,
             allow_tools=allow_tools,
             tool_result_chat_id=tool_result_chat_id,
+            tool_registry=tool_registry,
         )
+
+    def _build_subagent_tools(self) -> ToolRegistry:
+        """Build the tool registry exposed to subagents."""
+        return self.tools.filtered(exclude_names={"delegate"})
 
     async def call_llm(
         self,
@@ -620,7 +626,14 @@ class AgentLoop:
         logger.info(
             f"[{log_id}] subagent.run | workspace={workspace} task={self._format_log_preview(task, max_chars=200)}"
         )
-        return await self._execute_messages(log_id, chat_messages, allow_tools=False)
+        subagent_tools = self._build_subagent_tools()
+        return await self._execute_messages(
+            log_id,
+            chat_messages,
+            allow_tools=bool(subagent_tools.tool_names),
+            tool_result_chat_id=parent_chat_id,
+            tool_registry=subagent_tools,
+        )
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

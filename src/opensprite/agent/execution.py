@@ -80,12 +80,14 @@ class ExecutionEngine:
         *,
         allow_tools: bool,
         tool_result_chat_id: str | None = None,
+        tool_registry: ToolRegistry | None = None,
     ) -> str:
         """Execute the prepared messages, including tool calls when enabled."""
+        active_tools = tool_registry or self.tools
         tools = None
-        if allow_tools and self.tools.tool_names:
-            tools = self.tools.get_definitions()
-            logger.info(f"[{log_id}] tools.enabled | names={', '.join(self.tools.tool_names)}")
+        if allow_tools and active_tools.tool_names:
+            tools = active_tools.get_definitions()
+            logger.info(f"[{log_id}] tools.enabled | names={', '.join(active_tools.tool_names)}")
 
         tool_results_history: list[str] = []
 
@@ -153,7 +155,7 @@ class ExecutionEngine:
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
 
-                    result = await self.tools.execute(tool_name, tool_args)
+                    result = await active_tools.execute(tool_name, tool_args)
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
                     )

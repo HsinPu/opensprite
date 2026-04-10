@@ -19,6 +19,16 @@ class ToolRegistry:
         """Get a tool by name."""
         return self._tools.get(name)
 
+    def filtered(self, *, exclude_names: set[str] | None = None) -> "ToolRegistry":
+        """Return a registry copy filtered by excluded tool names."""
+        filtered_registry = ToolRegistry()
+        excluded = exclude_names or set()
+        for name, tool in self._tools.items():
+            if name in excluded:
+                continue
+            filtered_registry.register(tool)
+        return filtered_registry
+
     def get_definitions(self) -> list[dict[str, Any]]:
         """Get all tool definitions in OpenAI format."""
         return [tool.to_schema() for tool in self._tools.values()]
