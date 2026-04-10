@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
 
 import typer
 
 from .. import __version__
+from ..context.paths import get_chat_workspace, get_tool_workspace
+from ..cron import CronSchedule, CronService
 from ..runtime import gateway as run_gateway
 from . import service_linux
 from .onboard import run_onboard
@@ -22,6 +25,8 @@ app = typer.Typer(
 
 service_app = typer.Typer(help="Manage the Linux systemd user service.")
 app.add_typer(service_app, name="service")
+cron_app = typer.Typer(help="Manage per-session scheduled jobs.")
+app.add_typer(cron_app, name="cron")
 
 
 def version_callback(value: bool) -> None:
@@ -311,6 +316,99 @@ def _handle_service_error(exc: Exception) -> None:
     raise typer.Exit(code=1) from exc
 
 
+def _handle_cron_error(exc: Exception | str) -> None:
+    """Render a cron-management error and exit non-zero."""
+    typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
+
+
+def _resolve_workspace_root() -> Path:
+    """Resolve the default workspace root used by cron CLI commands."""
+    return get_tool_workspace()
+
+
+def _get_cron_service(session: str) -> CronService:
+    """Open the cron service store for a session without starting a timer loop."""
+    workspace = get_chat_workspace(session, workspace_root=_resolve_workspace_root())
+    return CronService(workspace / "cron" / "jobs.json", session_chat_id=session)
+
+
+def _build_cli_schedule(
+    *,
+    every_seconds: int | None,
+    cron_expr: str | None,
+    tz: str | None,
+    at: str | None,
+    default_timezone: str = "UTC",
+) -> tuple[CronSchedule, bool]:
+    """Build a CronSchedule from CLI arguments."""
+    provided = [every_seconds is not None, bool(cron_expr), bool(at)]
+    if sum(provided) != 1:
+        raise ValueError("provide exactly one of --every-seconds, --cron-expr, or --at")
+    if tz and not cron_expr:
+        raise ValueError("--tz can only be used with --cron-expr")
+
+    if every_seconds is not None:
+        if every_seconds <= 0:
+            raise ValueError("--every-seconds must be greater than 0")
+        return CronSchedule(kind="every", every_ms=every_seconds * 1000), False
+
+    if cron_expr:
+        return CronSchedule(kind="cron", expr=cron_expr, tz=tz or default_timezone), False
+
+    try:
+        dt = datetime.fromisoformat(at or "")
+    except ValueError as exc:
+        raise ValueError("--at must use ISO format like 2026-04-10T09:00:00") from exc
+
+    if dt.tzinfo is None:
+        from zoneinfo import ZoneInfo
+
+        dt = dt.replace(tzinfo=ZoneInfo(default_timezone))
+    return CronSchedule(kind="at", at_ms=int(dt.timestamp() * 1000)), True
+
+
+def _format_cron_timestamp(ms: int, tz_name: str) -> str:
+    """Format a scheduled timestamp for CLI output."""
+    from zoneinfo import ZoneInfo
+
+    dt = datetime.fromtimestamp(ms / 1000, tz=ZoneInfo(tz_name))
+    return f"{dt.isoformat()} ({tz_name})"
+
+
+def _format_cron_timing(schedule: CronSchedule, default_timezone: str = "UTC") -> str:
+    """Format a cron schedule in the same style as the runtime tool."""
+    if schedule.kind == "cron":
+        tz = f" ({schedule.tz})" if schedule.tz else ""
+        return f"cron: {schedule.expr}{tz}"
+    if schedule.kind == "every" and schedule.every_ms:
+        if schedule.every_ms % 3_600_000 == 0:
+            return f"every {schedule.every_ms // 3_600_000}h"
+        if schedule.every_ms % 60_000 == 0:
+            return f"every {schedule.every_ms // 60_000}m"
+        if schedule.every_ms % 1000 == 0:
+            return f"every {schedule.every_ms // 1000}s"
+        return f"every {schedule.every_ms}ms"
+    if schedule.kind == "at" and schedule.at_ms:
+        return f"at {_format_cron_timestamp(schedule.at_ms, schedule.tz or default_timezone)}"
+    return schedule.kind
+
+
+def _render_cron_jobs(service: CronService, default_timezone: str = "UTC") -> str:
+    """Render the stored jobs for CLI list output."""
+    jobs = service.list_jobs(include_disabled=True)
+    if not jobs:
+        return "No scheduled jobs."
+
+    lines = []
+    for job in jobs:
+        line = f"- {job.name} (id: {job.id}, {_format_cron_timing(job.schedule, default_timezone)})"
+        if job.state.next_run_at_ms:
+            line += f"\n  Next run: {_format_cron_timestamp(job.state.next_run_at_ms, job.schedule.tz or default_timezone)}"
+        lines.append(line)
+    return "Scheduled jobs:\n" + "\n".join(lines)
+
+
 @service_app.command("install")
 def service_install(
     config: str | None = typer.Option(
@@ -395,6 +493,110 @@ def service_status() -> None:
     typer.echo(f"Installed: {_format_presence(status.installed)}")
     typer.echo(f"Enabled: {_format_presence(status.enabled)}")
     typer.echo(f"Active: {_format_presence(status.active)}")
+
+
+@cron_app.command("list")
+def cron_list(
+    session: str = typer.Option(
+        ...,
+        "--session",
+        help="Session chat id, for example telegram:user-a.",
+    ),
+) -> None:
+    """List scheduled jobs for one session."""
+    service = _get_cron_service(session)
+    typer.echo(_render_cron_jobs(service))
+
+
+@cron_app.command("add")
+def cron_add(
+    session: str = typer.Option(
+        ...,
+        "--session",
+        help="Session chat id, for example telegram:user-a.",
+    ),
+    message: str = typer.Option(
+        ...,
+        "--message",
+        help="Instruction to execute when the job triggers.",
+    ),
+    name: str | None = typer.Option(
+        None,
+        "--name",
+        help="Optional short label for the job.",
+    ),
+    every_seconds: int | None = typer.Option(
+        None,
+        "--every-seconds",
+        help="Fixed recurring interval in seconds.",
+    ),
+    cron_expr: str | None = typer.Option(
+        None,
+        "--cron-expr",
+        help="Cron expression like '0 9 * * *'.",
+    ),
+    tz: str | None = typer.Option(
+        None,
+        "--tz",
+        help="Optional IANA timezone for cron expressions.",
+    ),
+    at: str | None = typer.Option(
+        None,
+        "--at",
+        help="ISO datetime for one-time execution, e.g. 2026-04-10T09:00:00.",
+    ),
+    deliver: bool = typer.Option(
+        True,
+        "--deliver/--no-deliver",
+        help="Whether the job should send its result back to the original chat.",
+    ),
+) -> None:
+    """Add a scheduled job to one session."""
+    try:
+        schedule, delete_after = _build_cli_schedule(
+            every_seconds=every_seconds,
+            cron_expr=cron_expr,
+            tz=tz,
+            at=at,
+        )
+        service = _get_cron_service(session)
+        if ":" in session:
+            channel, chat_id = session.split(":", 1)
+        else:
+            channel, chat_id = "default", session
+        job = service.add_job(
+            name=name or message[:30],
+            schedule=schedule,
+            message=message,
+            deliver=deliver,
+            channel=channel,
+            chat_id=chat_id,
+            delete_after_run=delete_after,
+        )
+    except ValueError as exc:
+        _handle_cron_error(exc)
+
+    typer.echo(f"Created job '{job.name}' (id: {job.id})")
+
+
+@cron_app.command("remove")
+def cron_remove(
+    session: str = typer.Option(
+        ...,
+        "--session",
+        help="Session chat id, for example telegram:user-a.",
+    ),
+    job_id: str = typer.Option(
+        ...,
+        "--job-id",
+        help="The job id to remove.",
+    ),
+) -> None:
+    """Remove one scheduled job from a session."""
+    service = _get_cron_service(session)
+    if not service.remove_job(job_id):
+        _handle_cron_error(f"job {job_id} not found")
+    typer.echo(f"Removed job {job_id}")
 
 
 if __name__ == "__main__":

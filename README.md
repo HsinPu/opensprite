@@ -348,6 +348,35 @@ Current actions exposed by the tool:
 - `list`
 - `remove`
 
+You can also manage schedules directly from the CLI:
+
+```bash
+# list one session's jobs
+opensprite cron list --session telegram:user-a
+
+# add a recurring interval job
+opensprite cron add \
+  --session telegram:user-a \
+  --message "Check weather and report back" \
+  --every-seconds 300
+
+# add a calendar-based cron job
+opensprite cron add \
+  --session telegram:user-a \
+  --message "Send a weekday reminder" \
+  --cron-expr "0 9 * * 1-5" \
+  --tz Asia/Taipei
+
+# add a one-time job
+opensprite cron add \
+  --session telegram:user-a \
+  --message "Remind me later" \
+  --at 2026-04-10T09:00:00
+
+# remove a job
+opensprite cron remove --session telegram:user-a --job-id abc12345
+```
+
 ## Project Layout
 
 ```text
