@@ -86,6 +86,8 @@ class ExecTool(Tool):
 
     async def execute(self, **kwargs: Any) -> str:
         import re
+        if "command" not in kwargs:
+            return "Error: Missing required argument for exec: command. Call exec with a 'command' string."
         command = str(kwargs["command"])
         
         # Check for dangerous patterns

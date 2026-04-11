@@ -158,6 +158,13 @@ class WriteFileTool(Tool):
 
     async def execute(self, **kwargs: Any) -> str:
         try:
+            missing = [key for key in ("path", "content") if key not in kwargs]
+            if missing:
+                return (
+                    "Error: Missing required argument(s) for write_file: "
+                    f"{', '.join(missing)}. "
+                    "Call write_file with both 'path' and 'content'."
+                )
             path = str(kwargs["path"])
             content = str(kwargs["content"])
             workspace = self._get_workspace()
