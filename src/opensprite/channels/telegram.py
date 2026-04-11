@@ -17,6 +17,7 @@ import re
 from typing import Any
 
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application
 
@@ -44,6 +45,7 @@ class TelegramAdapter(MessageAdapter):
         "poll_timeout": 10,
         "bootstrap_retries": 3,
         "drop_pending_updates": False,
+        "typing_action_interval": 4,
     }
     EMPTY_MESSAGE_FALLBACK = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
 
@@ -59,6 +61,7 @@ class TelegramAdapter(MessageAdapter):
         self.app = None
         self.mq = mq
         self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self._typing_tasks: dict[str, asyncio.Task] = {}
 
     def _get_int(self, key: str) -> int:
         """Read an integer config value with sane defaults."""
@@ -93,8 +96,50 @@ class TelegramAdapter(MessageAdapter):
             f"poll_timeout={self._get_int('poll_timeout')}",
             f"bootstrap_retries={self._get_int('bootstrap_retries')}",
             f"drop_pending_updates={self._get_bool('drop_pending_updates')}",
+            f"typing_action_interval={self._get_int('typing_action_interval')}",
         ]
         return ", ".join(parts)
+
+    async def _send_typing_action(self, chat_id: str) -> None:
+        """Send one Telegram typing action if the app is available."""
+        if self.app is None:
+            return
+        try:
+            await self.app.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+        except Exception as exc:
+            logger.debug("Telegram typing action failed for chat {}: {}", chat_id, exc)
+
+    def _start_typing_indicator(self, session_chat_id: str | None, chat_id: str | None) -> None:
+        """Start a periodic typing indicator for an active session."""
+        if self.app is None or not session_chat_id or not chat_id:
+            return
+        if session_chat_id in self._typing_tasks:
+            return
+
+        interval = max(1, self._get_int("typing_action_interval"))
+
+        async def run_typing() -> None:
+            try:
+                while True:
+                    await self._send_typing_action(chat_id)
+                    await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+
+        self._typing_tasks[session_chat_id] = asyncio.create_task(run_typing())
+
+    async def _stop_typing_indicator(self, session_chat_id: str | None) -> None:
+        """Stop the periodic typing indicator for a session."""
+        if not session_chat_id:
+            return
+        task = self._typing_tasks.pop(session_chat_id, None)
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     def _log_request_timeouts(self) -> None:
         """Log the applied Bot API request timeout values if available."""
@@ -522,7 +567,12 @@ class TelegramAdapter(MessageAdapter):
         """
         Telegram channel 的 outbound handler。
         """
+        await self._stop_typing_indicator(response.session_chat_id)
         await self.send(response)
+
+    async def _on_error(self, session_chat_id: str, error: str) -> None:
+        """Stop typing when queued processing fails."""
+        await self._stop_typing_indicator(session_chat_id)
     
     async def run(self):
         """
@@ -552,6 +602,7 @@ class TelegramAdapter(MessageAdapter):
             
             if self.mq:
                 # === 新方式：走 MessageQueue ===
+                self._start_typing_indicator(user_msg.session_chat_id, user_msg.chat_id)
                 await self.mq.enqueue(user_msg)
             else:
                 # === 舊方式：直接叫 agent（向後相容）===
@@ -564,6 +615,7 @@ class TelegramAdapter(MessageAdapter):
         if self.mq is None:
             raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
         self.mq.register_response_handler("telegram", self._on_response)
+        self.mq.on_error = self._on_error
         
         # 初始化並啟動
         stage = "initialize"
