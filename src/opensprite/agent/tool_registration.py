@@ -14,6 +14,7 @@ from ..tools import (
     Tool,
     ToolRegistry,
     AnalyzeImageTool,
+    OCRImageTool,
     CronTool,
     ReadFileTool,
     WriteFileTool,
@@ -132,6 +133,12 @@ def register_media_tools(
     """Register media-analysis tools."""
     registry.register(
         AnalyzeImageTool(
+            media_router or MediaRouter(),
+            get_current_images=get_current_images,
+        )
+    )
+    registry.register(
+        OCRImageTool(
             media_router or MediaRouter(),
             get_current_images=get_current_images,
         )

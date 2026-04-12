@@ -301,6 +301,7 @@ The default agent registers tools for:
 - web search
 - web fetch
 - analyzing images from the current user turn
+- extracting visible text from images in the current user turn
 - scheduling per-session cron jobs
 - long-term memory save
 - search over indexed history and knowledge when LanceDB is enabled
@@ -340,10 +341,18 @@ Typical uses for `analyze_image`:
 - explain a chart, diagram, or photographed content
 - analyze the first or second image in a multi-image turn with `image_index`
 
-The current minimal image tool is intentionally narrow:
+For image turns where the main goal is text extraction, OpenSprite also exposes `ocr_image`.
 
-- it handles image understanding only
-- it does not yet split into OCR, audio, or video-specific tools
+Typical uses for `ocr_image`:
+
+- read text from screenshots and photographed error messages
+- extract visible text from receipts, forms, or labels
+- capture document text before summarizing or reasoning about it
+
+The current minimal image toolset is intentionally narrow:
+
+- it currently covers general image analysis and OCR-style text extraction
+- it does not yet cover audio or video-specific media tools
 - it is designed so future media tools can follow the same tool + provider-adapter pattern
 
 ## Scheduling

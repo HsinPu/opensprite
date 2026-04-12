@@ -40,6 +40,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools():
         "web_search",
         "web_fetch",
         "analyze_image",
+        "ocr_image",
         "delegate",
         "search_history",
         "search_knowledge",
@@ -66,6 +67,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "web_search",
         "web_fetch",
         "analyze_image",
+        "ocr_image",
         "delegate",
         "cron",
     ]

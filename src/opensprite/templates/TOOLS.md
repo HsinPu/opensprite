@@ -58,6 +58,12 @@ This file defines when to use tools, how to choose between them, and what constr
   - If the user only wants a normal text answer and the image is irrelevant, do not call it.
   - If a specialized image-reading skill is relevant, read that skill first and then call `analyze_image` with a prompt shaped by the skill.
 
+- `ocr_image`
+  - Use when the main goal is to extract visible text from an image rather than general visual understanding.
+  - Prefer this for screenshots with error messages, receipts, documents, forms, labels, or photographed text.
+  - Use `image_index` when multiple images are attached.
+  - Add an optional `instruction` only when you need OCR to focus on a specific section or formatting need.
+
 ## Skill Tool
 
 - `read_skill`
