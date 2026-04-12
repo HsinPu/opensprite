@@ -33,6 +33,7 @@ from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
+from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
@@ -184,6 +185,7 @@ class AgentLoop:
         search_config: SearchConfig | None = None,
         user_profile_config: UserProfileConfig | None = None,
         cron_manager: Any | None = None,
+        media_router: MediaRouter | None = None,
     ):
         ...
         self.memory_config = memory_config or MemoryConfig()
@@ -193,8 +195,10 @@ class AgentLoop:
         self.user_profile_config = user_profile_config or UserProfileConfig()
         self.search_store = search_store
         self.cron_manager = cron_manager
+        self.media_router = media_router
         self.provider = provider
         self._current_chat_id: ContextVar[str | None] = ContextVar("current_chat_id", default=None)
+        self._current_images: ContextVar[list[str] | None] = ContextVar("current_images", default=None)
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
         self._mcp_servers = dict(self.tools_config.mcp_servers)
@@ -384,6 +388,8 @@ class AgentLoop:
             search_store=self.search_store,
             search_config=self.search_config,
             cron_manager=self.cron_manager,
+            media_router=self.media_router,
+            get_current_images=self._get_current_images,
         )
         
         logger.info(f"agent.init | tools={', '.join(self.tools.tool_names)}")
@@ -509,6 +515,19 @@ class AgentLoop:
         """Build the tool registry exposed to subagents."""
         return self.tools.filtered(exclude_names={"delegate", "cron"})
 
+    def _get_current_images(self) -> list[str] | None:
+        """Return images attached to the current active turn."""
+        return self._current_images.get()
+
+    @staticmethod
+    def _augment_message_for_images(current_message: str, user_images: list[str] | None) -> str:
+        """Add a lightweight prompt hint when the current turn includes images."""
+        if not user_images:
+            return current_message
+        count = len(user_images)
+        suffix = f"\n\n[User attached {count} image(s). Use analyze_image if visual understanding is needed.]"
+        return f"{current_message}{suffix}"
+
     async def call_llm(
         self,
         chat_id: str,
@@ -580,10 +599,11 @@ class AgentLoop:
         logger.info(
             f"[{chat_id}] prompt.build | history={len(history_dicts)} channel={channel or '-'} images={len(user_images or [])}"
         )
+        prompt_message = self._augment_message_for_images(current_message, user_images)
         full_messages = self._context_builder.build_messages(
             history=history_dicts,
-            current_message=current_message,
-            current_images=user_images,
+            current_message=prompt_message,
+            current_images=None,
             channel=channel,
             chat_id=chat_id,
         )
@@ -675,6 +695,7 @@ class AgentLoop:
         user_metadata = {key: value for key, value in user_metadata.items() if value is not None}
 
         token = self._current_chat_id.set(session_chat_id)
+        images_token = self._current_images.set(list(user_message.images or []))
         try:
             await self.connect_mcp()
 
@@ -722,6 +743,7 @@ class AgentLoop:
             )
             raise
         finally:
+            self._current_images.reset(images_token)
             self._current_chat_id.reset(token)
 
     async def _maybe_consolidate_memory(self, chat_id: str) -> None:

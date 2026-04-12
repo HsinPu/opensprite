@@ -10,6 +10,7 @@ from .web_search import WebSearchTool
 from .web_fetch import WebFetchTool
 from .mcp import MCPToolWrapper, connect_mcp_servers
 from .cron import CronTool
+from .image import AnalyzeImageTool
 
 __all__ = [
     "Tool",
@@ -27,4 +28,5 @@ __all__ = [
     "MCPToolWrapper",
     "connect_mcp_servers",
     "CronTool",
+    "AnalyzeImageTool",
 ]

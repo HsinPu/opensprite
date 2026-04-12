@@ -10,6 +10,7 @@ from .config import AgentConfig
 from .context.paths import split_session_chat_id
 from .cron import CronManager, CronJob
 from .llms import create_llm
+from .media import MediaRouter, OpenAICompatibleImageProvider
 from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
 from .bus.dispatcher import MessageQueue
@@ -52,6 +53,19 @@ def create_search_store(config: Config) -> SearchStore | None:
     )
 
 
+def create_media_router(config: Config) -> MediaRouter:
+    """Create the media router with optional image analysis support."""
+    vision = getattr(config, "vision", None)
+    if not vision or not vision.enabled:
+        return MediaRouter()
+    image_provider = OpenAICompatibleImageProvider(
+        api_key=vision.api_key,
+        default_model=vision.model,
+        base_url=vision.base_url,
+    )
+    return MediaRouter(image_provider=image_provider)
+
+
 async def create_agent(config: Config):
     """建立 Agent 和 Queue"""
     # 用 Registry 建立 LLM Provider
@@ -64,6 +78,7 @@ async def create_agent(config: Config):
     # 建立 Storage
     storage = create_storage(config)
     search_store = create_search_store(config)
+    media_router = create_media_router(config)
     if search_store is not None:
         try:
             await search_store.sync_from_storage(storage)
@@ -83,6 +98,7 @@ async def create_agent(config: Config):
         search_config=config.search,
         user_profile_config=config.user_profile,
         cron_manager=None,
+        media_router=media_router,
     )
     mq = MessageQueue(agent)
     cron_manager = create_cron_manager(config, agent, mq)

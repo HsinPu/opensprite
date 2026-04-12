@@ -8,10 +8,12 @@ from typing import Any, Awaitable, Callable
 from ..config import SearchConfig, ToolsConfig
 from ..documents.memory import MemoryStore
 from ..cron import CronManager
+from ..media import MediaRouter
 from ..search.base import SearchStore
 from ..tools import (
     Tool,
     ToolRegistry,
+    AnalyzeImageTool,
     CronTool,
     ReadFileTool,
     WriteFileTool,
@@ -121,6 +123,21 @@ def register_web_tools(
     )
 
 
+def register_media_tools(
+    registry: ToolRegistry,
+    *,
+    media_router: MediaRouter | None = None,
+    get_current_images: Callable[[], list[str] | None],
+) -> None:
+    """Register media-analysis tools."""
+    registry.register(
+        AnalyzeImageTool(
+            media_router or MediaRouter(),
+            get_current_images=get_current_images,
+        )
+    )
+
+
 def register_delegate_tools(
     registry: ToolRegistry,
     *,
@@ -184,6 +201,8 @@ def register_default_tools(
     search_store: SearchStore | None = None,
     search_config: SearchConfig | None = None,
     cron_manager: CronManager | None = None,
+    media_router: MediaRouter | None = None,
+    get_current_images: Callable[[], list[str] | None] | None = None,
 ) -> None:
     """Register the built-in tools used by AgentLoop."""
     register_filesystem_tools(
@@ -198,6 +217,11 @@ def register_default_tools(
     )
     register_shell_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=tools_config)
+    register_media_tools(
+        registry,
+        media_router=media_router,
+        get_current_images=get_current_images or (lambda: None),
+    )
     register_delegate_tools(registry, run_subagent=run_subagent)
     register_search_tools(
         registry,
