@@ -48,6 +48,16 @@ This file defines when to use tools, how to choose between them, and what constr
   - Use to retrieve and extract readable content from a specific URL.
   - Prefer this after `web_search` or when the user already gave a URL.
 
+## Image Tool
+
+- `analyze_image`
+  - Use when the current user turn includes one or more images and the task requires visual understanding.
+  - Use it for screenshots, photos, diagrams, visual bug reports, UI review, or image-based questions.
+  - Always provide a clear `instruction` that says what to inspect and what kind of answer is needed.
+  - If multiple images are attached, use `image_index` to choose the correct one.
+  - If the user only wants a normal text answer and the image is irrelevant, do not call it.
+  - If a specialized image-reading skill is relevant, read that skill first and then call `analyze_image` with a prompt shaped by the skill.
+
 ## Skill Tool
 
 - `read_skill`

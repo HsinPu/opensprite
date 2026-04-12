@@ -300,9 +300,51 @@ The default agent registers tools for:
 - executing shell commands
 - web search
 - web fetch
+- analyzing images from the current user turn
 - scheduling per-session cron jobs
 - long-term memory save
 - search over indexed history and knowledge when LanceDB is enabled
+
+## Vision
+
+OpenSprite now includes a minimal image-analysis path built around the `analyze_image` tool.
+
+Images are still downloaded by the Telegram adapter, but they are no longer sent directly into the normal text-model chat call. Instead, the agent sees that the current turn contains images and decides whether to call `analyze_image`.
+
+This keeps image handling agent-centric:
+
+- the agent decides whether visual analysis is actually needed
+- skills can influence the instruction before the tool is called
+- the image provider can be swapped independently from the normal text model
+
+Minimal vision config:
+
+```json
+{
+  "vision": {
+    "enabled": true,
+    "provider": "openai",
+    "api_key": "YOUR_VISION_API_KEY",
+    "model": "gpt-4.1-mini",
+    "base_url": "https://api.openai.com/v1"
+  }
+}
+```
+
+If `vision.enabled` is false, the `analyze_image` tool still exists, but it returns a clear error explaining that no vision provider is configured.
+
+Typical uses for `analyze_image`:
+
+- describe what is shown in a screenshot
+- inspect a UI issue from an image
+- explain a chart, diagram, or photographed content
+- analyze the first or second image in a multi-image turn with `image_index`
+
+The current minimal image tool is intentionally narrow:
+
+- it handles image understanding only
+- it does not yet split into OCR, audio, or video-specific tools
+- it is designed so future media tools can follow the same tool + provider-adapter pattern
 
 ## Scheduling
 
