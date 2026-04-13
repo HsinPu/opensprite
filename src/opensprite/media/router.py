@@ -17,6 +17,9 @@ class MediaRouter:
     VIDEO_PROVIDER_UNAVAILABLE = (
         "Error: video analysis is unavailable because no video provider is configured."
     )
+    EMPTY_IMAGE_RESULT = "Error: image analysis provider returned no usable result."
+    EMPTY_SPEECH_RESULT = "Error: speech provider returned no transcription text."
+    EMPTY_VIDEO_RESULT = "Error: video analysis provider returned no usable result."
 
     def __init__(
         self,
@@ -45,12 +48,13 @@ class MediaRouter:
             return "Error: no images are available in the current turn."
         if image_index < 0 or image_index >= len(images):
             return f"Error: image_index {image_index} is out of range for {len(images)} image(s)."
-        return await self.image_provider.analyze(
+        result = await self.image_provider.analyze(
             instruction,
             [images[image_index]],
             model=model,
             max_tokens=max_tokens,
         )
+        return result if result.strip() else self.EMPTY_IMAGE_RESULT
 
     async def transcribe_audio(
         self,
@@ -67,11 +71,12 @@ class MediaRouter:
             return "Error: no audio is available in the current turn."
         if audio_index < 0 or audio_index >= len(audios):
             return f"Error: audio_index {audio_index} is out of range for {len(audios)} audio clip(s)."
-        return await self.speech_provider.transcribe(
+        result = await self.speech_provider.transcribe(
             audios[audio_index],
             model=model,
             language=language,
         )
+        return result if result.strip() else self.EMPTY_SPEECH_RESULT
 
     async def analyze_video(
         self,
@@ -89,9 +94,10 @@ class MediaRouter:
             return "Error: no videos are available in the current turn."
         if video_index < 0 or video_index >= len(videos):
             return f"Error: video_index {video_index} is out of range for {len(videos)} video clip(s)."
-        return await self.video_provider.analyze(
+        result = await self.video_provider.analyze(
             instruction,
             videos[video_index],
             model=model,
             max_tokens=max_tokens,
         )
+        return result if result.strip() else self.EMPTY_VIDEO_RESULT

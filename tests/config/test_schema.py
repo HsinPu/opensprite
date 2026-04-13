@@ -58,3 +58,18 @@ def test_video_config_defaults_to_disabled_provider():
     assert config.enabled is False
     assert config.provider == "minimax"
     assert config.api_key == ""
+
+
+def test_vision_config_requires_api_key_and_model_when_enabled():
+    with pytest.raises(ValidationError):
+        VisionConfig(enabled=True)
+
+
+def test_speech_config_requires_api_key_and_model_when_enabled():
+    with pytest.raises(ValidationError):
+        SpeechConfig(enabled=True)
+
+
+def test_video_config_requires_api_key_and_model_when_enabled():
+    with pytest.raises(ValidationError):
+        VideoConfig(enabled=True)

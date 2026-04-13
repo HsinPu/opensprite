@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 from typing import Any, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ProviderConfig(BaseModel):
@@ -94,6 +94,14 @@ class VisionConfig(BaseModel):
     model: str = ""
     base_url: str | None = None
 
+    @model_validator(mode="after")
+    def validate_enabled_fields(self) -> "VisionConfig":
+        if self.enabled:
+            missing = [name for name, value in {"api_key": self.api_key, "model": self.model}.items() if not value]
+            if missing:
+                raise ValueError(f"vision config requires {', '.join(missing)} when enabled=true")
+        return self
+
 
 class SpeechConfig(BaseModel):
     """Speech-to-text provider configuration."""
@@ -104,6 +112,14 @@ class SpeechConfig(BaseModel):
     model: str = ""
     base_url: str | None = None
 
+    @model_validator(mode="after")
+    def validate_enabled_fields(self) -> "SpeechConfig":
+        if self.enabled:
+            missing = [name for name, value in {"api_key": self.api_key, "model": self.model}.items() if not value]
+            if missing:
+                raise ValueError(f"speech config requires {', '.join(missing)} when enabled=true")
+        return self
+
 
 class VideoConfig(BaseModel):
     """Video analysis provider configuration."""
@@ -113,6 +129,14 @@ class VideoConfig(BaseModel):
     api_key: str = ""
     model: str = ""
     base_url: str | None = None
+
+    @model_validator(mode="after")
+    def validate_enabled_fields(self) -> "VideoConfig":
+        if self.enabled:
+            missing = [name for name, value in {"api_key": self.api_key, "model": self.model}.items() if not value]
+            if missing:
+                raise ValueError(f"video config requires {', '.join(missing)} when enabled=true")
+        return self
 
 
 class ToolsConfig(BaseModel):
