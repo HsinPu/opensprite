@@ -89,7 +89,7 @@ class VisionConfig(BaseModel):
     """Image analysis provider configuration."""
 
     enabled: bool = False
-    provider: str = "openai"
+    provider: str = "minimax"
     api_key: str = ""
     model: str = ""
     base_url: str | None = None
@@ -99,7 +99,7 @@ class SpeechConfig(BaseModel):
     """Speech-to-text provider configuration."""
 
     enabled: bool = False
-    provider: str = "openai"
+    provider: str = "minimax"
     api_key: str = ""
     model: str = ""
     base_url: str | None = None

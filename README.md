@@ -324,10 +324,10 @@ Minimal vision config:
 {
   "vision": {
     "enabled": true,
-    "provider": "openai",
+    "provider": "minimax",
     "api_key": "YOUR_VISION_API_KEY",
-    "model": "gpt-4.1-mini",
-    "base_url": "https://api.openai.com/v1"
+    "model": "YOUR_MINIMAX_VISION_MODEL",
+    "base_url": "YOUR_MINIMAX_BASE_URL"
   }
 }
 ```
@@ -367,10 +367,10 @@ Minimal speech config:
 {
   "speech": {
     "enabled": true,
-    "provider": "openai",
+    "provider": "minimax",
     "api_key": "YOUR_SPEECH_API_KEY",
-    "model": "gpt-4o-mini-transcribe",
-    "base_url": "https://api.openai.com/v1"
+    "model": "YOUR_MINIMAX_SPEECH_MODEL",
+    "base_url": "YOUR_MINIMAX_BASE_URL"
   }
 }
 ```

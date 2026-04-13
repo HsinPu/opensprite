@@ -40,7 +40,7 @@ def test_vision_config_defaults_to_disabled_provider():
     config = VisionConfig()
 
     assert config.enabled is False
-    assert config.provider == "openai"
+    assert config.provider == "minimax"
     assert config.api_key == ""
 
 
@@ -48,5 +48,5 @@ def test_speech_config_defaults_to_disabled_provider():
     config = SpeechConfig()
 
     assert config.enabled is False
-    assert config.provider == "openai"
+    assert config.provider == "minimax"
     assert config.api_key == ""

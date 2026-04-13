@@ -85,14 +85,14 @@
   },
   "vision": {
     "enabled": false,
-    "provider": "openai",
+    "provider": "minimax",
     "api_key": "",
     "model": "",
     "base_url": null
   },
   "speech": {
     "enabled": false,
-    "provider": "openai",
+    "provider": "minimax",
     "api_key": "",
     "model": "",
     "base_url": null
