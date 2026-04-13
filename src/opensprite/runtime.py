@@ -10,7 +10,12 @@ from .config import AgentConfig
 from .context.paths import split_session_chat_id
 from .cron import CronManager, CronJob
 from .llms import create_llm
-from .media import MediaRouter, OpenAICompatibleImageProvider, OpenAICompatibleSpeechProvider
+from .media import (
+    MediaRouter,
+    OpenAICompatibleImageProvider,
+    OpenAICompatibleSpeechProvider,
+    OpenAICompatibleVideoProvider,
+)
 from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
 from .bus.dispatcher import MessageQueue
@@ -57,6 +62,7 @@ def create_media_router(config: Config) -> MediaRouter:
     """Create the media router with optional image analysis support."""
     vision = getattr(config, "vision", None)
     speech = getattr(config, "speech", None)
+    video = getattr(config, "video", None)
 
     image_provider = None
     if vision and vision.enabled:
@@ -74,7 +80,19 @@ def create_media_router(config: Config) -> MediaRouter:
             base_url=speech.base_url,
         )
 
-    return MediaRouter(image_provider=image_provider, speech_provider=speech_provider)
+    video_provider = None
+    if video and video.enabled:
+        video_provider = OpenAICompatibleVideoProvider(
+            api_key=video.api_key,
+            default_model=video.model,
+            base_url=video.base_url,
+        )
+
+    return MediaRouter(
+        image_provider=image_provider,
+        speech_provider=speech_provider,
+        video_provider=video_provider,
+    )
 
 
 async def create_agent(config: Config):
