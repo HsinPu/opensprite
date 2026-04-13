@@ -1,8 +1,6 @@
 import asyncio
 from pathlib import Path
 
-import pytest
-
 from opensprite.tools.filesystem import WriteFileTool
 from opensprite.tools.shell import ExecTool
 
@@ -48,10 +46,3 @@ def test_exec_rejects_overlong_command(tmp_path):
     result = asyncio.run(tool.execute(command="a" * 2001))
 
     assert result == "Error: Command too long for exec (max 2000 chars). Please run a shorter command."
-
-
-def test_exec_requires_existing_workspace(tmp_path):
-    missing_workspace = Path(tmp_path) / "missing"
-
-    with pytest.raises(FileNotFoundError, match="Workspace does not exist"):
-        ExecTool(workspace=missing_workspace)

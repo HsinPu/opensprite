@@ -14,10 +14,7 @@ WorkspaceResolver = Callable[[], Path]
 def _resolve_workspace_root(workspace: Path) -> Path:
     """Resolve and ensure the workspace root directory exists."""
     root = Path(workspace).expanduser().resolve(strict=False)
-    if not root.exists():
-        raise FileNotFoundError(f"Workspace does not exist: {root}")
-    if not root.is_dir():
-        raise NotADirectoryError(f"Workspace is not a directory: {root}")
+    root.mkdir(parents=True, exist_ok=True)
     return root
 
 
