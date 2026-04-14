@@ -3,6 +3,8 @@
 from typing import Any
 
 from .base import Tool
+from .validation import format_param_preview, validate_required_tool_params
+from ..utils.log import logger
 
 
 class ToolRegistry:
@@ -38,6 +40,16 @@ class ToolRegistry:
         tool = self._tools.get(name)
         if not tool:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
+
+        validation_error = validate_required_tool_params(name, params)
+        if validation_error is not None:
+            logger.warning(
+                "tool.validation-failed | name={} params={} error={}",
+                name,
+                format_param_preview(params),
+                validation_error,
+            )
+            return validation_error
         
         try:
             result = await tool.execute(**params)

@@ -1,7 +1,9 @@
 import asyncio
 from pathlib import Path
 
+from opensprite.tools.base import Tool
 from opensprite.tools.filesystem import WriteFileTool
+from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.shell import ExecTool
 
 
@@ -61,3 +63,53 @@ def test_exec_timeout_returns_partial_output(tmp_path):
     assert "interactive input" in result
     assert "Partial output before timeout:" in result
     assert "waiting for input..." in result
+
+
+def test_registry_rejects_blank_read_file_path_before_execution():
+    class ReadFileStub(Tool):
+        @property
+        def name(self) -> str:
+            return "read_file"
+
+        @property
+        def description(self) -> str:
+            return "read"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, **kwargs):
+            raise AssertionError("execute should not be called when validation fails")
+
+    registry = ToolRegistry()
+    registry.register(ReadFileStub())
+
+    result = asyncio.run(registry.execute("read_file", {"path": "   "}))
+
+    assert result == "Error: Missing required argument(s) for read_file: path. Received: path=<empty-string>."
+
+
+def test_registry_rejects_non_string_write_file_content_before_execution():
+    class WriteFileStub(Tool):
+        @property
+        def name(self) -> str:
+            return "write_file"
+
+        @property
+        def description(self) -> str:
+            return "write"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, **kwargs):
+            raise AssertionError("execute should not be called when validation fails")
+
+    registry = ToolRegistry()
+    registry.register(WriteFileStub())
+
+    result = asyncio.run(registry.execute("write_file", {"path": "out.txt", "content": ["hello"]}))
+
+    assert result == "Error: Missing required argument(s) for write_file: content. Received: content=<array>."

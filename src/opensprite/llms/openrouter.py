@@ -7,6 +7,7 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 from typing import Any
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
+from .tool_args import parse_tool_arguments
 from ..utils.log import logger
 
 
@@ -165,17 +166,11 @@ class OpenRouterLLM(LLMProvider):
                 if function is None:
                     logger.warning("OpenRouter tool call missing function payload; skipping")
                     continue
-                import json
-                try:
-                    raw_args = getattr(function, "arguments", None)
-                    if isinstance(raw_args, str):
-                        args = json.loads(raw_args) if raw_args.strip() else {}
-                    elif isinstance(raw_args, dict):
-                        args = raw_args
-                    else:
-                        args = {}
-                except:
-                    args = {}
+                args = parse_tool_arguments(
+                    getattr(function, "arguments", None),
+                    provider_name="OpenRouter",
+                    tool_name=getattr(function, "name", "") or "",
+                )
                 
                 tool_calls.append(ToolCall(
                     id=getattr(tc, "id", "") or f"tool_call_{len(tool_calls) + 1}",
