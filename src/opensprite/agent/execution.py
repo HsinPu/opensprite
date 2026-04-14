@@ -96,6 +96,22 @@ class ExecutionEngine:
             return result
         return None
 
+    @staticmethod
+    def _build_missing_argument_retry_message(tool_name: str, result: str) -> str:
+        """Build a corrective message for the next model turn after a bad tool call."""
+        if tool_name == "write_file":
+            return (
+                "Your previous write_file call was invalid because required arguments were missing. "
+                "Do not call write_file again unless you provide both 'path' and 'content'. "
+                "Choose the exact target path first, then prepare the full file contents, then call write_file with both fields populated. "
+                f"Latest tool error: {result}"
+            )
+        return (
+            f"Your previous {tool_name} call was invalid because required arguments were missing. "
+            "Read the tool schema carefully and retry only with every required argument populated. "
+            f"Latest tool error: {result}"
+        )
+
     @classmethod
     def _summarize_tool_result_for_context(cls, tool_name: str, result: str) -> str:
         """Shrink verbose tool output before feeding it back into the LLM loop."""
@@ -268,6 +284,18 @@ class ExecutionEngine:
                         else:
                             repeated_tool_error_key = current_error_key
                             repeated_tool_error_count = 1
+
+                        if repeated_tool_error_count == 1:
+                            corrective_message = self._build_missing_argument_retry_message(tool_name, result)
+                            logger.warning(
+                                f"[{log_id}] tool.missing-required-args | name={tool_name} count=1 retry_hint=true"
+                            )
+                            chat_messages.append(
+                                ChatMessage(
+                                    role="system",
+                                    content=corrective_message,
+                                )
+                            )
 
                         if repeated_tool_error_count >= self.REPEATED_TOOL_ERROR_LIMIT:
                             logger.warning(

@@ -237,6 +237,57 @@ def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
     assert len(provider.calls) == 2
 
 
+def test_execution_engine_adds_retry_hint_after_first_missing_required_tool_error():
+    class MissingArgsTool(Tool):
+        @property
+        def name(self) -> str:
+            return "write_file"
+
+        @property
+        def description(self) -> str:
+            return "write_file"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def execute(self, **kwargs) -> str:
+            return (
+                "Error: Missing required argument(s) for write_file: path, content. "
+                "Call write_file with both 'path' and 'content'."
+            )
+
+    registry = ToolRegistry()
+    registry.register(MissingArgsTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="write_file", arguments={})],
+            ),
+            LLMResponse(content="fixed", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [], tools_config=ToolsConfig(max_tool_iterations=10))
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=True)
+    )
+
+    assert result == "fixed"
+    assert len(provider.calls) == 2
+    retry_hints = [
+        message.content
+        for message in provider.calls[1]["messages"]
+        if getattr(message, "role", None) == "system"
+    ]
+    assert any(
+        "Do not call write_file again unless you provide both 'path' and 'content'" in content
+        for content in retry_hints
+    )
+
+
 def test_execution_engine_slims_tool_result_for_context_but_persists_full_result():
     class VerboseTool(Tool):
         @property

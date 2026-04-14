@@ -142,7 +142,9 @@ class WriteFileTool(Tool):
     def description(self) -> str:
         return (
             "Write content to one file inside the current workspace. "
-            "Always provide both 'path' and 'content'. Creates parent directories and the file if needed."
+            "Always provide both 'path' and 'content'. Never call write_file with empty arguments. "
+            "Decide the exact target path and prepare the complete file contents before calling it. "
+            "Creates parent directories and the file if needed."
         )
 
     @property
@@ -165,6 +167,8 @@ class WriteFileTool(Tool):
     async def execute(self, **kwargs: Any) -> str:
         try:
             missing = [key for key in ("path", "content") if key not in kwargs]
+            blank = [key for key in ("path", "content") if key in kwargs and not str(kwargs[key]).strip()]
+            missing.extend(key for key in blank if key not in missing)
             if missing:
                 return (
                     "Error: Missing required argument(s) for write_file: "

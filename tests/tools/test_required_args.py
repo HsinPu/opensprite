@@ -16,6 +16,17 @@ def test_write_file_reports_missing_required_arguments(tmp_path):
     )
 
 
+def test_write_file_rejects_blank_required_arguments(tmp_path):
+    tool = WriteFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="   ", content=""))
+
+    assert result == (
+        "Error: Missing required argument(s) for write_file: path, content. "
+        "Call write_file with both 'path' and 'content'."
+    )
+
+
 def test_exec_reports_missing_command_argument(tmp_path):
     tool = ExecTool(workspace=Path(tmp_path))
 
