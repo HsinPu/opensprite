@@ -98,6 +98,25 @@ def test_execution_engine_uses_empty_fallback_for_blank_visible_response():
     assert provider.calls[1]["messages"][-1].content == ExecutionEngine.EMPTY_RESPONSE_RETRY_MESSAGE
 
 
+def test_execution_engine_uses_sanitized_empty_retry_message_for_hidden_only_content():
+    provider = FakeProvider(
+        [
+            LLMResponse(content="<think>secret</think>", model="fake-model"),
+            LLMResponse(content="retry ok", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, ToolRegistry(), [])
+    engine.sanitize_response_content = lambda text: "" if "<think>" in text else text.strip()
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)
+    )
+
+    assert result == "retry ok"
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
+
+
 def test_execution_engine_falls_back_after_second_blank_visible_response():
     provider = FakeProvider(
         [
