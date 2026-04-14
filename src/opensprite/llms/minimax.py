@@ -108,6 +108,36 @@ class MiniMaxLLM(LLMProvider):
             _safe_len(choices),
         )
 
+        # Debug: log raw MiniMax response for diagnostics
+        logger.debug(
+            "MiniMax raw response: id={}, model={}, usage={}, finish_reason={}",
+            getattr(response, "id", None),
+            getattr(response, "model", None),
+            getattr(response, "usage", None),
+            getattr(getattr(choices[0], "finish_reason", None) if choices else None, "value", None) if choices else None,
+        )
+
+        # Log raw message content for debugging hidden blocks
+        raw_message_content = getattr(message, "content", "")
+        logger.debug(
+            "MiniMax raw message content: len={} preview={}",
+            len(raw_message_content) if raw_message_content else 0,
+            (raw_message_content[:500] if raw_message_content else "")[:200],
+        )
+
+        # Log raw tool calls for debugging
+        raw_tool_calls = getattr(message, "tool_calls", None)
+        if raw_tool_calls:
+            for tc in raw_tool_calls:
+                func = getattr(tc, "function", None)
+                logger.debug(
+                    "MiniMax raw tool_call: id={}, name={}, arguments_type={}, arguments_preview={}",
+                    getattr(tc, "id", None),
+                    getattr(func, "name", None),
+                    type(getattr(func, "arguments", None)).__name__,
+                    str(getattr(func, "arguments", ""))[:200] if getattr(func, "arguments", None) else "None",
+                )
+
         if not choices:
             logger.warning(
                 "MiniMax returned empty choices: response_id={}, model={}, object={}, usage={}",
