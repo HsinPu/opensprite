@@ -280,3 +280,35 @@ def test_execution_engine_slims_tool_result_for_context_but_persists_full_result
     assert "Output truncated for context" in messages[-1].content
     assert len(messages[-1].content) < len("A" * 2000 + "TAIL")
     assert messages[-1].content.endswith("TAIL")
+
+
+def test_exec_tool_result_slimming_keeps_timeout_and_stderr_highlights():
+    result = (
+        "Error: Command timed out after 60s. The command may be waiting for interactive input or may be stuck.\n"
+        "Partial output before timeout:\n"
+        + ("line\n" * 400)
+        + "[stderr] npm ERR! missing script: build\n"
+        + "final line\n"
+    )
+
+    summary = ExecutionEngine._summarize_tool_result_for_context("exec", result)
+
+    assert "Output truncated for context" in summary
+    assert "Timeout/Error summary:" in summary
+    assert "timed out after 60s" in summary
+    assert "stderr highlights:" in summary
+    assert "missing script: build" in summary
+    assert "output tail:" in summary
+    assert "final line" in summary
+
+
+def test_exec_tool_result_slimming_prefers_tail_lines_for_long_output():
+    result = "\n".join([f"line {i}" for i in range(300)])
+
+    summary = ExecutionEngine._summarize_tool_result_for_context("exec", result)
+
+    assert "output start:" in summary
+    assert "line 0" in summary
+    assert "output tail:" in summary
+    assert "line 299" in summary
+    assert len(summary) <= ExecutionEngine.EXEC_RESULT_MAX_CHARS + len("\n... (exec context summary truncated)")

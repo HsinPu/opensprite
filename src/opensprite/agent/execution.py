@@ -49,6 +49,7 @@ class ExecutionEngine:
 
     REPEATED_TOOL_ERROR_LIMIT = 2
     TOOL_RESULT_MAX_CHARS = 1200
+    EXEC_RESULT_MAX_CHARS = 1200
     EMPTY_RESPONSE_RETRY_MESSAGE = (
         "Previous attempt produced no visible user-facing text. "
         "Please answer again with a direct, displayable reply for the user."
@@ -99,6 +100,8 @@ class ExecutionEngine:
     def _summarize_tool_result_for_context(cls, tool_name: str, result: str) -> str:
         """Shrink verbose tool output before feeding it back into the LLM loop."""
         text = result.strip()
+        if tool_name == "exec":
+            return cls._summarize_exec_result_for_context(text)
         if len(text) <= cls.TOOL_RESULT_MAX_CHARS:
             return text
 
@@ -113,6 +116,41 @@ class ExecutionEngine:
             f"--- MIDDLE TRUNCATED ---\n"
             f"--- END TAIL ---\n{tail}"
         )
+
+    @classmethod
+    def _summarize_exec_result_for_context(cls, text: str) -> str:
+        """Prefer error markers and the latest lines for shell command output."""
+        if len(text) <= cls.EXEC_RESULT_MAX_CHARS:
+            return text
+
+        lines = [line for line in text.splitlines() if line.strip()]
+        first_lines = lines[:6]
+        stderr_lines = [line for line in lines if "[stderr]" in line][:4]
+        timeout_lines = [line for line in lines if "timed out" in line.lower()][:2]
+        tail_lines = lines[-8:]
+
+        summary_parts: list[str] = [
+            f"[tool:exec] Output truncated for context. Full result was persisted separately ({len(text)} chars total)."
+        ]
+        if timeout_lines:
+            summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
+        elif text.startswith("Error:"):
+            summary_parts.extend(["Error summary:", lines[0]])
+
+        if stderr_lines:
+            summary_parts.extend(["stderr highlights:", *stderr_lines])
+
+        if first_lines:
+            summary_parts.extend(["output start:", *first_lines])
+
+        if tail_lines:
+            summary_parts.extend(["output tail:", *tail_lines])
+
+        summarized = "\n".join(summary_parts)
+        if len(summarized) <= cls.EXEC_RESULT_MAX_CHARS:
+            return summarized
+
+        return summarized[: cls.EXEC_RESULT_MAX_CHARS].rstrip() + "\n... (exec context summary truncated)"
 
     @staticmethod
     def _summarize_tool_names(tool_calls: list[Any] | None) -> str:
