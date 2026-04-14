@@ -144,16 +144,7 @@ class ExecutionEngine:
 
         return summarized[: cls.EXEC_RESULT_MAX_CHARS].rstrip() + "\n... (exec context summary truncated)"
 
-    @staticmethod
-    def _summarize_tool_names(tool_calls: list[Any] | None) -> str:
-        """Build a compact tool name list for diagnostics."""
-        if not tool_calls:
-            return "-"
-        names = [getattr(tc, "name", "") or "<unknown>" for tc in tool_calls]
-        preview = ", ".join(names[:5])
-        if len(names) > 5:
-            preview += f", ... (+{len(names) - 5} more)"
-        return preview
+
     async def execute_messages(
         self,
         log_id: str,
@@ -243,6 +234,7 @@ class ExecutionEngine:
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
                     )
+                    result_for_context = self._summarize_tool_result_for_context(tool_name, result)
 
                     repeated_error_marker = self._classify_tool_result(result)
                     if repeated_error_marker is not None:
@@ -265,10 +257,10 @@ class ExecutionEngine:
                         repeated_tool_error_key = None
                         repeated_tool_error_count = 0
 
-                    tool_results_history.append(f"{tool_name}: {result[:200]}")
+                    tool_results_history.append(f"{tool_name}: {result_for_context[:200]}")
                     chat_messages.append(ChatMessage(
                         role="tool",
-                        content=result,
+                        content=result_for_context,
                         tool_call_id=tc.id,
                     ))
 
