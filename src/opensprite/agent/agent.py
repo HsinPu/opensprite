@@ -23,6 +23,7 @@ opensprite/agent.py - Agent Loop
 import asyncio
 from contextvars import ContextVar
 from contextlib import AsyncExitStack
+import json
 import re
 import time
 from pathlib import Path
@@ -39,7 +40,7 @@ from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
-from ..utils import count_messages_tokens
+from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, RecentSummaryConfig
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService
@@ -232,6 +233,7 @@ class AgentLoop:
         current_message: str,
         channel: str | None,
         chat_id: str,
+        tool_schema_tokens: int = 0,
     ) -> tuple[list[dict[str, Any]], int, int, int]:
         """Trim oldest history messages when the prompt would exceed the history token budget."""
         budget = max(0, self.config.history_token_budget)
@@ -242,7 +244,7 @@ class AgentLoop:
             channel=channel,
             chat_id=chat_id,
         )
-        base_tokens = count_messages_tokens(base_messages, model=self.provider.get_default_model())
+        base_tokens = count_messages_tokens(base_messages, model=self.provider.get_default_model()) + tool_schema_tokens
         if budget <= 0 or not history:
             history_tokens = count_messages_tokens(history, model=self.provider.get_default_model()) if history else 0
             return history, base_tokens, history_tokens, base_tokens + history_tokens
@@ -275,6 +277,22 @@ class AgentLoop:
                 f"[{chat_id}] prompt.trim | budget={budget} base_tokens={base_tokens} history_before={len(history)} history_after={len(trimmed_history)} estimated_tokens={running_tokens}"
             )
         return trimmed_history, base_tokens, retained_history_tokens, running_tokens
+
+    def _estimate_tool_schema_tokens(self, *, allow_tools: bool, tool_registry: ToolRegistry | None = None) -> int:
+        """Estimate token cost of tool schemas sent with the request."""
+        if not allow_tools:
+            return 0
+
+        active_tools = tool_registry or self.tools
+        if not active_tools.tool_names:
+            return 0
+
+        try:
+            tool_schema_text = json.dumps(active_tools.get_definitions(), ensure_ascii=False, sort_keys=True)
+        except Exception:
+            return 0
+
+        return count_text_tokens(tool_schema_text, model=self.provider.get_default_model())
 
     def _setup_storage(self, storage: StorageProvider | None) -> StorageProvider:
         """Resolve the storage provider used by the agent."""
@@ -715,14 +733,16 @@ class AgentLoop:
         current_audios = self._get_current_audios()
         current_videos = self._get_current_videos()
         prompt_message = self._augment_message_for_media(current_message, user_images, current_audios, current_videos)
+        tool_schema_tokens = self._estimate_tool_schema_tokens(allow_tools=allow_tools)
         history_dicts, base_tokens, history_tokens, final_tokens = self._trim_history_to_token_budget(
             history=history_dicts,
             current_message=prompt_message,
             channel=channel,
             chat_id=chat_id,
+            tool_schema_tokens=tool_schema_tokens,
         )
         logger.info(
-            f"[{chat_id}] prompt.tokens | budget={self.config.history_token_budget} base={base_tokens} history={history_tokens} final_estimated={final_tokens}"
+            f"[{chat_id}] prompt.tokens | budget={self.config.history_token_budget} base={base_tokens} tools={tool_schema_tokens} history={history_tokens} final_estimated={final_tokens}"
         )
         full_messages = self._context_builder.build_messages(
             history=history_dicts,

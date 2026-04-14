@@ -88,6 +88,31 @@ class DummyTool(Tool):
         return "ok"
 
 
+class LargeSchemaTool(Tool):
+    @property
+    def name(self) -> str:
+        return "large"
+
+    @property
+    def description(self) -> str:
+        return "large schema tool"
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "type": "string",
+                    "description": "x" * 2000,
+                }
+            },
+        }
+
+    async def execute(self, **kwargs):
+        return "ok"
+
+
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
@@ -246,3 +271,43 @@ def test_trim_history_reports_base_tokens_without_history(tmp_path):
     assert base_tokens > 0
     assert history_tokens == 0
     assert final_tokens == base_tokens
+
+
+def test_tool_schema_tokens_reduce_history_budget(tmp_path):
+    storage = HistoryStorage([StoredMessage(role="assistant", content="recent message", timestamp=1.0)])
+    registry = ToolRegistry()
+    registry.register(LargeSchemaTool())
+    agent = AgentLoop(
+        config=AgentConfig(history_token_budget=150),
+        provider=FakeProvider(),
+        storage=storage,
+        context_builder=FakeContextBuilder(tmp_path),
+        tools=registry,
+        memory_config=MemoryConfig(),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(enabled=False),
+        recent_summary_config=RecentSummaryConfig(enabled=False),
+    )
+
+    tool_tokens = agent._estimate_tool_schema_tokens(allow_tools=True)
+    assert tool_tokens > 0
+
+    kept_without_tools, _, _, _ = agent._trim_history_to_token_budget(
+        history=[{"role": "assistant", "content": "recent message"}],
+        current_message="hello",
+        channel="telegram",
+        chat_id="telegram:room-1",
+        tool_schema_tokens=0,
+    )
+    kept_with_tools, _, _, _ = agent._trim_history_to_token_budget(
+        history=[{"role": "assistant", "content": "recent message"}],
+        current_message="hello",
+        channel="telegram",
+        chat_id="telegram:room-1",
+        tool_schema_tokens=tool_tokens,
+    )
+
+    assert kept_without_tools == [{"role": "assistant", "content": "recent message"}]
+    assert kept_with_tools == []
