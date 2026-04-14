@@ -50,7 +50,7 @@ class MemoryConsolidationService:
 
     async def maybe_consolidate(self, chat_id: str) -> None:
         """Consolidate pending chat history into long-term memory when needed."""
-        messages = await self.storage.get_messages(chat_id, limit=1000)
+        messages = await self.storage.get_messages(chat_id)
         message_count = len(messages)
         last_consolidated = await self.storage.get_consolidated_index(chat_id)
         pending_messages = self._to_message_dicts(messages[last_consolidated:])

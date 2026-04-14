@@ -218,3 +218,31 @@ def test_load_history_uses_agent_max_history(tmp_path):
     history = asyncio.run(agent._load_history("telegram:room-1"))
 
     assert [message.content for message in history] == ["second", "third"]
+
+
+def test_trim_history_reports_base_tokens_without_history(tmp_path):
+    agent = AgentLoop(
+        config=AgentConfig(history_token_budget=500),
+        provider=FakeProvider(),
+        storage=FakeStorage(),
+        context_builder=FakeContextBuilder(tmp_path),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(enabled=False),
+        recent_summary_config=RecentSummaryConfig(enabled=False),
+    )
+
+    history, base_tokens, history_tokens, final_tokens = agent._trim_history_to_token_budget(
+        history=[],
+        current_message="hello",
+        channel="telegram",
+        chat_id="telegram:room-1",
+    )
+
+    assert history == []
+    assert base_tokens > 0
+    assert history_tokens == 0
+    assert final_tokens == base_tokens

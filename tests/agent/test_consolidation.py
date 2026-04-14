@@ -122,3 +122,28 @@ def test_memory_consolidation_triggers_when_token_threshold_reached(monkeypatch)
 
     assert captured["chat_id"] == "chat-1"
     assert storage.updated_index == 2
+
+
+def test_memory_consolidation_uses_full_history_for_processed_index(monkeypatch):
+    captured = {}
+
+    async def fake_consolidate(**kwargs):
+        captured.update(kwargs)
+        return True
+
+    monkeypatch.setattr(consolidation_module, "consolidate", fake_consolidate)
+
+    messages = [StoredMessage(role="user", content=f"m{i}", timestamp=float(i)) for i in range(1005)]
+    storage = FakeStorage(messages, consolidated_index=1000)
+    service = MemoryConsolidationService(
+        storage=storage,
+        memory_store=object(),
+        provider=FakeProvider(),
+        threshold=1,
+        token_threshold=0,
+    )
+
+    asyncio.run(service.maybe_consolidate("chat-1"))
+
+    assert [message["content"] for message in captured["messages"]] == [f"m{i}" for i in range(1000, 1005)]
+    assert storage.updated_index == 1005

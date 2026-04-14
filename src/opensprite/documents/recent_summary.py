@@ -200,10 +200,10 @@ class RecentSummaryConsolidator(ConversationConsolidator):
         provider,
         model: str,
         summary_store: RecentSummaryStore,
-        threshold: int = 12,
-        token_threshold: int = 12000,
-        lookback_messages: int = 80,
-        keep_last_messages: int = 20,
+        threshold: int = 20,
+        token_threshold: int = 30000,
+        lookback_messages: int = 120,
+        keep_last_messages: int = 40,
         enabled: bool = True,
     ):
         self.storage = storage

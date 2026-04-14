@@ -235,10 +235,6 @@ class AgentLoop:
     ) -> tuple[list[dict[str, Any]], int, int, int]:
         """Trim oldest history messages when the prompt would exceed the history token budget."""
         budget = max(0, self.config.history_token_budget)
-        if budget <= 0 or not history:
-            history_tokens = count_messages_tokens(history, model=self.provider.get_default_model()) if history else 0
-            return history, 0, history_tokens, history_tokens
-
         base_messages = self._context_builder.build_messages(
             history=[],
             current_message=current_message,
@@ -247,6 +243,10 @@ class AgentLoop:
             chat_id=chat_id,
         )
         base_tokens = count_messages_tokens(base_messages, model=self.provider.get_default_model())
+        if budget <= 0 or not history:
+            history_tokens = count_messages_tokens(history, model=self.provider.get_default_model()) if history else 0
+            return history, base_tokens, history_tokens, base_tokens + history_tokens
+
         if base_tokens >= budget:
             logger.warning(
                 f"[{chat_id}] prompt.trim | base_tokens={base_tokens} budget={budget} history_retained=0 reason=base-exceeds-budget"
