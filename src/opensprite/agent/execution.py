@@ -213,6 +213,9 @@ class ExecutionEngine:
                     f"tool_calls={tool_calls_count} tools={self._summarize_tool_names(response.tool_calls)} "
                     f"raw_preview={self.format_log_preview(raw_content, max_chars=240)}"
                 )
+                logger.warning(
+                    f"[{log_id}] llm.raw-hidden-blocks | iter={iteration + 1} raw_content={raw_content[:500]}"
+                )
 
             if response.tool_calls:
                 if not tools:
