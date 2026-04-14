@@ -119,7 +119,7 @@ class MiniMaxLLM(LLMProvider):
 
         # Log raw message content for debugging hidden blocks
         raw_message_content = getattr(message, "content", "")
-        logger.debug(
+        logger.info(
             "MiniMax raw message content: len={} preview={}",
             len(raw_message_content) if raw_message_content else 0,
             (raw_message_content[:500] if raw_message_content else "")[:200],
@@ -130,7 +130,7 @@ class MiniMaxLLM(LLMProvider):
         if raw_tool_calls:
             for tc in raw_tool_calls:
                 func = getattr(tc, "function", None)
-                logger.debug(
+                logger.info(
                     "MiniMax raw tool_call: id={}, name={}, arguments_type={}, arguments_preview={}",
                     getattr(tc, "id", None),
                     getattr(func, "name", None),
