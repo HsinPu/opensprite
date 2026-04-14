@@ -117,27 +117,6 @@ class MiniMaxLLM(LLMProvider):
             getattr(getattr(choices[0], "finish_reason", None) if choices else None, "value", None) if choices else None,
         )
 
-        # Log raw message content for debugging hidden blocks
-        raw_message_content = getattr(message, "content", "")
-        logger.info(
-            "MiniMax raw message content: len={} preview={}",
-            len(raw_message_content) if raw_message_content else 0,
-            (raw_message_content[:500] if raw_message_content else "")[:200],
-        )
-
-        # Log raw tool calls for debugging
-        raw_tool_calls = getattr(message, "tool_calls", None)
-        if raw_tool_calls:
-            for tc in raw_tool_calls:
-                func = getattr(tc, "function", None)
-                logger.info(
-                    "MiniMax raw tool_call: id={}, name={}, arguments_type={}, arguments_preview={}",
-                    getattr(tc, "id", None),
-                    getattr(func, "name", None),
-                    type(getattr(func, "arguments", None)).__name__,
-                    str(getattr(func, "arguments", ""))[:200] if getattr(func, "arguments", None) else "None",
-                )
-
         if not choices:
             logger.warning(
                 "MiniMax returned empty choices: response_id={}, model={}, object={}, usage={}",
@@ -168,6 +147,27 @@ class MiniMaxLLM(LLMProvider):
                 model=getattr(response, "model", model or self.default_model),
                 tool_calls=[],
             )
+
+        # Log raw message content for debugging hidden blocks
+        raw_message_content = getattr(message, "content", "")
+        logger.info(
+            "MiniMax raw message content: len={} preview={}",
+            len(raw_message_content) if raw_message_content else 0,
+            (raw_message_content[:500] if raw_message_content else "")[:200],
+        )
+
+        # Log raw tool calls for debugging
+        raw_tool_calls = getattr(message, "tool_calls", None)
+        if raw_tool_calls:
+            for tc in raw_tool_calls:
+                func = getattr(tc, "function", None)
+                logger.info(
+                    "MiniMax raw tool_call: id={}, name={}, arguments_type={}, arguments_preview={}",
+                    getattr(tc, "id", None),
+                    getattr(func, "name", None),
+                    type(getattr(func, "arguments", None)).__name__,
+                    str(getattr(func, "arguments", ""))[:200] if getattr(func, "arguments", None) else "None",
+                )
 
         if message is None:
             logger.warning("MiniMax response missing message payload; returning empty response")
