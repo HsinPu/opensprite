@@ -40,18 +40,13 @@ from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, UserProfileStore
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
-from ..utils import count_messages_tokens, count_text_tokens
+from ..utils import count_messages_tokens, count_text_tokens, sanitize_assistant_visible_text, strip_assistant_internal_scaffolding
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, RecentSummaryConfig
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService
 from .execution import ExecutionEngine
 from .tool_registration import register_default_tools, register_memory_tool
 
-
-INTERNAL_CONTROL_BLOCK_RE = re.compile(
-    r"<(?:think|thinking)\b[^>]*>.*?</(?:think|thinking)>",
-    re.IGNORECASE | re.DOTALL,
-)
 
 LOG_WHITESPACE_RE = re.compile(r"\s+")
 
@@ -118,8 +113,7 @@ class AgentLoop:
     @staticmethod
     def _sanitize_response_content(content: str) -> str:
         """Remove provider-internal control blocks from visible replies."""
-        cleaned = INTERNAL_CONTROL_BLOCK_RE.sub("", content or "")
-        return cleaned.strip()
+        return sanitize_assistant_visible_text(content)
 
     @staticmethod
     def _format_log_preview(content: str | list[dict[str, Any]] | None, max_chars: int = 160) -> str:
@@ -141,7 +135,7 @@ class AgentLoop:
                     other_items += 1
 
             text = " ".join(part for part in text_parts if part)
-            text = INTERNAL_CONTROL_BLOCK_RE.sub("", text)
+            text = strip_assistant_internal_scaffolding(text)
             text = LOG_WHITESPACE_RE.sub(" ", text).strip() or "<multimodal>"
             suffix_parts = []
             if image_count:
@@ -151,7 +145,7 @@ class AgentLoop:
             if suffix_parts:
                 text = f"{text} [{' '.join(suffix_parts)}]"
         else:
-            text = INTERNAL_CONTROL_BLOCK_RE.sub("", str(content or ""))
+            text = strip_assistant_internal_scaffolding(str(content or ""))
             text = LOG_WHITESPACE_RE.sub(" ", text).strip()
 
         if not text:
