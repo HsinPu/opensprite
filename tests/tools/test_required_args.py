@@ -27,6 +27,26 @@ def test_write_file_rejects_blank_required_arguments(tmp_path):
     )
 
 
+def test_write_file_builds_validated_draft_before_writing(tmp_path):
+    tool = WriteFileTool(workspace=tmp_path)
+
+    draft = tool.build_draft(path="notes/out.txt", content="hello")
+
+    assert draft.path == "notes/out.txt"
+    assert draft.content == "hello"
+    assert draft.file_path == tmp_path / "notes" / "out.txt"
+
+
+def test_write_file_apply_draft_writes_to_disk(tmp_path):
+    tool = WriteFileTool(workspace=tmp_path)
+    draft = tool.build_draft(path="notes/out.txt", content="hello")
+
+    result = asyncio.run(tool.apply_draft(draft))
+
+    assert result == "Successfully wrote to notes/out.txt (5 chars)"
+    assert (tmp_path / "notes" / "out.txt").read_text(encoding="utf-8") == "hello"
+
+
 def test_exec_reports_missing_command_argument(tmp_path):
     tool = ExecTool(workspace=Path(tmp_path))
 

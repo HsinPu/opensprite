@@ -9,6 +9,7 @@ from ..config import ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
+from ..tools.filesystem import WriteFileTool
 from ..utils.log import logger
 
 
@@ -179,6 +180,26 @@ class ExecutionEngine:
             preview += f", ... (+{len(names) - 5} more)"
         return preview
 
+    async def _execute_tool_with_validation(
+        self,
+        *,
+        log_id: str,
+        registry: ToolRegistry,
+        tool_name: str,
+        tool_args: dict[str, Any],
+    ) -> str:
+        """Validate selected high-risk tool drafts before applying side effects."""
+        tool = registry.get(tool_name)
+        if isinstance(tool, WriteFileTool):
+            draft = tool.build_draft(**tool_args)
+            if isinstance(draft, str):
+                return draft
+            logger.info(
+                f"[{log_id}] tool.write-file-draft | path={draft.path} content_chars={len(draft.content)}"
+            )
+            return await tool.apply_draft(draft)
+        return await registry.execute(tool_name, tool_args)
+
     async def execute_messages(
         self,
         log_id: str,
@@ -271,7 +292,12 @@ class ExecutionEngine:
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
 
-                    result = await active_tools.execute(tool_name, tool_args)
+                    result = await self._execute_tool_with_validation(
+                        log_id=log_id,
+                        registry=active_tools,
+                        tool_name=tool_name,
+                        tool_args=tool_args,
+                    )
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
                     )

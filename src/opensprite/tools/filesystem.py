@@ -1,5 +1,6 @@
 """Filesystem tools for reading and writing files."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -8,6 +9,15 @@ from .base import Tool
 
 
 WorkspaceResolver = Callable[[], Path]
+
+
+@dataclass
+class WriteFileDraft:
+    """Validated write_file proposal ready to apply."""
+
+    path: str
+    content: str
+    file_path: Path
 
 
 def _resolve_workspace_root(workspace: Path) -> Path:
@@ -164,27 +174,39 @@ class WriteFileTool(Tool):
             "required": ["path", "content"]
         }
 
+    def build_draft(self, **kwargs: Any) -> WriteFileDraft | str:
+        """Validate a structured write draft before applying filesystem changes."""
+        missing = [key for key in ("path", "content") if key not in kwargs]
+        blank = [key for key in ("path", "content") if key in kwargs and not str(kwargs[key]).strip()]
+        missing.extend(key for key in blank if key not in missing)
+        if missing:
+            return (
+                "Error: Missing required argument(s) for write_file: "
+                f"{', '.join(missing)}. "
+                "Call write_file with both 'path' and 'content'."
+            )
+
+        path = str(kwargs["path"]).strip()
+        content = str(kwargs["content"])
+        workspace = self._get_workspace()
+        file_path = _resolve_workspace_path(workspace, path)
+        if file_path is None:
+            return f"Error: Access denied. Path must be within workspace: {workspace}"
+
+        return WriteFileDraft(path=path, content=content, file_path=file_path)
+
+    async def apply_draft(self, draft: WriteFileDraft) -> str:
+        """Write a previously validated draft to disk."""
+        draft.file_path.parent.mkdir(parents=True, exist_ok=True)
+        draft.file_path.write_text(draft.content, encoding="utf-8")
+        return f"Successfully wrote to {draft.path} ({len(draft.content)} chars)"
+
     async def execute(self, **kwargs: Any) -> str:
         try:
-            missing = [key for key in ("path", "content") if key not in kwargs]
-            blank = [key for key in ("path", "content") if key in kwargs and not str(kwargs[key]).strip()]
-            missing.extend(key for key in blank if key not in missing)
-            if missing:
-                return (
-                    "Error: Missing required argument(s) for write_file: "
-                    f"{', '.join(missing)}. "
-                    "Call write_file with both 'path' and 'content'."
-                )
-            path = str(kwargs["path"])
-            content = str(kwargs["content"])
-            workspace = self._get_workspace()
-            file_path = _resolve_workspace_path(workspace, path)
-            if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
-            
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            file_path.write_text(content, encoding="utf-8")
-            return f"Successfully wrote to {path} ({len(content)} chars)"
+            draft = self.build_draft(**kwargs)
+            if isinstance(draft, str):
+                return draft
+            return await self.apply_draft(draft)
         except Exception as e:
             return f"Error writing file: {str(e)}"
 

@@ -4,6 +4,7 @@ from opensprite.agent.execution import ExecutionEngine
 from opensprite.config.schema import ToolsConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
 from opensprite.tools.base import Tool
+from opensprite.tools.filesystem import WriteFileTool
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -286,6 +287,37 @@ def test_execution_engine_adds_retry_hint_after_first_missing_required_tool_erro
         "Do not call write_file again unless you provide both 'path' and 'content'" in content
         for content in retry_hints
     )
+
+
+def test_execution_engine_validates_write_file_draft_before_applying(tmp_path):
+    registry = ToolRegistry()
+    registry.register(WriteFileTool(workspace=tmp_path))
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="write_file",
+                        arguments={"path": "drafts/result.txt", "content": "hello world"},
+                    )
+                ],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    save_calls = []
+    engine = _make_engine(provider, registry, save_calls)
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=True, tool_result_chat_id="chat-1")
+    )
+
+    assert result == "done"
+    assert (tmp_path / "drafts" / "result.txt").read_text(encoding="utf-8") == "hello world"
+    assert save_calls == [("chat-1", "tool", "Successfully wrote to drafts/result.txt (11 chars)", "write_file")]
 
 
 def test_execution_engine_slims_tool_result_for_context_but_persists_full_result():
