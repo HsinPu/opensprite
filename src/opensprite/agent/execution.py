@@ -222,6 +222,11 @@ class ExecutionEngine:
                         f"visible_len={len(response.content)} tool_calls={tool_calls_count} "
                         f"tools={self._summarize_tool_names(response.tool_calls)}"
                     )
+                    logger.warning(
+                        f"[{log_id}] llm.system-reminder-hidden-state | iter={iteration + 1} "
+                        f"phase={'tool-call' if tool_calls_count else 'final-response'} "
+                        f"tool_history_count={len(tool_results_history)} sanitized_from_nonempty=true"
+                    )
 
             if response.tool_calls:
                 if not tools:

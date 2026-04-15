@@ -37,6 +37,10 @@ def _contains_system_reminder(value: Any) -> bool:
     return "<system-reminder>" in _coerce_content(value)
 
 
+def _count_system_reminders(value: Any) -> int:
+    return _coerce_content(value).count("<system-reminder>")
+
+
 class MiniMaxLLM(LLMProvider):
     """
     MiniMax LLM 實作
@@ -110,10 +114,12 @@ class MiniMaxLLM(LLMProvider):
                 len(text),
                 _preview_text(text),
             )
+        request_reminder_count = sum(_count_system_reminders(msg.get("content", "")) for msg in api_messages)
         if request_reminder_hits:
             logger.warning(
-                "MiniMax request system-reminder summary: message_count={} hits={}",
+                "MiniMax request system-reminder summary: message_count={} reminder_count={} hits={}",
                 len(api_messages),
+                request_reminder_count,
                 ", ".join(request_reminder_hits),
             )
 
@@ -188,11 +194,19 @@ class MiniMaxLLM(LLMProvider):
             (raw_message_content[:500] if raw_message_content else "")[:200],
         )
         if _contains_system_reminder(raw_message_content):
+            response_reminder_count = _count_system_reminders(raw_message_content)
             logger.warning(
-                "MiniMax response contains system-reminder: len={} tool_calls_count={} preview={}",
+                "MiniMax response contains system-reminder: len={} reminder_count={} tool_calls_count={} preview={}",
                 len(raw_message_content),
+                response_reminder_count,
                 _safe_len(getattr(message, "tool_calls", None)),
                 _preview_text(raw_message_content),
+            )
+            logger.warning(
+                "MiniMax system-reminder provenance: request_reminder_count={} response_reminder_count={} source={}",
+                request_reminder_count,
+                response_reminder_count,
+                "model_generated" if request_reminder_count == 0 else "request_echo_or_model_continuation",
             )
 
         # Log raw tool calls for debugging
