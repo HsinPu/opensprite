@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Awaitable, Callable
 
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 from ..subagent_prompts import ALL_SUBAGENTS
 
 
@@ -37,7 +38,7 @@ class DelegateTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "task": {"type": "string", "description": "要委派的工作描述"},
+                "task": {"type": "string", "description": "要委派的工作描述", "pattern": NON_EMPTY_STRING_PATTERN},
                 "prompt_type": {
                     "type": "string",
                     "description": f"子代理類型，可選: {list(ALL_SUBAGENTS.keys())}",
@@ -47,5 +48,5 @@ class DelegateTool(Tool):
             "required": ["task"],
         }
 
-    async def execute(self, task: str, prompt_type: str = "writer", **kwargs: Any) -> str:
+    async def _execute(self, task: str, prompt_type: str = "writer", **kwargs: Any) -> str:
         return await self._run_subagent(task, prompt_type)

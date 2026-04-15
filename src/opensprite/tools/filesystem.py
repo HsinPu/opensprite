@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 from ..skills import SkillsLoader
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 WorkspaceResolver = Callable[[], Path]
@@ -81,13 +82,14 @@ class ReadFileTool(Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Required. File path to read, relative to the current workspace unless already absolute inside it."
+                    "description": "Required. File path to read, relative to the current workspace unless already absolute inside it.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
                 }
             },
             "required": ["path"]
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def _execute(self, **kwargs: Any) -> str:
         try:
             path = str(kwargs["path"])
             workspace = self._get_workspace()
@@ -152,7 +154,8 @@ class WriteFileTool(Tool):
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Required. Target file path inside the current workspace."
+                    "description": "Required. Target file path inside the current workspace.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
                 },
                 "content": {
                     "type": "string",
@@ -162,15 +165,8 @@ class WriteFileTool(Tool):
             "required": ["path", "content"]
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def _execute(self, **kwargs: Any) -> str:
         try:
-            missing = [key for key in ("path", "content") if key not in kwargs]
-            if missing:
-                return (
-                    "Error: Missing required argument(s) for write_file: "
-                    f"{', '.join(missing)}. "
-                    "Call write_file with both 'path' and 'content'."
-                )
             path = str(kwargs["path"])
             content = str(kwargs["content"])
             workspace = self._get_workspace()
@@ -219,7 +215,7 @@ class ListDirTool(Tool):
             }
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def _execute(self, **kwargs: Any) -> str:
         try:
             path = str(kwargs.get("path", "."))
             workspace = self._get_workspace()
@@ -273,14 +269,14 @@ class EditFileTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Required. Target file path inside the current workspace."},
-                "old_text": {"type": "string", "description": "Required. Exact existing text to replace. It must appear exactly once or the tool will refuse the edit."},
+                "path": {"type": "string", "description": "Required. Target file path inside the current workspace.", "pattern": NON_EMPTY_STRING_PATTERN},
+                "old_text": {"type": "string", "description": "Required. Exact existing text to replace. It must appear exactly once or the tool will refuse the edit.", "minLength": 1},
                 "new_text": {"type": "string", "description": "Required. Replacement text for the matching old_text."},
             },
             "required": ["path", "old_text", "new_text"],
         }
 
-    async def execute(self, **kwargs: Any) -> str:
+    async def _execute(self, **kwargs: Any) -> str:
         try:
             path = str(kwargs["path"])
             old_text = str(kwargs["old_text"])

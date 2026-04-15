@@ -12,10 +12,7 @@ def test_write_file_reports_missing_required_arguments(tmp_path):
 
     result = asyncio.run(tool.execute())
 
-    assert result == (
-        "Error: Missing required argument(s) for write_file: path, content. "
-        "Call write_file with both 'path' and 'content'."
-    )
+    assert result == "Error: Invalid arguments for write_file: missing required argument(s): path, content."
 
 
 def test_exec_reports_missing_command_argument(tmp_path):
@@ -23,7 +20,7 @@ def test_exec_reports_missing_command_argument(tmp_path):
 
     result = asyncio.run(tool.execute())
 
-    assert result == "Error: Missing required argument for exec: command. Call exec with a 'command' string."
+    assert result == "Error: Invalid arguments for exec: missing required argument(s): command."
 
 
 def test_exec_rejects_blank_command(tmp_path):
@@ -31,7 +28,7 @@ def test_exec_rejects_blank_command(tmp_path):
 
     result = asyncio.run(tool.execute(command="   "))
 
-    assert result == "Error: Command for exec must be a non-empty string."
+    assert result == "Error: Invalid arguments for exec: command must be a non-empty string."
 
 
 def test_exec_blocks_powershell_recursive_delete(tmp_path):
@@ -47,7 +44,7 @@ def test_exec_rejects_overlong_command(tmp_path):
 
     result = asyncio.run(tool.execute(command="a" * 2001))
 
-    assert result == "Error: Command too long for exec (max 2000 chars). Please run a shorter command."
+    assert result == "Error: Invalid arguments for exec: command must be at most 2000 characters."
 
 
 def test_exec_timeout_returns_partial_output(tmp_path):
@@ -77,17 +74,21 @@ def test_registry_rejects_blank_read_file_path_before_execution():
 
         @property
         def parameters(self) -> dict:
-            return {"type": "object", "properties": {}}
+            return {
+                "type": "object",
+                "properties": {"path": {"type": "string", "pattern": r"\S"}},
+                "required": ["path"],
+            }
 
-        async def execute(self, **kwargs):
-            raise AssertionError("execute should not be called when validation fails")
+        async def _execute(self, **kwargs):
+            raise AssertionError("_execute should not be called when validation fails")
 
     registry = ToolRegistry()
     registry.register(ReadFileStub())
 
     result = asyncio.run(registry.execute("read_file", {"path": "   "}))
 
-    assert result == "Error: Missing required argument(s) for read_file: path. Received: path=<empty-string>."
+    assert result == "Error: Invalid arguments for read_file: path must be a non-empty string."
 
 
 def test_registry_rejects_non_string_write_file_content_before_execution():
@@ -102,14 +103,21 @@ def test_registry_rejects_non_string_write_file_content_before_execution():
 
         @property
         def parameters(self) -> dict:
-            return {"type": "object", "properties": {}}
+            return {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "pattern": r"\S"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+            }
 
-        async def execute(self, **kwargs):
-            raise AssertionError("execute should not be called when validation fails")
+        async def _execute(self, **kwargs):
+            raise AssertionError("_execute should not be called when validation fails")
 
     registry = ToolRegistry()
     registry.register(WriteFileStub())
 
     result = asyncio.run(registry.execute("write_file", {"path": "out.txt", "content": ["hello"]}))
 
-    assert result == "Error: Missing required argument(s) for write_file: content. Received: content=<array>."
+    assert result == "Error: Invalid arguments for write_file: content must be string, got array."

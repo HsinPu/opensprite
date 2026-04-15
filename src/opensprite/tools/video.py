@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 class AnalyzeVideoTool(Tool):
@@ -39,6 +40,7 @@ class AnalyzeVideoTool(Tool):
                 "instruction": {
                     "type": "string",
                     "description": "Required. What to analyze in the video and what kind of answer is needed.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
                 },
                 "video_index": {
                     "type": "integer",
@@ -50,10 +52,8 @@ class AnalyzeVideoTool(Tool):
             "required": ["instruction"],
         }
 
-    async def execute(self, instruction: str, video_index: int = 0, **kwargs: Any) -> str:
+    async def _execute(self, instruction: str, video_index: int = 0, **kwargs: Any) -> str:
         videos = self._get_current_videos() or []
-        if not instruction.strip():
-            return "Error: instruction is required for analyze_video."
         return await self._media_router.analyze_video(
             instruction=instruction,
             videos=videos,

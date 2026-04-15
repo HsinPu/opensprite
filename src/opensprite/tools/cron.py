@@ -87,7 +87,7 @@ class CronTool(Tool):
             "required": ["action"],
         }
 
-    async def execute(
+    async def _execute(
         self,
         action: str,
         name: str | None = None,

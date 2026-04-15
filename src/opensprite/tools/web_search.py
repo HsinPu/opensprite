@@ -11,6 +11,7 @@ import httpx
 from loguru import logger
 
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
 
@@ -74,7 +75,7 @@ class WebSearchTool(Tool):
     parameters = {
         "type": "object",
         "properties": {
-            "query": {"type": "string", "description": "Search query"},
+            "query": {"type": "string", "description": "Search query", "pattern": NON_EMPTY_STRING_PATTERN},
             "count": {"type": "integer", "description": "Results (1-10)", "minimum": 1, "maximum": 10}
         },
         "required": ["query"]
@@ -105,7 +106,7 @@ class WebSearchTool(Tool):
     def max_results(self) -> int:
         return self.config.get("max_results", 10)
 
-    async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
+    async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         n = min(max(count or self.max_results, 1), 10)
 
         provider = self.provider

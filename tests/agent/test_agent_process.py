@@ -84,7 +84,7 @@ class DummyTool(Tool):
     def parameters(self) -> dict:
         return {"type": "object", "properties": {}}
 
-    async def execute(self, **kwargs):
+    async def _execute(self, **kwargs):
         return "ok"
 
 
@@ -109,7 +109,7 @@ class LargeSchemaTool(Tool):
             },
         }
 
-    async def execute(self, **kwargs):
+    async def _execute(self, **kwargs):
         return "ok"
 
 

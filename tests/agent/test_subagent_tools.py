@@ -65,7 +65,7 @@ class DummyTool(Tool):
     def parameters(self) -> dict:
         return {"type": "object", "properties": {"value": {"type": "string"}}}
 
-    async def execute(self, value: str = "", **kwargs):
+    async def _execute(self, value: str = "", **kwargs):
         return f"tool:{value}"
 
 

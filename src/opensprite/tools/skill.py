@@ -6,6 +6,7 @@ from typing import Any
 
 from ..skills import SkillsLoader
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 class ReadSkillTool(Tool):
@@ -40,17 +41,18 @@ class ReadSkillTool(Tool):
             "properties": {
                 "skill_name": {
                     "type": "string",
-                    "description": "Name of the skill to read (e.g., 'github', 'weather')"
+                    "description": "Name of the skill to read (e.g., 'github', 'weather')",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
                 }
             },
             "required": ["skill_name"]
         }
 
-    async def execute(self, skill_name: str, **kwargs: Any) -> str:
+    async def _execute(self, skill_name: str, **kwargs: Any) -> str:
         personal_skills_dir = self._get_personal_skills_dir()
 
         # Security: validate skill_name (no path traversal)
-        if not skill_name or "/" in skill_name or "\\" in skill_name or "." in skill_name:
+        if "/" in skill_name or "\\" in skill_name or "." in skill_name:
             return f"Error: Invalid skill name '{skill_name}'"
         
         # Security: check if skill exists in valid skills list

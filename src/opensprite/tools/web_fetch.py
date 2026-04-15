@@ -173,6 +173,7 @@ from urllib.error import URLError, HTTPError
 from html import unescape
 
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 # 嘗試引入 trafilatura
 try:
@@ -772,13 +773,13 @@ class WebFetchTool(Tool):
         return {
             "type": "object",
             "properties": {
-                "url": {"type": "string", "description": "URL to fetch"},
+                "url": {"type": "string", "description": "URL to fetch", "pattern": NON_EMPTY_STRING_PATTERN},
                 "max_chars": {"type": "integer", "description": "Max characters to return", "default": 50000},
             },
             "required": ["url"],
         }
 
-    async def execute(self, url: str, max_chars: int = 50000, **kwargs) -> str:
+    async def _execute(self, url: str, max_chars: int = 50000, **kwargs) -> str:
         result = WebFetcher(
             max_chars=max_chars,
             timeout=self.fetcher.timeout,

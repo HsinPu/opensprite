@@ -49,7 +49,7 @@ class TranscribeAudioTool(Tool):
             },
         }
 
-    async def execute(self, audio_index: int = 0, language: str | None = None, **kwargs: Any) -> str:
+    async def _execute(self, audio_index: int = 0, language: str | None = None, **kwargs: Any) -> str:
         audios = self._get_current_audios() or []
         return await self._media_router.transcribe_audio(
             audios,

@@ -20,7 +20,7 @@ class DummyTool(Tool):
     def parameters(self) -> dict:
         return {"type": "object", "properties": {"value": {"type": "string"}}}
 
-    async def execute(self, value: str, **kwargs) -> str:
+    async def _execute(self, value: str, **kwargs) -> str:
         return f"tool:{value}"
 
 
@@ -168,13 +168,17 @@ def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
 
         @property
         def parameters(self) -> dict:
-            return {"type": "object", "properties": {}}
+            return {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                },
+                "required": ["path", "content"],
+            }
 
-        async def execute(self, **kwargs) -> str:
-            return (
-                "Error: Missing required argument(s) for write_file: path, content. "
-                "Call write_file with both 'path' and 'content'."
-            )
+        async def _execute(self, **kwargs) -> str:
+            raise AssertionError("_execute should not be called when validation fails")
 
     registry = ToolRegistry()
     registry.register(MissingArgsTool())
@@ -198,8 +202,8 @@ def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
         engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=True)
     )
 
-    assert "我重複嘗試呼叫工具，但仍然缺少必要參數而無法繼續。" in result
-    assert "Missing required argument(s) for write_file" in result
+    assert "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。" in result
+    assert "Invalid arguments for write_file" in result
     assert len(provider.calls) == 2
 
 
@@ -217,7 +221,7 @@ def test_execution_engine_slims_tool_result_for_context_but_persists_full_result
         def parameters(self) -> dict:
             return {"type": "object", "properties": {}}
 
-        async def execute(self, **kwargs) -> str:
+        async def _execute(self, **kwargs) -> str:
             return "A" * 2000 + "TAIL"
 
     registry = ToolRegistry()

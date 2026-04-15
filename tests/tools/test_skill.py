@@ -23,6 +23,6 @@ def test_read_skill_tool_prefers_personal_skill_dir(tmp_path):
     loader = SkillsLoader(default_skills_dir=global_dir)
     tool = ReadSkillTool(loader, personal_skills_dir_resolver=lambda: personal_dir)
 
-    result = asyncio.run(tool.execute("planner"))
+    result = asyncio.run(tool.execute(skill_name="planner"))
 
     assert result == "Personal body"

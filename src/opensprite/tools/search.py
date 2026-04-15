@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from ..search.base import SearchHit, SearchStore
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 def _truncate(text: str, limit: int = 240) -> str:
@@ -49,16 +50,14 @@ class SearchHistoryTool(_BaseSearchTool):
         return {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "What to search for in this chat history"},
+                "query": {"type": "string", "description": "What to search for in this chat history", "pattern": NON_EMPTY_STRING_PATTERN},
                 "limit": {"type": "integer", "description": "Maximum matches to return", "default": self.default_limit},
             },
             "required": ["query"],
         }
 
-    async def execute(self, query: str, limit: int | None = None, **kwargs: Any) -> str:
+    async def _execute(self, query: str, limit: int | None = None, **kwargs: Any) -> str:
         query = query.strip()
-        if not query:
-            return "Error: query is required."
         chat_id = self._current_chat_id()
         if not chat_id:
             return self._missing_chat_response()
@@ -94,7 +93,7 @@ class SearchKnowledgeTool(_BaseSearchTool):
         return {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "What to search for in saved web knowledge"},
+                "query": {"type": "string", "description": "What to search for in saved web knowledge", "pattern": NON_EMPTY_STRING_PATTERN},
                 "limit": {"type": "integer", "description": "Maximum matches to return", "default": self.default_limit},
                 "source_type": {
                     "type": "string",
@@ -105,7 +104,7 @@ class SearchKnowledgeTool(_BaseSearchTool):
             "required": ["query"],
         }
 
-    async def execute(
+    async def _execute(
         self,
         query: str,
         limit: int | None = None,
@@ -113,8 +112,6 @@ class SearchKnowledgeTool(_BaseSearchTool):
         **kwargs: Any,
     ) -> str:
         query = query.strip()
-        if not query:
-            return "Error: query is required."
         chat_id = self._current_chat_id()
         if not chat_id:
             return self._missing_chat_response()

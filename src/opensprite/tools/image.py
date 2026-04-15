@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 class AnalyzeImageTool(Tool):
@@ -39,6 +40,7 @@ class AnalyzeImageTool(Tool):
                 "instruction": {
                     "type": "string",
                     "description": "Required. What to analyze in the image and what kind of answer is needed.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
                 },
                 "image_index": {
                     "type": "integer",
@@ -50,10 +52,8 @@ class AnalyzeImageTool(Tool):
             "required": ["instruction"],
         }
 
-    async def execute(self, instruction: str, image_index: int = 0, **kwargs: Any) -> str:
+    async def _execute(self, instruction: str, image_index: int = 0, **kwargs: Any) -> str:
         images = self._get_current_images() or []
-        if not instruction.strip():
-            return "Error: instruction is required for analyze_image."
         return await self._media_router.analyze_image(
             instruction=instruction,
             images=images,
@@ -107,7 +107,7 @@ class OCRImageTool(Tool):
             },
         }
 
-    async def execute(self, image_index: int = 0, instruction: str = "", **kwargs: Any) -> str:
+    async def _execute(self, image_index: int = 0, instruction: str = "", **kwargs: Any) -> str:
         images = self._get_current_images() or []
         final_instruction = self.DEFAULT_INSTRUCTION
         if instruction.strip():

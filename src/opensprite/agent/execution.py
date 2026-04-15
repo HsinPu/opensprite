@@ -88,7 +88,7 @@ class ExecutionEngine:
     @staticmethod
     def _classify_tool_result(result: str) -> str | None:
         """Classify tool-result errors that should trigger early stopping."""
-        if result.startswith("Error: Missing required argument"):
+        if result.startswith("Error: Invalid arguments for "):
             return result
         return None
 
@@ -286,7 +286,7 @@ class ExecutionEngine:
                                 f"[{log_id}] tool.repeated-error | name={tool_name} count={repeated_tool_error_count} stopping_early=true"
                             )
                             return (
-                                "我重複嘗試呼叫工具，但仍然缺少必要參數而無法繼續。"
+                                "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。"
                                 f"最新錯誤：{result}"
                             )
                     else:

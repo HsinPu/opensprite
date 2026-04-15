@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .base import Tool
+from .validation import NON_EMPTY_STRING_PATTERN
 
 
 WorkspaceResolver = Callable[[], Path]
@@ -116,25 +117,16 @@ class ExecTool(Tool):
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Required. Full shell command to execute inside the current workspace."
+                    "description": "Required. Full shell command to execute inside the current workspace.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
+                    "maxLength": self.MAX_COMMAND_LENGTH,
                 }
             },
             "required": ["command"]
         }
 
-    async def execute(self, **kwargs: Any) -> str:
-        if "command" not in kwargs:
-            return "Error: Missing required argument for exec: command. Call exec with a 'command' string."
+    async def _execute(self, **kwargs: Any) -> str:
         command = str(kwargs["command"]).strip()
-
-        if not command:
-            return "Error: Command for exec must be a non-empty string."
-
-        if len(command) > self.MAX_COMMAND_LENGTH:
-            return (
-                f"Error: Command too long for exec (max {self.MAX_COMMAND_LENGTH} chars). "
-                "Please run a shorter command."
-            )
         
         # Check for dangerous patterns
         for pattern in self.deny_patterns:

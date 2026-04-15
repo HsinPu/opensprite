@@ -3,8 +3,6 @@
 from typing import Any
 
 from .base import Tool
-from .validation import format_param_preview, validate_required_tool_params
-from ..utils.log import logger
 
 
 class ToolRegistry:
@@ -35,27 +33,13 @@ class ToolRegistry:
         """Get all tool definitions in OpenAI format."""
         return [tool.to_schema() for tool in self._tools.values()]
 
-    async def execute(self, name: str, params: dict[str, Any]) -> str:
+    async def execute(self, name: str, params: Any) -> str:
         """Execute a tool by name with given parameters."""
         tool = self._tools.get(name)
         if not tool:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
 
-        validation_error = validate_required_tool_params(name, params)
-        if validation_error is not None:
-            logger.warning(
-                "tool.validation-failed | name={} params={} error={}",
-                name,
-                format_param_preview(params),
-                validation_error,
-            )
-            return validation_error
-        
-        try:
-            result = await tool.execute(**params)
-            return result
-        except Exception as e:
-            return f"Error executing {name}: {str(e)}"
+        return await tool.execute_validated(params)
 
     @property
     def tool_names(self) -> list[str]:
