@@ -105,3 +105,50 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
     assert fetch_only_hits[0].source_type == "web_fetch"
     assert cleared_history_hits == []
     assert [message.content for message in remaining_messages] == ["Please keep sqlite fts docs handy"]
+
+
+def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
+    db_path = tmp_path / "search.db"
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(
+                role="tool",
+                content=json.dumps(
+                    {
+                        "query": "sqlite fts5",
+                        "provider": "duckduckgo",
+                        "results": [
+                            {
+                                "title": "SQLite FTS5",
+                                "url": "https://sqlite.org/fts5.html",
+                                "content": "Official full text search docs",
+                            }
+                        ],
+                    }
+                ),
+                timestamp=11.0,
+                tool_name="web_search",
+            ),
+        )
+
+        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        await search.sync_from_storage(storage)
+
+        history_hits = await search.search_history("chat-a", "sqlite handy")
+        knowledge_hits = await search.search_knowledge("chat-a", "official full text docs")
+
+        return history_hits, knowledge_hits
+
+    history_hits, knowledge_hits = asyncio.run(scenario())
+
+    assert history_hits
+    assert history_hits[0].source_type == "history"
+    assert knowledge_hits
+    assert knowledge_hits[0].source_type == "web_search"

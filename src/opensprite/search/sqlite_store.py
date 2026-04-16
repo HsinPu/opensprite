@@ -17,6 +17,7 @@ from ..storage.sqlite import (
     insert_search_chunks,
     open_sqlite_connection,
 )
+from ..utils.log import logger
 
 
 class SQLiteSearchStore(SearchStore):
@@ -47,7 +48,56 @@ class SQLiteSearchStore(SearchStore):
         return open_sqlite_connection(self.path)
 
     async def sync_from_storage(self, storage: StorageProvider) -> None:
-        """The shared SQLite database no longer needs out-of-band backfills."""
+        """Backfill the shared SQLite index when search is enabled after history already exists."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                ensure_sqlite_schema(conn)
+                indexable_message_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM messages WHERE TRIM(content) <> ''"
+                    ).fetchone()[0]
+                )
+                indexed_message_count = int(
+                    conn.execute(
+                        "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'message'"
+                    ).fetchone()[0]
+                )
+                knowledge_source_count = int(
+                    conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
+                )
+                indexed_knowledge_count = int(
+                    conn.execute(
+                        "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'knowledge'"
+                    ).fetchone()[0]
+                )
+                has_tool_knowledge_candidates = bool(
+                    conn.execute(
+                        "SELECT 1 FROM messages WHERE tool_name IN ('web_search', 'web_fetch') LIMIT 1"
+                    ).fetchone()
+                )
+            finally:
+                conn.close()
+
+        needs_rebuild = False
+        if indexable_message_count > indexed_message_count:
+            needs_rebuild = True
+        elif knowledge_source_count > indexed_knowledge_count:
+            needs_rebuild = True
+        elif has_tool_knowledge_candidates and knowledge_source_count == 0:
+            needs_rebuild = True
+
+        if not needs_rebuild:
+            return None
+
+        logger.info(
+            "search.sync | rebuilding sqlite index messages={} indexed_messages={} knowledge={} indexed_knowledge={}",
+            indexable_message_count,
+            indexed_message_count,
+            knowledge_source_count,
+            indexed_knowledge_count,
+        )
+        await self.rebuild_index()
         return None
 
     async def index_message(
