@@ -39,7 +39,19 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
             "chat-a",
             tool_name="web_search",
             tool_args={"query": "sqlite fts5"},
-            result="Results for: sqlite fts5\n\n1. SQLite FTS5\n   https://sqlite.org/fts5.html\n   Official full text search docs",
+            result=json.dumps(
+                {
+                    "query": "sqlite fts5",
+                    "provider": "duckduckgo",
+                    "results": [
+                        {
+                            "title": "SQLite FTS5",
+                            "url": "https://sqlite.org/fts5.html",
+                            "content": "Official full text search docs",
+                        }
+                    ],
+                }
+            ),
             created_at=11.0,
         )
         await search.index_tool_result(

@@ -162,13 +162,38 @@ def guess_tool_name(content: str) -> str | None:
             payload = json.loads(stripped)
         except Exception:
             return None
+        if isinstance(payload, dict) and "query" in payload and isinstance(payload.get("results"), list):
+            return "web_search"
         if isinstance(payload, dict) and ("url" in payload or "finalUrl" in payload) and "text" in payload:
             return "web_fetch"
     return None
 
 
 def parse_web_search_results(result: str) -> tuple[str, list[dict[str, str]]]:
-    """Parse the plaintext output of ``web_search`` into structured items."""
+    """Parse the structured or legacy output of ``web_search`` into items."""
+    stripped = result.strip()
+    if stripped.startswith("{"):
+        try:
+            payload = json.loads(stripped)
+        except Exception:
+            payload = None
+        if isinstance(payload, dict):
+            query = str(payload.get("query", "") or "")
+            raw_results = payload.get("results", [])
+            items: list[dict[str, str]] = []
+            if isinstance(raw_results, list):
+                for item in raw_results:
+                    if not isinstance(item, dict):
+                        continue
+                    items.append(
+                        {
+                            "title": str(item.get("title", "") or ""),
+                            "url": str(item.get("url", "") or ""),
+                            "content": str(item.get("content", "") or ""),
+                        }
+                    )
+            return query, items
+
     query = ""
     items: list[dict[str, str]] = []
     current: dict[str, str] | None = None

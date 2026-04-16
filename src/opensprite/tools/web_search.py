@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from typing import Any
@@ -53,25 +54,32 @@ def _extract_duckduckgo_url(href: str) -> str:
     return normalized
 
 
-def _format_results(query: str, items: list[dict[str, Any]], n: int) -> str:
-    """Format search results into plaintext."""
-    if not items:
-        return f"No results for: {query}"
-    lines = [f"Results for: {query}\n"]
-    for i, item in enumerate(items[:n], 1):
-        title = _normalize(_strip_tags(item.get("title", "")))
-        snippet = _normalize(_strip_tags(item.get("content", "")))
-        lines.append(f"{i}. {title}\n   {item.get('url', '')}")
-        if snippet:
-            lines.append(f"   {snippet}")
-    return "\n".join(lines)
+def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider: str) -> str:
+    """Format search results into a structured JSON payload."""
+    normalized_items = []
+    for item in items[:n]:
+        normalized_items.append(
+            {
+                "title": _normalize(_strip_tags(str(item.get("title", "") or ""))),
+                "url": str(item.get("url", "") or ""),
+                "content": _normalize(_strip_tags(str(item.get("content", "") or ""))),
+            }
+        )
+    return json.dumps(
+        {
+            "query": query,
+            "provider": provider,
+            "results": normalized_items,
+        },
+        ensure_ascii=False,
+    )
 
 
 class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web. Returns titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
+    description = "Search the web. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
 
     parameters = {
         "type": "object",
@@ -143,7 +151,7 @@ class WebSearchTool(Tool):
                 {"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("description", "")}
                 for x in r.json().get("web", {}).get("results", [])
             ]
-            return _format_results(query, items, n)
+            return _format_results(query, items, n, provider="brave")
         except Exception as e:
             return f"Error: {e}"
 
@@ -188,7 +196,7 @@ class WebSearchTool(Tool):
                 })
                 if len(results) >= n:
                     break
-            return _format_results(query, results, n)
+            return _format_results(query, results, n, provider="duckduckgo")
         except Exception as e:
             return f"Error: {e}"
 
@@ -208,7 +216,7 @@ class WebSearchTool(Tool):
                 r.raise_for_status()
             items = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("content", "")} 
                      for x in r.json().get("results", [])]
-            return _format_results(query, items, n)
+            return _format_results(query, items, n, provider="tavily")
         except Exception as e:
             return f"Error: {e}"
 
@@ -223,7 +231,7 @@ class WebSearchTool(Tool):
                 )
             items = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("content", "")}
                      for x in r.json().get("results", [])[:n]]
-            return _format_results(query, items, n)
+            return _format_results(query, items, n, provider="searxng")
         except Exception as e:
             return f"Error: {e}"
 
@@ -238,7 +246,16 @@ class WebSearchTool(Tool):
                     headers=headers,
                     timeout=10.0
                 )
-            # Jina AI summarization endpoint
-            return r.text
+                r.raise_for_status()
+            return _format_results(
+                query,
+                [{
+                    "title": f"Jina summary for {query}",
+                    "url": "",
+                    "content": r.text,
+                }],
+                n,
+                provider="jina",
+            )
         except Exception as e:
             return f"Error: {e}"
