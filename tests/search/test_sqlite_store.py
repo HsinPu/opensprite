@@ -1,5 +1,6 @@
 import asyncio
 import json
+import sqlite3
 
 from opensprite.search.sqlite_store import SQLiteSearchStore
 from opensprite.storage.base import StoredMessage
@@ -152,3 +153,45 @@ def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):
     assert history_hits[0].source_type == "history"
     assert knowledge_hits
     assert knowledge_hits[0].source_type == "web_search"
+
+
+def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):
+    db_path = tmp_path / "search.db"
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="Please keep sqlite docs handy",
+            created_at=10.0,
+        )
+        return storage, search
+
+    storage, search = asyncio.run(seed())
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE search_metadata SET value = ? WHERE key = ?",
+        ("v0:chunk=10:2", "index_signature"),
+    )
+    conn.commit()
+    conn.close()
+
+    asyncio.run(search.sync_from_storage(storage))
+
+    conn = sqlite3.connect(str(db_path))
+    signature = conn.execute(
+        "SELECT value FROM search_metadata WHERE key = ?",
+        ("index_signature",),
+    ).fetchone()[0]
+    chunk_count = conn.execute("SELECT COUNT(*) FROM search_chunks").fetchone()[0]
+    conn.close()
+
+    assert signature == search._index_signature
+    assert chunk_count >= 1

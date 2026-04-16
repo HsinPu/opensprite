@@ -19,6 +19,9 @@ from ..storage.sqlite import (
 )
 from ..utils.log import logger
 
+SEARCH_INDEX_VERSION = 1
+SEARCH_INDEX_SIGNATURE_KEY = "index_signature"
+
 
 class SQLiteSearchStore(SearchStore):
     """Per-chat searchable history and knowledge index backed by SQLite."""
@@ -47,12 +50,37 @@ class SQLiteSearchStore(SearchStore):
     def _get_conn(self):
         return open_sqlite_connection(self.path)
 
+    @property
+    def _index_signature(self) -> str:
+        """Return the current signature for the SQLite search index layout."""
+        return f"v{SEARCH_INDEX_VERSION}:chunk={self.chunk_size}:{self.chunk_overlap}"
+
+    def _read_index_signature(self, conn) -> str | None:
+        """Read the persisted search index signature, if any."""
+        row = conn.execute(
+            "SELECT value FROM search_metadata WHERE key = ?",
+            (SEARCH_INDEX_SIGNATURE_KEY,),
+        ).fetchone()
+        return str(row["value"]) if row is not None else None
+
+    def _write_index_signature(self, conn) -> None:
+        """Persist the current search index signature."""
+        conn.execute(
+            """
+            INSERT INTO search_metadata (key, value, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """,
+            (SEARCH_INDEX_SIGNATURE_KEY, self._index_signature, time.time()),
+        )
+
     async def sync_from_storage(self, storage: StorageProvider) -> None:
         """Backfill the shared SQLite index when search is enabled after history already exists."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 ensure_sqlite_schema(conn)
+                persisted_signature = self._read_index_signature(conn)
                 indexable_message_count = int(
                     conn.execute(
                         "SELECT COUNT(*) FROM messages WHERE TRIM(content) <> ''"
@@ -80,7 +108,9 @@ class SQLiteSearchStore(SearchStore):
                 conn.close()
 
         needs_rebuild = False
-        if indexable_message_count > indexed_message_count:
+        if persisted_signature != self._index_signature:
+            needs_rebuild = True
+        elif indexable_message_count > indexed_message_count:
             needs_rebuild = True
         elif knowledge_source_count > indexed_knowledge_count:
             needs_rebuild = True
@@ -91,7 +121,9 @@ class SQLiteSearchStore(SearchStore):
             return None
 
         logger.info(
-            "search.sync | rebuilding sqlite index messages={} indexed_messages={} knowledge={} indexed_knowledge={}",
+            "search.sync | rebuilding sqlite index signature={} expected={} messages={} indexed_messages={} knowledge={} indexed_knowledge={}",
+            persisted_signature,
+            self._index_signature,
             indexable_message_count,
             indexed_message_count,
             knowledge_source_count,
@@ -138,6 +170,7 @@ class SQLiteSearchStore(SearchStore):
                     owner_id=owner_id,
                     chunks=chunks,
                 )
+                self._write_index_signature(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -171,6 +204,7 @@ class SQLiteSearchStore(SearchStore):
                         document=document,
                         created_at=current_created_at,
                     )
+                self._write_index_signature(conn)
                 conn.commit()
             finally:
                 conn.close()
@@ -296,6 +330,7 @@ class SQLiteSearchStore(SearchStore):
                         knowledge_count += 1
                         chunk_count += len(document.chunks)
 
+                self._write_index_signature(conn)
                 conn.commit()
                 return {
                     "chat_count": len({str(row["chat_id"]) for row in rows}),

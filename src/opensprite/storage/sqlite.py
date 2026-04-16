@@ -20,7 +20,7 @@ from ..search.indexing import (
 from ..utils.log import logger
 from .base import StorageProvider, StoredMessage
 
-SQLITE_SCHEMA_VERSION = 2
+SQLITE_SCHEMA_VERSION = 3
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -102,6 +102,12 @@ CREATE TABLE IF NOT EXISTS chunk_embeddings (
 
 CREATE INDEX IF NOT EXISTS idx_chunk_embeddings_status
     ON chunk_embeddings(embedding_status, embedding_model);
+
+CREATE TABLE IF NOT EXISTS search_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at REAL NOT NULL
+);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS search_chunks_fts USING fts5(
     content,
