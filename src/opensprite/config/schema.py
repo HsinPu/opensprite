@@ -214,10 +214,8 @@ class SearchConfig(BaseModel):
     """Search index configuration."""
 
     enabled: bool = False
-    provider: str = "lancedb"
-    path: str = "~/.opensprite/data/lancedb"
-    history_top_k: int = 5
-    knowledge_top_k: int = 5
+    history_top_k: int = Field(default=5, ge=1)
+    knowledge_top_k: int = Field(default=5, ge=1)
 
 
 class Config:
@@ -361,8 +359,6 @@ class Config:
             },
             "search": {
                 "enabled": self.search.enabled,
-                "provider": self.search.provider,
-                "path": self.search.path,
                 "history_top_k": self.search.history_top_k,
                 "knowledge_top_k": self.search.knowledge_top_k,
             },

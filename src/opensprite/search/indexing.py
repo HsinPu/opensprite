@@ -1,0 +1,268 @@
+"""Shared search indexing helpers for SQLite-backed storage."""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from ..storage.base import StoredMessage
+
+DEFAULT_CHUNK_SIZE = 1200
+DEFAULT_CHUNK_OVERLAP = 200
+
+
+@dataclass(frozen=True)
+class SearchChunkPayload:
+    """Searchable chunk payload stored in the shared SQLite index."""
+
+    source_type: str
+    content: str
+    created_at: float
+    role: str | None = None
+    tool_name: str | None = None
+    query: str | None = None
+    title: str | None = None
+    url: str | None = None
+    chunk_index: int = 0
+
+
+@dataclass(frozen=True)
+class KnowledgeDocument:
+    """Structured knowledge source parsed from a tool result."""
+
+    source_type: str
+    tool_name: str
+    query: str
+    title: str
+    url: str
+    raw_result: str
+    chunks: list[str]
+
+
+def chunk_text(
+    text: str,
+    *,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> list[str]:
+    """Normalize text and split it into overlapping chunks."""
+    normalized = re.sub(r"\s+", " ", text or "").strip()
+    if not normalized:
+        return []
+    if len(normalized) <= chunk_size:
+        return [normalized]
+
+    chunks = []
+    start = 0
+    while start < len(normalized):
+        end = min(len(normalized), start + chunk_size)
+        chunks.append(normalized[start:end].strip())
+        if end >= len(normalized):
+            break
+        start = max(end - chunk_overlap, start + 1)
+    return [chunk for chunk in chunks if chunk]
+
+
+def build_history_chunks(
+    *,
+    role: str,
+    content: str,
+    tool_name: str | None,
+    created_at: float,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> list[SearchChunkPayload]:
+    """Build history chunk payloads from one stored message."""
+    return [
+        SearchChunkPayload(
+            source_type="history",
+            role=role,
+            tool_name=tool_name,
+            content=chunk,
+            chunk_index=chunk_index,
+            created_at=created_at,
+        )
+        for chunk_index, chunk in enumerate(
+            chunk_text(content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        )
+    ]
+
+
+def build_knowledge_documents(
+    *,
+    tool_name: str,
+    tool_args: dict[str, Any],
+    result: str,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> list[KnowledgeDocument]:
+    """Build structured knowledge documents from a tool result."""
+    if tool_name == "web_search":
+        return _build_web_search_documents(
+            tool_args,
+            result,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+    if tool_name == "web_fetch":
+        return _build_web_fetch_documents(
+            tool_args,
+            result,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+    return []
+
+
+def build_knowledge_documents_from_message(
+    message: StoredMessage,
+    *,
+    chunk_size: int = DEFAULT_CHUNK_SIZE,
+    chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+) -> list[KnowledgeDocument]:
+    """Rebuild knowledge documents from a stored tool message."""
+    tool_name = message.tool_name or guess_tool_name(message.content)
+    if tool_name is None:
+        return []
+    return build_knowledge_documents(
+        tool_name=tool_name,
+        tool_args={},
+        result=message.content,
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+
+
+def build_knowledge_chunks(document: KnowledgeDocument, *, created_at: float) -> list[SearchChunkPayload]:
+    """Build searchable chunk payloads from one structured knowledge document."""
+    return [
+        SearchChunkPayload(
+            source_type=document.source_type,
+            tool_name=document.tool_name,
+            query=document.query,
+            title=document.title,
+            url=document.url,
+            content=chunk,
+            chunk_index=chunk_index,
+            created_at=created_at,
+        )
+        for chunk_index, chunk in enumerate(document.chunks)
+    ]
+
+
+def guess_tool_name(content: str) -> str | None:
+    """Infer the originating tool from a stored tool result payload."""
+    stripped = content.strip()
+    if stripped.startswith("Results for:"):
+        return "web_search"
+    if stripped.startswith("{"):
+        try:
+            payload = json.loads(stripped)
+        except Exception:
+            return None
+        if isinstance(payload, dict) and ("url" in payload or "finalUrl" in payload) and "text" in payload:
+            return "web_fetch"
+    return None
+
+
+def parse_web_search_results(result: str) -> tuple[str, list[dict[str, str]]]:
+    """Parse the plaintext output of ``web_search`` into structured items."""
+    query = ""
+    items: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    for raw_line in result.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if not query and line.startswith("Results for:"):
+            query = line.split(":", 1)[1].strip()
+            continue
+
+        match = re.match(r"^(\d+)\.\s+(.*)$", line)
+        if match:
+            if current:
+                items.append(current)
+            current = {"title": match.group(2).strip(), "url": "", "content": ""}
+            continue
+
+        if current is None:
+            continue
+
+        if not current["url"] and line.startswith(("http://", "https://")):
+            current["url"] = line
+        else:
+            current["content"] = f"{current['content']} {line}".strip()
+
+    if current:
+        items.append(current)
+    return query, items
+
+
+def _build_web_search_documents(
+    tool_args: dict[str, Any],
+    result: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[KnowledgeDocument]:
+    query = str(tool_args.get("query", "") or "").strip()
+    parsed_query, items = parse_web_search_results(result)
+    query = query or parsed_query
+    if not items:
+        items = [{"title": f"Search: {query or 'unknown'}", "url": "", "content": result}]
+
+    documents = []
+    for item in items:
+        chunks = chunk_text(item.get("content", "") or result, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        if not chunks:
+            continue
+        documents.append(
+            KnowledgeDocument(
+                source_type="web_search",
+                tool_name="web_search",
+                query=query,
+                title=item.get("title", ""),
+                url=item.get("url", ""),
+                raw_result=result,
+                chunks=chunks,
+            )
+        )
+    return documents
+
+
+def _build_web_fetch_documents(
+    tool_args: dict[str, Any],
+    result: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[KnowledgeDocument]:
+    query = str(tool_args.get("url", "") or "")
+    title = ""
+    url = query
+    content = result
+    try:
+        payload = json.loads(result)
+        if isinstance(payload, dict):
+            title = str(payload.get("title", "") or "")
+            url = str(payload.get("finalUrl", payload.get("url", query)) or query)
+            content = str(payload.get("text", result) or result)
+    except Exception:
+        pass
+
+    chunks = chunk_text(content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    if not chunks:
+        return []
+    return [
+        KnowledgeDocument(
+            source_type="web_fetch",
+            tool_name="web_fetch",
+            query=query,
+            title=title,
+            url=url,
+            raw_result=result,
+            chunks=chunks,
+        )
+    ]

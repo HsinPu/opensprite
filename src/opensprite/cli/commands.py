@@ -270,7 +270,6 @@ def status(
         provider_has_key = False
         model_name = "<unset>"
     storage_path = Path(loaded.storage.path).expanduser()
-    search_path = Path(loaded.search.path).expanduser()
     channels = {name: enabled for name, enabled in _iter_channel_status(loaded)}
 
     payload.update(
@@ -288,9 +287,9 @@ def status(
                 "path": str(storage_path),
             },
             "search": {
-                "provider": loaded.search.provider,
                 "enabled": loaded.search.enabled,
-                "path": str(search_path),
+                "history_top_k": loaded.search.history_top_k,
+                "knowledge_top_k": loaded.search.knowledge_top_k,
             },
             "channels": channels,
         }

@@ -123,8 +123,6 @@
   },
   "search": {
     "enabled": false,
-    "provider": "lancedb",
-    "path": "~/.opensprite/data/lancedb",
     "history_top_k": 5,
     "knowledge_top_k": 5
   }

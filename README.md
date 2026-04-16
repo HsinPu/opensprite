@@ -269,14 +269,12 @@ Example:
 
 ## Search Index
 
-Optional search uses LanceDB and is configured in `search`.
+Optional search uses the same SQLite database as `storage.path` and is configured in `search`.
 
 ```json
 {
   "search": {
     "enabled": true,
-    "provider": "lancedb",
-    "path": "~/.opensprite/data/lancedb",
     "history_top_k": 5,
     "knowledge_top_k": 5
   }
@@ -304,7 +302,7 @@ The default agent registers tools for:
 - extracting visible text from images in the current user turn
 - scheduling per-session cron jobs
 - long-term memory save
-- search over indexed history and knowledge when LanceDB is enabled
+- search over indexed history and knowledge when SQLite search is enabled
 
 ## Vision
 

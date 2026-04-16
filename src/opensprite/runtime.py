@@ -45,14 +45,13 @@ def create_search_store(config: Config) -> SearchStore | None:
     if not getattr(config, "search", None) or not config.search.enabled:
         return None
 
-    provider = (config.search.provider or "lancedb").strip().lower()
-    if provider != "lancedb":
-        raise ValueError(f"Unsupported search provider: {provider}")
+    if config.storage.type != "sqlite":
+        raise ValueError("search.enabled=true requires storage.type=sqlite")
 
-    from .search.lancedb_store import LanceDBSearchStore
+    from .search.sqlite_store import SQLiteSearchStore
 
-    return LanceDBSearchStore(
-        path=config.search.path,
+    return SQLiteSearchStore(
+        path=config.storage.path,
         history_top_k=config.search.history_top_k,
         knowledge_top_k=config.search.knowledge_top_k,
     )

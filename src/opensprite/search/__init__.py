@@ -2,13 +2,13 @@
 
 from .base import SearchHit, SearchStore
 
-__all__ = ["SearchHit", "SearchStore", "LanceDBSearchStore"]
+__all__ = ["SearchHit", "SearchStore", "SQLiteSearchStore"]
 
 
 def __getattr__(name: str):
-    """Lazily import optional search backends."""
-    if name == "LanceDBSearchStore":
-        from .lancedb_store import LanceDBSearchStore
+    """Lazily import optional search backends to avoid import cycles."""
+    if name == "SQLiteSearchStore":
+        from .sqlite_store import SQLiteSearchStore
 
-        return LanceDBSearchStore
+        return SQLiteSearchStore
     raise AttributeError(f"module 'opensprite.search' has no attribute {name!r}")
