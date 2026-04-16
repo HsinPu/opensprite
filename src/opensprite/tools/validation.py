@@ -124,6 +124,20 @@ def _validate_string(schema: dict[str, Any], value: str, path: str) -> list[Vali
     return issues
 
 
+def _validate_number(schema: dict[str, Any], value: int | float, path: str) -> list[ValidationIssue]:
+    issues: list[ValidationIssue] = []
+
+    minimum = schema.get("minimum")
+    if isinstance(minimum, (int, float)) and value < minimum:
+        issues.append(ValidationIssue("invalid", path, f"{path} must be at least {minimum}"))
+
+    maximum = schema.get("maximum")
+    if isinstance(maximum, (int, float)) and value > maximum:
+        issues.append(ValidationIssue("invalid", path, f"{path} must be at most {maximum}"))
+
+    return issues
+
+
 def _validate_value(
     schema: dict[str, Any],
     value: Any,
@@ -154,6 +168,8 @@ def _validate_value(
 
     if matching_type == "string":
         issues.extend(_validate_string(schema, value, path))
+    elif matching_type in {"integer", "number"} and isinstance(value, (int, float)):
+        issues.extend(_validate_number(schema, value, path))
     elif matching_type == "object" and isinstance(value, dict):
         properties = schema.get("properties")
         required_keys = schema.get("required") or []

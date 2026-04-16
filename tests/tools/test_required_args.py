@@ -7,6 +7,29 @@ from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.shell import ExecTool
 
 
+class BoundedCountStub(Tool):
+    @property
+    def name(self) -> str:
+        return "count_tool"
+
+    @property
+    def description(self) -> str:
+        return "count"
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "count": {"type": "integer", "minimum": 1, "maximum": 10},
+            },
+            "required": ["count"],
+        }
+
+    async def _execute(self, **kwargs):
+        raise AssertionError("_execute should not be called when validation fails")
+
+
 def test_write_file_reports_missing_required_arguments(tmp_path):
     tool = WriteFileTool(workspace=tmp_path)
 
@@ -121,3 +144,21 @@ def test_registry_rejects_non_string_write_file_content_before_execution():
     result = asyncio.run(registry.execute("write_file", {"path": "out.txt", "content": ["hello"]}))
 
     assert result == "Error: Invalid arguments for write_file: content must be string, got array."
+
+
+def test_registry_rejects_integer_below_minimum_before_execution():
+    registry = ToolRegistry()
+    registry.register(BoundedCountStub())
+
+    result = asyncio.run(registry.execute("count_tool", {"count": 0}))
+
+    assert result == "Error: Invalid arguments for count_tool: count must be at least 1."
+
+
+def test_registry_rejects_integer_above_maximum_before_execution():
+    registry = ToolRegistry()
+    registry.register(BoundedCountStub())
+
+    result = asyncio.run(registry.execute("count_tool", {"count": 11}))
+
+    assert result == "Error: Invalid arguments for count_tool: count must be at most 10."
