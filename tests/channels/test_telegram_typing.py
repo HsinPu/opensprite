@@ -1,6 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 
+from telegram import Update
+
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.telegram import TelegramAdapter
 
@@ -58,3 +60,27 @@ def test_typing_indicator_stops_on_error():
     adapter = asyncio.run(scenario())
 
     assert "telegram:user-a" not in adapter._typing_tasks
+
+
+def test_to_user_message_sets_session_chat_id_for_typing():
+    async def scenario():
+        adapter = TelegramAdapter("token")
+        update = Update.de_json(
+            {
+                "update_id": 1,
+                "message": {
+                    "message_id": 10,
+                    "date": 1710000000,
+                    "chat": {"id": 12345, "type": "private"},
+                    "from": {"id": 67890, "is_bot": False, "first_name": "Test"},
+                    "text": "hello",
+                },
+            },
+            bot=None,
+        )
+        return await adapter.to_user_message(update)
+
+    user_message = asyncio.run(scenario())
+
+    assert user_message.chat_id == "12345"
+    assert user_message.session_chat_id == "telegram:12345"

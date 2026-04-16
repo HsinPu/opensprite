@@ -245,6 +245,7 @@ class TelegramAdapter(MessageAdapter):
         
         # 取出聊天室 ID
         chat_id = str(message.chat.id) if message.chat else None
+        session_chat_id = f"telegram:{chat_id}" if chat_id else None
         
         # 處理圖片
         images = []
@@ -295,6 +296,7 @@ class TelegramAdapter(MessageAdapter):
             text=text,
             channel="telegram",
             chat_id=chat_id,
+            session_chat_id=session_chat_id,
             sender_id=sender_id,
             sender_name=sender_name,
             images=images if images else None,
