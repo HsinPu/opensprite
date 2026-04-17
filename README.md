@@ -287,6 +287,8 @@ Search requires `storage.type="sqlite"`.
       "base_url": null,
       "batch_size": 16,
       "candidate_count": 20,
+      "candidate_strategy": "fts",
+      "vector_candidate_count": 50,
       "retry_failed_on_startup": false
     }
   }
@@ -313,6 +315,24 @@ When `search.embedding.enabled=true`:
 - hybrid reranking improves result quality as pending embedding jobs complete
 
 If `search.embedding.api_key` or `search.embedding.base_url` is empty, OpenSprite falls back to the active LLM provider settings.
+
+`search.embedding` options:
+
+- `candidate_count`: FTS candidate pool size before hybrid reranking
+- `candidate_strategy`: candidate selection mode, either `fts` or `vector`
+- `vector_candidate_count`: vector candidate pool size when `candidate_strategy="vector"`
+- `retry_failed_on_startup`: whether failed embeddings should be re-queued automatically on startup
+
+Candidate strategies:
+
+- `fts` keeps the current default path: FTS5 selects candidates first, then embeddings rerank them when available
+- `vector` uses stored embeddings to pull candidates first, then applies the same score fusion and deduplication logic afterward
+
+Current note on `vector` mode:
+
+- it uses exact vector scanning over `chunk_embeddings`
+- it is not ANN and does not require `sqlite-vec`
+- if vector candidates are unavailable, search falls back to the existing FTS path automatically
 
 ### Automatic Maintenance
 
