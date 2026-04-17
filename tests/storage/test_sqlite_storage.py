@@ -96,9 +96,30 @@ def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
     }
     knowledge_count = conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
     chunk_count = conn.execute("SELECT COUNT(*) FROM search_chunks").fetchone()[0]
+    knowledge_rows = conn.execute(
+        "SELECT source_type, provider, extractor, status, content_type, truncated, summary FROM knowledge_sources ORDER BY id ASC"
+    ).fetchall()
     conn.close()
 
     assert "sessions" not in table_names
     assert {"chats", "chat_state", "messages", "knowledge_sources", "search_chunks", "search_chunks_fts"}.issubset(table_names)
     assert knowledge_count == 2
     assert chunk_count >= 5
+    assert knowledge_rows[0] == (
+        "web_search",
+        "duckduckgo",
+        "search",
+        None,
+        "application/json",
+        0,
+        "Official full text search docs",
+    )
+    assert knowledge_rows[1] == (
+        "web_fetch",
+        "web_fetch",
+        "trafilatura",
+        200,
+        "text/html",
+        0,
+        "SQLite FTS5",
+    )

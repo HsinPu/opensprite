@@ -377,9 +377,16 @@ class SQLiteSearchStore(SearchStore):
                 c.title,
                 c.url,
                 c.query,
+                ks.summary,
+                ks.provider,
+                ks.extractor,
+                ks.status,
+                ks.content_type,
+                ks.truncated,
                 bm25(search_chunks_fts) AS score
             FROM search_chunks_fts
             JOIN search_chunks c ON c.id = search_chunks_fts.rowid
+            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE search_chunks_fts MATCH ?
               AND c.chat_id = ?
               AND c.owner_type = ?
@@ -414,16 +421,33 @@ class SQLiteSearchStore(SearchStore):
         source_type: str | None = None,
     ):
         sql = """
-            SELECT id, chat_id, source_type, content, created_at, role, tool_name, title, url, query
-            FROM search_chunks
-            WHERE chat_id = ?
-              AND owner_type = ?
+            SELECT
+                c.id,
+                c.chat_id,
+                c.source_type,
+                c.content,
+                c.created_at,
+                c.role,
+                c.tool_name,
+                c.title,
+                c.url,
+                c.query,
+                ks.summary,
+                ks.provider,
+                ks.extractor,
+                ks.status,
+                ks.content_type,
+                ks.truncated
+            FROM search_chunks c
+            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
+            WHERE c.chat_id = ?
+              AND c.owner_type = ?
         """
         params: list[object] = [chat_id, owner_type]
         if source_type:
-            sql += " AND source_type = ?"
+            sql += " AND c.source_type = ?"
             params.append(source_type)
-        sql += " ORDER BY created_at DESC, id DESC"
+        sql += " ORDER BY c.created_at DESC, c.id DESC"
 
         rows = conn.execute(sql, params).fetchall()
         scored = []
@@ -482,4 +506,10 @@ class SQLiteSearchStore(SearchStore):
             title=row["title"],
             url=row["url"],
             query=row["query"],
+            summary=row["summary"],
+            provider=row["provider"],
+            extractor=row["extractor"],
+            status=int(row["status"]) if row["status"] is not None else None,
+            content_type=row["content_type"],
+            truncated=bool(row["truncated"]) if row["truncated"] is not None else None,
         )

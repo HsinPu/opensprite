@@ -93,6 +93,14 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
         knowledge_hits = await search.search_knowledge("chat-a", "full text docs")
         fetch_only_hits = await search.search_knowledge("chat-a", "examples", source_type="web_fetch")
 
+        import sqlite3
+
+        conn = sqlite3.connect(str(db_path))
+        metadata_rows = conn.execute(
+            "SELECT source_type, provider, extractor, status, content_type, truncated FROM knowledge_sources ORDER BY id ASC"
+        ).fetchall()
+        conn.close()
+
         await search.clear_chat("chat-a")
         cleared_history_hits = await search.search_history("chat-a", "sqlite docs")
         remaining_messages = await storage.get_messages("chat-a")
@@ -104,6 +112,7 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
             fetch_only_hits,
             cleared_history_hits,
             remaining_messages,
+            metadata_rows,
         )
 
     (
@@ -113,6 +122,7 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
         fetch_only_hits,
         cleared_history_hits,
         remaining_messages,
+        metadata_rows,
     ) = asyncio.run(scenario())
 
     assert len(history_hits) == 1
@@ -122,8 +132,17 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
     assert {hit.source_type for hit in knowledge_hits} == {"web_search", "web_fetch"}
     assert len(fetch_only_hits) == 1
     assert fetch_only_hits[0].source_type == "web_fetch"
+    assert knowledge_hits[0].provider in {"duckduckgo", "web_fetch"}
+    assert {hit.extractor for hit in knowledge_hits} == {"search", "trafilatura"}
+    assert fetch_only_hits[0].status == 200
+    assert fetch_only_hits[0].content_type == "text/html"
+    assert fetch_only_hits[0].truncated is False
     assert cleared_history_hits == []
     assert [message.content for message in remaining_messages] == ["Please keep sqlite fts docs handy"]
+    assert metadata_rows == [
+        ("web_search", "duckduckgo", "search", None, "application/json", 0),
+        ("web_fetch", "web_fetch", "trafilatura", 200, "text/html", 0),
+    ]
 
 
 def test_sqlite_search_store_sync_backfills_existing_messages(tmp_path):

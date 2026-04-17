@@ -137,5 +137,20 @@ class SearchKnowledgeTool(_BaseSearchTool):
                 lines.append(f"   {hit.url}")
             if hit.query:
                 lines.append(f"   query: {hit.query}")
+            metadata = []
+            if hit.provider:
+                metadata.append(f"provider={hit.provider}")
+            if hit.extractor:
+                metadata.append(f"extractor={hit.extractor}")
+            if hit.status is not None:
+                metadata.append(f"status={hit.status}")
+            if hit.content_type:
+                metadata.append(f"content_type={hit.content_type}")
+            if hit.truncated is not None:
+                metadata.append(f"truncated={'yes' if hit.truncated else 'no'}")
+            if metadata:
+                lines.append(f"   {' | '.join(metadata)}")
+            if hit.summary:
+                lines.append(f"   summary: {_truncate(hit.summary, limit=120)}")
             lines.append(f"   {_truncate(hit.content)}")
         return "\n".join(lines)

@@ -77,6 +77,7 @@ def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider
             "provider": provider,
             "extractor": "search",
             "status": None,
+            "truncated": False,
             "content_type": "application/json",
             "items": normalized_items,
         },

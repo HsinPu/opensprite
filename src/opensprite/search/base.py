@@ -21,6 +21,12 @@ class SearchHit:
     title: str | None = None
     url: str | None = None
     query: str | None = None
+    summary: str | None = None
+    provider: str | None = None
+    extractor: str | None = None
+    status: int | None = None
+    content_type: str | None = None
+    truncated: bool | None = None
 
 
 class SearchStore(ABC):

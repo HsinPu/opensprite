@@ -20,7 +20,7 @@ from ..search.indexing import (
 from ..utils.log import logger
 from .base import StorageProvider, StoredMessage
 
-SQLITE_SCHEMA_VERSION = 3
+SQLITE_SCHEMA_VERSION = 4
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -56,6 +56,12 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
     query TEXT,
     title TEXT,
     url TEXT,
+    summary TEXT,
+    provider TEXT,
+    extractor TEXT,
+    status INTEGER,
+    content_type TEXT,
+    truncated INTEGER,
     raw_result TEXT NOT NULL,
     created_at REAL NOT NULL
 );
@@ -161,6 +167,7 @@ def ensure_sqlite_schema(conn: sqlite3.Connection) -> None:
         return
 
     create_schema(conn)
+    ensure_schema_upgrades(conn)
     conn.execute(f"PRAGMA user_version = {SQLITE_SCHEMA_VERSION}")
     conn.commit()
 
@@ -168,6 +175,28 @@ def ensure_sqlite_schema(conn: sqlite3.Connection) -> None:
 def create_schema(conn: sqlite3.Connection) -> None:
     """Create the normalized schema used by storage and search."""
     conn.executescript(SCHEMA_SCRIPT)
+
+
+def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
+    """Apply additive schema upgrades for existing normalized databases."""
+    if not table_exists(conn, "knowledge_sources"):
+        return
+    existing_columns = {
+        str(row[1])
+        for row in conn.execute("PRAGMA table_info(knowledge_sources)").fetchall()
+    }
+    required_columns = {
+        "summary": "TEXT",
+        "provider": "TEXT",
+        "extractor": "TEXT",
+        "status": "INTEGER",
+        "content_type": "TEXT",
+        "truncated": "INTEGER",
+    }
+    for column_name, column_type in required_columns.items():
+        if column_name in existing_columns:
+            continue
+        conn.execute(f"ALTER TABLE knowledge_sources ADD COLUMN {column_name} {column_type}")
 
 
 def ensure_chat_row(
@@ -271,8 +300,23 @@ def insert_knowledge_document(
     ensure_chat_row(conn, chat_id, created_at=created_at, updated_at=created_at)
     cursor = conn.execute(
         """
-        INSERT INTO knowledge_sources (chat_id, source_type, tool_name, query, title, url, raw_result, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO knowledge_sources (
+            chat_id,
+            source_type,
+            tool_name,
+            query,
+            title,
+            url,
+            summary,
+            provider,
+            extractor,
+            status,
+            content_type,
+            truncated,
+            raw_result,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             chat_id,
@@ -281,6 +325,12 @@ def insert_knowledge_document(
             document.query,
             document.title,
             document.url,
+            document.summary,
+            document.provider,
+            document.extractor,
+            document.status,
+            document.content_type,
+            1 if document.truncated is True else 0 if document.truncated is False else None,
             document.raw_result,
             created_at,
         ),

@@ -39,6 +39,12 @@ class KnowledgeDocument:
     url: str
     raw_result: str
     chunks: list[str]
+    summary: str = ""
+    provider: str = ""
+    extractor: str = ""
+    status: int | None = None
+    content_type: str = ""
+    truncated: bool | None = None
 
 
 def chunk_text(
@@ -239,6 +245,20 @@ def _build_web_search_documents(
     chunk_overlap: int,
 ) -> list[KnowledgeDocument]:
     query = str(tool_args.get("query", "") or "").strip()
+    provider = str(tool_args.get("provider", "") or "")
+    extractor = "search"
+    content_type = "application/json"
+    truncated: bool | None = False
+    try:
+        payload = json.loads(result)
+        if isinstance(payload, dict):
+            provider = str(payload.get("provider", provider) or provider)
+            extractor = str(payload.get("extractor", extractor) or extractor)
+            content_type = str(payload.get("content_type", content_type) or content_type)
+            raw_truncated = payload.get("truncated")
+            truncated = raw_truncated if isinstance(raw_truncated, bool) else truncated
+    except Exception:
+        pass
     parsed_query, items = parse_web_search_results(result)
     query = query or parsed_query
     if not items:
@@ -256,6 +276,11 @@ def _build_web_search_documents(
                 query=query,
                 title=item.get("title", ""),
                 url=item.get("url", ""),
+                summary=str(item.get("content", "") or ""),
+                provider=provider,
+                extractor=extractor,
+                content_type=content_type,
+                truncated=truncated,
                 raw_result=result,
                 chunks=chunks,
             )
@@ -274,12 +299,26 @@ def _build_web_fetch_documents(
     title = ""
     url = query
     content = result
+    summary = ""
+    provider = ""
+    extractor = ""
+    status: int | None = None
+    content_type = ""
+    truncated: bool | None = None
     try:
         payload = json.loads(result)
         if isinstance(payload, dict):
             title = str(payload.get("title", "") or "")
             url = str(payload.get("final_url", payload.get("finalUrl", payload.get("url", query))) or query)
             content = str(payload.get("content", payload.get("text", result)) or result)
+            summary = str(payload.get("summary", "") or "")
+            provider = str(payload.get("provider", "") or "")
+            extractor = str(payload.get("extractor", "") or "")
+            raw_status = payload.get("status")
+            status = int(raw_status) if isinstance(raw_status, (int, float)) else None
+            content_type = str(payload.get("content_type", payload.get("contentType", "")) or "")
+            raw_truncated = payload.get("truncated")
+            truncated = raw_truncated if isinstance(raw_truncated, bool) else None
     except Exception:
         pass
 
@@ -293,6 +332,12 @@ def _build_web_fetch_documents(
             query=query,
             title=title,
             url=url,
+            summary=summary,
+            provider=provider,
+            extractor=extractor,
+            status=status,
+            content_type=content_type,
+            truncated=truncated,
             raw_result=result,
             chunks=chunks,
         )

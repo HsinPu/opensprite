@@ -30,6 +30,7 @@ def test_format_results_returns_structured_json_payload():
         "provider": "duckduckgo",
         "extractor": "search",
         "status": None,
+        "truncated": False,
         "content_type": "application/json",
         "items": [
             {
