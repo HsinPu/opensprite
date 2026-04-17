@@ -19,6 +19,21 @@ class FakeEmbeddingProvider:
         return [list(self.vectors.get(text, [0.0, 0.0])) for text in texts]
 
 
+class BlockingEmbeddingProvider:
+    provider_name = "fake"
+    model_name = "fake-embedding"
+    batch_size = 8
+
+    def __init__(self):
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def embed_texts(self, texts):
+        self.started.set()
+        await self.release.wait()
+        return [[1.0, 0.0] for _ in texts]
+
+
 def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path):
     db_path = tmp_path / "search.db"
 
@@ -296,6 +311,8 @@ def test_sqlite_search_store_persists_embeddings_and_reranks_candidates(tmp_path
             created_at=20.0,
         )
 
+        await search.wait_for_embedding_idle()
+
         hits = await search.search_history("chat-a", "guide", limit=2)
 
         conn = sqlite3.connect(str(db_path))
@@ -312,3 +329,42 @@ def test_sqlite_search_store_persists_embeddings_and_reranks_candidates(tmp_path
         ("fake", "fake-embedding", 2, "completed"),
         ("fake", "fake-embedding", 2, "completed"),
     ]
+
+
+def test_sqlite_search_store_processes_embeddings_in_background(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = BlockingEmbeddingProvider()
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="background embedding", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="background embedding",
+            created_at=10.0,
+        )
+
+        await asyncio.wait_for(embedder.started.wait(), timeout=1.0)
+        status_during = await search.get_status()
+
+        embedder.release.set()
+        status_after = await search.wait_for_embedding_idle()
+        return status_during, status_after
+
+    status_during, status_after = asyncio.run(scenario())
+
+    assert status_during["processing"] == 1
+    assert status_after["completed"] == 1
+    assert status_after["pending"] == 0

@@ -331,6 +331,7 @@ def search_rebuild(
     try:
         loaded, search_store = _load_sqlite_search_store(config)
         result = asyncio.run(search_store.rebuild_index(chat_id=chat_id))
+        status = asyncio.run(search_store.wait_for_embedding_idle())
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
@@ -341,6 +342,50 @@ def search_rebuild(
     typer.echo(f"Messages: {result['message_count']}")
     typer.echo(f"Knowledge sources: {result['knowledge_count']}")
     typer.echo(f"Chunks: {result['chunk_count']}")
+    typer.echo(
+        "Embeddings: "
+        f"pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']}"
+    )
+
+
+@search_app.command("status")
+def search_status(
+    config: str | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to an OpenSprite JSON config file.",
+    ),
+    chat_id: str | None = typer.Option(
+        None,
+        "--chat-id",
+        help="Optional chat id to inspect instead of the full search index.",
+    ),
+) -> None:
+    """Show SQLite search index and embedding status."""
+    try:
+        loaded, search_store = _load_sqlite_search_store(config)
+        status = asyncio.run(search_store.get_status(chat_id=chat_id))
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        _handle_search_error(exc)
+
+    scope = chat_id or "all chats"
+    embedding = loaded.search.embedding
+    typer.echo(f"Search status for {scope}.")
+    typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
+    typer.echo(f"Chats: {status['chat_count']}")
+    typer.echo(f"Messages: {status['message_count']}")
+    typer.echo(f"Knowledge sources: {status['knowledge_count']}")
+    typer.echo(f"Chunks: {status['chunk_count']}")
+    typer.echo(
+        "Embedding: "
+        f"enabled={_format_presence(bool(embedding.enabled))} "
+        f"provider={embedding.provider} model={embedding.model or '<unset>'}"
+    )
+    typer.echo(
+        "Embedding jobs: "
+        f"pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']}"
+    )
 
 
 def _handle_service_error(exc: Exception) -> None:

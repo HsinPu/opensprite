@@ -49,6 +49,7 @@ class SQLiteSearchStore(SearchStore):
         self.embedding_provider = embedding_provider
         self.hybrid_candidate_count = max(hybrid_candidate_count, max(history_top_k, knowledge_top_k))
         self._lock = asyncio.Lock()
+        self._embedding_task: asyncio.Task | None = None
         conn = self._get_conn()
         try:
             ensure_sqlite_schema(conn)
@@ -91,33 +92,191 @@ class SQLiteSearchStore(SearchStore):
             return max(requested_limit, 1)
         return max(requested_limit, self.hybrid_candidate_count)
 
-    async def _store_chunk_embeddings(self, conn, chunk_ids: list[int], chunk_texts: list[str]) -> None:
-        """Persist embeddings for the provided chunk ids when embedding is enabled."""
+    def _schedule_pending_embeddings(self) -> None:
+        """Start the background embedding worker when there is an active event loop."""
+        if self.embedding_provider is None:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        if self._embedding_task is not None and not self._embedding_task.done():
+            return
+        self._embedding_task = loop.create_task(self.process_pending_embeddings())
+        self._embedding_task.add_done_callback(self._clear_embedding_task)
+
+    def _clear_embedding_task(self, task: asyncio.Task) -> None:
+        """Reset the cached background task when it finishes."""
+        if self._embedding_task is task:
+            self._embedding_task = None
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            logger.info("search.embed | background worker cancelled")
+        except Exception as exc:
+            logger.warning("search.embed | background worker failed: {}", exc)
+
+    def _queue_chunk_embeddings(self, conn, chunk_ids: list[int]) -> None:
+        """Mark new chunk rows as pending embedding work."""
         if self.embedding_provider is None or not chunk_ids:
             return
+        for chunk_id in chunk_ids:
+            upsert_chunk_embedding(
+                conn,
+                chunk_id=chunk_id,
+                provider=self.embedding_provider.provider_name,
+                model=self.embedding_provider.model_name,
+                values=None,
+                status="pending",
+                embedded_at=None,
+            )
 
-        try:
-            vectors = await self.embedding_provider.embed_texts(chunk_texts)
-            for chunk_id, vector in zip(chunk_ids, vectors, strict=True):
-                upsert_chunk_embedding(
-                    conn,
-                    chunk_id=chunk_id,
-                    provider=self.embedding_provider.provider_name,
-                    model=self.embedding_provider.model_name,
-                    values=vector,
-                    status="completed",
+    async def _claim_pending_embedding_batch(self) -> list[tuple[int, str]]:
+        """Claim one batch of pending chunk ids for background embedding."""
+        if self.embedding_provider is None:
+            return []
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT ce.chunk_id, sc.content
+                    FROM chunk_embeddings ce
+                    JOIN search_chunks sc ON sc.id = ce.chunk_id
+                    WHERE ce.embedding_status = 'pending'
+                      AND ce.embedding_model = ?
+                    ORDER BY ce.chunk_id ASC
+                    LIMIT ?
+                    """,
+                    (self.embedding_provider.model_name, self.embedding_provider.batch_size),
+                ).fetchall()
+                if not rows:
+                    return []
+                chunk_ids = [int(row["chunk_id"]) for row in rows]
+                conn.executemany(
+                    "UPDATE chunk_embeddings SET embedding_status = 'processing' WHERE chunk_id = ? AND embedding_status = 'pending'",
+                    [(chunk_id,) for chunk_id in chunk_ids],
                 )
-        except Exception as exc:
-            logger.warning("search.embed | failed to persist chunk embeddings: {}", exc)
-            for chunk_id in chunk_ids:
-                upsert_chunk_embedding(
-                    conn,
-                    chunk_id=chunk_id,
-                    provider=self.embedding_provider.provider_name,
-                    model=self.embedding_provider.model_name,
-                    values=None,
-                    status="failed",
-                )
+                conn.commit()
+                return [(int(row["chunk_id"]), str(row["content"] or "")) for row in rows]
+            finally:
+                conn.close()
+
+    async def _mark_embedding_batch(
+        self,
+        chunk_ids: list[int],
+        *,
+        vectors: list[list[float]] | None,
+        status: str,
+    ) -> None:
+        """Persist one processed embedding batch."""
+        if self.embedding_provider is None or not chunk_ids:
+            return
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                payloads = vectors or [None] * len(chunk_ids)
+                for chunk_id, values in zip(chunk_ids, payloads, strict=True):
+                    upsert_chunk_embedding(
+                        conn,
+                        chunk_id=chunk_id,
+                        provider=self.embedding_provider.provider_name,
+                        model=self.embedding_provider.model_name,
+                        values=values,
+                        status=status,
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
+    async def process_pending_embeddings(self) -> dict[str, int]:
+        """Drain pending chunk embeddings and persist results."""
+        if self.embedding_provider is None:
+            return {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+
+        current_task = asyncio.current_task()
+        if self._embedding_task is not None and self._embedding_task is not current_task and not self._embedding_task.done():
+            await self._embedding_task
+            return await self.get_status()
+
+        while True:
+            batch = await self._claim_pending_embedding_batch()
+            if not batch:
+                break
+            chunk_ids = [chunk_id for chunk_id, _ in batch]
+            texts = [content for _, content in batch]
+            try:
+                vectors = await self.embedding_provider.embed_texts(texts)
+            except Exception as exc:
+                logger.warning("search.embed | failed to embed batch: {}", exc)
+                await self._mark_embedding_batch(chunk_ids, vectors=None, status="failed")
+                continue
+            await self._mark_embedding_batch(chunk_ids, vectors=vectors, status="completed")
+
+        return await self.get_status()
+
+    async def wait_for_embedding_idle(self) -> dict[str, int]:
+        """Wait for background embedding work to finish and return current status counts."""
+        if self._embedding_task is not None and not self._embedding_task.done():
+            await self._embedding_task
+        return await self.process_pending_embeddings()
+
+    async def get_status(self, chat_id: str | None = None) -> dict[str, int]:
+        """Return search and embedding status counts."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                filters = ""
+                params: list[object] = []
+                if chat_id:
+                    filters = " WHERE chat_id = ?"
+                    params.append(chat_id)
+                chats = conn.execute(
+                    f"SELECT COUNT(DISTINCT chat_id) FROM search_chunks{filters}",
+                    params,
+                ).fetchone()[0]
+                knowledge = conn.execute(
+                    f"SELECT COUNT(*) FROM knowledge_sources{filters}",
+                    params,
+                ).fetchone()[0]
+                chunks = conn.execute(
+                    f"SELECT COUNT(*) FROM search_chunks{filters}",
+                    params,
+                ).fetchone()[0]
+                messages = conn.execute(
+                    f"SELECT COUNT(*) FROM messages{filters}",
+                    params,
+                ).fetchone()[0]
+
+                embedding_filters = ""
+                embedding_params: list[object] = []
+                if chat_id:
+                    embedding_filters = " WHERE sc.chat_id = ?"
+                    embedding_params.append(chat_id)
+                status_rows = conn.execute(
+                    f"""
+                    SELECT ce.embedding_status, COUNT(*) AS count
+                    FROM chunk_embeddings ce
+                    JOIN search_chunks sc ON sc.id = ce.chunk_id
+                    {embedding_filters}
+                    GROUP BY ce.embedding_status
+                    """,
+                    embedding_params,
+                ).fetchall()
+            finally:
+                conn.close()
+
+        counts = {str(row["embedding_status"]): int(row["count"] or 0) for row in status_rows}
+        return {
+            "chat_count": int(chats or 0),
+            "message_count": int(messages or 0),
+            "knowledge_count": int(knowledge or 0),
+            "chunk_count": int(chunks or 0),
+            "pending": counts.get("pending", 0),
+            "processing": counts.get("processing", 0),
+            "completed": counts.get("completed", 0),
+            "failed": counts.get("failed", 0),
+        }
 
     async def _rerank_rows(self, conn, query: str, rows, limit: int):
         """Rerank FTS candidates with embeddings when available."""
@@ -195,6 +354,11 @@ class SQLiteSearchStore(SearchStore):
                 knowledge_source_count = int(
                     conn.execute("SELECT COUNT(*) FROM knowledge_sources").fetchone()[0]
                 )
+                pending_embedding_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'pending'"
+                    ).fetchone()[0]
+                )
                 indexed_knowledge_count = int(
                     conn.execute(
                         "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'knowledge'"
@@ -219,6 +383,8 @@ class SQLiteSearchStore(SearchStore):
             needs_rebuild = True
 
         if not needs_rebuild:
+            if pending_embedding_count > 0:
+                self._schedule_pending_embeddings()
             return None
 
         logger.info(
@@ -231,6 +397,7 @@ class SQLiteSearchStore(SearchStore):
             indexed_knowledge_count,
         )
         await self.rebuild_index()
+        self._schedule_pending_embeddings()
         return None
 
     async def index_message(
@@ -271,11 +438,12 @@ class SQLiteSearchStore(SearchStore):
                     owner_id=owner_id,
                     chunks=chunks,
                 )
-                await self._store_chunk_embeddings(conn, chunk_ids, [chunk.content for chunk in chunks])
+                self._queue_chunk_embeddings(conn, chunk_ids)
                 self._write_index_signature(conn)
                 conn.commit()
             finally:
                 conn.close()
+        self._schedule_pending_embeddings()
 
     async def index_tool_result(
         self,
@@ -306,11 +474,12 @@ class SQLiteSearchStore(SearchStore):
                         document=document,
                         created_at=current_created_at,
                     )
-                    await self._store_chunk_embeddings(conn, chunk_ids, list(document.chunks))
+                    self._queue_chunk_embeddings(conn, chunk_ids)
                 self._write_index_signature(conn)
                 conn.commit()
             finally:
                 conn.close()
+        self._schedule_pending_embeddings()
 
     async def search_history(self, chat_id: str, query: str, limit: int = 5) -> list[SearchHit]:
         async with self._lock:
@@ -411,7 +580,7 @@ class SQLiteSearchStore(SearchStore):
                         owner_id=int(row["id"]),
                         chunks=history_chunks,
                     )
-                    await self._store_chunk_embeddings(conn, history_chunk_ids, [chunk.content for chunk in history_chunks])
+                    self._queue_chunk_embeddings(conn, history_chunk_ids)
                     chunk_count += len(history_chunks)
                     message_count += 1
 
@@ -433,12 +602,13 @@ class SQLiteSearchStore(SearchStore):
                             document=document,
                             created_at=created_at,
                         )
-                        await self._store_chunk_embeddings(conn, knowledge_chunk_ids, list(document.chunks))
+                        self._queue_chunk_embeddings(conn, knowledge_chunk_ids)
                         knowledge_count += 1
                         chunk_count += len(document.chunks)
 
                 self._write_index_signature(conn)
                 conn.commit()
+                self._schedule_pending_embeddings()
                 return {
                     "chat_count": len({str(row["chat_id"]) for row in rows}),
                     "message_count": message_count,

@@ -314,9 +314,12 @@ def upsert_chunk_embedding(
     model: str,
     values: list[float] | None,
     status: str,
+    embedded_at: float | None = None,
 ) -> None:
     """Insert or update one chunk embedding row."""
-    current_time = time.time()
+    current_time = embedded_at
+    if current_time is None and status in {"completed", "failed"}:
+        current_time = time.time()
     conn.execute(
         """
         INSERT INTO chunk_embeddings (

@@ -115,3 +115,33 @@ def test_status_command_renders_search_top_k_values(tmp_path):
 
     assert result.exit_code == 0
     assert "Search: enabled=yes (history_top_k=7, knowledge_top_k=9)" in result.stdout
+
+
+def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
+    db_path = tmp_path / "sessions.db"
+    config_path = tmp_path / "opensprite.json"
+    _write_config(config_path, db_path, search_enabled=True)
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(db_path, history_top_k=5, knowledge_top_k=5)
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="Please keep sqlite docs handy", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="Please keep sqlite docs handy",
+            created_at=10.0,
+        )
+
+    asyncio.run(scenario())
+
+    result = runner.invoke(app, ["search", "status", "--config", str(config_path)])
+
+    assert result.exit_code == 0
+    assert "Search status for all chats." in result.stdout
+    assert "Messages: 1" in result.stdout
+    assert "Chunks: 1" in result.stdout
+    assert "Embedding jobs: pending=0 processing=0 completed=0 failed=0" in result.stdout
