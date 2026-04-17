@@ -7,6 +7,7 @@ import math
 import re
 import time
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .base import SearchHit, SearchStore
 from .embeddings import EmbeddingProvider
@@ -39,6 +40,7 @@ class SQLiteSearchStore(SearchStore):
         chunk_overlap: int = 200,
         embedding_provider: EmbeddingProvider | None = None,
         hybrid_candidate_count: int = 20,
+        retry_failed_on_startup: bool = False,
     ):
         self.path = Path(path).expanduser()
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -48,6 +50,7 @@ class SQLiteSearchStore(SearchStore):
         self.chunk_overlap = chunk_overlap
         self.embedding_provider = embedding_provider
         self.hybrid_candidate_count = max(hybrid_candidate_count, max(history_top_k, knowledge_top_k))
+        self.retry_failed_on_startup = retry_failed_on_startup
         self._lock = asyncio.Lock()
         self._embedding_task: asyncio.Task | None = None
         conn = self._get_conn()
@@ -192,7 +195,7 @@ class SQLiteSearchStore(SearchStore):
     async def process_pending_embeddings(self) -> dict[str, int]:
         """Drain pending chunk embeddings and persist results."""
         if self.embedding_provider is None:
-            return {"pending": 0, "processing": 0, "completed": 0, "failed": 0}
+            return await self.get_status()
 
         current_task = asyncio.current_task()
         if self._embedding_task is not None and self._embedding_task is not current_task and not self._embedding_task.done():
@@ -220,6 +223,64 @@ class SQLiteSearchStore(SearchStore):
         if self._embedding_task is not None and not self._embedding_task.done():
             await self._embedding_task
         return await self.process_pending_embeddings()
+
+    async def _requeue_embeddings(self, *, from_status: str, chat_id: str | None = None) -> int:
+        """Move matching embedding jobs back to pending."""
+        if self.embedding_provider is None:
+            return 0
+
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                params: list[object] = [self.embedding_provider.model_name]
+                where_clauses = ["ce.embedding_status = ?", "ce.embedding_model = ?"]
+                params.insert(0, from_status)
+                if chat_id:
+                    where_clauses.append("sc.chat_id = ?")
+                    params.append(chat_id)
+                rows = conn.execute(
+                    f"""
+                    SELECT ce.chunk_id
+                    FROM chunk_embeddings ce
+                    JOIN search_chunks sc ON sc.id = ce.chunk_id
+                    WHERE {' AND '.join(where_clauses)}
+                    ORDER BY ce.chunk_id ASC
+                    """,
+                    params,
+                ).fetchall()
+                chunk_ids = [int(row["chunk_id"]) for row in rows]
+                if chunk_ids:
+                    conn.executemany(
+                        "UPDATE chunk_embeddings SET embedding_status = 'pending', embedded_at = NULL WHERE chunk_id = ?",
+                        [(chunk_id,) for chunk_id in chunk_ids],
+                    )
+                    conn.commit()
+                return len(chunk_ids)
+            finally:
+                conn.close()
+
+    async def retry_failed_embeddings(
+        self,
+        chat_id: str | None = None,
+        *,
+        wait: bool = True,
+    ) -> dict[str, int]:
+        """Move failed embedding jobs back to pending and optionally wait for completion."""
+        if self.embedding_provider is None:
+            status = await self.get_status(chat_id=chat_id)
+            status["retried"] = 0
+            return status
+
+        retried = await self._requeue_embeddings(from_status="failed", chat_id=chat_id)
+
+        if retried:
+            self._schedule_pending_embeddings()
+            if wait:
+                await self.wait_for_embedding_idle()
+
+        filtered_status = await self.get_status(chat_id=chat_id)
+        filtered_status["retried"] = retried
+        return filtered_status
 
     async def get_status(self, chat_id: str | None = None) -> dict[str, int]:
         """Return search and embedding status counts."""
@@ -267,60 +328,90 @@ class SQLiteSearchStore(SearchStore):
                 conn.close()
 
         counts = {str(row["embedding_status"]): int(row["count"] or 0) for row in status_rows}
+        total_embeddings = sum(counts.values())
         return {
             "chat_count": int(chats or 0),
             "message_count": int(messages or 0),
             "knowledge_count": int(knowledge or 0),
             "chunk_count": int(chunks or 0),
+            "embedding_total": int(total_embeddings),
+            "queued": counts.get("pending", 0) + counts.get("processing", 0),
             "pending": counts.get("pending", 0),
             "processing": counts.get("processing", 0),
             "completed": counts.get("completed", 0),
             "failed": counts.get("failed", 0),
         }
 
-    async def _rerank_rows(self, conn, query: str, rows, limit: int):
-        """Rerank FTS candidates with embeddings when available."""
-        if self.embedding_provider is None or not rows:
-            return rows[: max(limit, 1)]
+    async def _rerank_rows(self, conn, query: str, rows, limit: int, *, owner_type: str):
+        """Fuse FTS, lexical coverage, embeddings, and source preference into final ranking."""
+        if not rows:
+            return []
 
-        try:
-            query_vectors = await self.embedding_provider.embed_texts([query])
-        except Exception as exc:
-            logger.warning("search.embed | failed to embed query for rerank: {}", exc)
-            return rows[: max(limit, 1)]
-        if not query_vectors:
-            return rows[: max(limit, 1)]
+        normalized_query = self._normalize_query_text(query)
+        query_tokens = self._query_tokens(normalized_query)
+        ranked_rows = [dict(row) if not isinstance(row, dict) else dict(row) for row in rows]
 
-        query_vector = query_vectors[0]
-        row_ids = [int(row["id"]) for row in rows]
-        placeholders = ", ".join("?" for _ in row_ids)
-        embedding_rows = conn.execute(
-            f"""
-            SELECT chunk_id, embedding, embedding_dim
-            FROM chunk_embeddings
-            WHERE chunk_id IN ({placeholders})
-              AND embedding_status = 'completed'
-            """,
-            row_ids,
-        ).fetchall()
-        if not embedding_rows:
-            return rows[: max(limit, 1)]
+        embedding_similarities: dict[int, float] = {}
+        if self.embedding_provider is not None:
+            try:
+                query_vectors = await self.embedding_provider.embed_texts([normalized_query or query])
+            except Exception as exc:
+                logger.warning("search.embed | failed to embed query for rerank: {}", exc)
+                query_vectors = []
 
-        vectors = {
-            int(row["chunk_id"]): unpack_embedding(row["embedding"], int(row["embedding_dim"] or 0))
-            for row in embedding_rows
-        }
-        if not vectors:
-            return rows[: max(limit, 1)]
+            if query_vectors:
+                query_vector = query_vectors[0]
+                row_ids = [int(row["id"]) for row in ranked_rows]
+                placeholders = ", ".join("?" for _ in row_ids)
+                embedding_rows = conn.execute(
+                    f"""
+                    SELECT chunk_id, embedding, embedding_dim
+                    FROM chunk_embeddings
+                    WHERE chunk_id IN ({placeholders})
+                      AND embedding_status = 'completed'
+                    """,
+                    row_ids,
+                ).fetchall()
+                vectors = {
+                    int(row["chunk_id"]): unpack_embedding(row["embedding"], int(row["embedding_dim"] or 0))
+                    for row in embedding_rows
+                }
+                for row in ranked_rows:
+                    vector = vectors.get(int(row["id"]))
+                    similarity = self._cosine_similarity(query_vector, vector) if vector else None
+                    if similarity is not None:
+                        embedding_similarities[int(row["id"])] = similarity
 
-        reranked: list[tuple[float, int, object]] = []
-        for index, row in enumerate(rows):
-            vector = vectors.get(int(row["id"]))
-            similarity = self._cosine_similarity(query_vector, vector) if vector else None
-            score = similarity if similarity is not None else -1.0
-            reranked.append((score, -index, row))
-        reranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
-        return [row for score, _, row in reranked[: max(limit, 1)] if score >= -1.0]
+        scored_rows: list[dict] = []
+        for index, row in enumerate(ranked_rows, start=1):
+            fts_component = 1.0 / index
+            coverage_component = self._coverage_score(query_tokens, row)
+            embedding_similarity = embedding_similarities.get(int(row["id"]))
+            embedding_component = ((embedding_similarity + 1.0) / 2.0) if embedding_similarity is not None else 0.0
+            source_bonus = self._source_bonus(row["source_type"] if owner_type == "knowledge" else None)
+
+            if embedding_similarity is not None:
+                combined_score = (0.25 * fts_component) + (0.25 * coverage_component) + (0.45 * embedding_component) + source_bonus
+            else:
+                combined_score = (0.55 * fts_component) + (0.35 * coverage_component) + source_bonus
+
+            row["score"] = combined_score
+            row["embedding_similarity"] = embedding_similarity
+            scored_rows.append(row)
+
+        scored_rows.sort(
+            key=lambda row: (
+                float(row["score"] or 0),
+                self._source_rank(str(row["source_type"] or "")) if owner_type == "knowledge" else 0,
+                float(row["created_at"] or 0),
+                int(row["id"]),
+            ),
+            reverse=True,
+        )
+
+        if owner_type == "knowledge":
+            return self._dedupe_knowledge_rows(scored_rows, limit)
+        return scored_rows[: max(limit, 1)]
 
     @staticmethod
     def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
@@ -333,6 +424,107 @@ class SQLiteSearchStore(SearchStore):
         if left_norm == 0 or right_norm == 0:
             return None
         return numerator / (left_norm * right_norm)
+
+    @staticmethod
+    def _normalize_query_text(text: str) -> str:
+        """Normalize a free-form query into a whitespace-separated token string."""
+        tokens = [token.strip() for token in re.findall(r"\w+", text.lower()) if token.strip()]
+        if tokens:
+            return " ".join(tokens)
+        return " ".join(text.strip().lower().split())
+
+    @classmethod
+    def _query_tokens(cls, text: str) -> list[str]:
+        """Tokenize a normalized query string."""
+        normalized = cls._normalize_query_text(text)
+        return [token for token in normalized.split() if token]
+
+    @classmethod
+    def _coverage_score(cls, query_tokens: list[str], row) -> float:
+        """Estimate how much of the normalized query is covered by this row."""
+        if not query_tokens:
+            return 0.0
+        haystack = " ".join(
+            str(row.get(key, "") or "")
+            for key in ("title", "query", "summary", "content", "url")
+        )
+        haystack_tokens = set(cls._query_tokens(haystack))
+        if not haystack_tokens:
+            return 0.0
+        matched = sum(1 for token in query_tokens if token in haystack_tokens)
+        return matched / max(len(query_tokens), 1)
+
+    @staticmethod
+    def _source_rank(source_type: str | None) -> int:
+        """Return a stable rank for knowledge source preference."""
+        if source_type == "web_fetch":
+            return 2
+        if source_type == "web_search":
+            return 1
+        return 0
+
+    @classmethod
+    def _source_bonus(cls, source_type: str | None) -> float:
+        """Apply a modest bonus to higher-fidelity knowledge sources."""
+        rank = cls._source_rank(source_type)
+        if rank == 2:
+            return 0.08
+        if rank == 1:
+            return 0.03
+        return 0.0
+
+    @staticmethod
+    def _canonicalize_url(url: str | None) -> str | None:
+        """Normalize URLs so related knowledge hits can be deduplicated."""
+        if not url:
+            return None
+        parsed = urlsplit(url.strip())
+        host = parsed.netloc.lower()
+        path = parsed.path.rstrip("/") or "/"
+        if not host and not path:
+            return None
+        if host:
+            return f"{host}{path}"
+        return path
+
+    @classmethod
+    def _dedupe_knowledge_rows(cls, rows: list[dict], limit: int) -> list[dict]:
+        """Deduplicate knowledge rows by canonical URL or document owner."""
+        best_by_key: dict[str, dict] = {}
+        for row in rows:
+            canonical_url = cls._canonicalize_url(str(row.get("url") or ""))
+            owner_id = int(row.get("owner_id") or row.get("id") or 0)
+            dedupe_key = canonical_url or f"owner:{owner_id}"
+            current = best_by_key.get(dedupe_key)
+            if current is None:
+                best_by_key[dedupe_key] = row
+                continue
+            candidate_key = (
+                cls._source_rank(str(row.get("source_type") or "")),
+                float(row.get("score") or 0),
+                float(row.get("created_at") or 0),
+                int(row.get("id") or 0),
+            )
+            current_key = (
+                cls._source_rank(str(current.get("source_type") or "")),
+                float(current.get("score") or 0),
+                float(current.get("created_at") or 0),
+                int(current.get("id") or 0),
+            )
+            if candidate_key > current_key:
+                best_by_key[dedupe_key] = row
+
+        deduped = sorted(
+            best_by_key.values(),
+            key=lambda row: (
+                float(row.get("score") or 0),
+                cls._source_rank(str(row.get("source_type") or "")),
+                float(row.get("created_at") or 0),
+                int(row.get("id") or 0),
+            ),
+            reverse=True,
+        )
+        return deduped[: max(limit, 1)]
 
     async def sync_from_storage(self, storage: StorageProvider) -> None:
         """Backfill the shared SQLite index when search is enabled after history already exists."""
@@ -359,6 +551,16 @@ class SQLiteSearchStore(SearchStore):
                         "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'pending'"
                     ).fetchone()[0]
                 )
+                processing_embedding_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'processing'"
+                    ).fetchone()[0]
+                )
+                failed_embedding_count = int(
+                    conn.execute(
+                        "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'failed'"
+                    ).fetchone()[0]
+                )
                 indexed_knowledge_count = int(
                     conn.execute(
                         "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'knowledge'"
@@ -383,6 +585,12 @@ class SQLiteSearchStore(SearchStore):
             needs_rebuild = True
 
         if not needs_rebuild:
+            if processing_embedding_count > 0:
+                requeued_processing = await self._requeue_embeddings(from_status="processing")
+                if requeued_processing > 0:
+                    pending_embedding_count += requeued_processing
+            if self.retry_failed_on_startup and failed_embedding_count > 0:
+                await self.retry_failed_embeddings(wait=False)
             if pending_embedding_count > 0:
                 self._schedule_pending_embeddings()
             return None
@@ -492,7 +700,13 @@ class SQLiteSearchStore(SearchStore):
                     owner_type="message",
                     limit=self._candidate_limit(limit or self.history_top_k),
                 )
-                rows = await self._rerank_rows(conn, query, rows, limit or self.history_top_k)
+                rows = await self._rerank_rows(
+                    conn,
+                    query,
+                    rows,
+                    limit or self.history_top_k,
+                    owner_type="message",
+                )
                 return [self._row_to_hit(row) for row in rows]
             finally:
                 conn.close()
@@ -525,7 +739,13 @@ class SQLiteSearchStore(SearchStore):
                     content_type=content_type,
                     truncated=truncated,
                 )
-                rows = await self._rerank_rows(conn, query, rows, limit or self.knowledge_top_k)
+                rows = await self._rerank_rows(
+                    conn,
+                    query,
+                    rows,
+                    limit or self.knowledge_top_k,
+                    owner_type="knowledge",
+                )
                 return [self._row_to_hit(row) for row in rows]
             finally:
                 conn.close()
@@ -665,6 +885,7 @@ class SQLiteSearchStore(SearchStore):
         sql = """
             SELECT
                 c.id,
+                c.owner_id,
                 c.chat_id,
                 c.source_type,
                 c.content,
@@ -745,6 +966,7 @@ class SQLiteSearchStore(SearchStore):
         sql = """
             SELECT
                 c.id,
+                c.owner_id,
                 c.chat_id,
                 c.source_type,
                 c.content,
@@ -801,22 +1023,19 @@ class SQLiteSearchStore(SearchStore):
 
     @staticmethod
     def _compile_match_query(query: str) -> str | None:
-        tokens = []
-        for token in re.findall(r"\w+", query.lower()):
-            cleaned = token.strip()
-            if cleaned:
-                tokens.append(cleaned)
+        tokens = SQLiteSearchStore._query_tokens(query)
         if not tokens:
             return None
         return " AND ".join(f'"{token}"' for token in tokens)
 
     @staticmethod
     def _lexical_score(query: str, content: str) -> float:
-        query_tokens = {token for token in re.findall(r"\w+", query.lower()) if len(token) > 1}
+        query_tokens = {token for token in SQLiteSearchStore._query_tokens(query) if len(token) > 1}
         if not query_tokens:
-            normalized_query = query.strip().lower()
-            return 1.0 if normalized_query and normalized_query in content.lower() else 0.0
-        content_tokens = re.findall(r"\w+", content.lower())
+            normalized_query = SQLiteSearchStore._normalize_query_text(query)
+            normalized_content = SQLiteSearchStore._normalize_query_text(content)
+            return 1.0 if normalized_query and normalized_query in normalized_content else 0.0
+        content_tokens = SQLiteSearchStore._query_tokens(content)
         if not content_tokens:
             return 0.0
         counts = {token: content_tokens.count(token) for token in query_tokens}

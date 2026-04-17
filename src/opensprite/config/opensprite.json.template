@@ -132,7 +132,8 @@
       "model": "",
       "base_url": null,
       "batch_size": 16,
-      "candidate_count": 20
+      "candidate_count": 20,
+      "retry_failed_on_startup": false
     }
   }
 }

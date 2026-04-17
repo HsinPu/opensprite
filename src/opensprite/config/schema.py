@@ -220,6 +220,7 @@ class SearchEmbeddingConfig(BaseModel):
     base_url: str | None = None
     batch_size: int = Field(default=16, ge=1, le=128)
     candidate_count: int = Field(default=20, ge=1, le=200)
+    retry_failed_on_startup: bool = False
 
     @model_validator(mode="after")
     def validate_enabled_fields(self) -> "SearchEmbeddingConfig":

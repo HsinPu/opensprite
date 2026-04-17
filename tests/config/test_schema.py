@@ -120,6 +120,7 @@ def test_search_config_provides_embedding_defaults():
     assert config.embedding.provider == "openai"
     assert config.embedding.batch_size == 16
     assert config.embedding.candidate_count == 20
+    assert config.embedding.retry_failed_on_startup is False
 
 
 def test_config_load_defaults_agent_when_section_missing(tmp_path):

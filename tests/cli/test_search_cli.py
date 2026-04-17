@@ -1,5 +1,6 @@
 import asyncio
 import json
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -12,7 +13,7 @@ from opensprite.storage.sqlite import SQLiteStorage
 runner = CliRunner()
 
 
-def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, knowledge_top_k=5):
+def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, knowledge_top_k=5, embedding=None):
     path.write_text(
         json.dumps(
             {
@@ -34,6 +35,17 @@ def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, knowle
                     "enabled": search_enabled,
                     "history_top_k": history_top_k,
                     "knowledge_top_k": knowledge_top_k,
+                    "embedding": embedding
+                    or {
+                        "enabled": False,
+                        "provider": "openai",
+                        "api_key": "",
+                        "model": "",
+                        "base_url": None,
+                        "batch_size": 16,
+                        "candidate_count": 20,
+                        "retry_failed_on_startup": False,
+                    },
                 },
             }
         ),
@@ -144,4 +156,66 @@ def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
     assert "Search status for all chats." in result.stdout
     assert "Messages: 1" in result.stdout
     assert "Chunks: 1" in result.stdout
-    assert "Embedding jobs: pending=0 processing=0 completed=0 failed=0" in result.stdout
+    assert "Embedding: enabled=no provider=openai model=<unset> retry_failed_on_startup=no" in result.stdout
+    assert "Embedding jobs: total=0 queued=0 pending=0 processing=0 completed=0 failed=0" in result.stdout
+
+
+def test_search_retry_embeddings_cli_reports_retried_jobs(monkeypatch, tmp_path):
+    db_path = tmp_path / "sessions.db"
+    config_path = tmp_path / "opensprite.json"
+    _write_config(
+        config_path,
+        db_path,
+        search_enabled=True,
+        embedding={
+            "enabled": True,
+            "provider": "openai",
+            "api_key": "key",
+            "model": "text-embedding-3-small",
+            "base_url": None,
+            "batch_size": 16,
+            "candidate_count": 20,
+            "retry_failed_on_startup": True,
+        },
+    )
+
+    class FakeSearchStore:
+        async def retry_failed_embeddings(self, chat_id=None, wait=True):
+            assert chat_id == "telegram:user-a"
+            assert wait is True
+            return {
+                "retried": 2,
+                "embedding_total": 4,
+                "queued": 0,
+                "pending": 0,
+                "processing": 0,
+                "completed": 4,
+                "failed": 0,
+            }
+
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path=str(db_path)),
+        search=SimpleNamespace(
+            embedding=SimpleNamespace(
+                enabled=True,
+                provider="openai",
+                model="text-embedding-3-small",
+                retry_failed_on_startup=True,
+            )
+        ),
+    )
+
+    monkeypatch.setattr(
+        "opensprite.cli.commands._load_sqlite_search_store",
+        lambda config=None: (loaded, FakeSearchStore()),
+    )
+
+    result = runner.invoke(
+        app,
+        ["search", "retry-embeddings", "--config", str(config_path), "--chat-id", "telegram:user-a"],
+    )
+
+    assert result.exit_code == 0
+    assert "Retried failed embeddings for telegram:user-a." in result.stdout
+    assert "Retried: 2" in result.stdout
+    assert "Embedding jobs: total=4 queued=0 pending=0 processing=0 completed=4 failed=0" in result.stdout

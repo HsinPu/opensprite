@@ -34,6 +34,20 @@ class BlockingEmbeddingProvider:
         return [[1.0, 0.0] for _ in texts]
 
 
+class FailingThenPassingEmbeddingProvider:
+    provider_name = "fake"
+    model_name = "fake-embedding"
+    batch_size = 8
+
+    def __init__(self):
+        self.should_fail = True
+
+    async def embed_texts(self, texts):
+        if self.should_fail:
+            raise RuntimeError("temporary embedding failure")
+        return [[1.0, 0.0] for _ in texts]
+
+
 def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path):
     db_path = tmp_path / "search.db"
 
@@ -117,7 +131,7 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
 
         history_hits = await search.search_history("chat-a", "sqlite docs")
         other_chat_hits = await search.search_history("chat-b", "sqlite docs")
-        knowledge_hits = await search.search_knowledge("chat-a", "full text docs")
+        knowledge_hits = await search.search_knowledge("chat-a", "SQLite!! full-text docs???")
         fetch_only_hits = await search.search_knowledge("chat-a", "examples", source_type="web_fetch")
         provider_hits = await search.search_knowledge("chat-a", "full text docs", provider="duckduckgo")
         extractor_hits = await search.search_knowledge("chat-a", "examples", extractor="trafilatura")
@@ -171,11 +185,12 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
     assert history_hits[0].source_type == "history"
     assert "sqlite fts docs" in history_hits[0].content.lower()
     assert other_chat_hits == []
-    assert {hit.source_type for hit in knowledge_hits} == {"web_search", "web_fetch"}
+    assert len(knowledge_hits) == 1
+    assert knowledge_hits[0].source_type == "web_fetch"
     assert len(fetch_only_hits) == 1
     assert fetch_only_hits[0].source_type == "web_fetch"
-    assert knowledge_hits[0].provider in {"duckduckgo", "web_fetch"}
-    assert {hit.extractor for hit in knowledge_hits} == {"search", "trafilatura"}
+    assert knowledge_hits[0].provider == "web_fetch"
+    assert [hit.extractor for hit in knowledge_hits] == ["trafilatura"]
     assert fetch_only_hits[0].status == 200
     assert fetch_only_hits[0].content_type == "text/html"
     assert fetch_only_hits[0].truncated is False
@@ -388,3 +403,150 @@ def test_sqlite_search_store_processes_embeddings_in_background(tmp_path):
     assert status_during["processing"] == 1
     assert status_after["completed"] == 1
     assert status_after["pending"] == 0
+
+
+def test_sqlite_search_store_can_retry_failed_embeddings(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FailingThenPassingEmbeddingProvider()
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="retry embeddings", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="retry embeddings",
+            created_at=10.0,
+        )
+
+        failed_status = await search.wait_for_embedding_idle()
+        embedder.should_fail = False
+        retried_status = await search.retry_failed_embeddings(chat_id="chat-a", wait=True)
+
+        conn = sqlite3.connect(str(db_path))
+        embedding_rows = conn.execute(
+            "SELECT embedding_status, embedding_dim FROM chunk_embeddings ORDER BY chunk_id ASC"
+        ).fetchall()
+        conn.close()
+        return failed_status, retried_status, embedding_rows
+
+    failed_status, retried_status, embedding_rows = asyncio.run(scenario())
+
+    assert failed_status["failed"] == 1
+    assert retried_status["retried"] == 1
+    assert retried_status["failed"] == 0
+    assert retried_status["completed"] == 1
+    assert embedding_rows == [("completed", 2)]
+
+
+def test_sqlite_search_store_requeues_processing_embeddings_on_startup(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider({"startup recovery": [1.0, 0.0]})
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="startup recovery", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="startup recovery",
+            created_at=10.0,
+        )
+        await search.wait_for_embedding_idle()
+        return storage
+
+    storage = asyncio.run(seed())
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE chunk_embeddings SET embedding_status = 'processing', embedded_at = NULL"
+    )
+    conn.commit()
+    conn.close()
+
+    async def recover():
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await search.sync_from_storage(storage)
+        return await search.wait_for_embedding_idle()
+
+    status = asyncio.run(recover())
+
+    assert status["processing"] == 0
+    assert status["pending"] == 0
+    assert status["completed"] == 1
+
+
+def test_sqlite_search_store_can_retry_failed_embeddings_on_startup(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FailingThenPassingEmbeddingProvider()
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="startup failed retry", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="startup failed retry",
+            created_at=10.0,
+        )
+        failed_status = await search.wait_for_embedding_idle()
+        return storage, failed_status
+
+    storage, failed_status = asyncio.run(seed())
+    assert failed_status["failed"] == 1
+
+    embedder.should_fail = False
+
+    async def recover():
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+            retry_failed_on_startup=True,
+        )
+        await search.sync_from_storage(storage)
+        return await search.wait_for_embedding_idle()
+
+    status = asyncio.run(recover())
+
+    assert status["failed"] == 0
+    assert status["completed"] == 1
