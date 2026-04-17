@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import opensprite.agent.agent as agent_module
 from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import AgentConfig, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.tools.base import Tool
@@ -123,3 +124,39 @@ def test_subagent_system_prompt_logging_uses_separate_directory(tmp_path):
     log_files = list(dated_dirs[0].glob("*.md"))
     assert len(log_files) == 1
     assert "subagent" in log_files[0].name
+
+
+def test_main_prompt_logging_includes_available_subagent_summary(tmp_path, monkeypatch):
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    agent = AgentLoop(
+        config=AgentConfig(),
+        provider=FakeProvider(),
+        storage=FakeStorage(),
+        context_builder=FakeContextBuilder(tmp_path / "workspace"),
+        tools=registry,
+        memory_config=MemoryConfig(),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(enabled=False),
+    )
+    agent.app_home = tmp_path / "home"
+    info_messages: list[str] = []
+
+    monkeypatch.setattr(agent_module.logger, "info", lambda message: info_messages.append(message))
+
+    agent._log_prepared_messages(
+        "telegram:user-a",
+        [
+            {
+                "role": "system",
+                "content": "# Available Subagents\n\n- `writer`: drafting helper\n- `researcher`: research helper\n",
+            }
+        ],
+    )
+
+    assert any(
+        "[telegram:user-a] prompt.subagents | count=2 names=writer, researcher" in message
+        for message in info_messages
+    )

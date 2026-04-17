@@ -169,6 +169,33 @@ class AgentLoop:
             )
         return ", ".join(summary) if summary else "<empty>"
 
+    @staticmethod
+    def _extract_available_subagents(system_prompt: str) -> list[str]:
+        """Parse the Available Subagents section from a rendered system prompt."""
+        in_section = False
+        subagents: list[str] = []
+
+        for raw_line in system_prompt.splitlines():
+            line = raw_line.strip()
+            if not in_section:
+                if line in {"# Available Subagents", "## Available Subagents"}:
+                    in_section = True
+                continue
+
+            if not line:
+                continue
+            if line == "---" or line.startswith("#"):
+                break
+            if not line.startswith("- `"):
+                continue
+
+            end_tick = line.find("`", 3)
+            if end_tick <= 3:
+                continue
+            subagents.append(line[3:end_tick])
+
+        return subagents
+
     def __init__(
         self,
         config: AgentConfig,
@@ -576,13 +603,20 @@ class AgentLoop:
         try:
             system_msg = next((m for m in messages if m.get("role") == "system"), None)
             if system_msg:
-                self._write_full_system_prompt_log(log_id, str(system_msg.get("content", "")))
+                system_prompt = str(system_msg.get("content", ""))
+                self._write_full_system_prompt_log(log_id, system_prompt)
                 max_chars = 240
                 if self.log_config.log_system_prompt_lines > 0:
                     max_chars = max(120, self.log_config.log_system_prompt_lines * 120)
                 logger.info(
-                    f"[{log_id}] prompt.system | {self._format_log_preview(system_msg.get('content', ''), max_chars=max_chars)}"
+                    f"[{log_id}] prompt.system | {self._format_log_preview(system_prompt, max_chars=max_chars)}"
                 )
+                if ":subagent:" not in log_id:
+                    available_subagents = self._extract_available_subagents(system_prompt)
+                    names = ", ".join(available_subagents) if available_subagents else "<none>"
+                    logger.info(
+                        f"[{log_id}] prompt.subagents | count={len(available_subagents)} names={names}"
+                    )
 
             for index, msg in enumerate(messages):
                 role = msg.get("role", "unknown")

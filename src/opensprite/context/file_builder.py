@@ -26,6 +26,7 @@ from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..skills import SkillsLoader
+from ..subagent_prompts import ALL_SUBAGENTS
 
 
 class FileContextBuilder:
@@ -43,6 +44,22 @@ When retrieval tools are available:
 - Use `web_search` when you need new external sources, fresher information, or URLs that do not already exist in the stored chat knowledge.
 - Use `web_fetch` only after choosing a specific URL, or when the user already provided one.
 - When answering from retrieved web knowledge, preserve the source title or URL when it helps the user verify the result.
+"""
+
+    @staticmethod
+    def _build_subagent_summary() -> str:
+        """Describe the available delegate prompt types for the main agent."""
+        if not ALL_SUBAGENTS:
+            return ""
+
+        subagent_lines = "\n".join(
+            f"- `{name}`: {description}" for name, description in ALL_SUBAGENTS.items()
+        )
+        return f"""# Available Subagents
+
+Use `delegate` when a focused subproblem would benefit from a dedicated prompt.
+
+{subagent_lines}
 """
 
     def __init__(
@@ -111,6 +128,10 @@ To use a skill, read its SKILL.md file using the read_skill tool.
 
 {skills_summary}
 """)
+
+        subagent_summary = self._build_subagent_summary()
+        if subagent_summary:
+            parts.append(subagent_summary)
 
         memory = self.memory_store.read(chat_id)
         if memory:
