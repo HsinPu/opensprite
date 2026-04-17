@@ -286,7 +286,8 @@ Search requires `storage.type="sqlite"`.
       "model": "",
       "base_url": null,
       "batch_size": 16,
-      "candidate_count": 20
+      "candidate_count": 20,
+      "retry_failed_on_startup": false
     }
   }
 }
@@ -313,6 +314,24 @@ When `search.embedding.enabled=true`:
 
 If `search.embedding.api_key` or `search.embedding.base_url` is empty, OpenSprite falls back to the active LLM provider settings.
 
+### Automatic Maintenance
+
+Under normal service operation, search maintenance is mostly automatic:
+
+- new chat messages are indexed automatically
+- new `web_search` and `web_fetch` results are persisted and indexed automatically
+- if search is enabled after older SQLite history already exists, startup backfills the missing index rows
+- if the search index signature changes, startup rebuilds stale index structures automatically
+- if embeddings are enabled, new chunk embeddings are queued in the background instead of blocking normal replies
+- the gateway now starts a search queue worker automatically and keeps draining pending embedding jobs while the service is online
+- stale `processing` embedding rows are re-queued automatically after restart
+- missing or stale embeddings are refreshed automatically on startup
+- failed embeddings can also be retried automatically on startup when `search.embedding.retry_failed_on_startup=true`
+
+### Manual Maintenance
+
+Manual commands are mainly for recovery, forced refresh, or running maintenance when the normal service is not active:
+
 Search maintenance commands:
 
 ```bash
@@ -325,7 +344,28 @@ opensprite search rebuild --chat-id telegram:user-a
 # inspect index and embedding job status
 opensprite search status
 opensprite search status --chat-id telegram:user-a
+
+# retry failed embedding jobs
+opensprite search retry-embeddings
+opensprite search retry-embeddings --chat-id telegram:user-a
+
+# refresh missing or stale embeddings
+opensprite search refresh-embeddings
+opensprite search refresh-embeddings --chat-id telegram:user-a
+opensprite search refresh-embeddings --force
+
+# run the embedding queue worker manually
+opensprite search run-queue
+opensprite search run-queue --watch
+opensprite search run-queue --watch --idle-exit-seconds 30
+opensprite search run-queue --force-refresh
 ```
+
+In practice, you should usually only need these commands when:
+
+- the service is offline and you still want to drain the embedding queue
+- you want to force a full embedding refresh after changing models or ranking behavior
+- you want to inspect or recover failed jobs immediately instead of waiting for the next startup cycle
 
 ## Web Search Pipeline
 
@@ -634,6 +674,13 @@ opensprite search status
 
 # rebuild indexed history and knowledge
 opensprite search rebuild
+
+# retry failed or refresh stale embeddings
+opensprite search retry-embeddings
+opensprite search refresh-embeddings
+
+# run the embedding queue worker manually
+opensprite search run-queue
 
 # module entrypoint
 python -m opensprite gateway
