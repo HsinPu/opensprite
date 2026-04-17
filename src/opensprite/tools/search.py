@@ -86,7 +86,7 @@ class SearchKnowledgeTool(_BaseSearchTool):
 
     @property
     def description(self) -> str:
-        return "Search stored web search and web fetch results for the current chat only."
+        return "Search stored web search and web fetch results for the current chat only. Prefer this before repeating web_search or web_fetch on topics already researched in this chat."
 
     @property
     def parameters(self) -> dict[str, Any]:

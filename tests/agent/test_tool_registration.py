@@ -4,6 +4,7 @@ from opensprite.agent.tool_registration import register_default_tools
 from opensprite.config.schema import SearchConfig, ToolsConfig
 from opensprite.tools.cron import CronTool
 from opensprite.tools.shell import ExecTool
+from opensprite.tools.search import SearchKnowledgeTool
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.registry import ToolRegistry
@@ -120,6 +121,30 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.timeout == 9
     assert web_fetch_tool.fetcher.prefer_trafilatura is False
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
+
+
+def test_search_and_web_tools_describe_retrieval_preference():
+    registry = ToolRegistry()
+
+    register_default_tools(
+        registry,
+        workspace_resolver=lambda: Path.cwd(),
+        get_chat_id=lambda: "chat-1",
+        run_subagent=_fake_run_subagent,
+        search_store=FakeSearchStore(),
+        search_config=SearchConfig(history_top_k=7, knowledge_top_k=9),
+    )
+
+    web_search_tool = registry.get("web_search")
+    web_fetch_tool = registry.get("web_fetch")
+    search_knowledge_tool = registry.get("search_knowledge")
+
+    assert isinstance(web_search_tool, WebSearchTool)
+    assert isinstance(web_fetch_tool, WebFetchTool)
+    assert isinstance(search_knowledge_tool, SearchKnowledgeTool)
+    assert "prefer search_knowledge first" in web_search_tool.description.lower()
+    assert "stored web_fetch results" in web_fetch_tool.description.lower()
+    assert "prefer this before repeating web_search or web_fetch" in search_knowledge_tool.description.lower()
 
 
 def test_register_default_tools_applies_cron_default_timezone_from_tools_config():

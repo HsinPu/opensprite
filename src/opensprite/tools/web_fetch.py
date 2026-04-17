@@ -766,7 +766,7 @@ class WebFetchTool(Tool):
 
     @property
     def description(self) -> str:
-        return "Fetch and extract readable content from URLs. Returns title, text, and metadata."
+        return "Fetch and extract readable content from a URL. Prefer this after selecting a specific source, and reuse stored web_fetch results from search_knowledge when the same page was already fetched in this chat."
 
     @property
     def parameters(self) -> dict:

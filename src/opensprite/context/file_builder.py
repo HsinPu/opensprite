@@ -33,6 +33,17 @@ class FileContextBuilder:
 
     BOOTSTRAP_FILES = ["SOUL.md", "IDENTITY.md", "AGENTS.md", "USER.md", "TOOLS.md"]
     _RUNTIME_CONTEXT_TAG = RUNTIME_CONTEXT_TAG
+    _RETRIEVAL_STRATEGY = """# Retrieval Strategy
+
+When retrieval tools are available:
+
+- Prefer `search_history` before claiming you do not remember earlier chat details.
+- Prefer `search_knowledge` before repeating `web_search` or `web_fetch` for topics that may already have been researched in this chat.
+- If `search_knowledge` already returns a relevant `web_fetch` result, prefer using that stored page content instead of fetching the same URL again.
+- Use `web_search` when you need new external sources, fresher information, or URLs that do not already exist in the stored chat knowledge.
+- Use `web_fetch` only after choosing a specific URL, or when the user already provided one.
+- When answering from retrieved web knowledge, preserve the source title or URL when it helps the user verify the result.
+"""
 
     def __init__(
         self,
@@ -84,6 +95,8 @@ class FileContextBuilder:
                     parts.append(section)
                 else:
                     parts.append(f"## {key}\n\n{section}")
+
+        parts.append(self._RETRIEVAL_STRATEGY.strip())
 
         # Skills follow the on-demand model from OpenCode docs: list available
         # skill metadata in the main prompt, then load a full SKILL.md only when

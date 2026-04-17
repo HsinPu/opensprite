@@ -44,10 +44,12 @@ This file defines when to use tools, how to choose between them, and what constr
 - `web_search`
   - Use to discover external sources, URLs, or recent information.
   - Prefer this when you need candidate sources before reading one in detail.
+  - If the topic may already have been researched in the current chat, prefer `search_knowledge` first.
 
 - `web_fetch`
   - Use to retrieve and extract readable content from a specific URL.
   - Prefer this after `web_search` or when the user already gave a URL.
+  - If the current chat may already contain fetched content for the same page, prefer `search_knowledge` with `source_type="web_fetch"` before fetching again.
 
 ## Image Tool
 
@@ -104,6 +106,8 @@ This file defines when to use tools, how to choose between them, and what constr
 - `search_knowledge`
   - Use to retrieve previously stored `web_search` and `web_fetch` results from the current chat.
   - Prefer this when the user refers to earlier research rather than current local files.
+  - Prefer this before repeating `web_search` or `web_fetch` on the same topic inside the same chat.
+  - Use `provider`, `extractor`, `status`, `content_type`, and `truncated` filters to narrow large result sets when needed.
 
 ## Scheduling Tool
 
