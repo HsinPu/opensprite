@@ -20,6 +20,7 @@ from .search.base import SearchStore
 from .storage import MemoryStorage, StorageProvider
 from .bus.dispatcher import MessageQueue
 from .config import Config
+from .llms.registry import find_provider
 from .utils.log import logger
 
 
@@ -49,11 +50,43 @@ def create_search_store(config: Config) -> SearchStore | None:
         raise ValueError("search.enabled=true requires storage.type=sqlite")
 
     from .search.sqlite_store import SQLiteSearchStore
+    embedding_provider = create_search_embedding_provider(config)
 
     return SQLiteSearchStore(
         path=config.storage.path,
         history_top_k=config.search.history_top_k,
         knowledge_top_k=config.search.knowledge_top_k,
+        embedding_provider=embedding_provider,
+        hybrid_candidate_count=config.search.embedding.candidate_count,
+    )
+
+
+def create_search_embedding_provider(config: Config):
+    """Create the optional embedding provider for hybrid search."""
+    embedding_config = getattr(config.search, "embedding", None)
+    if not embedding_config or not embedding_config.enabled:
+        return None
+
+    active_llm = config.llm.get_active()
+    api_key = embedding_config.api_key or active_llm.api_key
+    base_url = embedding_config.base_url or active_llm.base_url
+    if not api_key:
+        raise ValueError("search.embedding.api_key is required when enabled=true")
+
+    from .search.embeddings import OpenAIEmbeddingProvider
+
+    provider_spec = find_provider(
+        api_key=api_key,
+        base_url=base_url or "",
+        model=embedding_config.model,
+        provider_name=embedding_config.provider,
+    )
+    return OpenAIEmbeddingProvider(
+        api_key=api_key,
+        model=embedding_config.model,
+        provider_name=provider_spec.name,
+        base_url=base_url or provider_spec.default_base_url,
+        batch_size=embedding_config.batch_size,
     )
 
 

@@ -210,12 +210,31 @@ class RecentSummaryConfig(BaseModel):
     keep_last_messages: int = 40
 
 
+class SearchEmbeddingConfig(BaseModel):
+    """Embedding and hybrid reranking configuration."""
+
+    enabled: bool = False
+    provider: Literal["openai", "openrouter", "minimax"] = "openai"
+    api_key: str = ""
+    model: str = ""
+    base_url: str | None = None
+    batch_size: int = Field(default=16, ge=1, le=128)
+    candidate_count: int = Field(default=20, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def validate_enabled_fields(self) -> "SearchEmbeddingConfig":
+        if self.enabled and not self.model:
+            raise ValueError("search.embedding.model is required when enabled=true")
+        return self
+
+
 class SearchConfig(BaseModel):
     """Search index configuration."""
 
     enabled: bool = False
     history_top_k: int = Field(default=5, ge=1)
     knowledge_top_k: int = Field(default=5, ge=1)
+    embedding: SearchEmbeddingConfig = Field(default_factory=SearchEmbeddingConfig)
 
 
 class Config:
@@ -361,6 +380,7 @@ class Config:
                 "enabled": self.search.enabled,
                 "history_top_k": self.search.history_top_k,
                 "knowledge_top_k": self.search.knowledge_top_k,
+                "embedding": self.search.embedding.model_dump(),
             },
             "user_profile": {
                 "enabled": self.user_profile.enabled,

@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import sqlite3
+import struct
 import time
 from pathlib import Path
 from typing import Any
@@ -250,26 +251,28 @@ def insert_search_chunks(
 ) -> None:
     """Insert one batch of search chunks into the shared index table."""
     if not chunks:
-        return
-    conn.executemany(
-        """
-        INSERT INTO search_chunks (
-            chat_id,
-            owner_type,
-            owner_id,
-            source_type,
-            role,
-            tool_name,
-            query,
-            title,
-            url,
-            chunk_index,
-            content,
-            created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
+        return []
+
+    chunk_ids: list[int] = []
+    for chunk in chunks:
+        cursor = conn.execute(
+            """
+            INSERT INTO search_chunks (
+                chat_id,
+                owner_type,
+                owner_id,
+                source_type,
+                role,
+                tool_name,
+                query,
+                title,
+                url,
+                chunk_index,
+                content,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
             (
                 chat_id,
                 owner_type,
@@ -283,9 +286,70 @@ def insert_search_chunks(
                 chunk.chunk_index,
                 chunk.content,
                 chunk.created_at,
-            )
-            for chunk in chunks
-        ],
+            ),
+        )
+        chunk_ids.append(int(cursor.lastrowid))
+    return chunk_ids
+
+
+def pack_embedding(values: list[float]) -> bytes:
+    """Serialize one embedding vector to a portable little-endian blob."""
+    if not values:
+        return b""
+    return struct.pack(f"<{len(values)}f", *[float(value) for value in values])
+
+
+def unpack_embedding(blob: bytes, dim: int) -> list[float]:
+    """Deserialize one embedding vector blob."""
+    if not blob or dim <= 0:
+        return []
+    return list(struct.unpack(f"<{dim}f", blob))
+
+
+def upsert_chunk_embedding(
+    conn: sqlite3.Connection,
+    *,
+    chunk_id: int,
+    provider: str,
+    model: str,
+    values: list[float] | None,
+    status: str,
+) -> None:
+    """Insert or update one chunk embedding row."""
+    current_time = time.time()
+    conn.execute(
+        """
+        INSERT INTO chunk_embeddings (
+            chunk_id,
+            embedding_provider,
+            embedding_model,
+            embedding_dim,
+            embedding_format,
+            embedding,
+            embedding_status,
+            embedded_at,
+            version
+        )
+        VALUES (?, ?, ?, ?, 'blob', ?, ?, ?, 1)
+        ON CONFLICT(chunk_id) DO UPDATE SET
+            embedding_provider = excluded.embedding_provider,
+            embedding_model = excluded.embedding_model,
+            embedding_dim = excluded.embedding_dim,
+            embedding_format = excluded.embedding_format,
+            embedding = excluded.embedding,
+            embedding_status = excluded.embedding_status,
+            embedded_at = excluded.embedded_at,
+            version = excluded.version
+        """,
+        (
+            chunk_id,
+            provider,
+            model,
+            len(values or []),
+            pack_embedding(values or []),
+            status,
+            current_time,
+        ),
     )
 
 
@@ -295,7 +359,7 @@ def insert_knowledge_document(
     chat_id: str,
     document: KnowledgeDocument,
     created_at: float,
-) -> int:
+) -> tuple[int, list[int]]:
     """Insert one knowledge source and its searchable chunks."""
     ensure_chat_row(conn, chat_id, created_at=created_at, updated_at=created_at)
     cursor = conn.execute(
@@ -336,14 +400,14 @@ def insert_knowledge_document(
         ),
     )
     source_id = int(cursor.lastrowid)
-    insert_search_chunks(
+    chunk_ids = insert_search_chunks(
         conn,
         chat_id=chat_id,
         owner_type="knowledge",
         owner_id=source_id,
         chunks=build_knowledge_chunks(document, created_at=created_at),
     )
-    return source_id
+    return source_id, chunk_ids
 
 
 def find_message_owner_id(

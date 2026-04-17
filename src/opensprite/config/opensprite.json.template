@@ -124,6 +124,15 @@
   "search": {
     "enabled": false,
     "history_top_k": 5,
-    "knowledge_top_k": 5
+    "knowledge_top_k": 5,
+    "embedding": {
+      "enabled": false,
+      "provider": "openai",
+      "api_key": "",
+      "model": "",
+      "base_url": null,
+      "batch_size": 16,
+      "candidate_count": 20
+    }
   }
 }

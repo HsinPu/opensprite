@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from opensprite.config.schema import Config, MCPServerConfig, SpeechConfig, StorageConfig, ToolsConfig, VideoConfig, VisionConfig
+from opensprite.config.schema import Config, MCPServerConfig, SearchConfig, SearchEmbeddingConfig, SpeechConfig, StorageConfig, ToolsConfig, VideoConfig, VisionConfig
 
 
 def test_storage_config_accepts_supported_types():
@@ -106,6 +106,20 @@ def test_speech_config_requires_api_key_and_model_when_enabled():
 def test_video_config_requires_api_key_and_model_when_enabled():
     with pytest.raises(ValidationError):
         VideoConfig(enabled=True)
+
+
+def test_search_embedding_config_requires_model_when_enabled():
+    with pytest.raises(ValidationError):
+        SearchEmbeddingConfig(enabled=True)
+
+
+def test_search_config_provides_embedding_defaults():
+    config = SearchConfig()
+
+    assert config.embedding.enabled is False
+    assert config.embedding.provider == "openai"
+    assert config.embedding.batch_size == 16
+    assert config.embedding.candidate_count == 20
 
 
 def test_config_load_defaults_agent_when_section_missing(tmp_path):

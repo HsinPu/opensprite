@@ -7,6 +7,18 @@ from opensprite.storage.base import StoredMessage
 from opensprite.storage.sqlite import SQLiteStorage
 
 
+class FakeEmbeddingProvider:
+    provider_name = "fake"
+    model_name = "fake-embedding"
+    batch_size = 8
+
+    def __init__(self, vectors: dict[str, list[float]]):
+        self.vectors = vectors
+
+    async def embed_texts(self, texts):
+        return [list(self.vectors.get(text, [0.0, 0.0])) for text in texts]
+
+
 def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path):
     db_path = tmp_path / "search.db"
 
@@ -241,3 +253,62 @@ def test_sqlite_search_store_sync_rebuilds_when_signature_is_stale(tmp_path):
 
     assert signature == search._index_signature
     assert chunk_count >= 1
+
+
+def test_sqlite_search_store_persists_embeddings_and_reranks_candidates(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider(
+        {
+            "sqlite guide basics": [1.0, 0.0],
+            "postgres guide basics": [0.0, 1.0],
+            "guide": [1.0, 0.0],
+        }
+    )
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="sqlite guide basics", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="sqlite guide basics",
+            created_at=10.0,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="postgres guide basics", timestamp=20.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="postgres guide basics",
+            created_at=20.0,
+        )
+
+        hits = await search.search_history("chat-a", "guide", limit=2)
+
+        conn = sqlite3.connect(str(db_path))
+        embedding_rows = conn.execute(
+            "SELECT embedding_provider, embedding_model, embedding_dim, embedding_status FROM chunk_embeddings ORDER BY chunk_id ASC"
+        ).fetchall()
+        conn.close()
+        return hits, embedding_rows
+
+    hits, embedding_rows = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["sqlite guide basics", "postgres guide basics"]
+    assert embedding_rows == [
+        ("fake", "fake-embedding", 2, "completed"),
+        ("fake", "fake-embedding", 2, "completed"),
+    ]
