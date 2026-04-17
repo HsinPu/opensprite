@@ -344,7 +344,7 @@ def search_rebuild(
     typer.echo(f"Chunks: {result['chunk_count']}")
     typer.echo(
         "Embeddings: "
-        f"queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']}"
+        f"queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
     )
 
 
@@ -385,7 +385,51 @@ def search_status(
     )
     typer.echo(
         "Embedding jobs: "
-        f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']}"
+        f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
+    )
+
+
+@search_app.command("refresh-embeddings")
+def search_refresh_embeddings(
+    config: str | None = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Path to an OpenSprite JSON config file.",
+    ),
+    chat_id: str | None = typer.Option(
+        None,
+        "--chat-id",
+        help="Optional chat id to refresh instead of refreshing all embeddings.",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Recompute all embeddings in scope, not just missing or stale ones.",
+    ),
+) -> None:
+    """Queue embedding refresh work and wait for it to complete."""
+    try:
+        loaded, search_store = _load_sqlite_search_store(config)
+        if not loaded.search.embedding.enabled:
+            raise ValueError("search.embedding.enabled=false; enable embeddings first")
+        status = asyncio.run(search_store.refresh_embeddings(chat_id=chat_id, force=force, wait=True))
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        _handle_search_error(exc)
+
+    scope = chat_id or "all chats"
+    embedding = loaded.search.embedding
+    typer.echo(f"Refreshed embeddings for {scope}.")
+    typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
+    typer.echo(
+        "Embedding: "
+        f"enabled={_format_presence(bool(embedding.enabled))} "
+        f"provider={embedding.provider} model={embedding.model or '<unset>'} force={_format_presence(bool(force))}"
+    )
+    typer.echo(f"Refreshed: {status['refreshed']}")
+    typer.echo(
+        "Embedding jobs: "
+        f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
     )
 
 
@@ -424,7 +468,7 @@ def search_retry_embeddings(
     typer.echo(f"Retried: {status['retried']}")
     typer.echo(
         "Embedding jobs: "
-        f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']}"
+        f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
     )
 
 

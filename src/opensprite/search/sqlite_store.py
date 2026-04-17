@@ -282,6 +282,66 @@ class SQLiteSearchStore(SearchStore):
         filtered_status["retried"] = retried
         return filtered_status
 
+    async def refresh_embeddings(
+        self,
+        chat_id: str | None = None,
+        *,
+        force: bool = False,
+        wait: bool = True,
+    ) -> dict[str, int]:
+        """Queue embeddings for missing, stale, or explicitly refreshed chunks."""
+        if self.embedding_provider is None:
+            status = await self.get_status(chat_id=chat_id)
+            status["refreshed"] = 0
+            return status
+
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                filters = []
+                params: list[object] = []
+                if chat_id:
+                    filters.append("sc.chat_id = ?")
+                    params.append(chat_id)
+
+                if force:
+                    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+                else:
+                    filters.append(
+                        "(ce.chunk_id IS NULL OR ce.embedding_status = 'failed' OR COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?)"
+                    )
+                    params.extend([
+                        self.embedding_provider.provider_name,
+                        self.embedding_provider.model_name,
+                    ])
+                    where_clause = f"WHERE {' AND '.join(filters)}"
+
+                rows = conn.execute(
+                    f"""
+                    SELECT sc.id
+                    FROM search_chunks sc
+                    LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
+                    {where_clause}
+                    ORDER BY sc.id ASC
+                    """,
+                    params,
+                ).fetchall()
+                chunk_ids = [int(row["id"]) for row in rows]
+                if chunk_ids:
+                    self._queue_chunk_embeddings(conn, chunk_ids)
+                    conn.commit()
+            finally:
+                conn.close()
+
+        if chunk_ids:
+            self._schedule_pending_embeddings()
+            if wait:
+                await self.wait_for_embedding_idle()
+
+        status = await self.get_status(chat_id=chat_id)
+        status["refreshed"] = len(chunk_ids)
+        return status
+
     async def get_status(self, chat_id: str | None = None) -> dict[str, int]:
         """Return search and embedding status counts."""
         async with self._lock:
@@ -324,6 +384,48 @@ class SQLiteSearchStore(SearchStore):
                     """,
                     embedding_params,
                 ).fetchall()
+
+                missing_count = 0
+                stale_count = 0
+                if self.embedding_provider is not None:
+                    missing_count = int(
+                        conn.execute(
+                            f"""
+                            SELECT COUNT(*)
+                            FROM search_chunks sc
+                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
+                            {embedding_filters}
+                            AND ce.chunk_id IS NULL
+                            """
+                            if embedding_filters
+                            else """
+                            SELECT COUNT(*)
+                            FROM search_chunks sc
+                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
+                            WHERE ce.chunk_id IS NULL
+                            """,
+                            embedding_params,
+                        ).fetchone()[0]
+                    )
+                    stale_params = list(embedding_params)
+                    stale_params.extend([
+                        self.embedding_provider.provider_name,
+                        self.embedding_provider.model_name,
+                    ])
+                    stale_count = int(
+                        conn.execute(
+                            f"""
+                            SELECT COUNT(*)
+                            FROM chunk_embeddings ce
+                            JOIN search_chunks sc ON sc.id = ce.chunk_id
+                            {embedding_filters}
+                            {' AND ' if embedding_filters else ' WHERE '}(
+                                COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?
+                            )
+                            """,
+                            stale_params,
+                        ).fetchone()[0]
+                    )
             finally:
                 conn.close()
 
@@ -340,6 +442,8 @@ class SQLiteSearchStore(SearchStore):
             "processing": counts.get("processing", 0),
             "completed": counts.get("completed", 0),
             "failed": counts.get("failed", 0),
+            "missing": int(missing_count),
+            "stale": int(stale_count),
         }
 
     async def _rerank_rows(self, conn, query: str, rows, limit: int, *, owner_type: str):
@@ -561,6 +665,32 @@ class SQLiteSearchStore(SearchStore):
                         "SELECT COUNT(*) FROM chunk_embeddings WHERE embedding_status = 'failed'"
                     ).fetchone()[0]
                 )
+                missing_embedding_count = 0
+                stale_embedding_count = 0
+                if self.embedding_provider is not None:
+                    missing_embedding_count = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM search_chunks sc
+                            LEFT JOIN chunk_embeddings ce ON ce.chunk_id = sc.id
+                            WHERE ce.chunk_id IS NULL
+                            """
+                        ).fetchone()[0]
+                    )
+                    stale_embedding_count = int(
+                        conn.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM chunk_embeddings ce
+                            WHERE COALESCE(ce.embedding_provider, '') != ? OR COALESCE(ce.embedding_model, '') != ?
+                            """,
+                            (
+                                self.embedding_provider.provider_name,
+                                self.embedding_provider.model_name,
+                            ),
+                        ).fetchone()[0]
+                    )
                 indexed_knowledge_count = int(
                     conn.execute(
                         "SELECT COUNT(DISTINCT owner_id) FROM search_chunks WHERE owner_type = 'knowledge'"
@@ -591,6 +721,8 @@ class SQLiteSearchStore(SearchStore):
                     pending_embedding_count += requeued_processing
             if self.retry_failed_on_startup and failed_embedding_count > 0:
                 await self.retry_failed_embeddings(wait=False)
+            if (missing_embedding_count > 0 or stale_embedding_count > 0) and self.embedding_provider is not None:
+                await self.refresh_embeddings(wait=False)
             if pending_embedding_count > 0:
                 self._schedule_pending_embeddings()
             return None

@@ -550,3 +550,144 @@ def test_sqlite_search_store_can_retry_failed_embeddings_on_startup(tmp_path):
 
     assert status["failed"] == 0
     assert status["completed"] == 1
+
+
+def test_sqlite_search_store_refreshes_missing_and_stale_embeddings(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider({"refresh stale vector": [1.0, 0.0]})
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="refresh stale vector", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="refresh stale vector",
+            created_at=10.0,
+        )
+        await search.wait_for_embedding_idle()
+        return search
+
+    search = asyncio.run(seed())
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE chunk_embeddings SET embedding_provider = 'legacy', embedding_model = 'legacy-model', embedding_status = 'completed', embedded_at = NULL"
+    )
+    conn.commit()
+    conn.close()
+
+    refreshed_status = asyncio.run(search.refresh_embeddings(force=False, wait=True))
+
+    conn = sqlite3.connect(str(db_path))
+    embedding_rows = conn.execute(
+        "SELECT embedding_provider, embedding_model, embedding_status, embedding_dim FROM chunk_embeddings ORDER BY chunk_id ASC"
+    ).fetchall()
+    conn.close()
+
+    assert refreshed_status["refreshed"] == 1
+    assert refreshed_status["stale"] == 0
+    assert refreshed_status["completed"] == 1
+    assert embedding_rows == [("fake", "fake-embedding", "completed", 2)]
+
+
+def test_sqlite_search_store_status_reports_missing_embeddings(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider({"missing embedding row": [1.0, 0.0]})
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="missing embedding row", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="missing embedding row",
+            created_at=10.0,
+        )
+        await search.wait_for_embedding_idle()
+        return search
+
+    search = asyncio.run(seed())
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute("DELETE FROM chunk_embeddings")
+    conn.commit()
+    conn.close()
+
+    status = asyncio.run(search.get_status())
+
+    assert status["embedding_total"] == 0
+    assert status["missing"] == 1
+    assert status["stale"] == 0
+
+
+def test_sqlite_search_store_sync_refreshes_stale_embeddings(tmp_path):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider({"sync stale vector": [1.0, 0.0]})
+
+    async def seed():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="sync stale vector", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="sync stale vector",
+            created_at=10.0,
+        )
+        await search.wait_for_embedding_idle()
+        return storage
+
+    storage = asyncio.run(seed())
+
+    conn = sqlite3.connect(str(db_path))
+    conn.execute(
+        "UPDATE chunk_embeddings SET embedding_provider = 'legacy', embedding_model = 'legacy-model'"
+    )
+    conn.commit()
+    conn.close()
+
+    async def recover():
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+        )
+        await search.sync_from_storage(storage)
+        return await search.wait_for_embedding_idle()
+
+    status = asyncio.run(recover())
+
+    assert status["stale"] == 0
+    assert status["completed"] == 1
