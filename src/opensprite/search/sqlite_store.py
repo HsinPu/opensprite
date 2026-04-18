@@ -24,6 +24,7 @@ from ..storage.sqlite import (
     insert_search_chunks,
     open_sqlite_connection,
     pack_embedding,
+    table_exists,
     unpack_embedding,
     upsert_chunk_embedding,
 )
@@ -280,9 +281,9 @@ class SQLiteSearchStore(SearchStore):
                 c.source_type,
                 COALESCE(ks.provider, '') AS provider,
                 COALESCE(ks.extractor, '') AS extractor,
-                ks.status,
+                COALESCE(ks.status, -1) AS status,
                 COALESCE(ks.content_type, '') AS content_type,
-                ks.truncated,
+                COALESCE(ks.truncated, 0) AS truncated,
                 ce.embedding,
                 ce.embedding_dim
             FROM search_chunks c
@@ -332,6 +333,8 @@ class SQLiteSearchStore(SearchStore):
         """Remove chunk ids from the sqlite-vec index table."""
         if self.vector_backend_effective != "sqlite_vec" or not chunk_ids:
             return
+        if not table_exists(conn, SQLITE_VEC_INDEX_TABLE):
+            return
         conn.executemany(
             f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chunk_id = ?",
             [(chunk_id,) for chunk_id in chunk_ids],
@@ -352,9 +355,9 @@ class SQLiteSearchStore(SearchStore):
                 c.source_type,
                 COALESCE(ks.provider, '') AS provider,
                 COALESCE(ks.extractor, '') AS extractor,
-                ks.status,
+                COALESCE(ks.status, -1) AS status,
                 COALESCE(ks.content_type, '') AS content_type,
-                ks.truncated,
+                COALESCE(ks.truncated, 0) AS truncated,
                 ce.embedding
             FROM search_chunks c
             JOIN chunk_embeddings ce ON ce.chunk_id = c.id

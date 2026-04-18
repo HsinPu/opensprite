@@ -381,7 +381,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
         return FakeStore(candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -442,7 +442,7 @@ def test_search_benchmark_cli_skips_vector_when_embeddings_disabled(monkeypatch)
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
         return SimpleNamespace(strategy=candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -492,7 +492,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
         return FakeStore(candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -574,3 +574,79 @@ def test_search_seed_demo_cli_seeds_benchmark_ready_data(tmp_path):
     assert "Search benchmark for demo:bench (knowledge)." in benchmark_result.stdout
     assert "Strategy: fts" in benchmark_result.stdout
     assert "Orchard Irrigation Guide" in benchmark_result.stdout
+
+
+def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path="sessions.db"),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=False,
+                provider="openai",
+                model="",
+            ),
+        ),
+    )
+
+    class FakeStore:
+        def __init__(self, strategy, embedding_provider_override=None):
+            self.strategy = strategy
+            self.embedding_provider = embedding_provider_override
+            self.vector_backend_requested = "exact"
+            self.vector_backend_effective = "exact"
+
+        async def refresh_embeddings(self, force=False, wait=True):
+            return {
+                "refreshed": 2,
+                "embedding_total": 2,
+                "queued": 0,
+                "pending": 0,
+                "processing": 0,
+                "completed": 2,
+                "failed": 0,
+                "missing": 0,
+                "stale": 0,
+            }
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
+        return FakeStore(candidate_strategy, embedding_provider_override=embedding_provider_override)
+
+    def fake_benchmark(store, **kwargs):
+        hit = SearchHit(
+            id="hit-1",
+            chat_id="demo:bench",
+            source_type="web_fetch",
+            title="demo vector result",
+            content="content",
+            created_at=1.0,
+            score=0.8,
+            url="https://example.com",
+        )
+        return (4.0, [hit])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "demo:bench",
+            "--query",
+            "orchard irrigation",
+            "--strategy",
+            "vector",
+            "--demo-embeddings",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Strategy: vector" in result.stdout
+    assert "demo vector result" in result.stdout

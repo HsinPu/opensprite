@@ -525,6 +525,7 @@ def search_benchmark(
     limit: int = typer.Option(5, "--limit", help="Maximum hits to show per strategy."),
     repeat: int = typer.Option(3, "--repeat", help="How many runs to execute per strategy."),
     json_output: bool = typer.Option(False, "--json", help="Emit benchmark output as JSON."),
+    demo_embeddings: bool = typer.Option(False, "--demo-embeddings", help="Use a deterministic local embedding provider so vector benchmarks can run without a remote API key."),
     source_type: str | None = typer.Option(None, "--source-type", help="Knowledge source filter for knowledge benchmarks."),
     provider: str | None = typer.Option(None, "--provider", help="Knowledge provider filter for knowledge benchmarks."),
     extractor: str | None = typer.Option(None, "--extractor", help="Knowledge extractor filter for knowledge benchmarks."),
@@ -543,12 +544,15 @@ def search_benchmark(
 
     try:
         from ..config import Config
+        from ..search.embeddings import LocalHashEmbeddingProvider
 
         loaded = Config.load(_resolve_config_path(config))
         if not loaded.search.enabled:
             raise ValueError("search.enabled=false; enable search first")
         strategies = ["fts", "vector"] if strategy == "both" else [strategy]
-        if strategy == "vector" and not loaded.search.embedding.enabled:
+        benchmark_embedding_provider = LocalHashEmbeddingProvider() if demo_embeddings else None
+        vector_available = loaded.search.embedding.enabled or benchmark_embedding_provider is not None
+        if strategy == "vector" and not vector_available:
             raise ValueError("search.embedding.enabled=false; vector benchmarks require embeddings")
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
@@ -568,7 +572,7 @@ def search_benchmark(
         if truncated is not None:
             filters.append(f"truncated={'yes' if truncated else 'no'}")
 
-    if "vector" in strategies and not loaded.search.embedding.enabled:
+    if "vector" in strategies and not vector_available:
         if not json_output:
             typer.echo("Vector benchmark skipped because embeddings are disabled.")
         strategies = [item for item in strategies if item != "vector"]
@@ -578,6 +582,7 @@ def search_benchmark(
         "kind": kind,
         "query": query,
         "repeat": repeat,
+        "demo_embeddings": demo_embeddings,
         "filters": filters,
         "strategies": [],
         "comparison": {},
@@ -591,7 +596,14 @@ def search_benchmark(
 
     for candidate_strategy in strategies:
         try:
-            search_store = _build_sqlite_search_store(loaded, candidate_strategy=candidate_strategy)
+            embedding_override = benchmark_embedding_provider if candidate_strategy == "vector" and benchmark_embedding_provider is not None else None
+            search_store = _build_sqlite_search_store(
+                loaded,
+                candidate_strategy=candidate_strategy,
+                embedding_provider_override=embedding_override,
+            )
+            if embedding_override is not None:
+                asyncio.run(search_store.refresh_embeddings(force=False, wait=True))
             elapsed_runs: list[float] = []
             hits = []
             for _ in range(repeat):
@@ -864,12 +876,12 @@ def _load_sqlite_search_store(config: str | None = None):
     return loaded, search_store
 
 
-def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None):
+def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None, embedding_provider_override=None):
     """Build a SQLite search store from an already loaded config."""
     from ..runtime import create_search_embedding_provider
     from ..search.sqlite_store import SQLiteSearchStore
 
-    embedding_provider = create_search_embedding_provider(loaded)
+    embedding_provider = embedding_provider_override or create_search_embedding_provider(loaded)
     strategy = candidate_strategy or loaded.search.embedding.candidate_strategy
     return SQLiteSearchStore(
         path=loaded.storage.path,

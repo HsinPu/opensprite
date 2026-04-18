@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import hashlib
+import math
 from typing import Sequence
 
 from openai import AsyncOpenAI
@@ -51,3 +53,31 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             response = await self.client.embeddings.create(model=self.model_name, input=batch)
             vectors.extend([list(item.embedding) for item in response.data])
         return vectors
+
+
+class LocalHashEmbeddingProvider(EmbeddingProvider):
+    """Deterministic local embedding provider for testing and benchmarking."""
+
+    def __init__(self, *, model: str = "local-hash-embedding", dimensions: int = 64, batch_size: int = 64):
+        self.provider_name = "local"
+        self.model_name = model
+        self.dimensions = dimensions
+        self.batch_size = batch_size
+
+    async def embed_texts(self, texts: Sequence[str]) -> list[list[float]]:
+        return [self._embed_one(str(text or "")) for text in texts]
+
+    def _embed_one(self, text: str) -> list[float]:
+        buckets = [0.0] * self.dimensions
+        tokens = text.lower().split()
+        if not tokens:
+            return buckets
+        for token in tokens:
+            digest = hashlib.sha256(token.encode("utf-8")).digest()
+            bucket = int.from_bytes(digest[:4], "little") % self.dimensions
+            sign = 1.0 if digest[4] % 2 == 0 else -1.0
+            buckets[bucket] += sign
+        norm = math.sqrt(sum(value * value for value in buckets))
+        if norm == 0:
+            return buckets
+        return [value / norm for value in buckets]
