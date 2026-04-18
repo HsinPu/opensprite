@@ -287,8 +287,8 @@ Search requires `storage.type="sqlite"`.
       "base_url": null,
       "batch_size": 16,
       "candidate_count": 20,
-      "candidate_strategy": "fts",
-      "vector_backend": "exact",
+      "candidate_strategy": "vector",
+      "vector_backend": "auto",
       "vector_candidate_count": 50,
       "retry_failed_on_startup": false
     }
@@ -327,11 +327,13 @@ If `search.embedding.api_key` or `search.embedding.base_url` is empty, OpenSprit
 
 Candidate strategies:
 
-- `fts` keeps the current default path: FTS5 selects candidates first, then embeddings rerank them when available
+- `fts` uses FTS5 to select candidates first, then embeddings rerank them when available
 - `vector` uses stored embeddings to pull candidates first, then applies the same score fusion and deduplication logic afterward
 
 Current note on `vector` mode:
 
+- the current default path is `candidate_strategy="vector"` with `vector_backend="auto"`
+- this means OpenSprite will try `sqlite_vec` first, then fall back to exact vector scanning, then fall back to FTS if vector candidates are unavailable
 - `vector_backend="exact"` uses exact vector scanning over `chunk_embeddings`
 - `vector_backend="sqlite_vec"` tries to use a `sqlite-vec` virtual table for vector candidates
 - `vector_backend="auto"` tries `sqlite-vec` first and falls back to exact scan automatically

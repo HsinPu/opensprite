@@ -157,9 +157,9 @@ def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
     assert "Search status for all chats." in result.stdout
     assert "Messages: 1" in result.stdout
     assert "Chunks: 1" in result.stdout
-    assert "Embedding: enabled=no provider=openai model=<unset> candidate_strategy=fts vector_backend=exact retry_failed_on_startup=no" in result.stdout
+    assert "Embedding: enabled=no provider=openai model=<unset> candidate_strategy=vector vector_backend=auto retry_failed_on_startup=no" in result.stdout
     assert "Embedding jobs: total=0 queued=0 pending=0 processing=0 completed=0 failed=0 missing=0 stale=0" in result.stdout
-    assert "Vector backend: requested=exact effective=exact" in result.stdout
+    assert "Vector backend: requested=auto effective=exact" in result.stdout
     assert "Queue worker: running=no owner=<none> expires=never" in result.stdout
     assert "Last queue run: mode=<none> started=never finished=never refreshed=0 processed=0 failed=0" in result.stdout
 

@@ -133,8 +133,8 @@
       "base_url": null,
       "batch_size": 16,
       "candidate_count": 20,
-      "candidate_strategy": "fts",
-      "vector_backend": "exact",
+      "candidate_strategy": "vector",
+      "vector_backend": "auto",
       "vector_candidate_count": 50,
       "retry_failed_on_startup": false
     }
