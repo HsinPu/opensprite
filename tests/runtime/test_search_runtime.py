@@ -145,6 +145,7 @@ def test_create_search_store_passes_embedding_candidate_strategy(tmp_path):
                 provider="openai",
                 model="text-embedding-3-small",
                 candidate_strategy="vector",
+                vector_backend="sqlite_vec",
                 vector_candidate_count=80,
             ),
         ),
@@ -154,6 +155,7 @@ def test_create_search_store_passes_embedding_candidate_strategy(tmp_path):
 
     assert store is not None
     assert store.embedding_candidate_strategy == "vector"
+    assert store.vector_backend_requested == "sqlite_vec"
     assert store.vector_candidate_count == 80
 
 

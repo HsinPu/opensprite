@@ -33,6 +33,9 @@ dependencies = [
 dev = [
     "pytest>=7.0.0",
 ]
+vector = [
+    "sqlite-vec>=0.1.10-alpha.3",
+]
 
 [project.scripts]
 opensprite = "opensprite.cli.commands:app"

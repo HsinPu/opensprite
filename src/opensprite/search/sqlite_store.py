@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from .base import SearchHit, SearchStore
 from .embeddings import EmbeddingProvider
 from .indexing import build_history_chunks, build_knowledge_documents, build_knowledge_documents_from_message
+from .sqlite_vec_backend import load_sqlite_vec_extension
 from ..storage.base import StorageProvider, StoredMessage
 from ..storage.sqlite import (
     ensure_sqlite_schema,
@@ -22,6 +23,7 @@ from ..storage.sqlite import (
     insert_knowledge_document,
     insert_search_chunks,
     open_sqlite_connection,
+    pack_embedding,
     unpack_embedding,
     upsert_chunk_embedding,
 )
@@ -32,6 +34,8 @@ SEARCH_INDEX_SIGNATURE_KEY = "index_signature"
 SEARCH_WORKER_LOCK_KEY = "embedding_worker_lock"
 SEARCH_WORKER_LAST_RUN_KEY = "embedding_worker_last_run"
 SEARCH_WORKER_LEASE_SECONDS = 60.0
+SQLITE_VEC_INDEX_TABLE = "search_chunk_vec_index"
+SQLITE_VEC_INDEX_STATE_KEY = "sqlite_vec_index_state"
 
 
 class SQLiteSearchStore(SearchStore):
@@ -47,6 +51,7 @@ class SQLiteSearchStore(SearchStore):
         embedding_provider: EmbeddingProvider | None = None,
         hybrid_candidate_count: int = 20,
         embedding_candidate_strategy: str = "fts",
+        vector_backend: str = "exact",
         vector_candidate_count: int = 50,
         retry_failed_on_startup: bool = False,
     ):
@@ -59,6 +64,9 @@ class SQLiteSearchStore(SearchStore):
         self.embedding_provider = embedding_provider
         self.hybrid_candidate_count = max(hybrid_candidate_count, max(history_top_k, knowledge_top_k))
         self.embedding_candidate_strategy = embedding_candidate_strategy
+        self.vector_backend_requested = vector_backend
+        self.vector_backend_effective = "exact"
+        self._sqlite_vec_warning_emitted = False
         self.vector_candidate_count = max(vector_candidate_count, max(history_top_k, knowledge_top_k))
         self.retry_failed_on_startup = retry_failed_on_startup
         self._lock = asyncio.Lock()
@@ -72,7 +80,32 @@ class SQLiteSearchStore(SearchStore):
             conn.close()
 
     def _get_conn(self):
-        return open_sqlite_connection(self.path)
+        conn = open_sqlite_connection(self.path)
+        self._maybe_load_sqlite_vec(conn)
+        return conn
+
+    def _should_try_sqlite_vec(self) -> bool:
+        """Return whether sqlite-vec should be attempted for vector candidate retrieval."""
+        if self.vector_backend_requested == "sqlite_vec":
+            return True
+        return self.vector_backend_requested == "auto"
+
+    def _maybe_load_sqlite_vec(self, conn) -> bool:
+        """Load sqlite-vec into this connection when configured."""
+        if not self._should_try_sqlite_vec() or self.embedding_provider is None:
+            self.vector_backend_effective = "exact"
+            return False
+
+        loaded, error = load_sqlite_vec_extension(conn)
+        if loaded:
+            self.vector_backend_effective = "sqlite_vec"
+            return True
+
+        self.vector_backend_effective = "exact"
+        if not self._sqlite_vec_warning_emitted:
+            logger.warning("search.vector | sqlite-vec unavailable, falling back to exact scan: {}", error)
+            self._sqlite_vec_warning_emitted = True
+        return False
 
     @property
     def _index_signature(self) -> str:
@@ -82,7 +115,7 @@ class SQLiteSearchStore(SearchStore):
             embedding_signature = f"{self.embedding_provider.provider_name}:{self.embedding_provider.model_name}"
         return (
             f"v{SEARCH_INDEX_VERSION}:chunk={self.chunk_size}:{self.chunk_overlap}:embed={embedding_signature}"
-            f":strategy={self.embedding_candidate_strategy}:vectork={self.vector_candidate_count}"
+            f":strategy={self.embedding_candidate_strategy}:backend={self.vector_backend_requested}:vectork={self.vector_candidate_count}"
         )
 
     def _read_index_signature(self, conn) -> str | None:
@@ -185,6 +218,191 @@ class SQLiteSearchStore(SearchStore):
         """Persist queue worker run summary metadata."""
         self._write_json_metadata(conn, SEARCH_WORKER_LAST_RUN_KEY, payload)
 
+    def _sqlite_vec_state(self, *, vector_dim: int) -> dict[str, object]:
+        """Return the desired sqlite-vec index state for the current embedding model."""
+        return {
+            "provider": self.embedding_provider.provider_name if self.embedding_provider else "",
+            "model": self.embedding_provider.model_name if self.embedding_provider else "",
+            "dim": int(vector_dim),
+            "distance_metric": "cosine",
+        }
+
+    def _drop_sqlite_vec_index(self, conn) -> None:
+        """Drop the sqlite-vec virtual table and clear its state metadata."""
+        conn.execute(f"DROP TABLE IF EXISTS {SQLITE_VEC_INDEX_TABLE}")
+        self._delete_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY)
+
+    def _ensure_sqlite_vec_index(self, conn, *, vector_dim: int) -> bool:
+        """Ensure the sqlite-vec virtual table exists for the current embedding model."""
+        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
+            return False
+
+        try:
+            desired_state = self._sqlite_vec_state(vector_dim=vector_dim)
+            current_state = self._read_json_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY)
+            if current_state != desired_state:
+                self._drop_sqlite_vec_index(conn)
+                conn.execute(
+                    f"""
+                    CREATE VIRTUAL TABLE {SQLITE_VEC_INDEX_TABLE} USING vec0(
+                        chunk_id integer primary key,
+                        embedding float[{vector_dim}] distance_metric=cosine,
+                        chat_id text,
+                        owner_type text,
+                        source_type text,
+                        provider text,
+                        extractor text,
+                        status integer,
+                        content_type text,
+                        truncated boolean
+                    )
+                    """
+                )
+                self._write_json_metadata(conn, SQLITE_VEC_INDEX_STATE_KEY, desired_state)
+                self._rebuild_sqlite_vec_index(conn)
+            return True
+        except Exception as exc:
+            logger.warning("search.vector | sqlite-vec index unavailable, falling back to exact scan: {}", exc)
+            self.vector_backend_effective = "exact"
+            return False
+
+    def _rebuild_sqlite_vec_index(self, conn) -> None:
+        """Repopulate the sqlite-vec table from completed current-model embeddings."""
+        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
+            return
+        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE}")
+        rows = conn.execute(
+            """
+            SELECT
+                c.id,
+                c.chat_id,
+                c.owner_type,
+                c.source_type,
+                COALESCE(ks.provider, '') AS provider,
+                COALESCE(ks.extractor, '') AS extractor,
+                ks.status,
+                COALESCE(ks.content_type, '') AS content_type,
+                ks.truncated,
+                ce.embedding,
+                ce.embedding_dim
+            FROM search_chunks c
+            JOIN chunk_embeddings ce ON ce.chunk_id = c.id
+            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
+            WHERE ce.embedding_status = 'completed'
+              AND COALESCE(ce.embedding_provider, '') = ?
+              AND COALESCE(ce.embedding_model, '') = ?
+            ORDER BY c.id ASC
+            """,
+            (
+                self.embedding_provider.provider_name,
+                self.embedding_provider.model_name,
+            ),
+        ).fetchall()
+        for row in rows:
+            conn.execute(
+                f"""
+                INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
+                    chunk_id,
+                    embedding,
+                    chat_id,
+                    owner_type,
+                    source_type,
+                    provider,
+                    extractor,
+                    status,
+                    content_type,
+                    truncated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(row["id"]),
+                    row["embedding"],
+                    str(row["chat_id"] or ""),
+                    str(row["owner_type"] or ""),
+                    str(row["source_type"] or ""),
+                    str(row["provider"] or ""),
+                    str(row["extractor"] or ""),
+                    row["status"],
+                    str(row["content_type"] or ""),
+                    row["truncated"],
+                ),
+            )
+
+    def _delete_sqlite_vec_rows(self, conn, chunk_ids: list[int]) -> None:
+        """Remove chunk ids from the sqlite-vec index table."""
+        if self.vector_backend_effective != "sqlite_vec" or not chunk_ids:
+            return
+        conn.executemany(
+            f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chunk_id = ?",
+            [(chunk_id,) for chunk_id in chunk_ids],
+        )
+
+    def _upsert_sqlite_vec_rows(self, conn, chunk_ids: list[int], *, vector_dim: int) -> None:
+        """Insert or replace one batch of completed embeddings into sqlite-vec."""
+        if not chunk_ids or not self._ensure_sqlite_vec_index(conn, vector_dim=vector_dim):
+            return
+
+        placeholders = ", ".join("?" for _ in chunk_ids)
+        rows = conn.execute(
+            f"""
+            SELECT
+                c.id,
+                c.chat_id,
+                c.owner_type,
+                c.source_type,
+                COALESCE(ks.provider, '') AS provider,
+                COALESCE(ks.extractor, '') AS extractor,
+                ks.status,
+                COALESCE(ks.content_type, '') AS content_type,
+                ks.truncated,
+                ce.embedding
+            FROM search_chunks c
+            JOIN chunk_embeddings ce ON ce.chunk_id = c.id
+            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
+            WHERE c.id IN ({placeholders})
+              AND ce.embedding_status = 'completed'
+              AND COALESCE(ce.embedding_provider, '') = ?
+              AND COALESCE(ce.embedding_model, '') = ?
+            ORDER BY c.id ASC
+            """,
+            [
+                *chunk_ids,
+                self.embedding_provider.provider_name,
+                self.embedding_provider.model_name,
+            ],
+        ).fetchall()
+
+        self._delete_sqlite_vec_rows(conn, chunk_ids)
+        for row in rows:
+            conn.execute(
+                f"""
+                INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
+                    chunk_id,
+                    embedding,
+                    chat_id,
+                    owner_type,
+                    source_type,
+                    provider,
+                    extractor,
+                    status,
+                    content_type,
+                    truncated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(row["id"]),
+                    row["embedding"],
+                    str(row["chat_id"] or ""),
+                    str(row["owner_type"] or ""),
+                    str(row["source_type"] or ""),
+                    str(row["provider"] or ""),
+                    str(row["extractor"] or ""),
+                    row["status"],
+                    str(row["content_type"] or ""),
+                    row["truncated"],
+                ),
+            )
+
     def _candidate_limit(self, requested_limit: int) -> int:
         """Expand the search candidate pool when embeddings are enabled."""
         if self.embedding_provider is None:
@@ -225,6 +443,7 @@ class SQLiteSearchStore(SearchStore):
         """Mark new chunk rows as pending embedding work."""
         if self.embedding_provider is None or not chunk_ids:
             return
+        self._delete_sqlite_vec_rows(conn, chunk_ids)
         for chunk_id in chunk_ids:
             upsert_chunk_embedding(
                 conn,
@@ -292,6 +511,10 @@ class SQLiteSearchStore(SearchStore):
                         values=values,
                         status=status,
                     )
+                if status == "completed" and vectors:
+                    self._upsert_sqlite_vec_rows(conn, chunk_ids, vector_dim=len(vectors[0]))
+                else:
+                    self._delete_sqlite_vec_rows(conn, chunk_ids)
                 conn.commit()
             finally:
                 conn.close()
@@ -469,6 +692,7 @@ class SQLiteSearchStore(SearchStore):
                         "UPDATE chunk_embeddings SET embedding_status = 'pending', embedded_at = NULL WHERE chunk_id = ?",
                         [(chunk_id,) for chunk_id in chunk_ids],
                     )
+                    self._delete_sqlite_vec_rows(conn, chunk_ids)
                     conn.commit()
                 return len(chunk_ids)
             finally:
@@ -697,6 +921,8 @@ class SQLiteSearchStore(SearchStore):
             "last_run_refreshed": last_run_refreshed,
             "last_run_processed": last_run_processed,
             "last_run_failed": last_run_failed,
+            "vector_backend_requested": self.vector_backend_requested,
+            "vector_backend_effective": self.vector_backend_effective,
         }
 
     async def _rerank_rows(self, conn, query: str, rows, limit: int, *, owner_type: str):
@@ -775,6 +1001,56 @@ class SQLiteSearchStore(SearchStore):
         return scored_rows[: max(limit, 1)]
 
     async def _vector_candidate_rows(
+        self,
+        conn,
+        *,
+        chat_id: str,
+        query: str,
+        owner_type: str,
+        limit: int,
+        source_type: str | None = None,
+        provider: str | None = None,
+        extractor: str | None = None,
+        status: int | None = None,
+        content_type: str | None = None,
+        truncated: bool | None = None,
+    ) -> list[dict]:
+        """Select candidates using the configured vector backend with safe fallback."""
+        if self.embedding_provider is None:
+            return []
+
+        if self.vector_backend_effective == "sqlite_vec":
+            rows = await self._sqlite_vec_candidate_rows(
+                conn,
+                chat_id=chat_id,
+                query=query,
+                owner_type=owner_type,
+                limit=limit,
+                source_type=source_type,
+                provider=provider,
+                extractor=extractor,
+                status=status,
+                content_type=content_type,
+                truncated=truncated,
+            )
+            if rows:
+                return rows
+
+        return await self._exact_vector_candidate_rows(
+            conn,
+            chat_id=chat_id,
+            query=query,
+            owner_type=owner_type,
+            limit=limit,
+            source_type=source_type,
+            provider=provider,
+            extractor=extractor,
+            status=status,
+            content_type=content_type,
+            truncated=truncated,
+        )
+
+    async def _exact_vector_candidate_rows(
         self,
         conn,
         *,
@@ -880,6 +1156,110 @@ class SQLiteSearchStore(SearchStore):
             reverse=True,
         )
         return scored_rows[: max(limit, 1)]
+
+    async def _sqlite_vec_candidate_rows(
+        self,
+        conn,
+        *,
+        chat_id: str,
+        query: str,
+        owner_type: str,
+        limit: int,
+        source_type: str | None = None,
+        provider: str | None = None,
+        extractor: str | None = None,
+        status: int | None = None,
+        content_type: str | None = None,
+        truncated: bool | None = None,
+    ) -> list[dict]:
+        """Select candidates from the sqlite-vec virtual table."""
+        if self.vector_backend_effective != "sqlite_vec" or self.embedding_provider is None:
+            return []
+
+        normalized_query = self._normalize_query_text(query)
+        try:
+            query_vectors = await self.embedding_provider.embed_texts([normalized_query or query])
+        except Exception as exc:
+            logger.warning("search.embed | failed to embed query for sqlite-vec retrieval: {}", exc)
+            return []
+        if not query_vectors:
+            return []
+
+        query_blob = pack_embedding(query_vectors[0])
+        vector_dim = len(query_vectors[0])
+        if not self._ensure_sqlite_vec_index(conn, vector_dim=vector_dim):
+            return []
+
+        sql = f"""
+            WITH vector_matches AS (
+                SELECT chunk_id, distance
+                FROM {SQLITE_VEC_INDEX_TABLE}
+                WHERE embedding MATCH ?
+                  AND k = ?
+                  AND chat_id = ?
+                  AND owner_type = ?
+        """
+        params: list[object] = [query_blob, max(limit, 1), chat_id, owner_type]
+        if source_type:
+            sql += " AND source_type = ?"
+            params.append(source_type)
+        if provider:
+            sql += " AND provider = ?"
+            params.append(provider)
+        if extractor:
+            sql += " AND extractor = ?"
+            params.append(extractor)
+        if status is not None:
+            sql += " AND status = ?"
+            params.append(status)
+        if content_type:
+            sql += " AND content_type = ?"
+            params.append(content_type)
+        if truncated is not None:
+            sql += " AND truncated = ?"
+            params.append(1 if truncated else 0)
+
+        sql += f"""
+            )
+            SELECT
+                c.id,
+                c.owner_id,
+                c.chat_id,
+                c.source_type,
+                c.content,
+                c.created_at,
+                c.role,
+                c.tool_name,
+                c.title,
+                c.url,
+                c.query,
+                ks.summary,
+                ks.provider,
+                ks.extractor,
+                ks.status,
+                ks.content_type,
+                ks.truncated,
+                vm.distance
+            FROM vector_matches vm
+            JOIN search_chunks c ON c.id = vm.chunk_id
+            LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
+            ORDER BY vm.distance ASC, c.created_at DESC, c.id DESC
+        """
+
+        try:
+            rows = conn.execute(sql, params).fetchall()
+        except Exception as exc:
+            logger.warning("search.vector | sqlite-vec query failed, falling back to exact scan: {}", exc)
+            self.vector_backend_effective = "exact"
+            return []
+
+        payloads: list[dict] = []
+        for row in rows:
+            payload = dict(row)
+            distance = row["distance"]
+            payload["embedding_similarity"] = None if distance is None else 1.0 - float(distance)
+            payloads.append(payload)
+        return payloads
 
     @staticmethod
     def _cosine_similarity(left: list[float], right: list[float]) -> float | None:
@@ -1299,6 +1679,8 @@ class SQLiteSearchStore(SearchStore):
         async with self._lock:
             conn = self._get_conn()
             try:
+                if self.vector_backend_effective == "sqlite_vec":
+                    conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chat_id = ?", (chat_id,))
                 conn.execute("DELETE FROM search_chunks WHERE chat_id = ?", (chat_id,))
                 conn.execute("DELETE FROM knowledge_sources WHERE chat_id = ?", (chat_id,))
                 conn.commit()
@@ -1313,6 +1695,8 @@ class SQLiteSearchStore(SearchStore):
                 ensure_sqlite_schema(conn)
                 conn.execute("BEGIN")
                 if chat_id:
+                    if self.vector_backend_effective == "sqlite_vec":
+                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chat_id = ?", (chat_id,))
                     conn.execute("DELETE FROM search_chunks WHERE chat_id = ?", (chat_id,))
                     conn.execute("DELETE FROM knowledge_sources WHERE chat_id = ?", (chat_id,))
                     rows = conn.execute(
@@ -1325,6 +1709,8 @@ class SQLiteSearchStore(SearchStore):
                         (chat_id,),
                     ).fetchall()
                 else:
+                    if self.vector_backend_effective == "sqlite_vec":
+                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE}")
                     conn.execute("DELETE FROM search_chunks")
                     conn.execute("DELETE FROM knowledge_sources")
                     rows = conn.execute(

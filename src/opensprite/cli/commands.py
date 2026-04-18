@@ -384,11 +384,17 @@ def search_status(
         "Embedding: "
         f"enabled={_format_presence(bool(embedding.enabled))} "
         f"provider={embedding.provider} model={embedding.model or '<unset>'} "
+        f"candidate_strategy={embedding.candidate_strategy} "
+        f"vector_backend={embedding.vector_backend} "
         f"retry_failed_on_startup={_format_presence(bool(embedding.retry_failed_on_startup))}"
     )
     typer.echo(
         "Embedding jobs: "
         f"total={status['embedding_total']} queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
+    )
+    typer.echo(
+        "Vector backend: "
+        f"requested={status['vector_backend_requested']} effective={status['vector_backend_effective']}"
     )
     typer.echo(
         "Queue worker: "
@@ -609,6 +615,8 @@ def search_benchmark(
         benchmark_payload["strategies"].append(
             {
                 "strategy": candidate_strategy,
+                "vector_backend_requested": getattr(search_store, "vector_backend_requested", None),
+                "vector_backend_effective": getattr(search_store, "vector_backend_effective", None),
                 "summary": summary,
                 "hit_count": len(hits),
                 "hits": _serialize_benchmark_hits(hits, limit=limit),
@@ -621,6 +629,12 @@ def search_benchmark(
 
         typer.echo("")
         typer.echo(f"Strategy: {candidate_strategy}")
+        if candidate_strategy == "vector":
+            typer.echo(
+                "Vector backend: "
+                f"requested={getattr(search_store, 'vector_backend_requested', '<unknown>')} "
+                f"effective={getattr(search_store, 'vector_backend_effective', '<unknown>')}"
+            )
         typer.echo(
             "Elapsed: "
             f"avg={summary['avg_ms']:.2f} ms min={summary['min_ms']:.2f} ms "
@@ -840,6 +854,7 @@ def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None)
         embedding_provider=embedding_provider,
         hybrid_candidate_count=loaded.search.embedding.candidate_count,
         embedding_candidate_strategy=strategy,
+        vector_backend=loaded.search.embedding.vector_backend,
         vector_candidate_count=loaded.search.embedding.vector_candidate_count,
         retry_failed_on_startup=loaded.search.embedding.retry_failed_on_startup,
     )

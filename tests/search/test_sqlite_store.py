@@ -417,6 +417,126 @@ def test_sqlite_search_store_can_use_vector_candidate_strategy(tmp_path):
     assert [hit.content for hit in hits] == ["orchard manual"]
 
 
+def test_sqlite_search_store_falls_back_to_exact_when_sqlite_vec_is_unavailable(tmp_path, monkeypatch):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider(
+        {
+            "orchard manual": [1.0, 0.0],
+            "kitchen recipe": [0.0, 1.0],
+            "guide": [1.0, 0.0],
+        }
+    )
+
+    monkeypatch.setattr("opensprite.search.sqlite_store.load_sqlite_vec_extension", lambda conn: (False, "missing"))
+
+    async def scenario():
+        storage = SQLiteStorage(db_path)
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+            embedding_candidate_strategy="vector",
+            vector_backend="sqlite_vec",
+            vector_candidate_count=10,
+        )
+
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="orchard manual", timestamp=10.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="orchard manual",
+            created_at=10.0,
+        )
+        await storage.add_message(
+            "chat-a",
+            StoredMessage(role="user", content="kitchen recipe", timestamp=20.0),
+        )
+        await search.index_message(
+            "chat-a",
+            role="user",
+            content="kitchen recipe",
+            created_at=20.0,
+        )
+        await search.wait_for_embedding_idle()
+
+        hits = await search.search_history("chat-a", "guide", limit=1)
+        status = await search.get_status()
+        return hits, status
+
+    hits, status = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["orchard manual"]
+    assert status["vector_backend_requested"] == "sqlite_vec"
+    assert status["vector_backend_effective"] == "exact"
+
+
+def test_sqlite_search_store_uses_sqlite_vec_dispatch_when_available(tmp_path, monkeypatch):
+    db_path = tmp_path / "search.db"
+    embedder = FakeEmbeddingProvider({"guide": [1.0, 0.0]})
+    calls: list[str] = []
+
+    monkeypatch.setattr("opensprite.search.sqlite_store.load_sqlite_vec_extension", lambda conn: (True, None))
+
+    async def fake_sqlite_vec_candidate_rows(self, conn, **kwargs):
+        calls.append("sqlite_vec")
+        return [
+            {
+                "id": 1,
+                "owner_id": 1,
+                "chat_id": "chat-a",
+                "source_type": "history",
+                "content": "orchard manual",
+                "created_at": 1.0,
+                "role": "user",
+                "tool_name": None,
+                "title": None,
+                "url": None,
+                "query": None,
+                "summary": None,
+                "provider": None,
+                "extractor": None,
+                "status": None,
+                "content_type": None,
+                "truncated": None,
+                "embedding_similarity": 0.95,
+            }
+        ]
+
+    async def fake_exact_vector_candidate_rows(self, conn, **kwargs):
+        calls.append("exact")
+        return []
+
+    monkeypatch.setattr(SQLiteSearchStore, "_sqlite_vec_candidate_rows", fake_sqlite_vec_candidate_rows)
+    monkeypatch.setattr(SQLiteSearchStore, "_exact_vector_candidate_rows", fake_exact_vector_candidate_rows)
+
+    async def scenario():
+        search = SQLiteSearchStore(
+            db_path,
+            history_top_k=2,
+            knowledge_top_k=2,
+            embedding_provider=embedder,
+            hybrid_candidate_count=4,
+            embedding_candidate_strategy="vector",
+            vector_backend="sqlite_vec",
+            vector_candidate_count=10,
+        )
+        hits = await search.search_history("chat-a", "guide", limit=1)
+        status = await search.get_status()
+        return hits, status
+
+    hits, status = asyncio.run(scenario())
+
+    assert [hit.content for hit in hits] == ["orchard manual"]
+    assert calls == ["sqlite_vec"]
+    assert status["vector_backend_requested"] == "sqlite_vec"
+    assert status["vector_backend_effective"] == "sqlite_vec"
+
+
 def test_sqlite_search_store_processes_embeddings_in_background(tmp_path):
     db_path = tmp_path / "search.db"
     embedder = BlockingEmbeddingProvider()

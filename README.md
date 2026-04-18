@@ -288,6 +288,7 @@ Search requires `storage.type="sqlite"`.
       "batch_size": 16,
       "candidate_count": 20,
       "candidate_strategy": "fts",
+      "vector_backend": "exact",
       "vector_candidate_count": 50,
       "retry_failed_on_startup": false
     }
@@ -320,6 +321,7 @@ If `search.embedding.api_key` or `search.embedding.base_url` is empty, OpenSprit
 
 - `candidate_count`: FTS candidate pool size before hybrid reranking
 - `candidate_strategy`: candidate selection mode, either `fts` or `vector`
+- `vector_backend`: vector candidate backend, one of `exact`, `sqlite_vec`, or `auto`
 - `vector_candidate_count`: vector candidate pool size when `candidate_strategy="vector"`
 - `retry_failed_on_startup`: whether failed embeddings should be re-queued automatically on startup
 
@@ -330,9 +332,16 @@ Candidate strategies:
 
 Current note on `vector` mode:
 
-- it uses exact vector scanning over `chunk_embeddings`
-- it is not ANN and does not require `sqlite-vec`
-- if vector candidates are unavailable, search falls back to the existing FTS path automatically
+- `vector_backend="exact"` uses exact vector scanning over `chunk_embeddings`
+- `vector_backend="sqlite_vec"` tries to use a `sqlite-vec` virtual table for vector candidates
+- `vector_backend="auto"` tries `sqlite-vec` first and falls back to exact scan automatically
+- if `sqlite-vec` is unavailable or fails, search falls back to the exact vector path and then to the existing FTS path automatically
+
+To enable `sqlite-vec`, install the optional extra:
+
+```bash
+python -m pip install -e ".[vector]"
+```
 
 ### Automatic Maintenance
 
@@ -429,9 +438,11 @@ The benchmark command reports:
 - elapsed time summary (`avg`, `min`, `max`, `median`)
 - hit count
 - top result preview
+- result overlap and top-hit agreement when comparing both strategies
 - optional JSON output for later comparison or scripting
 
 If embeddings are disabled, vector benchmarks are skipped automatically.
+If you request `sqlite-vec`, benchmark output also shows the requested backend versus the effective backend actually used.
 
 ## Web Search Pipeline
 
@@ -716,6 +727,9 @@ python -m pip install .
 
 # development install
 python -m pip install -e ".[dev]"
+
+# development install with sqlite-vec support
+python -m pip install -e ".[dev,vector]"
 
 # show help
 opensprite

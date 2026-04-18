@@ -121,6 +121,7 @@ def test_search_config_provides_embedding_defaults():
     assert config.embedding.batch_size == 16
     assert config.embedding.candidate_count == 20
     assert config.embedding.candidate_strategy == "fts"
+    assert config.embedding.vector_backend == "exact"
     assert config.embedding.vector_candidate_count == 50
     assert config.embedding.retry_failed_on_startup is False
 

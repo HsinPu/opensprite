@@ -134,6 +134,7 @@
       "batch_size": 16,
       "candidate_count": 20,
       "candidate_strategy": "fts",
+      "vector_backend": "exact",
       "vector_candidate_count": 50,
       "retry_failed_on_startup": false
     }
