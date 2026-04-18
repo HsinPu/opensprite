@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
+from opensprite.search.base import SearchHit
 from opensprite.search.sqlite_store import SQLiteSearchStore
 from opensprite.storage.base import StoredMessage
 from opensprite.storage.sqlite import SQLiteStorage
@@ -355,3 +356,183 @@ def test_search_run_queue_cli_reports_queue_run(monkeypatch, tmp_path):
     assert "Ran search queue in once mode." in result.stdout
     assert "Embedding jobs: total=5 queued=0 pending=0 processing=0 completed=5 failed=0 missing=0 stale=0" in result.stdout
     assert "Queue run: refreshed=2 processed=3 failed=0" in result.stdout
+
+
+def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
+    db_path = tmp_path / "sessions.db"
+
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path=str(db_path)),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=True,
+                provider="openai",
+                model="text-embedding-3-small",
+            ),
+        ),
+    )
+
+    class FakeStore:
+        def __init__(self, strategy):
+            self.strategy = strategy
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None):
+        return FakeStore(candidate_strategy)
+
+    def fake_benchmark(store, **kwargs):
+        hit = SearchHit(
+            id=f"{store.strategy}-1",
+            chat_id="telegram:user-a",
+            source_type="web_fetch",
+            title=f"{store.strategy} result",
+            content="content",
+            created_at=1.0,
+            score=0.9,
+            url="https://example.com",
+        )
+        return (12.5 if store.strategy == "fts" else 7.5, [hit])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "telegram:user-a",
+            "--query",
+            "sqlite guide",
+            "--strategy",
+            "both",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Search benchmark for telegram:user-a (knowledge)." in result.stdout
+    assert "Strategy: fts" in result.stdout
+    assert "Strategy: vector" in result.stdout
+    assert "Elapsed: avg=" in result.stdout
+    assert "fts result" in result.stdout
+    assert "vector result" in result.stdout
+    assert "Comparison: overlap=" in result.stdout
+    assert "Top hits: fts=" in result.stdout
+
+
+def test_search_benchmark_cli_skips_vector_when_embeddings_disabled(monkeypatch):
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path="sessions.db"),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=False,
+                provider="openai",
+                model="",
+            ),
+        ),
+    )
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None):
+        return SimpleNamespace(strategy=candidate_strategy)
+
+    def fake_benchmark(store, **kwargs):
+        return (5.0, [])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "telegram:user-a",
+            "--query",
+            "sqlite guide",
+            "--strategy",
+            "both",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Vector benchmark skipped because embeddings are disabled." in result.stdout
+    assert "Strategy: fts" in result.stdout
+    assert "Strategy: vector" not in result.stdout
+
+
+def test_search_benchmark_cli_can_emit_json(monkeypatch):
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path="sessions.db"),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=True,
+                provider="openai",
+                model="text-embedding-3-small",
+            ),
+        ),
+    )
+
+    class FakeStore:
+        def __init__(self, strategy):
+            self.strategy = strategy
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None):
+        return FakeStore(candidate_strategy)
+
+    def fake_benchmark(store, **kwargs):
+        hit = SearchHit(
+            id="hit-1",
+            chat_id="telegram:user-a",
+            source_type="web_fetch",
+            title="vector result",
+            content="content",
+            created_at=1.0,
+            score=0.7,
+            url="https://example.com",
+        )
+        return (6.0, [hit])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "telegram:user-a",
+            "--query",
+            "sqlite guide",
+            "--strategy",
+            "vector",
+            "--repeat",
+            "2",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["chat_id"] == "telegram:user-a"
+    assert payload["repeat"] == 2
+    assert payload["strategies"][0]["strategy"] == "vector"
+    assert payload["strategies"][0]["summary"]["avg_ms"] == 6.0
+    assert payload["strategies"][0]["hits"][0]["title"] == "vector result"
+    assert payload["comparison"] == {}

@@ -6,6 +6,8 @@ import asyncio
 from datetime import datetime
 import json
 from pathlib import Path
+import statistics
+import time
 
 import typer
 
@@ -13,6 +15,7 @@ from .. import __version__
 from ..context.paths import get_chat_workspace, get_tool_workspace
 from ..cron import CronSchedule, CronService
 from ..runtime import gateway as run_gateway
+from ..search.base import SearchHit
 from . import service_linux
 from .onboard import run_onboard
 
@@ -506,6 +509,161 @@ def search_run_queue(
     )
 
 
+@search_app.command("benchmark")
+def search_benchmark(
+    query: str = typer.Option(..., "--query", help="Search query to benchmark."),
+    chat_id: str = typer.Option(..., "--chat-id", help="Chat id to benchmark against."),
+    kind: str = typer.Option("knowledge", "--kind", help="Benchmark `history` or `knowledge` search."),
+    strategy: str = typer.Option("both", "--strategy", help="Benchmark `fts`, `vector`, or `both`."),
+    limit: int = typer.Option(5, "--limit", help="Maximum hits to show per strategy."),
+    repeat: int = typer.Option(3, "--repeat", help="How many runs to execute per strategy."),
+    json_output: bool = typer.Option(False, "--json", help="Emit benchmark output as JSON."),
+    source_type: str | None = typer.Option(None, "--source-type", help="Knowledge source filter for knowledge benchmarks."),
+    provider: str | None = typer.Option(None, "--provider", help="Knowledge provider filter for knowledge benchmarks."),
+    extractor: str | None = typer.Option(None, "--extractor", help="Knowledge extractor filter for knowledge benchmarks."),
+    status: int | None = typer.Option(None, "--status", help="Knowledge status filter for knowledge benchmarks."),
+    content_type: str | None = typer.Option(None, "--content-type", help="Knowledge content type filter for knowledge benchmarks."),
+    truncated: bool | None = typer.Option(None, "--truncated", help="Knowledge truncation filter for knowledge benchmarks."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+) -> None:
+    """Benchmark FTS and vector candidate strategies for one chat query."""
+    if kind not in {"history", "knowledge"}:
+        _handle_search_error("--kind must be 'history' or 'knowledge'")
+    if strategy not in {"fts", "vector", "both"}:
+        _handle_search_error("--strategy must be 'fts', 'vector', or 'both'")
+    if repeat < 1:
+        _handle_search_error("--repeat must be greater than 0")
+
+    try:
+        from ..config import Config
+
+        loaded = Config.load(_resolve_config_path(config))
+        if not loaded.search.enabled:
+            raise ValueError("search.enabled=false; enable search first")
+        strategies = ["fts", "vector"] if strategy == "both" else [strategy]
+        if strategy == "vector" and not loaded.search.embedding.enabled:
+            raise ValueError("search.embedding.enabled=false; vector benchmarks require embeddings")
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
+        _handle_search_error(exc)
+
+    filters = []
+    if kind == "knowledge":
+        if source_type:
+            filters.append(f"source_type={source_type}")
+        if provider:
+            filters.append(f"provider={provider}")
+        if extractor:
+            filters.append(f"extractor={extractor}")
+        if status is not None:
+            filters.append(f"status={status}")
+        if content_type:
+            filters.append(f"content_type={content_type}")
+        if truncated is not None:
+            filters.append(f"truncated={'yes' if truncated else 'no'}")
+
+    if "vector" in strategies and not loaded.search.embedding.enabled:
+        if not json_output:
+            typer.echo("Vector benchmark skipped because embeddings are disabled.")
+        strategies = [item for item in strategies if item != "vector"]
+
+    benchmark_payload: dict[str, object] = {
+        "chat_id": chat_id,
+        "kind": kind,
+        "query": query,
+        "repeat": repeat,
+        "filters": filters,
+        "strategies": [],
+        "comparison": {},
+    }
+
+    if not json_output:
+        typer.echo(f"Search benchmark for {chat_id} ({kind}).")
+        typer.echo(f"Query: {query}")
+        if kind == "knowledge":
+            typer.echo(f"Filters: {', '.join(filters) if filters else '<none>'}")
+
+    for candidate_strategy in strategies:
+        try:
+            search_store = _build_sqlite_search_store(loaded, candidate_strategy=candidate_strategy)
+            elapsed_runs: list[float] = []
+            hits = []
+            for _ in range(repeat):
+                elapsed_ms, hits = _benchmark_one_strategy(
+                    search_store,
+                    kind=kind,
+                    chat_id=chat_id,
+                    query=query,
+                    limit=limit,
+                    source_type=source_type,
+                    provider=provider,
+                    extractor=extractor,
+                    status=status,
+                    content_type=content_type,
+                    truncated=truncated,
+                )
+                elapsed_runs.append(elapsed_ms)
+        except (ValueError, RuntimeError) as exc:
+            _handle_search_error(exc)
+
+        summary = _summarize_benchmark_runs(elapsed_runs)
+        benchmark_payload["strategies"].append(
+            {
+                "strategy": candidate_strategy,
+                "summary": summary,
+                "hit_count": len(hits),
+                "hits": _serialize_benchmark_hits(hits, limit=limit),
+                "_raw_hits": hits,
+            }
+        )
+
+        if json_output:
+            continue
+
+        typer.echo("")
+        typer.echo(f"Strategy: {candidate_strategy}")
+        typer.echo(
+            "Elapsed: "
+            f"avg={summary['avg_ms']:.2f} ms min={summary['min_ms']:.2f} ms "
+            f"max={summary['max_ms']:.2f} ms median={summary['median_ms']:.2f} ms "
+            f"runs={int(summary['runs'])}"
+        )
+        typer.echo(f"Hits: {len(hits)}")
+        preview_lines = _render_benchmark_hits(hits, limit=limit)
+        if preview_lines:
+            for line in preview_lines:
+                typer.echo(line)
+        else:
+            typer.echo("<no hits>")
+
+    comparison = _compare_benchmark_results(list(benchmark_payload["strategies"]))
+    if comparison:
+        benchmark_payload["comparison"] = comparison
+        if not json_output:
+            typer.echo("")
+            typer.echo(
+                "Comparison: "
+                f"overlap={comparison['overlap_count']} ({comparison['overlap_ratio']:.2%}) "
+                f"top_hit_same={_format_presence(bool(comparison['top_hit_same']))} "
+                f"{comparison['strategies'][0]}_only={comparison['first_only_count']} "
+                f"{comparison['strategies'][1]}_only={comparison['second_only_count']}"
+            )
+            if comparison["first_top"] or comparison["second_top"]:
+                typer.echo(
+                    "Top hits: "
+                    f"{comparison['strategies'][0]}={comparison['first_top'] or '<none>'} | "
+                    f"{comparison['strategies'][1]}={comparison['second_top'] or '<none>'}"
+                )
+
+    if json_output:
+        strategies_payload = []
+        for item in benchmark_payload["strategies"]:
+            serialized = dict(item)
+            serialized.pop("_raw_hits", None)
+            strategies_payload.append(serialized)
+        benchmark_payload["strategies"] = strategies_payload
+        typer.echo(json.dumps(benchmark_payload, ensure_ascii=False, indent=2))
+
+
 @search_app.command("retry-embeddings")
 def search_retry_embeddings(
     config: str | None = typer.Option(
@@ -570,6 +728,84 @@ def _format_search_timestamp(value: float | None) -> str:
     return datetime.fromtimestamp(value).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _render_benchmark_hits(hits, *, limit: int) -> list[str]:
+    """Render a compact benchmark preview for the top hits."""
+    lines: list[str] = []
+    for index, hit in enumerate(hits[:limit], start=1):
+        title = hit.title or hit.source_type
+        score = f" score={hit.score:.4f}" if hit.score is not None else ""
+        lines.append(f"{index}. [{hit.source_type}] {title}{score}")
+        if hit.url:
+            lines.append(f"   {hit.url}")
+    return lines
+
+
+def _serialize_benchmark_hits(hits, *, limit: int) -> list[dict[str, object]]:
+    """Convert benchmark hits into a compact JSON-friendly structure."""
+    payload: list[dict[str, object]] = []
+    for hit in hits[:limit]:
+        payload.append(
+            {
+                "id": hit.id,
+                "source_type": hit.source_type,
+                "title": hit.title,
+                "url": hit.url,
+                "score": hit.score,
+                "content": hit.content,
+            }
+        )
+    return payload
+
+
+def _summarize_benchmark_runs(elapsed_runs: list[float]) -> dict[str, float]:
+    """Summarize repeated benchmark timings."""
+    if not elapsed_runs:
+        return {"runs": 0.0, "avg_ms": 0.0, "min_ms": 0.0, "max_ms": 0.0, "median_ms": 0.0}
+    return {
+        "runs": float(len(elapsed_runs)),
+        "avg_ms": float(statistics.mean(elapsed_runs)),
+        "min_ms": float(min(elapsed_runs)),
+        "max_ms": float(max(elapsed_runs)),
+        "median_ms": float(statistics.median(elapsed_runs)),
+    }
+
+
+def _benchmark_hit_identity(hit: SearchHit) -> str:
+    """Build a stable identity for comparing benchmark result overlap."""
+    if hit.url:
+        return f"url:{hit.url}"
+    title = hit.title or hit.source_type or hit.id
+    return f"title:{title}|source:{hit.source_type}"
+
+
+def _compare_benchmark_results(results: list[dict[str, object]]) -> dict[str, object]:
+    """Compare multiple benchmark strategy outputs by overlap and top-hit agreement."""
+    if len(results) < 2:
+        return {}
+
+    first = results[0]
+    second = results[1]
+    first_hits = first.get("_raw_hits", [])
+    second_hits = second.get("_raw_hits", [])
+    first_keys = {_benchmark_hit_identity(hit) for hit in first_hits}
+    second_keys = {_benchmark_hit_identity(hit) for hit in second_hits}
+    overlap = first_keys & second_keys
+    union = first_keys | second_keys
+    first_top = _benchmark_hit_identity(first_hits[0]) if first_hits else None
+    second_top = _benchmark_hit_identity(second_hits[0]) if second_hits else None
+
+    return {
+        "strategies": [first.get("strategy"), second.get("strategy")],
+        "overlap_count": len(overlap),
+        "overlap_ratio": (len(overlap) / len(union)) if union else 1.0,
+        "top_hit_same": bool(first_top and second_top and first_top == second_top),
+        "first_only_count": len(first_keys - second_keys),
+        "second_only_count": len(second_keys - first_keys),
+        "first_top": first_top,
+        "second_top": second_top,
+    }
+
+
 def _resolve_workspace_root() -> Path:
     """Resolve the default workspace root used by cron CLI commands."""
     return get_tool_workspace()
@@ -588,6 +824,61 @@ def _load_sqlite_search_store(config: str | None = None):
     if not isinstance(search_store, SQLiteSearchStore):
         raise ValueError("configured search backend does not support rebuild")
     return loaded, search_store
+
+
+def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None):
+    """Build a SQLite search store from an already loaded config."""
+    from ..runtime import create_search_embedding_provider
+    from ..search.sqlite_store import SQLiteSearchStore
+
+    embedding_provider = create_search_embedding_provider(loaded)
+    strategy = candidate_strategy or loaded.search.embedding.candidate_strategy
+    return SQLiteSearchStore(
+        path=loaded.storage.path,
+        history_top_k=loaded.search.history_top_k,
+        knowledge_top_k=loaded.search.knowledge_top_k,
+        embedding_provider=embedding_provider,
+        hybrid_candidate_count=loaded.search.embedding.candidate_count,
+        embedding_candidate_strategy=strategy,
+        vector_candidate_count=loaded.search.embedding.vector_candidate_count,
+        retry_failed_on_startup=loaded.search.embedding.retry_failed_on_startup,
+    )
+
+
+def _benchmark_one_strategy(
+    search_store,
+    *,
+    kind: str,
+    chat_id: str,
+    query: str,
+    limit: int,
+    source_type: str | None = None,
+    provider: str | None = None,
+    extractor: str | None = None,
+    status: int | None = None,
+    content_type: str | None = None,
+    truncated: bool | None = None,
+):
+    """Run one benchmark query and return elapsed time with hits."""
+    started = time.perf_counter()
+    if kind == "history":
+        hits = asyncio.run(search_store.search_history(chat_id, query, limit=limit))
+    else:
+        hits = asyncio.run(
+            search_store.search_knowledge(
+                chat_id,
+                query,
+                limit=limit,
+                source_type=source_type,
+                provider=provider,
+                extractor=extractor,
+                status=status,
+                content_type=content_type,
+                truncated=truncated,
+            )
+        )
+    elapsed_ms = (time.perf_counter() - started) * 1000.0
+    return elapsed_ms, hits
 
 
 def _get_cron_service(session: str) -> CronService:
