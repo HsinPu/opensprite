@@ -13,8 +13,13 @@ class SubagentMessageBuilder:
         self.prompt_loader = prompt_loader
         self.skills_loader = skills_loader
 
-    def build_system_prompt(self, prompt_type: str = "writer", workspace: str | Path | None = None) -> str:
-        prompt_body = self.prompt_loader(prompt_type)
+    def build_system_prompt(
+        self,
+        prompt_type: str = "writer",
+        workspace: str | Path | None = None,
+        app_home: Path | None = None,
+    ) -> str:
+        prompt_body = self.prompt_loader(prompt_type, app_home=app_home)
         runtime_context = build_runtime_context(workspace=workspace)
         workspace_path = Path(workspace) if workspace is not None else None
         skills_summary = ""
@@ -57,8 +62,9 @@ class SubagentMessageBuilder:
         task: str,
         prompt_type: str = "writer",
         workspace: str | Path | None = None,
+        app_home: Path | None = None,
     ) -> list[ChatMessage]:
-        system_prompt = self.build_system_prompt(prompt_type, workspace=workspace)
+        system_prompt = self.build_system_prompt(prompt_type, workspace=workspace, app_home=app_home)
         return [
             ChatMessage(role="system", content=system_prompt),
             ChatMessage(role="user", content=task),

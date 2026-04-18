@@ -50,6 +50,7 @@ opensprite = [
     "templates/memory/*.md",
     "skills/*/*.md",
     "skills/*/*.py",
+    "subagent_prompts/*.md",
 ]
 
 [tool.setuptools.packages.find]

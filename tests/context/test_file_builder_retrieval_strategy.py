@@ -1,5 +1,5 @@
 from opensprite.context.file_builder import FileContextBuilder
-from opensprite.subagent_prompts import ALL_SUBAGENTS
+from opensprite.subagent_prompts import get_all_subagents
 
 
 def test_file_builder_includes_retrieval_strategy_in_system_prompt(tmp_path):
@@ -18,8 +18,9 @@ def test_file_builder_includes_retrieval_strategy_in_system_prompt(tmp_path):
 
 
 def test_file_builder_includes_available_subagents_in_system_prompt(tmp_path):
+    app_home = tmp_path / "home"
     builder = FileContextBuilder(
-        app_home=tmp_path / "home",
+        app_home=app_home,
         bootstrap_dir=tmp_path / "bootstrap",
         memory_dir=tmp_path / "memory",
         tool_workspace=tmp_path / "workspace",
@@ -29,5 +30,5 @@ def test_file_builder_includes_available_subagents_in_system_prompt(tmp_path):
 
     assert "# Available Subagents" in prompt
     assert "Use `delegate` when a focused subproblem would benefit from a dedicated prompt." in prompt
-    first_name, first_description = next(iter(ALL_SUBAGENTS.items()))
+    first_name, first_description = next(iter(get_all_subagents(app_home).items()))
     assert f"- `{first_name}`: {first_description}" in prompt

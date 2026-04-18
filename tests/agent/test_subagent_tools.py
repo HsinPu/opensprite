@@ -107,6 +107,7 @@ def test_subagent_can_use_tools_but_not_delegate(tmp_path):
         user_profile_config=UserProfileConfig(enabled=False),
     )
     agent._current_chat_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
 
     result = asyncio.run(agent.run_subagent("do the task", prompt_type="implementer"))
 

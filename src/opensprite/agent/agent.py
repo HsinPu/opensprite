@@ -509,6 +509,7 @@ class AgentLoop:
             workspace_resolver=self._get_current_workspace,
             get_chat_id=self._get_current_chat_id,
             run_subagent=self.run_subagent,
+            app_home=self.app_home,
             skills_loader=getattr(self._context_builder, "skills_loader", None),
             tools_config=self.tools_config,
             search_store=self.search_store,
@@ -801,10 +802,11 @@ class AgentLoop:
     async def run_subagent(self, task: str, prompt_type: str = "writer") -> str:
         """Run a delegated subagent task through the shared execution core."""
         from .subagent_builder import SubagentMessageBuilder
-        from ..subagent_prompts import ALL_SUBAGENTS
+        from ..subagent_prompts import get_all_subagents
 
-        if prompt_type not in ALL_SUBAGENTS:
-            available = ", ".join(ALL_SUBAGENTS)
+        subagents = get_all_subagents(self.app_home)
+        if prompt_type not in subagents:
+            available = ", ".join(subagents)
             return f"Error: unknown subagent type '{prompt_type}'. Available: {available}"
 
         parent_chat_id = self._get_current_chat_id() or "default"
@@ -814,7 +816,9 @@ class AgentLoop:
         subagent_builder = SubagentMessageBuilder(
             skills_loader=getattr(self._context_builder, "skills_loader", None)
         )
-        chat_messages = subagent_builder.build_messages(task, prompt_type=prompt_type, workspace=workspace)
+        chat_messages = subagent_builder.build_messages(
+            task, prompt_type=prompt_type, workspace=workspace, app_home=self.app_home
+        )
         self._log_prepared_messages(
             log_id,
             [{"role": msg.role, "content": msg.content} for msg in chat_messages],

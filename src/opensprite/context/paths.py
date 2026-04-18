@@ -3,6 +3,7 @@ opensprite/context/paths.py - Path helpers and template sync.
 
 Path layout:
 - app home: ~/.opensprite
+- subagent prompts: ~/.opensprite/subagent_prompts/*.md (seeded from bundled templates on first sync)
 - bootstrap files: ~/.opensprite/bootstrap/*.md
 - memory: ~/.opensprite/memory/<chat>/MEMORY.md
 - recent summary: ~/.opensprite/memory/<chat>/RECENT_SUMMARY.md
@@ -27,6 +28,7 @@ MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
 WORKSPACE_DIRNAME = "workspace"
 WORKSPACE_CHATS_DIRNAME = "chats"
+SUBAGENT_PROMPTS_DIRNAME = "subagent_prompts"
 USER_PROFILE_STATE_FILENAME = ".user_profile_state.json"
 RECENT_SUMMARY_STATE_FILENAME = ".recent_summary_state.json"
 
@@ -73,6 +75,35 @@ def get_skills_dir(app_home: str | Path | None = None) -> Path:
 def get_tool_workspace(app_home: str | Path | None = None) -> Path:
     """Get the shared root directory that contains per-chat workspaces."""
     return ensure_dir(get_app_home(app_home) / WORKSPACE_DIRNAME)
+
+
+def get_subagent_prompts_dir(app_home: str | Path | None = None) -> Path:
+    """Directory for editable subagent prompt markdown files (mirrors bundled defaults)."""
+    return ensure_dir(get_app_home(app_home) / SUBAGENT_PROMPTS_DIRNAME)
+
+
+def sync_subagent_prompts_from_package(app_home: str | Path | None = None, *, silent: bool = False) -> list[str]:
+    """Copy bundled subagent *.md into app_home/subagent_prompts when missing (like default skills)."""
+    import opensprite
+
+    home = get_app_home(app_home)
+    dest_root = get_subagent_prompts_dir(home)
+    bundled_root = Path(opensprite.__file__).resolve().parent / SUBAGENT_PROMPTS_DIRNAME
+    if not bundled_root.is_dir():
+        return []
+
+    changed: list[str] = []
+    for src in sorted(bundled_root.glob("*.md")):
+        dest = dest_root / src.name
+        if dest.exists():
+            continue
+        shutil.copy2(src, dest)
+        changed.append(_relative_path(dest, home))
+
+    if changed and not silent:
+        logger.info("Synced subagent prompt files: %s", changed)
+
+    return changed
 
 
 def get_workspace_path(workspace: str | Path | None = None) -> Path:
@@ -288,6 +319,8 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
             for item in skill_folder.iterdir():
                 if item.name.endswith((".md", ".py")):
                     _write(item, skill_dest / item.name, overwrite=True)
+
+    changed.extend(sync_subagent_prompts_from_package(home, silent=True))
 
     if changed and not silent:
         logger.info("Synced template files: %s", changed)

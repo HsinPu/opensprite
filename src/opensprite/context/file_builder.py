@@ -26,7 +26,7 @@ from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..skills import SkillsLoader
-from ..subagent_prompts import ALL_SUBAGENTS
+from ..subagent_prompts import get_all_subagents
 
 
 class FileContextBuilder:
@@ -46,14 +46,14 @@ When retrieval tools are available:
 - When answering from retrieved web knowledge, preserve the source title or URL when it helps the user verify the result.
 """
 
-    @staticmethod
-    def _build_subagent_summary() -> str:
+    def _build_subagent_summary(self) -> str:
         """Describe the available delegate prompt types for the main agent."""
-        if not ALL_SUBAGENTS:
+        subagents = get_all_subagents(self.app_home)
+        if not subagents:
             return ""
 
         subagent_lines = "\n".join(
-            f"- `{name}`: {description}" for name, description in ALL_SUBAGENTS.items()
+            f"- `{name}`: {description}" for name, description in subagents.items()
         )
         return f"""# Available Subagents
 
