@@ -125,7 +125,7 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
         order.append("connect")
         assert agent.storage.saved == []
 
-    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True):
+    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
         order.append("call_llm")
         assert order[0] == "connect"
         return "assistant reply"

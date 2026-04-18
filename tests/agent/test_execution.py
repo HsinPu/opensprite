@@ -80,6 +80,41 @@ def test_execution_engine_runs_tool_loop_and_persists_tool_result():
     assert messages[1].tool_calls[0]["function"]["name"] == "demo_tool"
 
 
+def test_execution_engine_calls_on_tool_before_execute_before_tool_run():
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need tool",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="demo_tool", arguments={"value": "abc"})],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    save_calls = []
+    engine = _make_engine(provider, registry, save_calls)
+    messages = [ChatMessage(role="user", content="hi")]
+    order = []
+
+    async def before(name, args):
+        order.append(("before", name, args))
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            messages,
+            allow_tools=True,
+            tool_result_chat_id="chat-1",
+            on_tool_before_execute=before,
+        )
+    )
+
+    assert result == "done"
+    assert order == [("before", "demo_tool", {"value": "abc"})]
+
+
 def test_execution_engine_uses_empty_fallback_for_blank_visible_response():
     provider = FakeProvider(
         [

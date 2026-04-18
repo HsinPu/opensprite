@@ -195,6 +195,7 @@ async def create_agent(config: Config):
         media_router=media_router,
     )
     mq = MessageQueue(agent)
+    agent._message_bus = mq.bus
     cron_manager = create_cron_manager(config, agent, mq)
     agent.cron_manager = cron_manager
     cron_tool = agent.tools.get("cron")

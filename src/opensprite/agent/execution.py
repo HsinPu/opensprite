@@ -168,6 +168,7 @@ class ExecutionEngine:
         allow_tools: bool,
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
+        on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
     ) -> str:
         """Execute the prepared messages, including tool calls when enabled."""
         active_tools = tool_registry or self.tools
@@ -265,6 +266,14 @@ class ExecutionEngine:
                     tool_args = tc.arguments
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
+
+                    if on_tool_before_execute is not None:
+                        try:
+                            await on_tool_before_execute(tool_name, tool_args)
+                        except Exception:
+                            logger.exception(
+                                f"[{log_id}] tool.progress-hook.error | name={tool_name}"
+                            )
 
                     result = await active_tools.execute(tool_name, tool_args)
                     logger.info(

@@ -132,7 +132,7 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
 
     call_order = []
 
-    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True):
+    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
         call_order.append(("call_llm", chat_id, current_message, channel, list(user_images or [])))
         assert storage.saved[0][1] == "user"
         return "assistant reply"
@@ -205,7 +205,9 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
 
     captured = {}
 
-    async def fake_execute_messages(log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None):
+    async def fake_execute_messages(
+        log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None, on_tool_before_execute=None
+    ):
         captured["messages"] = list(chat_messages)
         return "ok"
 

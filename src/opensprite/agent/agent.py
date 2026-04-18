@@ -27,8 +27,9 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
+from ..bus.events import OutboundMessage
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
@@ -196,6 +197,60 @@ class AgentLoop:
 
         return subagents
 
+    @staticmethod
+    def _tool_warrants_progress_notice(tool_name: str) -> bool:
+        """Whether to send a short interim message before this tool runs (main agent only)."""
+        if tool_name in {"read_skill", "delegate"}:
+            return True
+        return tool_name.startswith("mcp_")
+
+    @staticmethod
+    def _format_tool_progress_message(tool_name: str, tool_args: dict[str, Any]) -> str:
+        """User-facing one-line status for skill / subagent / MCP tool execution."""
+        args = tool_args or {}
+        if tool_name == "read_skill":
+            name = args.get("skill_name") or "?"
+            return f"正在讀取技能〈{name}〉…"
+        if tool_name == "delegate":
+            ptype = args.get("prompt_type") or "writer"
+            return f"正在委派子代理（{ptype}）…"
+        if tool_name.startswith("mcp_"):
+            tail = tool_name[4:] if tool_name.startswith("mcp_") else tool_name
+            return f"正在呼叫 MCP：{tail}…"
+        return "處理中…"
+
+    def _make_tool_progress_hook(
+        self,
+        *,
+        channel: str | None,
+        transport_chat_id: str | None,
+        session_chat_id: str,
+        enabled: bool,
+    ) -> Callable[[str, dict[str, Any]], Awaitable[None]] | None:
+        """Publish a brief outbound status before selected tools run; requires gateway MessageBus."""
+        if not enabled or not self._message_bus or not channel or transport_chat_id is None:
+            return None
+        bus = self._message_bus
+        ch = channel
+        tid = str(transport_chat_id)
+        sid = session_chat_id
+
+        async def _hook(tool_name: str, tool_args: dict[str, Any]) -> None:
+            if not AgentLoop._tool_warrants_progress_notice(tool_name):
+                return
+            text = AgentLoop._format_tool_progress_message(tool_name, tool_args)
+            await bus.publish_outbound(
+                OutboundMessage(
+                    channel=ch,
+                    chat_id=tid,
+                    session_chat_id=sid,
+                    content=text,
+                    metadata={"interim": True, "kind": "tool_progress", "tool_name": tool_name},
+                )
+            )
+
+        return _hook
+
     def __init__(
         self,
         config: AgentConfig,
@@ -236,6 +291,8 @@ class AgentLoop:
         self._mcp_connected = False
         self._mcp_connecting = False
         self._mcp_connect_lock = asyncio.Lock()
+        # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
+        self._message_bus: Any = None
 
         self.storage = self._setup_storage(storage)
         self._context_builder = self._setup_context_builder(context_builder)
@@ -637,6 +694,7 @@ class AgentLoop:
         allow_tools: bool,
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
+        on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
     ) -> str:
         """Run the shared LLM execution loop for main and delegated agents."""
         return await self.execution_engine.execute_messages(
@@ -645,6 +703,7 @@ class AgentLoop:
             allow_tools=allow_tools,
             tool_result_chat_id=tool_result_chat_id,
             tool_registry=tool_registry,
+            on_tool_before_execute=on_tool_before_execute,
         )
 
     def _build_subagent_tools(self) -> ToolRegistry:
@@ -695,6 +754,9 @@ class AgentLoop:
         channel: str | None = None,
         allow_tools: bool = True,
         user_images: list[str] | None = None,
+        *,
+        transport_chat_id: str | None = None,
+        emit_tool_progress: bool = False,
     ) -> str:
         """
         呼叫 LLM 生成對話回應。
@@ -792,11 +854,18 @@ class AgentLoop:
             chat_messages.append(msg)
 
         self._log_prepared_messages(chat_id, full_messages)
+        on_tool_before_execute = self._make_tool_progress_hook(
+            channel=channel,
+            transport_chat_id=transport_chat_id,
+            session_chat_id=chat_id,
+            enabled=emit_tool_progress,
+        )
         return await self._execute_messages(
             chat_id,
             chat_messages,
             allow_tools=allow_tools,
             tool_result_chat_id=chat_id if allow_tools else None,
+            on_tool_before_execute=on_tool_before_execute,
         )
 
     async def run_subagent(self, task: str, prompt_type: str = "writer") -> str:
@@ -888,7 +957,9 @@ class AgentLoop:
                 session_chat_id,
                 current_message=user_message.text,
                 channel=channel,
-                user_images=user_message.images
+                user_images=user_message.images,
+                transport_chat_id=str(user_message.chat_id) if user_message.chat_id is not None else None,
+                emit_tool_progress=True,
             )
             
             logger.info(
