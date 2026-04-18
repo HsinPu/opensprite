@@ -393,6 +393,10 @@ opensprite search run-queue --force-refresh
 opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide"
 opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5
 opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5 --json
+
+# seed synthetic benchmark data when no real chat history exists yet
+opensprite search seed-demo
+opensprite search seed-demo --chat-id demo:search-benchmark
 ```
 
 In practice, you should usually only need these commands when:
@@ -404,6 +408,13 @@ In practice, you should usually only need these commands when:
 ### Benchmarking Candidate Strategies
 
 Use `opensprite search benchmark` when you want to compare `fts` and `vector` candidate selection for the same chat query.
+
+If you do not have real chat data yet, seed a synthetic benchmark chat first:
+
+```bash
+opensprite search seed-demo
+opensprite search seed-demo --chat-id demo:search-benchmark
+```
 
 Examples:
 
@@ -431,6 +442,14 @@ opensprite search benchmark \
   --strategy both \
   --repeat 5 \
   --json
+
+# run vector benchmarks without a remote embedding API key
+opensprite search benchmark \
+  --chat-id demo:search-benchmark \
+  --query "orchard irrigation" \
+  --strategy both \
+  --repeat 5 \
+  --demo-embeddings
 ```
 
 The benchmark command reports:
@@ -440,6 +459,8 @@ The benchmark command reports:
 - top result preview
 - result overlap and top-hit agreement when comparing both strategies
 - optional JSON output for later comparison or scripting
+
+`--demo-embeddings` uses a deterministic local embedding provider. It is intended for local benchmarking and test validation only; it is not a replacement for your real embedding model.
 
 If embeddings are disabled, vector benchmarks are skipped automatically.
 If you request `sqlite-vec`, benchmark output also shows the requested backend versus the effective backend actually used.
@@ -764,6 +785,10 @@ opensprite search run-queue
 
 # compare candidate strategies
 opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5
+
+# seed synthetic benchmark data and compare without remote embeddings
+opensprite search seed-demo
+opensprite search benchmark --chat-id demo:search-benchmark --query "orchard irrigation" --strategy both --repeat 5 --demo-embeddings
 
 # module entrypoint
 python -m opensprite gateway

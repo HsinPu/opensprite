@@ -381,7 +381,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
         return FakeStore(candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -422,7 +422,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
     assert "Elapsed: avg=" in result.stdout
     assert "fts result" in result.stdout
     assert "vector result" in result.stdout
-    assert "Comparison: overlap=" in result.stdout
+    assert "Comparison: fts vs vector | overlap=" in result.stdout
     assert "Top hits: fts=" in result.stdout
 
 
@@ -442,7 +442,7 @@ def test_search_benchmark_cli_skips_vector_when_embeddings_disabled(monkeypatch)
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
         return SimpleNamespace(strategy=candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -492,7 +492,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
         return FakeStore(candidate_strategy)
 
     def fake_benchmark(store, **kwargs):
@@ -612,7 +612,7 @@ def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
     def fake_load(path):
         return loaded
 
-    def fake_build(loaded_config, *, candidate_strategy=None, embedding_provider_override=None):
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
         return FakeStore(candidate_strategy, embedding_provider_override=embedding_provider_override)
 
     def fake_benchmark(store, **kwargs):
@@ -650,3 +650,134 @@ def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
     assert result.exit_code == 0
     assert "Strategy: vector" in result.stdout
     assert "demo vector result" in result.stdout
+
+
+def test_search_benchmark_cli_passes_vector_backend_override(monkeypatch):
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path="sessions.db"),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=True,
+                provider="openai",
+                model="text-embedding-3-small",
+                vector_backend="exact",
+            ),
+        ),
+    )
+
+    class FakeStore:
+        def __init__(self, strategy, backend):
+            self.strategy = strategy
+            self.vector_backend_requested = backend
+            self.vector_backend_effective = backend
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
+        return FakeStore(candidate_strategy, vector_backend)
+
+    def fake_benchmark(store, **kwargs):
+        hit = SearchHit(
+            id="hit-1",
+            chat_id="telegram:user-a",
+            source_type="web_fetch",
+            title="sqlite vec result",
+            content="content",
+            created_at=1.0,
+            score=0.9,
+            url="https://example.com",
+        )
+        return (8.0, [hit])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "telegram:user-a",
+            "--query",
+            "sqlite guide",
+            "--strategy",
+            "vector",
+            "--vector-backend",
+            "sqlite_vec",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Vector backend override: sqlite_vec" in result.stdout
+    assert "requested=sqlite_vec effective=sqlite_vec" in result.stdout
+
+
+def test_search_benchmark_cli_can_compare_vector_backends(monkeypatch):
+    loaded = SimpleNamespace(
+        storage=SimpleNamespace(path="sessions.db"),
+        search=SimpleNamespace(
+            enabled=True,
+            embedding=SimpleNamespace(
+                enabled=True,
+                provider="openai",
+                model="text-embedding-3-small",
+                vector_backend="exact",
+            ),
+        ),
+    )
+
+    class FakeStore:
+        def __init__(self, strategy, backend):
+            self.strategy = strategy
+            self.vector_backend_requested = backend
+            self.vector_backend_effective = backend
+
+    def fake_load(path):
+        return loaded
+
+    def fake_build(loaded_config, *, candidate_strategy=None, vector_backend=None, embedding_provider_override=None):
+        return FakeStore(candidate_strategy, vector_backend)
+
+    def fake_benchmark(store, **kwargs):
+        title = "sqlite vec result" if store.vector_backend_requested == "sqlite_vec" else "exact result"
+        hit = SearchHit(
+            id=f"{store.vector_backend_requested}-1",
+            chat_id="telegram:user-a",
+            source_type="web_fetch",
+            title=title,
+            content="content",
+            created_at=1.0,
+            score=0.9,
+            url="https://example.com",
+        )
+        return (8.0, [hit])
+
+    monkeypatch.setattr("opensprite.config.Config.load", classmethod(lambda cls, path=None: fake_load(path)))
+    monkeypatch.setattr("opensprite.cli.commands._build_sqlite_search_store", fake_build)
+    monkeypatch.setattr("opensprite.cli.commands._benchmark_one_strategy", fake_benchmark)
+
+    result = runner.invoke(
+        app,
+        [
+            "search",
+            "benchmark",
+            "--chat-id",
+            "telegram:user-a",
+            "--query",
+            "sqlite guide",
+            "--strategy",
+            "vector",
+            "--vector-backend",
+            "both",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Vector backend override: both" in result.stdout
+    assert "Strategy: vector:exact" in result.stdout
+    assert "Strategy: vector:sqlite_vec" in result.stdout
+    assert "Comparison: vector:exact vs vector:sqlite_vec" in result.stdout

@@ -522,6 +522,7 @@ def search_benchmark(
     chat_id: str = typer.Option(..., "--chat-id", help="Chat id to benchmark against."),
     kind: str = typer.Option("knowledge", "--kind", help="Benchmark `history` or `knowledge` search."),
     strategy: str = typer.Option("both", "--strategy", help="Benchmark `fts`, `vector`, or `both`."),
+    vector_backend: str | None = typer.Option(None, "--vector-backend", help="Override vector backend for this benchmark: `exact`, `sqlite_vec`, `auto`, or `both` (compare exact vs sqlite_vec)."),
     limit: int = typer.Option(5, "--limit", help="Maximum hits to show per strategy."),
     repeat: int = typer.Option(3, "--repeat", help="How many runs to execute per strategy."),
     json_output: bool = typer.Option(False, "--json", help="Emit benchmark output as JSON."),
@@ -539,6 +540,8 @@ def search_benchmark(
         _handle_search_error("--kind must be 'history' or 'knowledge'")
     if strategy not in {"fts", "vector", "both"}:
         _handle_search_error("--strategy must be 'fts', 'vector', or 'both'")
+    if vector_backend is not None and vector_backend not in {"exact", "sqlite_vec", "auto", "both"}:
+        _handle_search_error("--vector-backend must be 'exact', 'sqlite_vec', 'auto', or 'both'")
     if repeat < 1:
         _handle_search_error("--repeat must be greater than 0")
 
@@ -556,6 +559,8 @@ def search_benchmark(
             raise ValueError("search.embedding.enabled=false; vector benchmarks require embeddings")
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
+
+    backend_overrides = [vector_backend] if vector_backend not in {None, "both"} else (["exact", "sqlite_vec"] if vector_backend == "both" else [None])
 
     filters = []
     if kind == "knowledge":
@@ -583,6 +588,7 @@ def search_benchmark(
         "query": query,
         "repeat": repeat,
         "demo_embeddings": demo_embeddings,
+        "vector_backend": vector_backend or getattr(loaded.search.embedding, "vector_backend", "exact"),
         "filters": filters,
         "strategies": [],
         "comparison": {},
@@ -591,95 +597,106 @@ def search_benchmark(
     if not json_output:
         typer.echo(f"Search benchmark for {chat_id} ({kind}).")
         typer.echo(f"Query: {query}")
+        if vector_backend:
+            typer.echo(f"Vector backend override: {vector_backend}")
         if kind == "knowledge":
             typer.echo(f"Filters: {', '.join(filters) if filters else '<none>'}")
 
     for candidate_strategy in strategies:
-        try:
-            embedding_override = benchmark_embedding_provider if candidate_strategy == "vector" and benchmark_embedding_provider is not None else None
-            search_store = _build_sqlite_search_store(
-                loaded,
-                candidate_strategy=candidate_strategy,
-                embedding_provider_override=embedding_override,
-            )
-            if embedding_override is not None:
-                asyncio.run(search_store.refresh_embeddings(force=False, wait=True))
-            elapsed_runs: list[float] = []
-            hits = []
-            for _ in range(repeat):
-                elapsed_ms, hits = _benchmark_one_strategy(
-                    search_store,
-                    kind=kind,
-                    chat_id=chat_id,
-                    query=query,
-                    limit=limit,
-                    source_type=source_type,
-                    provider=provider,
-                    extractor=extractor,
-                    status=status,
-                    content_type=content_type,
-                    truncated=truncated,
+        strategy_backends = backend_overrides if candidate_strategy == "vector" else [None]
+        for backend_override in strategy_backends:
+            try:
+                embedding_override = benchmark_embedding_provider if candidate_strategy == "vector" and benchmark_embedding_provider is not None else None
+                search_store = _build_sqlite_search_store(
+                    loaded,
+                    candidate_strategy=candidate_strategy,
+                    vector_backend=backend_override,
+                    embedding_provider_override=embedding_override,
                 )
-                elapsed_runs.append(elapsed_ms)
-        except (ValueError, RuntimeError) as exc:
-            _handle_search_error(exc)
+                if embedding_override is not None:
+                    asyncio.run(search_store.refresh_embeddings(force=False, wait=True))
+                elapsed_runs: list[float] = []
+                hits = []
+                for _ in range(repeat):
+                    elapsed_ms, hits = _benchmark_one_strategy(
+                        search_store,
+                        kind=kind,
+                        chat_id=chat_id,
+                        query=query,
+                        limit=limit,
+                        source_type=source_type,
+                        provider=provider,
+                        extractor=extractor,
+                        status=status,
+                        content_type=content_type,
+                        truncated=truncated,
+                    )
+                    elapsed_runs.append(elapsed_ms)
+            except (ValueError, RuntimeError) as exc:
+                _handle_search_error(exc)
 
-        summary = _summarize_benchmark_runs(elapsed_runs)
-        benchmark_payload["strategies"].append(
-            {
-                "strategy": candidate_strategy,
-                "vector_backend_requested": getattr(search_store, "vector_backend_requested", None),
-                "vector_backend_effective": getattr(search_store, "vector_backend_effective", None),
-                "summary": summary,
-                "hit_count": len(hits),
-                "hits": _serialize_benchmark_hits(hits, limit=limit),
-                "_raw_hits": hits,
-            }
-        )
-
-        if json_output:
-            continue
-
-        typer.echo("")
-        typer.echo(f"Strategy: {candidate_strategy}")
-        if candidate_strategy == "vector":
-            typer.echo(
-                "Vector backend: "
-                f"requested={getattr(search_store, 'vector_backend_requested', '<unknown>')} "
-                f"effective={getattr(search_store, 'vector_backend_effective', '<unknown>')}"
+            summary = _summarize_benchmark_runs(elapsed_runs)
+            label = candidate_strategy
+            if candidate_strategy == "vector" and backend_override is not None:
+                label = f"vector:{backend_override}"
+            benchmark_payload["strategies"].append(
+                {
+                    "strategy": label,
+                    "candidate_strategy": candidate_strategy,
+                    "vector_backend_requested": getattr(search_store, "vector_backend_requested", None),
+                    "vector_backend_effective": getattr(search_store, "vector_backend_effective", None),
+                    "summary": summary,
+                    "hit_count": len(hits),
+                    "hits": _serialize_benchmark_hits(hits, limit=limit),
+                    "_raw_hits": hits,
+                }
             )
-        typer.echo(
-            "Elapsed: "
-            f"avg={summary['avg_ms']:.2f} ms min={summary['min_ms']:.2f} ms "
-            f"max={summary['max_ms']:.2f} ms median={summary['median_ms']:.2f} ms "
-            f"runs={int(summary['runs'])}"
-        )
-        typer.echo(f"Hits: {len(hits)}")
-        preview_lines = _render_benchmark_hits(hits, limit=limit)
-        if preview_lines:
-            for line in preview_lines:
-                typer.echo(line)
-        else:
-            typer.echo("<no hits>")
+
+            if json_output:
+                continue
+
+            typer.echo("")
+            typer.echo(f"Strategy: {label}")
+            if candidate_strategy == "vector":
+                typer.echo(
+                    "Vector backend: "
+                    f"requested={getattr(search_store, 'vector_backend_requested', '<unknown>')} "
+                    f"effective={getattr(search_store, 'vector_backend_effective', '<unknown>')}"
+                )
+            typer.echo(
+                "Elapsed: "
+                f"avg={summary['avg_ms']:.2f} ms min={summary['min_ms']:.2f} ms "
+                f"max={summary['max_ms']:.2f} ms median={summary['median_ms']:.2f} ms "
+                f"runs={int(summary['runs'])}"
+            )
+            typer.echo(f"Hits: {len(hits)}")
+            preview_lines = _render_benchmark_hits(hits, limit=limit)
+            if preview_lines:
+                for line in preview_lines:
+                    typer.echo(line)
+            else:
+                typer.echo("<no hits>")
 
     comparison = _compare_benchmark_results(list(benchmark_payload["strategies"]))
     if comparison:
         benchmark_payload["comparison"] = comparison
         if not json_output:
-            typer.echo("")
-            typer.echo(
-                "Comparison: "
-                f"overlap={comparison['overlap_count']} ({comparison['overlap_ratio']:.2%}) "
-                f"top_hit_same={_format_presence(bool(comparison['top_hit_same']))} "
-                f"{comparison['strategies'][0]}_only={comparison['first_only_count']} "
-                f"{comparison['strategies'][1]}_only={comparison['second_only_count']}"
-            )
-            if comparison["first_top"] or comparison["second_top"]:
+            for pair in comparison.get("pairs", []):
+                typer.echo("")
                 typer.echo(
-                    "Top hits: "
-                    f"{comparison['strategies'][0]}={comparison['first_top'] or '<none>'} | "
-                    f"{comparison['strategies'][1]}={comparison['second_top'] or '<none>'}"
+                    "Comparison: "
+                    f"{pair['strategies'][0]} vs {pair['strategies'][1]} | "
+                    f"overlap={pair['overlap_count']} ({pair['overlap_ratio']:.2%}) "
+                    f"top_hit_same={_format_presence(bool(pair['top_hit_same']))} "
+                    f"{pair['strategies'][0]}_only={pair['first_only_count']} "
+                    f"{pair['strategies'][1]}_only={pair['second_only_count']}"
                 )
+                if pair["first_top"] or pair["second_top"]:
+                    typer.echo(
+                        "Top hits: "
+                        f"{pair['strategies'][0]}={pair['first_top'] or '<none>'} | "
+                        f"{pair['strategies'][1]}={pair['second_top'] or '<none>'}"
+                    )
 
     if json_output:
         strategies_payload = []
@@ -829,31 +846,37 @@ def _benchmark_hit_identity(hit: SearchHit) -> str:
 
 
 def _compare_benchmark_results(results: list[dict[str, object]]) -> dict[str, object]:
-    """Compare multiple benchmark strategy outputs by overlap and top-hit agreement."""
+    """Compare benchmark outputs pairwise by overlap and top-hit agreement."""
     if len(results) < 2:
         return {}
 
-    first = results[0]
-    second = results[1]
-    first_hits = first.get("_raw_hits", [])
-    second_hits = second.get("_raw_hits", [])
-    first_keys = {_benchmark_hit_identity(hit) for hit in first_hits}
-    second_keys = {_benchmark_hit_identity(hit) for hit in second_hits}
-    overlap = first_keys & second_keys
-    union = first_keys | second_keys
-    first_top = _benchmark_hit_identity(first_hits[0]) if first_hits else None
-    second_top = _benchmark_hit_identity(second_hits[0]) if second_hits else None
+    comparisons = []
+    for index in range(len(results) - 1):
+        first = results[index]
+        second = results[index + 1]
+        first_hits = first.get("_raw_hits", [])
+        second_hits = second.get("_raw_hits", [])
+        first_keys = {_benchmark_hit_identity(hit) for hit in first_hits}
+        second_keys = {_benchmark_hit_identity(hit) for hit in second_hits}
+        overlap = first_keys & second_keys
+        union = first_keys | second_keys
+        first_top = _benchmark_hit_identity(first_hits[0]) if first_hits else None
+        second_top = _benchmark_hit_identity(second_hits[0]) if second_hits else None
 
-    return {
-        "strategies": [first.get("strategy"), second.get("strategy")],
-        "overlap_count": len(overlap),
-        "overlap_ratio": (len(overlap) / len(union)) if union else 1.0,
-        "top_hit_same": bool(first_top and second_top and first_top == second_top),
-        "first_only_count": len(first_keys - second_keys),
-        "second_only_count": len(second_keys - first_keys),
-        "first_top": first_top,
-        "second_top": second_top,
-    }
+        comparisons.append(
+            {
+                "strategies": [first.get("strategy"), second.get("strategy")],
+                "overlap_count": len(overlap),
+                "overlap_ratio": (len(overlap) / len(union)) if union else 1.0,
+                "top_hit_same": bool(first_top and second_top and first_top == second_top),
+                "first_only_count": len(first_keys - second_keys),
+                "second_only_count": len(second_keys - first_keys),
+                "first_top": first_top,
+                "second_top": second_top,
+            }
+        )
+
+    return {"pairs": comparisons}
 
 
 def _resolve_workspace_root() -> Path:
@@ -876,13 +899,20 @@ def _load_sqlite_search_store(config: str | None = None):
     return loaded, search_store
 
 
-def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None, embedding_provider_override=None):
+def _build_sqlite_search_store(
+    loaded,
+    *,
+    candidate_strategy: str | None = None,
+    vector_backend: str | None = None,
+    embedding_provider_override=None,
+):
     """Build a SQLite search store from an already loaded config."""
     from ..runtime import create_search_embedding_provider
     from ..search.sqlite_store import SQLiteSearchStore
 
     embedding_provider = embedding_provider_override or create_search_embedding_provider(loaded)
     strategy = candidate_strategy or loaded.search.embedding.candidate_strategy
+    backend = vector_backend or loaded.search.embedding.vector_backend
     return SQLiteSearchStore(
         path=loaded.storage.path,
         history_top_k=loaded.search.history_top_k,
@@ -890,7 +920,7 @@ def _build_sqlite_search_store(loaded, *, candidate_strategy: str | None = None,
         embedding_provider=embedding_provider,
         hybrid_candidate_count=loaded.search.embedding.candidate_count,
         embedding_candidate_strategy=strategy,
-        vector_backend=loaded.search.embedding.vector_backend,
+        vector_backend=backend,
         vector_candidate_count=loaded.search.embedding.vector_candidate_count,
         retry_failed_on_startup=loaded.search.embedding.retry_failed_on_startup,
     )
