@@ -208,6 +208,9 @@ def _prepare_config_data(result: OnboardResult, config_path: Path, force: bool) 
     _persist_config_data(config_path, data)
     loaded = Config.from_json(config_path)
     hydrated = copy.deepcopy(data)
+    hydrated.setdefault("llm", {})["providers"] = {
+        name: provider.model_dump() for name, provider in loaded.llm.providers.items()
+    }
     hydrated["channels"] = loaded.channels.model_dump()
     hydrated["search"] = loaded.search.model_dump()
     hydrated["vision"] = loaded.vision.model_dump()
@@ -219,6 +222,8 @@ def _prepare_config_data(result: OnboardResult, config_path: Path, force: bool) 
 def _persist_config_data(config_path: Path, config_data: dict[str, Any]) -> None:
     """Persist config data while keeping external config sections split out."""
     main_data = copy.deepcopy(config_data)
+    llm_data = main_data.get("llm")
+    providers_data = llm_data.pop("providers", None) if isinstance(llm_data, dict) else None
     channels_data = main_data.pop("channels", None)
     search_data = main_data.pop("search", None)
     vision_data = main_data.pop("vision", None)
@@ -226,6 +231,9 @@ def _persist_config_data(config_path: Path, config_data: dict[str, Any]) -> None
     video_data = main_data.pop("video", None)
 
     _write_json(config_path, main_data)
+    Config.ensure_llm_providers_file(config_path, main_data)
+    if isinstance(providers_data, dict):
+        Config.write_llm_providers_file(config_path, providers_data, llm_data)
     Config.ensure_channels_file(config_path, main_data)
     if isinstance(channels_data, dict):
         Config.write_channels_file(config_path, channels_data, main_data)

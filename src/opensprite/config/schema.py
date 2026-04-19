@@ -16,8 +16,9 @@ class ProviderConfig(BaseModel):
 
 class LLMsConfig(BaseModel):
     """LLM configuration with support for multiple providers."""
-    
+
     providers: dict[str, ProviderConfig] = {}
+    providers_file: str = "llm.providers.json"
     default: str | None = None
     api_key: str = ""
     model: str = ""
@@ -311,6 +312,16 @@ class Config:
             candidate = (config_path.parent / candidate).resolve()
         return candidate
 
+    @staticmethod
+    def _resolve_llm_providers_file(config_path: Path, providers_file: str | None) -> Path | None:
+        if not providers_file:
+            return None
+
+        candidate = Path(providers_file).expanduser()
+        if not candidate.is_absolute():
+            candidate = (config_path.parent / candidate).resolve()
+        return candidate
+
     @classmethod
     def _load_mcp_servers_data(cls, path: Path) -> dict[str, Any]:
         if not path.exists():
@@ -364,6 +375,19 @@ class Config:
         return data
 
     @classmethod
+    def _load_llm_providers_data(cls, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            raise ValueError(f"LLM providers 設定檔必須是 JSON object：{path}")
+
+        return data
+
+    @classmethod
     def _parse_mcp_servers(cls, raw_data: dict[str, Any], source: Path) -> dict[str, MCPServerConfig]:
         parsed: dict[str, MCPServerConfig] = {}
         for name, server in raw_data.items():
@@ -409,6 +433,10 @@ class Config:
     @classmethod
     def _build_default_media_path(cls, config_path: Path) -> Path:
         return config_path.parent / "media.json"
+
+    @classmethod
+    def _build_default_llm_providers_path(cls, config_path: Path) -> Path:
+        return config_path.parent / "llm.providers.json"
 
     @classmethod
     def get_mcp_servers_file_path(
@@ -478,6 +506,26 @@ class Config:
         target_path = cls._resolve_media_file(resolved_config_path, configured_path)
         if target_path is None:
             target_path = cls._build_default_media_path(resolved_config_path)
+        return target_path
+
+    @classmethod
+    def get_llm_providers_file_path(
+        cls,
+        config_path: str | Path,
+        llm_config: LLMsConfig | dict[str, Any] | None = None,
+        providers_file: str | None = None,
+    ) -> Path:
+        resolved_config_path = Path(config_path).expanduser().resolve()
+        configured_path = providers_file
+        if configured_path is None:
+            if isinstance(llm_config, LLMsConfig):
+                configured_path = llm_config.providers_file
+            elif isinstance(llm_config, dict):
+                configured_path = llm_config.get("providers_file")
+
+        target_path = cls._resolve_llm_providers_file(resolved_config_path, configured_path)
+        if target_path is None:
+            target_path = cls._build_default_llm_providers_path(resolved_config_path)
         return target_path
 
     @classmethod
@@ -572,6 +620,31 @@ class Config:
         return target_path
 
     @classmethod
+    def write_llm_providers_file(
+        cls,
+        config_path: str | Path,
+        providers_data: dict[str, Any],
+        llm_config: LLMsConfig | dict[str, Any] | None = None,
+        providers_file: str | None = None,
+    ) -> Path:
+        target_path = cls.get_llm_providers_file_path(config_path, llm_config, providers_file)
+        cls._write_json_file(target_path, providers_data)
+        return target_path
+
+    @classmethod
+    def ensure_llm_providers_file(cls, config_path: str | Path, config_data: dict[str, Any] | None = None) -> Path:
+        llm_data = config_data.get("llm") if isinstance(config_data, dict) else None
+        providers_data = llm_data.get("providers") if isinstance(llm_data, dict) else None
+        target_path = cls.get_llm_providers_file_path(config_path, llm_data)
+
+        if not target_path.exists():
+            cls._copy_external_template(target_path, "llm.providers")
+            if isinstance(providers_data, dict):
+                cls._write_json_file(target_path, providers_data)
+
+        return target_path
+
+    @classmethod
     def from_json(cls, path: str | Path) -> "Config":
         path = Path(path)
         if not path.exists():
@@ -583,6 +656,14 @@ class Config:
         for section in ["llm", "storage"]:
             if section not in data:
                 raise ValueError(f"設定檔缺少必要區塊：{section}")
+        llm_data = dict(data.get("llm", {}))
+        inline_providers = llm_data.get("providers", {})
+        llm_providers_path = cls._resolve_llm_providers_file(path, llm_data.get("providers_file"))
+        external_providers = cls._load_llm_providers_data(llm_providers_path) if llm_providers_path is not None else {}
+        merged_providers = dict(inline_providers) if isinstance(inline_providers, dict) else {}
+        merged_providers.update(external_providers)
+        if merged_providers or llm_providers_path is not None:
+            llm_data["providers"] = merged_providers
         inline_channels = data.get("channels", {})
         channels_path = cls._resolve_channels_file(path, data.get("channels_file"))
         external_channels = cls._load_channels_data(channels_path) if channels_path is not None else {}
@@ -618,7 +699,7 @@ class Config:
                 external_path=mcp_servers_path,
             )
         return cls(
-            llm=LLMsConfig(**data["llm"]),
+            llm=LLMsConfig(**llm_data),
             agent=AgentConfig(**data["agent"]) if "agent" in data else None,
             storage=StorageConfig(**data["storage"]),
             channels=ChannelsConfig(**merged_channels),
@@ -711,6 +792,7 @@ class Config:
             cls.ensure_channels_file(path, cls.load_template_data())
             cls.ensure_search_file(path, cls.load_template_data())
             cls.ensure_media_file(path, cls.load_template_data())
+            cls.ensure_llm_providers_file(path, cls.load_template_data())
             cls.ensure_mcp_servers_file(path, cls.load_template_data())
 
         return path
@@ -742,6 +824,11 @@ class Config:
             },
             media_file=self.media_file,
         )
+        self.write_llm_providers_file(
+            path,
+            {name: provider.model_dump() for name, provider in self.llm.providers.items()},
+            providers_file=self.llm.providers_file,
+        )
         mcp_servers_path = self._resolve_mcp_servers_file(path, self.tools.mcp_servers_file)
         if mcp_servers_path is not None:
             self._write_json_file(
@@ -750,7 +837,7 @@ class Config:
             )
         data = {
             "llm": {
-                "providers": dict(self.llm.providers) if self.llm.providers else {},
+                "providers_file": self.llm.providers_file,
                 "default": self.llm.default,
                 "temperature": self.llm.temperature,
                 "max_tokens": self.llm.max_tokens,

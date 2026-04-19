@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from opensprite.config.schema import ChannelsConfig, Config, MCPServerConfig, SearchConfig, SearchEmbeddingConfig, SpeechConfig, StorageConfig, ToolsConfig, VideoConfig, VisionConfig
+from opensprite.config.schema import ChannelsConfig, Config, MCPServerConfig, ProviderConfig, SearchConfig, SearchEmbeddingConfig, SpeechConfig, StorageConfig, ToolsConfig, VideoConfig, VisionConfig
 
 
 def test_storage_config_accepts_supported_types():
@@ -18,6 +18,46 @@ def test_storage_config_accepts_supported_types():
 def test_storage_config_rejects_unsupported_file_type():
     with pytest.raises(ValidationError):
         StorageConfig(type="file", path="sessions.db")
+
+
+def test_config_load_reads_llm_providers_from_external_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    providers_path = tmp_path / "llm.providers.json"
+    providers_path.write_text(
+        json.dumps(
+            {
+                "openai": {
+                    "api_key": "key-1",
+                    "enabled": True,
+                    "model": "gpt-4.1",
+                    "base_url": "https://api.openai.com/v1",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    config_path.write_text(
+        json.dumps(
+            {
+                "llm": {
+                    "providers_file": "llm.providers.json",
+                    "default": "openai",
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                },
+                "storage": {"type": "memory", "path": "memory.db"},
+                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(config_path)
+
+    assert isinstance(config.llm.providers["openai"], ProviderConfig)
+    assert config.llm.providers["openai"].api_key == "key-1"
+    assert config.llm.providers["openai"].model == "gpt-4.1"
+    assert config.llm.providers_file == "llm.providers.json"
 
 
 def test_tools_config_parses_mcp_server_entries():
@@ -355,6 +395,42 @@ def test_config_save_writes_media_to_external_file(tmp_path):
     assert saved_media["video"]["model"] == "video-model"
 
 
+def test_config_save_writes_llm_providers_to_external_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "llm": {
+                    "default": "openai",
+                    "temperature": 0.7,
+                    "max_tokens": 2048,
+                },
+                "storage": {"type": "memory", "path": "memory.db"},
+                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(config_path)
+    config.llm.default = "openai"
+    config.llm.providers["openai"] = ProviderConfig(
+        api_key="new-key",
+        enabled=True,
+        model="gpt-4.1",
+        base_url="https://api.openai.com/v1",
+    )
+    config.save(config_path)
+
+    saved_main = json.loads(config_path.read_text(encoding="utf-8"))
+    saved_providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+
+    assert saved_main["llm"]["providers_file"] == "llm.providers.json"
+    assert "providers" not in saved_main["llm"]
+    assert saved_providers["openai"]["api_key"] == "new-key"
+    assert saved_providers["openai"]["model"] == "gpt-4.1"
+
+
 def test_config_load_merges_external_mcp_servers_file(tmp_path):
     config_path = tmp_path / "opensprite.json"
     mcp_path = tmp_path / "mcp_servers.json"
@@ -492,8 +568,22 @@ def test_copy_template_creates_external_media_file(tmp_path):
     assert json.loads(media_path.read_text(encoding="utf-8")) == Config.load_external_template_data("media")
 
 
+def test_copy_template_creates_external_llm_providers_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+
+    Config.copy_template(config_path)
+
+    template_data = json.loads(config_path.read_text(encoding="utf-8"))
+    providers_path = tmp_path / "llm.providers.json"
+
+    assert template_data["llm"]["providers_file"] == "llm.providers.json"
+    assert providers_path.exists()
+    assert json.loads(providers_path.read_text(encoding="utf-8")) == Config.load_external_template_data("llm.providers")
+
+
 def test_external_template_paths_exist():
     assert Config.external_template_path("channels").exists()
     assert Config.external_template_path("search").exists()
     assert Config.external_template_path("mcp_servers").exists()
     assert Config.external_template_path("media").exists()
+    assert Config.external_template_path("llm.providers").exists()
