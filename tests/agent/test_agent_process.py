@@ -206,7 +206,14 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
     captured = {}
 
     async def fake_execute_messages(
-        log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None, on_tool_before_execute=None
+        log_id,
+        chat_messages,
+        *,
+        allow_tools,
+        tool_result_chat_id=None,
+        tool_registry=None,
+        on_tool_before_execute=None,
+        refresh_system_prompt=None,
     ):
         captured["messages"] = list(chat_messages)
         return "ok"

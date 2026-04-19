@@ -69,7 +69,14 @@ def test_call_llm_replaces_direct_image_payload_with_tool_hint(tmp_path):
     captured = {}
 
     async def fake_execute(
-        log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None, on_tool_before_execute=None
+        log_id,
+        chat_messages,
+        *,
+        allow_tools,
+        tool_result_chat_id=None,
+        tool_registry=None,
+        on_tool_before_execute=None,
+        refresh_system_prompt=None,
     ):
         captured["content"] = chat_messages[0].content
         return "ok"
@@ -108,7 +115,14 @@ def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):
     captured = {}
 
     async def fake_execute(
-        log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None, on_tool_before_execute=None
+        log_id,
+        chat_messages,
+        *,
+        allow_tools,
+        tool_result_chat_id=None,
+        tool_registry=None,
+        on_tool_before_execute=None,
+        refresh_system_prompt=None,
     ):
         captured["content"] = chat_messages[0].content
         return "ok"
@@ -150,7 +164,14 @@ def test_call_llm_adds_video_tool_hint_to_prompt(tmp_path):
     captured = {}
 
     async def fake_execute(
-        log_id, chat_messages, *, allow_tools, tool_result_chat_id=None, tool_registry=None, on_tool_before_execute=None
+        log_id,
+        chat_messages,
+        *,
+        allow_tools,
+        tool_result_chat_id=None,
+        tool_registry=None,
+        on_tool_before_execute=None,
+        refresh_system_prompt=None,
     ):
         captured["content"] = chat_messages[0].content
         return "ok"

@@ -47,6 +47,9 @@ class ToolResultPersistence:
 class ExecutionEngine:
     """Run the LLM and tool-calling loop for prepared chat messages."""
 
+    _MAIN_SYSTEM_REFRESH_TOOLS = frozenset({"configure_skill", "configure_subagent"})
+    _MAIN_SYSTEM_REFRESH_ACTIONS = frozenset({"add", "upsert", "remove"})
+
     REPEATED_TOOL_ERROR_LIMIT = 2
     TOOL_RESULT_MAX_CHARS = 1200
     EXEC_RESULT_MAX_CHARS = 1200
@@ -84,6 +87,18 @@ class ExecutionEngine:
             save_message=save_message,
             search_store=search_store,
         )
+
+    @staticmethod
+    def _should_refresh_main_system_after_tool(tool_name: str, tool_args: dict[str, Any]) -> bool:
+        """Skill/subagent definitions on disk may change; optional mid-loop system rebuild."""
+        if tool_name not in ExecutionEngine._MAIN_SYSTEM_REFRESH_TOOLS:
+            return False
+        action = tool_args.get("action")
+        return action in ExecutionEngine._MAIN_SYSTEM_REFRESH_ACTIONS
+
+    @staticmethod
+    def _tool_result_ok_for_system_refresh(result: str) -> bool:
+        return not str(result).lstrip().startswith("Error:")
 
     @staticmethod
     def _classify_tool_result(result: str) -> str | None:
@@ -169,6 +184,7 @@ class ExecutionEngine:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        refresh_system_prompt: Callable[[], str] | None = None,
     ) -> str:
         """Execute the prepared messages, including tool calls when enabled."""
         active_tools = tool_registry or self.tools
@@ -263,7 +279,7 @@ class ExecutionEngine:
 
                 for tc in response.tool_calls:
                     tool_name = tc.name
-                    tool_args = tc.arguments
+                    tool_args = tc.arguments if isinstance(tc.arguments, dict) else {}
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
 
@@ -308,6 +324,24 @@ class ExecutionEngine:
                         content=result_for_context,
                         tool_call_id=tc.id,
                     ))
+
+                    if (
+                        refresh_system_prompt is not None
+                        and self._should_refresh_main_system_after_tool(tool_name, tool_args)
+                        and self._tool_result_ok_for_system_refresh(result)
+                    ):
+                        try:
+                            new_system = refresh_system_prompt()
+                            if chat_messages and chat_messages[0].role == "system":
+                                chat_messages[0].content = new_system
+                                if allow_tools and active_tools.tool_names:
+                                    tools = active_tools.get_definitions()
+                                logger.info(
+                                    f"[{log_id}] prompt.refresh | after_tool={tool_name} "
+                                    "system_rebuilt=true tools_refreshed=true"
+                                )
+                        except Exception:
+                            logger.exception(f"[{log_id}] prompt.refresh.error | after_tool={tool_name}")
 
                     await self.tool_result_persistence.persist(
                         chat_id=tool_result_chat_id,

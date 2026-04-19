@@ -759,6 +759,7 @@ class AgentLoop:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        refresh_system_prompt: Callable[[], str] | None = None,
     ) -> str:
         """Run the shared LLM execution loop for main and delegated agents."""
         return await self.execution_engine.execute_messages(
@@ -768,6 +769,7 @@ class AgentLoop:
             tool_result_chat_id=tool_result_chat_id,
             tool_registry=tool_registry,
             on_tool_before_execute=on_tool_before_execute,
+            refresh_system_prompt=refresh_system_prompt,
         )
 
     def _build_subagent_tools(self) -> ToolRegistry:
@@ -939,6 +941,7 @@ class AgentLoop:
             allow_tools=allow_tools,
             tool_result_chat_id=chat_id if allow_tools else None,
             on_tool_before_execute=on_tool_before_execute,
+            refresh_system_prompt=lambda: self._context_builder.build_system_prompt(chat_id),
         )
 
     async def run_subagent(self, task: str, prompt_type: str = "writer") -> str:

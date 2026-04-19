@@ -317,3 +317,79 @@ def test_exec_tool_result_slimming_prefers_tail_lines_for_long_output():
     assert "output tail:" in summary
     assert "line 299" in summary
     assert len(summary) <= ExecutionEngine.EXEC_RESULT_MAX_CHARS + len("\n... (exec context summary truncated)")
+
+
+class FakeConfigureSkillTool(Tool):
+    """Minimal stand-in for configure_skill (mutation success path)."""
+
+    @property
+    def name(self) -> str:
+        return "configure_skill"
+
+    @property
+    def description(self) -> str:
+        return "configure skill"
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string"},
+                "scope": {"type": "string"},
+            },
+            "required": ["action", "scope"],
+        }
+
+    async def _execute(self, action: str, scope: str, **kwargs):
+        return "Added skill 'demo-skill' at /tmp/SKILL.md"
+
+
+def test_execution_refreshes_system_and_tools_after_configure_skill_success():
+    registry = ToolRegistry()
+    registry.register(FakeConfigureSkillTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need tool",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="configure_skill",
+                        arguments={"action": "add", "scope": "global"},
+                    )
+                ],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    save_calls = []
+    engine = _make_engine(provider, registry, save_calls)
+    messages = [
+        ChatMessage(role="system", content="SYSTEM_V1"),
+        ChatMessage(role="user", content="hi"),
+    ]
+    state = {"n": 0}
+
+    def refresh_system():
+        state["n"] += 1
+        return f"SYSTEM_V{state['n'] + 1}"
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            messages,
+            allow_tools=True,
+            tool_result_chat_id="chat-1",
+            refresh_system_prompt=refresh_system,
+        )
+    )
+
+    assert result == "done"
+    assert messages[0].content == "SYSTEM_V2"
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["messages"][0].content == "SYSTEM_V2"
+    second_tools = provider.calls[1]["tools"]
+    assert second_tools is not None
+    assert any(t["function"]["name"] == "configure_skill" for t in second_tools)
