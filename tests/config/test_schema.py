@@ -128,6 +128,48 @@ def test_search_config_provides_embedding_defaults():
     assert config.embedding.retry_failed_on_startup is False
 
 
+def test_config_load_reads_search_from_external_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    search_path = tmp_path / "search.json"
+    search_path.write_text(
+        json.dumps(
+            {
+                "enabled": True,
+                "history_top_k": 7,
+                "knowledge_top_k": 9,
+                "embedding": {
+                    "enabled": True,
+                    "provider": "openai",
+                    "model": "text-embedding-3-small",
+                    "candidate_count": 33,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    config_path.write_text(
+        json.dumps(
+            {
+                "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
+                "storage": {"type": "memory", "path": "memory.db"},
+                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "search_file": "search.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(config_path)
+
+    assert config.search.enabled is True
+    assert config.search.history_top_k == 7
+    assert config.search.knowledge_top_k == 9
+    assert config.search.embedding.enabled is True
+    assert config.search.embedding.model == "text-embedding-3-small"
+    assert config.search.embedding.candidate_count == 33
+    assert config.search_file == "search.json"
+
+
 def test_config_load_defaults_agent_when_section_missing(tmp_path):
     path = tmp_path / "opensprite.json"
     path.write_text(
@@ -207,6 +249,37 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
     assert "channels" not in saved_main
     assert saved_channels["telegram"]["enabled"] is True
     assert saved_channels["telegram"]["token"] == "secret"
+
+
+def test_config_save_writes_search_to_external_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
+                "storage": {"type": "memory", "path": "memory.db"},
+                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    config = Config.from_json(config_path)
+    config.search.enabled = True
+    config.search.embedding.enabled = True
+    config.search.embedding.model = "text-embedding-3-small"
+    config.search.embedding.candidate_count = 77
+    config.save(config_path)
+
+    saved_main = json.loads(config_path.read_text(encoding="utf-8"))
+    saved_search = json.loads((tmp_path / "search.json").read_text(encoding="utf-8"))
+
+    assert saved_main["search_file"] == "search.json"
+    assert "search" not in saved_main
+    assert saved_search["enabled"] is True
+    assert saved_search["embedding"]["enabled"] is True
+    assert saved_search["embedding"]["model"] == "text-embedding-3-small"
+    assert saved_search["embedding"]["candidate_count"] == 77
 
 
 def test_config_load_merges_external_mcp_servers_file(tmp_path):
@@ -318,3 +391,16 @@ def test_copy_template_creates_external_channels_file(tmp_path):
     assert template_data["channels_file"] == "channels.json"
     assert channels_path.exists()
     assert json.loads(channels_path.read_text(encoding="utf-8")) == ChannelsConfig().model_dump()
+
+
+def test_copy_template_creates_external_search_file(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+
+    Config.copy_template(config_path)
+
+    template_data = json.loads(config_path.read_text(encoding="utf-8"))
+    search_path = tmp_path / "search.json"
+
+    assert template_data["search_file"] == "search.json"
+    assert search_path.exists()
+    assert json.loads(search_path.read_text(encoding="utf-8")) == SearchConfig().model_dump()

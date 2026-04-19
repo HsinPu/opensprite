@@ -29,6 +29,7 @@
     "path": "~/.opensprite/data/sessions.db"
   },
   "channels_file": "channels.json",
+  "search_file": "search.json",
   "log": {
     "enabled": true,
     "retention_days": 365,
@@ -101,23 +102,5 @@
     "api_key": "",
     "model": "",
     "base_url": null
-  },
-  "search": {
-    "enabled": false,
-    "history_top_k": 5,
-    "knowledge_top_k": 5,
-    "embedding": {
-      "enabled": false,
-      "provider": "openai",
-      "api_key": "",
-      "model": "",
-      "base_url": null,
-      "batch_size": 16,
-      "candidate_count": 20,
-      "candidate_strategy": "vector",
-      "vector_backend": "auto",
-      "vector_candidate_count": 50,
-      "retry_failed_on_startup": false
-    }
   }
 }

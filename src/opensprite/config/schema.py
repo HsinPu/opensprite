@@ -249,7 +249,7 @@ class Config:
                  user_profile: UserProfileConfig | None = None, vision: VisionConfig | None = None,
                  speech: SpeechConfig | None = None, video: VideoConfig | None = None,
                  recent_summary: RecentSummaryConfig | None = None, source_path: str | Path | None = None,
-                 channels_file: str = "channels.json"):
+                 channels_file: str = "channels.json", search_file: str = "search.json"):
         self.llm = llm
         self.agent = agent
         self.storage = storage
@@ -265,6 +265,7 @@ class Config:
         self.video = video or VideoConfig()
         self.source_path = Path(source_path).expanduser().resolve() if source_path is not None else None
         self.channels_file = channels_file
+        self.search_file = search_file
 
         if self.agent is None:
             self.agent = AgentConfig()
@@ -285,6 +286,16 @@ class Config:
             return None
 
         candidate = Path(channels_file).expanduser()
+        if not candidate.is_absolute():
+            candidate = (config_path.parent / candidate).resolve()
+        return candidate
+
+    @staticmethod
+    def _resolve_search_file(config_path: Path, search_file: str | None) -> Path | None:
+        if not search_file:
+            return None
+
+        candidate = Path(search_file).expanduser()
         if not candidate.is_absolute():
             candidate = (config_path.parent / candidate).resolve()
         return candidate
@@ -312,6 +323,19 @@ class Config:
 
         if not isinstance(data, dict):
             raise ValueError(f"Channels 設定檔必須是 JSON object：{path}")
+
+        return data
+
+    @classmethod
+    def _load_search_data(cls, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not isinstance(data, dict):
+            raise ValueError(f"Search 設定檔必須是 JSON object：{path}")
 
         return data
 
@@ -355,6 +379,10 @@ class Config:
         return config_path.parent / "channels.json"
 
     @classmethod
+    def _build_default_search_path(cls, config_path: Path) -> Path:
+        return config_path.parent / "search.json"
+
+    @classmethod
     def get_mcp_servers_file_path(
         cls,
         config_path: str | Path,
@@ -391,6 +419,23 @@ class Config:
         return target_path
 
     @classmethod
+    def get_search_file_path(
+        cls,
+        config_path: str | Path,
+        config_data: dict[str, Any] | None = None,
+        search_file: str | None = None,
+    ) -> Path:
+        resolved_config_path = Path(config_path).expanduser().resolve()
+        configured_path = search_file
+        if configured_path is None and isinstance(config_data, dict):
+            configured_path = config_data.get("search_file")
+
+        target_path = cls._resolve_search_file(resolved_config_path, configured_path)
+        if target_path is None:
+            target_path = cls._build_default_search_path(resolved_config_path)
+        return target_path
+
+    @classmethod
     def ensure_mcp_servers_file(cls, config_path: str | Path, config_data: dict[str, Any] | None = None) -> Path:
         tools_data = config_data.get("tools", {}) if isinstance(config_data, dict) else None
         target_path = cls.get_mcp_servers_file_path(config_path, tools_data)
@@ -424,6 +469,29 @@ class Config:
         return target_path
 
     @classmethod
+    def write_search_file(
+        cls,
+        config_path: str | Path,
+        search_data: dict[str, Any],
+        config_data: dict[str, Any] | None = None,
+        search_file: str | None = None,
+    ) -> Path:
+        target_path = cls.get_search_file_path(config_path, config_data, search_file)
+        cls._write_json_file(target_path, search_data)
+        return target_path
+
+    @classmethod
+    def ensure_search_file(cls, config_path: str | Path, config_data: dict[str, Any] | None = None) -> Path:
+        search_data = config_data.get("search") if isinstance(config_data, dict) else None
+        target_path = cls.get_search_file_path(config_path, config_data)
+
+        if not target_path.exists():
+            default_search = search_data if isinstance(search_data, dict) else SearchConfig().model_dump()
+            cls._write_json_file(target_path, default_search)
+
+        return target_path
+
+    @classmethod
     def from_json(cls, path: str | Path) -> "Config":
         path = Path(path)
         if not path.exists():
@@ -442,6 +510,11 @@ class Config:
         merged_channels.update(external_channels)
         if not merged_channels:
             raise ValueError("設定檔缺少必要區塊：channels 或 channels_file")
+        inline_search = data.get("search", {})
+        search_path = cls._resolve_search_file(path, data.get("search_file"))
+        external_search = cls._load_search_data(search_path) if search_path is not None else {}
+        merged_search = dict(inline_search) if isinstance(inline_search, dict) else {}
+        merged_search.update(external_search)
         tools_data = dict(data.get("tools", {})) if "tools" in data else {}
         inline_mcp_servers = tools_data.get("mcp_servers", {})
         mcp_servers_path = cls._resolve_mcp_servers_file(path, tools_data.get("mcp_servers_file"))
@@ -461,7 +534,7 @@ class Config:
             log=LogConfig(**data["log"]) if "log" in data else None,
             tools=ToolsConfig(**tools_data) if "tools" in data else None,
             memory=MemoryConfig(**data.get("memory", {})) if "memory" in data else None,
-            search=SearchConfig(**data.get("search", {})) if "search" in data else None,
+            search=SearchConfig(**merged_search) if (merged_search or "search" in data or search_path is not None) else None,
             user_profile=UserProfileConfig(**data.get("user_profile", {})) if "user_profile" in data else None,
             recent_summary=RecentSummaryConfig(**data.get("recent_summary", {})) if "recent_summary" in data else None,
             vision=VisionConfig(**data.get("vision", {})) if "vision" in data else None,
@@ -469,6 +542,7 @@ class Config:
             video=VideoConfig(**data.get("video", {})) if "video" in data else None,
             source_path=path,
             channels_file=data.get("channels_file") or "channels.json",
+            search_file=data.get("search_file") or "search.json",
         )
 
     @classmethod
@@ -519,6 +593,7 @@ class Config:
         if template_path.exists():
             shutil.copy2(template_path, path)
             cls.ensure_channels_file(path, cls.load_template_data())
+            cls.ensure_search_file(path, cls.load_template_data())
             cls.ensure_mcp_servers_file(path, cls.load_template_data())
 
         return path
@@ -536,6 +611,11 @@ class Config:
             },
             channels_file=self.channels_file,
         )
+        self.write_search_file(
+            path,
+            self.search.model_dump(),
+            search_file=self.search_file,
+        )
         mcp_servers_path = self._resolve_mcp_servers_file(path, self.tools.mcp_servers_file)
         if mcp_servers_path is not None:
             self._write_json_file(
@@ -551,6 +631,7 @@ class Config:
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels_file": self.channels_file,
+            "search_file": self.search_file,
             "log": {"enabled": self.log.enabled, "retention_days": self.log.retention_days, "level": self.log.level, "log_system_prompt": self.log.log_system_prompt, "log_system_prompt_lines": self.log.log_system_prompt_lines},
             "tools": {
                 "max_tool_iterations": self.tools.max_tool_iterations,
@@ -567,12 +648,6 @@ class Config:
             "memory": {
                 "threshold": self.memory.threshold,
                 "token_threshold": self.memory.token_threshold,
-            },
-            "search": {
-                "enabled": self.search.enabled,
-                "history_top_k": self.search.history_top_k,
-                "knowledge_top_k": self.search.knowledge_top_k,
-                "embedding": self.search.embedding.model_dump(),
             },
             "user_profile": {
                 "enabled": self.user_profile.enabled,

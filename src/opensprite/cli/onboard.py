@@ -209,6 +209,7 @@ def _prepare_config_data(result: OnboardResult, config_path: Path, force: bool) 
     loaded = Config.from_json(config_path)
     hydrated = copy.deepcopy(data)
     hydrated["channels"] = loaded.channels.model_dump()
+    hydrated["search"] = loaded.search.model_dump()
     return hydrated
 
 
@@ -216,11 +217,15 @@ def _persist_config_data(config_path: Path, config_data: dict[str, Any]) -> None
     """Persist config data while keeping external config sections split out."""
     main_data = copy.deepcopy(config_data)
     channels_data = main_data.pop("channels", None)
+    search_data = main_data.pop("search", None)
 
     _write_json(config_path, main_data)
     Config.ensure_channels_file(config_path, main_data)
     if isinstance(channels_data, dict):
         Config.write_channels_file(config_path, channels_data, main_data)
+    Config.ensure_search_file(config_path, main_data)
+    if isinstance(search_data, dict):
+        Config.write_search_file(config_path, search_data, main_data)
     Config.ensure_mcp_servers_file(config_path, main_data)
 
 
