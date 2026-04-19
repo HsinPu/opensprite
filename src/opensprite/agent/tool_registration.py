@@ -74,11 +74,22 @@ def register_filesystem_tools(
     *,
     workspace_resolver: Callable[[], Path],
     skills_loader: Any = None,
+    config_path_resolver: Callable[[], Path | None] | None = None,
 ) -> None:
     """Register filesystem-oriented tools."""
     registry.register(ReadFileTool(workspace_resolver=workspace_resolver, skills_loader=skills_loader))
-    registry.register(WriteFileTool(workspace_resolver=workspace_resolver))
-    registry.register(EditFileTool(workspace_resolver=workspace_resolver))
+    registry.register(
+        WriteFileTool(
+            workspace_resolver=workspace_resolver,
+            config_path_resolver=config_path_resolver,
+        )
+    )
+    registry.register(
+        EditFileTool(
+            workspace_resolver=workspace_resolver,
+            config_path_resolver=config_path_resolver,
+        )
+    )
     registry.register(ListDirTool(workspace_resolver=workspace_resolver))
 
 
@@ -271,6 +282,7 @@ def register_default_tools(
         registry,
         workspace_resolver=workspace_resolver,
         skills_loader=skills_loader,
+        config_path_resolver=config_path_resolver,
     )
     register_skill_tools(
         registry,
