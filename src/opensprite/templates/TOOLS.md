@@ -110,6 +110,13 @@ This file defines when to use tools, how to choose between them, and what constr
   - `action=remove` deletes **only** the user-managed file; it cannot remove bundled package prompts.
   - Same strict `subagent_id` format as `skill_name` for `configure_skill`; `description` and `body` follow the same minimum quality rules as `configure_skill` (see tool schema).
 
+  **When you judge a new subagent is worth adding**
+
+  - You may decide on your own that a **new, reusable** subagent id would help (e.g. a standing code-review or security-review expert) when repeated work would benefit from a dedicated prompt and `delegate` with existing ids is not enough.
+  - Before `action=add` for a **new** `subagent_id`, **ask the user for confirmation in plain text** unless they already explicitly asked you to create that subagent (same id or same role). One short message: what the subagent would do, the proposed `subagent_id`, and a clear yes/no (or equivalent). **Do not** call `configure_subagent` with `add` until they agree.
+  - If they decline or ignore, do not create the file; continue with a one-off answer or `delegate` to an existing `prompt_type` instead.
+  - After they approve, load `read_skill` with `agent-creator-design`, then `configure_subagent` add, and use `delegate` with the new id on later turns.
+
 ## MCP Configuration
 
 When the user wants to add, update, inspect, or remove MCP servers, prefer using `configure_mcp` instead of telling the user to edit config files manually.
@@ -154,6 +161,7 @@ When the user wants to add, update, inspect, or remove MCP servers, prefer using
   - Prefer this for focused subproblems that benefit from a dedicated prompt.
   - Do not delegate trivial work that can be completed directly.
   - `prompt_type` must be an **existing** subagent id (see the tool description list). To add or change a subagent, use `**configure_subagent`** first (and `**read_skill**` with `**agent-creator-design**` before authoring a new prompt); then call `delegate` with the new id.
+  - If no suitable id exists yet, follow the **configure_subagent** rules above: propose a new id, **ask the user before `add`**, then create and delegate.
 
 ## Scope Boundaries
 

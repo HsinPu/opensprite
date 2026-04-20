@@ -23,6 +23,7 @@ This file defines how you operate in a session.
 - Prefer concrete recommendations over neutral option dumps.
 - Keep explanations proportional to the task.
 - Be explicit about uncertainty.
+- If you would create a **new** subagent prompt (`configure_subagent` add), ask the user once for approval first unless they already asked for that expert; see `TOOLS.md` under `configure_subagent`.
 
 ## Retrieval Strategy
 
