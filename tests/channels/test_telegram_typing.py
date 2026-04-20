@@ -49,6 +49,50 @@ def test_typing_indicator_starts_and_stops_on_response():
     assert adapter.app.bot.message_calls == [("user-a", "done", "HTML")]
 
 
+def test_typing_indicator_keeps_running_after_interim_tool_progress():
+    """Interim outbound (e.g. delegate / read_skill notice) must not stop typing before the final reply."""
+
+    async def scenario():
+        adapter = TelegramAdapter("token", config={"typing_action_interval": 1})
+        adapter.app = SimpleNamespace(bot=FakeBot())
+
+        adapter._start_typing_indicator("telegram:user-a", "user-a")
+        await asyncio.sleep(0.05)
+        assert "telegram:user-a" in adapter._typing_tasks
+
+        await adapter._on_response(
+            AssistantMessage(
+                text="正在委派子代理（writer）…",
+                channel="telegram",
+                chat_id="user-a",
+                session_chat_id="telegram:user-a",
+                metadata={"interim": True, "kind": "tool_progress", "tool_name": "delegate"},
+            ),
+            "telegram",
+            "user-a",
+        )
+
+        assert "telegram:user-a" in adapter._typing_tasks
+
+        await adapter._on_response(
+            AssistantMessage(
+                text="final",
+                channel="telegram",
+                chat_id="user-a",
+                session_chat_id="telegram:user-a",
+            ),
+            "telegram",
+            "user-a",
+        )
+
+        return adapter
+
+    adapter = asyncio.run(scenario())
+
+    assert "telegram:user-a" not in adapter._typing_tasks
+    assert adapter.app.bot.message_calls[-1] == ("user-a", "final", "HTML")
+
+
 def test_typing_indicator_stops_on_error():
     async def scenario():
         adapter = TelegramAdapter("token", config={"typing_action_interval": 1})

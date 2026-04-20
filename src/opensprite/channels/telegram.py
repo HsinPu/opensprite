@@ -634,7 +634,9 @@ class TelegramAdapter(MessageAdapter):
         """
         Telegram channel 的 outbound handler。
         """
-        await self._stop_typing_indicator(response.session_chat_id)
+        meta = response.metadata or {}
+        if not meta.get("interim"):
+            await self._stop_typing_indicator(response.session_chat_id)
         await self.send(response)
 
     async def _on_error(self, session_chat_id: str, error: str) -> None:
