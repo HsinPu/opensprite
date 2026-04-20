@@ -138,6 +138,7 @@ def register_config_tools(
     config_path_resolver: Callable[[], Path | None],
     reload_mcp: Callable[[], Awaitable[str]],
     app_home: Path | None = None,
+    workspace_resolver: Callable[[], Path] | None = None,
 ) -> None:
     """Register tools that safely update application configuration."""
     registry.register(
@@ -146,7 +147,12 @@ def register_config_tools(
             reload_callback=reload_mcp,
         )
     )
-    registry.register(ConfigureSubagentTool(app_home=app_home))
+    registry.register(
+        ConfigureSubagentTool(
+            app_home=app_home,
+            workspace_resolver=workspace_resolver,
+        )
+    )
 
 
 def register_web_tools(
@@ -304,6 +310,7 @@ def register_default_tools(
         config_path_resolver=config_path_resolver,
         reload_mcp=reload_mcp,
         app_home=app_home,
+        workspace_resolver=workspace_resolver,
     )
     register_shell_tools(registry, workspace_resolver=workspace_resolver, tools_config=tools_config)
     register_web_tools(registry, tools_config=tools_config)

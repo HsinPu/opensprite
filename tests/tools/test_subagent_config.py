@@ -2,6 +2,7 @@ import asyncio
 import json
 from pathlib import Path
 
+from opensprite.context.paths import sync_templates
 from opensprite.tools.subagent_config import ConfigureSubagentTool
 
 _VALID_DESCRIPTION = (
@@ -14,15 +15,23 @@ _VALID_BODY = (
 )
 
 
+def _session_workspace(tmp_path: Path) -> Path:
+    ws = tmp_path / "chat-ws"
+    ws.mkdir(parents=True, exist_ok=True)
+    return ws
+
+
 def test_configure_subagent_list_and_add(tmp_path):
     app_home = tmp_path / "opensprite-home"
-    tool = ConfigureSubagentTool(app_home=app_home)
+    session_ws = _session_workspace(tmp_path)
+    tool = ConfigureSubagentTool(app_home=app_home, workspace_resolver=lambda: session_ws)
 
     listed = asyncio.run(tool.execute(action="list"))
     payload = json.loads(listed)
     assert "subagent_prompts_dir" in payload
+    assert "app_home_subagent_prompts_dir" in payload
     assert "subagents" in payload
-    assert Path(payload["subagent_prompts_dir"]).is_dir()
+    assert Path(payload["subagent_prompts_dir"]) == session_ws / "subagent_prompts"
 
     denied = asyncio.run(
         tool.execute(
@@ -43,7 +52,7 @@ def test_configure_subagent_list_and_add(tmp_path):
             user_confirmed=True,
         )
     )
-    assert "Added subagent" in out
+    assert "Added session subagent" in out
 
     dup = asyncio.run(
         tool.execute(
@@ -65,7 +74,8 @@ def test_configure_subagent_list_and_add(tmp_path):
 
 def test_configure_subagent_upsert_then_remove(tmp_path):
     app_home = tmp_path / "oh"
-    tool = ConfigureSubagentTool(app_home=app_home)
+    session_ws = _session_workspace(tmp_path)
+    tool = ConfigureSubagentTool(app_home=app_home, workspace_resolver=lambda: session_ws)
 
     asyncio.run(
         tool.execute(
@@ -89,25 +99,22 @@ def test_configure_subagent_upsert_then_remove(tmp_path):
             body=_VALID_BODY + "\n\nSecond paragraph keeps the body substantive and long enough always.\n",
         )
     )
-    assert "Updated" in up or "Added" in up
+    assert "Updated" in up or "session subagent" in up
 
     rm = asyncio.run(tool.execute(action="remove", subagent_id="doc-writer"))
-    assert "Removed" in rm
+    assert "Removed session" in rm
 
     again = asyncio.run(tool.execute(action="remove", subagent_id="doc-writer"))
-    assert "no user-managed" in again.lower()
+    assert "no session-managed" in again.lower()
 
 
-def test_configure_subagent_add_refuses_when_only_bundled_remains(tmp_path):
-    """After removing the synced user copy, only the packaged writer remains; add must require upsert."""
-    from opensprite.context.paths import get_subagent_prompts_dir
-
-    app_home = tmp_path / "home-with-bundled"
-    tool = ConfigureSubagentTool(app_home=app_home)
+def test_configure_subagent_add_refuses_when_prompt_exists_under_app_home(tmp_path):
+    """writer exists under app home after sync; add must require upsert for a session file."""
+    app_home = tmp_path / "home-with-writer"
+    sync_templates(app_home, silent=True)
+    session_ws = _session_workspace(tmp_path)
+    tool = ConfigureSubagentTool(app_home=app_home, workspace_resolver=lambda: session_ws)
     asyncio.run(tool.execute(action="list"))
-    writer_user = get_subagent_prompts_dir(app_home) / "writer.md"
-    if writer_user.is_file():
-        writer_user.unlink()
 
     out = asyncio.run(
         tool.execute(
@@ -117,5 +124,10 @@ def test_configure_subagent_add_refuses_when_only_bundled_remains(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "bundled" in out.lower()
     assert "upsert" in out.lower()
+
+
+def test_configure_subagent_requires_workspace_resolver(tmp_path):
+    tool = ConfigureSubagentTool(app_home=tmp_path / "h", workspace_resolver=None)
+    out = asyncio.run(tool.execute(action="list"))
+    assert "workspace_resolver" in out.lower()

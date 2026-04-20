@@ -1,18 +1,18 @@
-"""Tool for safely creating and updating subagent prompt markdown files."""
+"""Tool for safely creating and updating subagent prompt markdown files in the session workspace."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
-from ..context.paths import get_app_home, get_subagent_prompts_dir
-from ..subagent_prompts import (
-    BUNDLED_PROMPTS_DIR,
-    load_all_metadata,
-    read_prompt_document,
+from ..context.paths import (
+    SUBAGENT_PROMPTS_DIRNAME,
+    get_app_home,
+    get_subagent_prompts_dir,
     sync_subagent_prompts_from_package,
 )
+from ..subagent_prompts import load_all_metadata, read_prompt_document
 from .base import Tool
 from .skill_config import (
     _validate_body_for_write,
@@ -20,16 +20,18 @@ from .skill_config import (
     _validate_skill_id,
 )
 
-# Bundled skill in ~/.opensprite/skills — same design discipline as configure_skill + skill-creator-design.
 AGENT_PROMPT_GUIDE_SKILL_NAME = "agent-creator-design"
 
+WorkspaceResolver = Callable[[], Path]
+
 _CONFIGURE_SUBAGENT_RULES_SUMMARY = (
-    "Each subagent is one file: ~/.opensprite/subagent_prompts/<subagent_id>.md with YAML frontmatter "
+    "Writes go only under the current session workspace: <workspace>/subagent_prompts/<subagent_id>.md with YAML frontmatter "
     "(name must match subagent_id, description required) and a markdown body used as the subagent system prompt. "
-    "Follow the bundled skill read_skill + "
-    f"skill_name '{AGENT_PROMPT_GUIDE_SKILL_NAME}' for structure (Role, Task, Constraints, Output) and metadata rules. "
-    "Use action=add only when no prompt exists yet (neither user nor bundled); if a bundled prompt exists, use upsert "
-    "to write a user override. remove deletes only the user-managed file in subagent_prompts, not bundled package files."
+    "list/get reflect merged ids (session overrides ~/.opensprite/subagent_prompts for the same id). "
+    f"Follow read_skill + skill_name '{AGENT_PROMPT_GUIDE_SKILL_NAME}' for structure (Role, Task, Constraints, Output). "
+    "Use action=add only for a brand-new id (no file in session and no prompt under app home for that id). "
+    "If an id already exists under ~/.opensprite/subagent_prompts/, use upsert to add or replace the session file. "
+    "remove deletes only the session file, never app-home defaults."
 )
 
 
@@ -39,28 +41,30 @@ def _build_subagent_prompt_md(subagent_id: str, description: str, body: str) -> 
     return f"---\nname: {subagent_id}\ndescription: {desc}\n---\n\n{body_text}\n"
 
 
-def _classify_subagent_storage(subagent_id: str, *, app_home: Path | None) -> str | None:
-    """Return 'user' if a user overlay exists, 'bundled' if only bundled exists, None if neither."""
-    home = get_app_home(app_home)
-    sync_subagent_prompts_from_package(home)
-    user_path = get_subagent_prompts_dir(home) / f"{subagent_id}.md"
-    if user_path.is_file():
-        return "user"
-
-    bundled = BUNDLED_PROMPTS_DIR / f"{subagent_id}.md"
-    if bundled.is_file():
-        return "bundled"
+def _classify_subagent_session_write(
+    subagent_id: str,
+    *,
+    app_home: Path | None,
+    session_workspace: Path,
+) -> str | None:
+    """Return 'session' if session file exists, 'global' if app-home has this prompt, None if net-new."""
+    session_path = Path(session_workspace).expanduser() / SUBAGENT_PROMPTS_DIRNAME / f"{subagent_id}.md"
+    if session_path.is_file():
+        return "session"
+    _, global_text = read_prompt_document(subagent_id, app_home=app_home, session_workspace=None)
+    if global_text.strip():
+        return "global"
     return None
 
 
 class ConfigureSubagentTool(Tool):
-    """Read and update subagent prompt files under ~/.opensprite/subagent_prompts/."""
+    """Read and update subagent prompts under the session workspace ``subagent_prompts/``."""
 
     name = "configure_subagent"
     description = (
-        "Inspect, add, update, or remove subagent prompt definitions (one markdown file per subagent id). "
-        "Use this when the user wants a new delegate target or to change an existing subagent prompt instead of "
-        "editing files manually. "
+        "Inspect, add, update, or remove subagent prompt definitions for this chat session (one markdown file per id "
+        "under the session workspace subagent_prompts/). "
+        "Use this when the user wants a new delegate target or to change prompts instead of editing files manually. "
         + _CONFIGURE_SUBAGENT_RULES_SUMMARY
     )
     parameters = {
@@ -70,10 +74,10 @@ class ConfigureSubagentTool(Tool):
                 "type": "string",
                 "enum": ["list", "get", "add", "upsert", "remove"],
                 "description": (
-                    "list: enumerate known subagent ids and descriptions; get: read one prompt file; "
-                    "add: create a user prompt only when none exists (no user file and no bundled file); "
-                    "upsert: create or replace the user overlay file (overrides bundled when present); "
-                    "remove: delete the user overlay file only (cannot remove bundled-only prompts)."
+                    "list: merged subagent ids and descriptions; get: read merged prompt for one id; "
+                    "add: create a session file only for a net-new id (none in session and none under app home); "
+                    "upsert: create or replace the session file (overrides app home when both exist); "
+                    "remove: delete the session file only (does not remove ~/.opensprite/subagent_prompts/)."
                 ),
             },
             "subagent_id": {
@@ -101,7 +105,7 @@ class ConfigureSubagentTool(Tool):
             "user_confirmed": {
                 "type": "boolean",
                 "description": (
-                    "For action=add only, when creating a brand-new subagent id (no user file and no bundled file): "
+                    "For action=add only, when creating a brand-new subagent id (no session file and no app-home prompt): "
                     "must be true after the user explicitly agreed in chat. False or omitted is rejected for that case. "
                     "Ignored for list, get, upsert, and remove."
                 ),
@@ -110,23 +114,33 @@ class ConfigureSubagentTool(Tool):
         "required": ["action"],
     }
 
-    def __init__(self, *, app_home: Path | None = None):
+    def __init__(self, *, app_home: Path | None = None, workspace_resolver: WorkspaceResolver | None = None):
         self._app_home = app_home
+        self._workspace_resolver = workspace_resolver
 
-    def _prompts_dir(self) -> Path:
-        return get_subagent_prompts_dir(self._app_home)
+    def _session_prompts_root(self, session_workspace: Path) -> Path:
+        return (Path(session_workspace).expanduser().resolve() / SUBAGENT_PROMPTS_DIRNAME)
 
-    def _user_prompt_path(self, subagent_id: str) -> Path:
-        return self._prompts_dir() / f"{subagent_id}.md"
+    def _session_prompt_path(self, session_workspace: Path, subagent_id: str) -> Path:
+        return self._session_prompts_root(session_workspace) / f"{subagent_id}.md"
 
     async def _execute(self, action: str, **kwargs: Any) -> str:
+        if self._workspace_resolver is None:
+            return "Error: configure_subagent requires a session workspace; workspace_resolver is not configured."
+
         home = get_app_home(self._app_home)
         sync_subagent_prompts_from_package(home)
-        prompts_dir = self._prompts_dir()
+
+        session_ws = Path(self._workspace_resolver()).expanduser().resolve()
+        session_root = self._session_prompts_root(session_ws)
 
         if action == "list":
-            meta = load_all_metadata(app_home=self._app_home)
-            payload = {"subagent_prompts_dir": str(prompts_dir), "subagents": meta}
+            meta = load_all_metadata(app_home=self._app_home, session_workspace=session_ws)
+            payload = {
+                "subagent_prompts_dir": str(session_root),
+                "app_home_subagent_prompts_dir": str(get_subagent_prompts_dir(home)),
+                "subagents": meta,
+            }
             return json.dumps(payload, ensure_ascii=False, indent=2)
 
         subagent_id = str(kwargs.get("subagent_id", "") or "").strip()
@@ -139,7 +153,7 @@ class ConfigureSubagentTool(Tool):
             )
 
         if action == "get":
-            path, text = read_prompt_document(subagent_id, app_home=self._app_home)
+            path, text = read_prompt_document(subagent_id, app_home=self._app_home, session_workspace=session_ws)
             if not text:
                 return f"Error: no prompt found for subagent_id '{subagent_id}'"
             payload = {
@@ -149,16 +163,17 @@ class ConfigureSubagentTool(Tool):
             }
             return json.dumps(payload, ensure_ascii=False, indent=2)
 
-        user_path = self._user_prompt_path(subagent_id)
+        session_path = self._session_prompt_path(session_ws, subagent_id)
 
         if action == "remove":
-            if not user_path.is_file():
+            if not session_path.is_file():
                 return (
-                    f"Error: no user-managed prompt at {user_path}. "
-                    "Bundled prompts cannot be removed via configure_subagent; delete a user overlay only."
+                    f"Error: no session-managed prompt at {session_path}. "
+                    "remove only deletes files under this session's subagent_prompts/; "
+                    "it does not remove defaults under ~/.opensprite/subagent_prompts/."
                 )
-            user_path.unlink()
-            return f"Removed user subagent prompt '{subagent_id}' at {user_path}."
+            session_path.unlink()
+            return f"Removed session subagent prompt '{subagent_id}' at {session_path}."
 
         if action in {"add", "upsert"}:
             description = kwargs.get("description")
@@ -170,36 +185,35 @@ class ConfigureSubagentTool(Tool):
             if body_err:
                 return body_err
 
-            where = _classify_subagent_storage(subagent_id, app_home=self._app_home)
+            where = _classify_subagent_session_write(subagent_id, app_home=self._app_home, session_workspace=session_ws)
             if action == "add":
-                if where == "user":
+                if where == "session":
                     return (
-                        f"Error: subagent '{subagent_id}' already exists at {user_path}. "
+                        f"Error: subagent '{subagent_id}' already exists in this session at {session_path}. "
                         "Use action=upsert to replace it, or remove it first."
                     )
-                if where == "bundled":
+                if where == "global":
                     return (
-                        f"Error: subagent '{subagent_id}' already exists as a bundled prompt. "
-                        "Use action=upsert to create a user override in ~/.opensprite/subagent_prompts/."
+                        f"Error: subagent '{subagent_id}' already exists under ~/.opensprite/subagent_prompts/. "
+                        "Use action=upsert to write a session override in subagent_prompts/."
                     )
-                # Net-new id (no user overlay, no bundled file): require explicit user consent in the tool call.
                 if where is None and kwargs.get("user_confirmed") is not True:
                     return (
                         "Error: action=add for a new subagent_id requires user_confirmed=true in the tool arguments "
                         "after the user explicitly agreed in the conversation. Ask first; do not set true without consent."
                     )
 
-            existed_user = user_path.is_file()
-            prompts_dir.mkdir(parents=True, exist_ok=True)
+            existed_session = session_path.is_file()
+            session_root.mkdir(parents=True, exist_ok=True)
             content = _build_subagent_prompt_md(subagent_id, str(description), str(body))
-            user_path.write_text(content, encoding="utf-8")
+            session_path.write_text(content, encoding="utf-8")
             guide = (
                 f" Next: ensure read_skill '{AGENT_PROMPT_GUIDE_SKILL_NAME}' was applied for structure and metadata; "
                 "delegate will pick up this id after the next tool description refresh."
             )
             if action == "add":
-                return f"Added subagent prompt '{subagent_id}' at {user_path}.{guide}"
-            label = "Updated" if existed_user or where == "bundled" else "Added"
-            return f"{label} subagent prompt '{subagent_id}' at {user_path}.{guide}"
+                return f"Added session subagent prompt '{subagent_id}' at {session_path}.{guide}"
+            label = "Updated" if existed_session else "Added"
+            return f"{label} session subagent prompt '{subagent_id}' at {session_path}.{guide}"
 
         return f"Error: unsupported action '{action}'"
