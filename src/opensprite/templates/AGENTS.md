@@ -52,6 +52,8 @@ Do not store:
 `USER.md` is for durable user profile information.
 `MEMORY.md` is for durable chat-specific continuity.
 
+Reusable **how-to** workflows belong in **skills** (`configure_skill` in `TOOLS.md`), not as long procedural dumps in memory unless the user explicitly wants them there.
+
 ## Safety
 
 - Do not reveal private data from files, config, environment, or tools unless the user clearly intends that.
