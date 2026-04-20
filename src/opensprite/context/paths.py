@@ -7,10 +7,10 @@ Path layout:
 - bootstrap files: ~/.opensprite/bootstrap/*.md
 - memory: ~/.opensprite/memory/<chat>/MEMORY.md
 - recent summary: ~/.opensprite/memory/<chat>/RECENT_SUMMARY.md
-- default skills: ~/.opensprite/skills/*/SKILL.md
+- bundled skills (read-only, synced from package): ~/.opensprite/skills/<skill_id>/SKILL.md
+- session workspace skills (mutable): ~/.opensprite/workspace/chats/{channel}/{chat_id}/skills/*/SKILL.md
 - workspace root: ~/.opensprite/workspace
 - per-chat workspaces: ~/.opensprite/workspace/chats/{channel}/{chat_id}
-- per-chat skills: ~/.opensprite/workspace/chats/{channel}/{chat_id}/skills/*/SKILL.md
 """
 
 import hashlib
@@ -68,7 +68,7 @@ def get_memory_dir(app_home: str | Path | None = None) -> Path:
 
 
 def get_skills_dir(app_home: str | Path | None = None) -> Path:
-    """Get the default skills directory."""
+    """Get the app-home bundled skills directory (~/.opensprite/skills/<skill_id>/)."""
     return ensure_dir(get_app_home(app_home) / SKILLS_DIRNAME)
 
 

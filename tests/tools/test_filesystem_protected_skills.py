@@ -1,12 +1,11 @@
-"""write_file / edit_file refuse paths under skills/<bundled_system_skill_id>/."""
+"""write_file / edit_file refuse paths under ~/.opensprite/skills/ (monkeypatched in tests)."""
 
 import asyncio
 
 from opensprite.tools.filesystem import EditFileTool, WriteFileTool
-from opensprite.tools.skill_config import PROTECTED_SKILL_IDS
 
 
-def test_write_file_allows_non_protected_skill_subdir(tmp_path):
+def test_write_file_allows_session_workspace_skill_subdir(tmp_path):
     tool = WriteFileTool(workspace=tmp_path)
     out = asyncio.run(
         tool.execute(path="skills/custom-skill/notes.md", content="hello")
@@ -15,26 +14,44 @@ def test_write_file_allows_non_protected_skill_subdir(tmp_path):
     assert (tmp_path / "skills" / "custom-skill" / "notes.md").read_text() == "hello"
 
 
-def test_write_file_blocks_protected_skill_paths(tmp_path):
-    tool = WriteFileTool(workspace=tmp_path)
-    for sid in PROTECTED_SKILL_IDS:
-        out = asyncio.run(
-            tool.execute(path=f"skills/{sid}/SKILL.md", content="x")
-        )
-        assert "bundled system skill" in out.lower()
-        assert not (tmp_path / "skills" / sid / "SKILL.md").exists()
+def test_write_file_blocks_under_app_skills_dir(tmp_path, monkeypatch):
+    app_skills = tmp_path / "opensprite_skills"
+    monkeypatch.setattr("opensprite.context.paths.get_skills_dir", lambda app_home=None: app_skills)
+    app_skills.mkdir(parents=True)
 
-
-def test_edit_file_blocks_protected_skill_paths(tmp_path):
-    sid = next(iter(sorted(PROTECTED_SKILL_IDS)))
-    skill_dir = tmp_path / "skills" / sid
-    skill_dir.mkdir(parents=True)
-    f = skill_dir / "SKILL.md"
-    f.write_text("old", encoding="utf-8")
-
-    tool = EditFileTool(workspace=tmp_path)
+    tool = WriteFileTool(workspace=app_skills)
     out = asyncio.run(
-        tool.execute(path=f"skills/{sid}/SKILL.md", old_text="old", new_text="new")
+        tool.execute(path="memory/SKILL.md", content="x")
     )
-    assert "bundled system skill" in out.lower()
-    assert f.read_text() == "old"
+    assert ".opensprite/skills" in out or "Cannot modify" in out
+    assert not (app_skills / "memory" / "SKILL.md").exists()
+
+
+def test_write_file_allows_skills_memory_in_session_workspace(tmp_path, monkeypatch):
+    """Session workspace skills/memory is not the app-home bundled tree."""
+    app_skills = tmp_path / "opensprite_skills"
+    monkeypatch.setattr("opensprite.context.paths.get_skills_dir", lambda app_home=None: app_skills)
+    app_skills.mkdir(parents=True)
+
+    session = tmp_path / "chat_ws"
+    tool = WriteFileTool(workspace=session)
+    out = asyncio.run(
+        tool.execute(path="skills/memory/SKILL.md", content="---\nname: memory\n---\n\nbody\n")
+    )
+    assert "Successfully wrote" in out
+
+
+def test_edit_file_blocks_under_app_skills_dir(tmp_path, monkeypatch):
+    app_skills = tmp_path / "opensprite_skills"
+    monkeypatch.setattr("opensprite.context.paths.get_skills_dir", lambda app_home=None: app_skills)
+    app_skills.mkdir(parents=True)
+    mem = app_skills / "foo" / "SKILL.md"
+    mem.parent.mkdir(parents=True)
+    mem.write_text("old", encoding="utf-8")
+
+    tool = EditFileTool(workspace=app_skills)
+    out = asyncio.run(
+        tool.execute(path="foo/SKILL.md", old_text="old", new_text="new")
+    )
+    assert ".opensprite/skills" in out or "Cannot modify" in out
+    assert mem.read_text() == "old"

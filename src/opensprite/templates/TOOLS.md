@@ -90,14 +90,12 @@ This file defines when to use tools, how to choose between them, and what constr
   - Use when the user wants to add, update, inspect, or remove skills (each skill is a folder with `SKILL.md`).
   - Prefer `configure_skill` instead of asking the user to create or edit skill files manually.
   - Before designing a **new** skill, load `**read_skill`** with `**skill-creator-design**` (bundled guide: metadata, English frontmatter, triggers in `description`, lean body, progressive disclosure, optional `scripts/` / `references/` / `assets/`).
-  - Do **not** edit bundled **system** skills: `**skill-creator-design`**, `**agent-creator-design**`, `**memory**`. `configure_skill` refuses `add` / `upsert` / `remove` for those ids; `write_file` and `edit_file` also refuse paths under `skills/<those_ids>/` inside the workspace.
+  - Do **not** edit bundled skills on disk: they live under `~/.opensprite/skills/<skill_id>/` (synced from the package), same folder layout as session `skills/<skill_id>/`. Mutable copies live **only** under the current session workspace `skills/`. `configure_skill` always targets that path. `write_file` / `edit_file` refuse any path under `~/.opensprite/skills/`.
   - Use `action=add` to create a new skill only (fails if it already exists); use `action=upsert` to create or overwrite.
   - Enforced by the tool: `skill_name` must be lowercase ASCII, letter-first, hyphen-separated segments; `description` and `body` must meet minimum lengths; `description` also needs enough English words, substantive vocabulary (not only glue words), and must not be repetitive padding (see tool schema).
-  - Use `scope=global` for user-wide skills under `~/.opensprite/skills/`; use `scope=chat` for skills in the current chat workspace `skills/` folder.
   **When to persist or refine skills without the user asking**
   - Skills are **procedural memory**: reusable *how-to* for a class of tasks. Use `**save_memory`** for stable facts, preferences, or chat-specific reminders; use `**configure_skill**` when the workflow itself should be saved for later.
   - After you finish a **non-trivial** task (several tool calls, backtracking, or the user corrected your approach), consider whether the successful approach is **reusable**. If yes, `**action=upsert`** a skill (or refine an existing one: `action=get` then `upsert` with merged content). Skip if nothing generalizable was learned.
-  - Choose `**scope=global**` for habits and workflows the user will want across chats; `**scope=chat**` for procedures tied to this workspace or project only.
   - Do not create noisy or one-off skills; one clear skill beats many thin ones.
 
 ## Subagent prompt tool

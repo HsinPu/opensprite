@@ -5,7 +5,7 @@ from typing import Any, Callable
 
 from ..skills import SkillsLoader
 from .base import Tool
-from .skill_config import path_touches_protected_system_skill
+from .skill_config import path_touches_read_only_app_skills_dir
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -186,7 +186,7 @@ class WriteFileTool(Tool):
         return (
             "Write content to one file inside the current workspace. "
             "Always provide both 'path' and 'content'. Creates parent directories and the file if needed. "
-            "Cannot write under skills/<bundled_system_skill_id>/ (read-only); use read_skill for those skills. "
+            "Cannot write under ~/.opensprite/skills/ (read-only bundled skills); use session workspace skills/ or configure_skill. "
             "Cannot write opensprite.json, split JSON config files (channels, search, MCP, media, LLM providers), "
             "or the active config paths (edit outside the agent or use onboard)."
         )
@@ -224,7 +224,7 @@ class WriteFileTool(Tool):
             if prot_cfg:
                 return prot_cfg
 
-            prot = path_touches_protected_system_skill(file_path)
+            prot = path_touches_read_only_app_skills_dir(file_path)
             if prot:
                 return prot
 
@@ -318,7 +318,7 @@ class EditFileTool(Tool):
         return (
             "Edit one file inside the current workspace by replacing 'old_text' with 'new_text'. "
             "Always provide 'path', 'old_text', and 'new_text'. The old_text must match existing file content exactly. "
-            "Cannot edit under skills/<bundled_system_skill_id>/ (read-only). "
+            "Cannot edit under ~/.opensprite/skills/ (read-only bundled skills). "
             "Cannot edit opensprite.json or other OpenSprite JSON configuration files."
         )
 
@@ -350,7 +350,7 @@ class EditFileTool(Tool):
             if prot_cfg:
                 return prot_cfg
 
-            prot = path_touches_protected_system_skill(file_path)
+            prot = path_touches_read_only_app_skills_dir(file_path)
             if prot:
                 return prot
 

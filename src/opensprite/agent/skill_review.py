@@ -14,7 +14,7 @@ Rules:
 - Prefer `action=upsert` on an existing skill when refining; use `action=add` only for a genuinely new skill id. Use `read_skill` with `skill-creator-design` before authoring a new skill.
 - If nothing is worth persisting, reply with exactly this single line and stop (no tools): Nothing to save.
 - Do not narrate, apologize, or mention this background pass.
-- Use `scope=global` for user-wide habits; `scope=chat` only for procedures specific to this chat's workspace.
+- Use `configure_skill` for the session workspace `skills/` folder only. Bundled skills live read-only under `~/.opensprite/skills/<id>/`.
 """
 
 

@@ -20,21 +20,38 @@ def _write_skill(root: Path, name: str, description: str, body: str) -> None:
     )
 
 
-def test_skills_loader_uses_personal_over_global_and_ignores_workspace_default(tmp_path):
-    global_dir = tmp_path / "global-skills"
-    personal_dir = tmp_path / "chat-skills"
-    workspace_dir = tmp_path / "workspace"
+def test_skills_loader_session_skills_override_system(tmp_path):
+    skills_root = tmp_path / "sr"
+    session_skills = tmp_path / "chat_ws" / "skills"
+    (skills_root / "shared").mkdir(parents=True)
+    (skills_root / "shared" / "SKILL.md").write_text(
+        "---\nname: shared\ndescription: from system\n---\n\nsystem body\n",
+        encoding="utf-8",
+    )
+    (session_skills / "shared").mkdir(parents=True)
+    (session_skills / "shared" / "SKILL.md").write_text(
+        "---\nname: shared\ndescription: from session\n---\n\nsession body\n",
+        encoding="utf-8",
+    )
+    loader = SkillsLoader(default_skills_dir=skills_root)
+    assert loader.load_skill_content("shared", session_skills) == "session body"
+    names = [s.name for s in loader.get_skills(session_skills)]
+    assert names == ["shared"]
+    assert loader.get_skills(session_skills)[0].description == "from session"
 
-    _write_skill(global_dir, "planner", "global planner", "Global body")
-    _write_skill(global_dir, "global-only", "global only", "Global only body")
-    _write_skill(personal_dir, "planner", "personal planner", "Personal body")
-    _write_skill(workspace_dir / "skills", "workspace-only", "workspace only", "Workspace body")
 
-    loader = SkillsLoader(workspace=workspace_dir, default_skills_dir=global_dir)
+def test_skills_loader_uses_personal_over_system(tmp_path):
+    skills_root = tmp_path / "home_skills"
+    personal_skills = tmp_path / "chat_ws" / "skills"
 
-    names = [skill.name for skill in loader.get_skills(personal_dir)]
+    _write_skill(skills_root, "planner", "system planner", "System body")
+    _write_skill(skills_root, "system-only", "system only", "System only body")
+    _write_skill(personal_skills, "planner", "session planner", "Session body")
 
-    assert names == ["planner", "global-only"]
-    assert loader.load_skill_content("planner", personal_dir) == "Personal body"
-    assert "workspace-only" not in loader.get_valid_skill_names(personal_dir)
-    assert "workspace-only" not in loader.get_valid_skill_names()
+    loader = SkillsLoader(default_skills_dir=skills_root)
+
+    names = [skill.name for skill in loader.get_skills(personal_skills)]
+
+    assert names == ["planner", "system-only"]
+    assert loader.load_skill_content("planner", personal_skills) == "Session body"
+    assert "system-only" in loader.get_valid_skill_names(personal_skills)

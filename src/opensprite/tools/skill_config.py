@@ -16,38 +16,25 @@ WorkspaceResolver = Callable[[], Path]
 
 # Bundled guide skill (see src/opensprite/skills/skill-creator-design/SKILL.md) — full rules for new skills.
 SKILL_CREATION_GUIDE_NAME = "skill-creator-design"
-# Bundled system skills (shipped with OpenSprite): must not be created, overwritten, or deleted via configure_skill.
-PROTECTED_SKILL_IDS = frozenset(
-    {
-        "skill-creator-design",
-        "agent-creator-design",
-        "memory",
-    }
-)
-_PROTECTED_IDS_LOWER = frozenset(s.lower() for s in PROTECTED_SKILL_IDS)
 
 
-def path_touches_protected_system_skill(file_path: Path) -> str | None:
-    """
-    If a resolved path lies under .../skills/<system_skill_id>/..., block writes via file tools.
+def path_touches_read_only_app_skills_dir(file_path: Path) -> str | None:
+    """Block writes anywhere under ``~/.opensprite/skills/`` (bundled skills, read-only for agents)."""
+    try:
+        resolved = file_path.resolve(strict=False)
+        from ..context.paths import get_skills_dir
 
-    The path segment must be exactly 'skills' (case-insensitive), then the next segment must match
-    a bundled system skill id. This covers chat workspaces (.../skills/memory/...) and any layout
-    where global skills live under a .../skills/... prefix inside the tool workspace.
-    """
-    parts = file_path.parts
-    for i, part in enumerate(parts):
-        if part.lower() != "skills":
-            continue
-        if i + 1 >= len(parts):
-            continue
-        sid = parts[i + 1].lower()
-        if sid in _PROTECTED_IDS_LOWER:
-            return (
-                f"Error: Cannot modify bundled system skill '{sid}' via write_file or edit_file. "
-                "Paths under skills/<system_skill_id>/ are read-only; use read_skill to read them."
-            )
-    return None
+        skills_home = get_skills_dir().resolve(strict=False)
+    except OSError:
+        return None
+    try:
+        resolved.relative_to(skills_home)
+    except ValueError:
+        return None
+    return (
+        "Error: Cannot modify files under ~/.opensprite/skills/ via write_file or edit_file. "
+        "Bundled skills there are read-only; use the session workspace skills/ folder or configure_skill."
+    )
 
 
 # Fixed rules (enforced on disk writes and on any action that takes skill_name).
@@ -101,23 +88,14 @@ _SKILL_ID_PATTERN = re.compile(r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$")
 
 _CONFIGURE_SKILL_RULES_SUMMARY = (
     "Skill layout: one directory per skill named like the skill id, containing SKILL.md. "
+    "Mutable skills live only under the current session workspace skills/; "
+    "Bundled skills stay under ~/.opensprite/skills/<id>/ (read-only). "
     "YAML frontmatter must include name (same as skill_name / folder) and description. "
     "Before writing a new skill, read the bundled guide with read_skill using skill_name "
     f"'{SKILL_CREATION_GUIDE_NAME}': it defines concise metadata, English frontmatter, "
     "detailed description (what the skill does + when to trigger), imperative body text, "
     "progressive disclosure, and optional scripts/, references/, assets/ next to SKILL.md."
 )
-
-
-def _protected_skill_mutation_error(skill_name: str, *, action: str) -> str | None:
-    """Block writes to bundled system skills (immutable via this tool)."""
-    if skill_name not in PROTECTED_SKILL_IDS:
-        return None
-    return (
-        f"Error: skill '{skill_name}' is a bundled system skill. "
-        f"It cannot be created, changed, or removed via configure_skill (action={action}). "
-        "Read it with read_skill only; do not edit its files."
-    )
 
 
 def _validate_skill_id(skill_name: str) -> str | None:
@@ -200,7 +178,7 @@ def _build_skill_md(skill_name: str, description: str, body: str) -> str:
 
 
 class ConfigureSkillTool(Tool):
-    """Read and update skill definitions under ~/.opensprite/skills or the chat workspace skills folder."""
+    """Read and update skill definitions under the session workspace ``skills/`` (not under ~/.opensprite/skills/)."""
 
     name = "configure_skill"
     description = (
@@ -218,14 +196,8 @@ class ConfigureSkillTool(Tool):
                     "list: enumerate skills; get: read one SKILL.md; "
                     "add: create a new skill only (fails if it already exists); "
                     "upsert: create or replace SKILL.md; remove: delete skill directory. "
-                    "Bundled system skills cannot be mutated (add/upsert/remove): "
-                    f"{', '.join(sorted(PROTECTED_SKILL_IDS))}."
+                    "All paths are under the session workspace skills/ (never ~/.opensprite/skills/)."
                 ),
-            },
-            "scope": {
-                "type": "string",
-                "enum": ["global", "chat"],
-                "description": "global: ~/.opensprite/skills (user-wide). chat: <workspace>/skills for the current chat workspace.",
             },
             "skill_name": {
                 "type": "string",
@@ -252,7 +224,7 @@ class ConfigureSkillTool(Tool):
                 ),
             },
         },
-        "required": ["action", "scope"],
+        "required": ["action"],
     }
 
     def __init__(
@@ -263,16 +235,9 @@ class ConfigureSkillTool(Tool):
     ):
         self._skills_loader = skills_loader
         self._workspace_resolver = workspace_resolver
-        self._default_skills_dir = Path(
-            getattr(skills_loader, "default_skills_dir", None) or (Path.home() / ".opensprite" / "skills")
-        ).expanduser()
 
-    def _skills_root(self, scope: str) -> Path:
-        if scope == "global":
-            return self._default_skills_dir.resolve()
-        if scope == "chat":
-            return (Path(self._workspace_resolver()) / "skills").resolve()
-        raise ValueError(f"unsupported scope '{scope}'")
+    def _session_skills_root(self) -> Path:
+        return (Path(self._workspace_resolver()) / "skills").resolve()
 
     @staticmethod
     def _is_under(root: Path, path: Path) -> bool:
@@ -293,14 +258,11 @@ class ConfigureSkillTool(Tool):
             }
         return payload
 
-    async def _execute(self, action: str, scope: str, **kwargs: Any) -> str:
-        if scope not in {"global", "chat"}:
-            return f"Error: scope must be 'global' or 'chat', got '{scope}'"
-
-        root = self._skills_root(scope)
+    async def _execute(self, action: str, **kwargs: Any) -> str:
+        root = self._session_skills_root()
 
         if action == "list":
-            return json.dumps({"scope": scope, **self._list_payload(root)}, ensure_ascii=False, indent=2)
+            return json.dumps(self._list_payload(root), ensure_ascii=False, indent=2)
 
         skill_name = str(kwargs.get("skill_name", "") or "").strip()
         err = _validate_skill_id(skill_name)
@@ -313,17 +275,11 @@ class ConfigureSkillTool(Tool):
 
         skill_file = skill_dir / "SKILL.md"
 
-        if action in {"add", "upsert", "remove"}:
-            prot = _protected_skill_mutation_error(skill_name, action=action)
-            if prot:
-                return prot
-
         if action == "get":
             if not skill_file.is_file():
                 return f"Error: skill '{skill_name}' not found under {root}"
             text = skill_file.read_text(encoding="utf-8")
             payload = {
-                "scope": scope,
                 "skills_dir": str(root),
                 "skill_name": skill_name,
                 "path": str(skill_file),

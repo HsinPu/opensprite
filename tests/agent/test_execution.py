@@ -338,12 +338,11 @@ class FakeConfigureSkillTool(Tool):
             "type": "object",
             "properties": {
                 "action": {"type": "string"},
-                "scope": {"type": "string"},
             },
-            "required": ["action", "scope"],
+            "required": ["action"],
         }
 
-    async def _execute(self, action: str, scope: str, **kwargs):
+    async def _execute(self, action: str, **kwargs):
         return "Added skill 'demo-skill' at /tmp/SKILL.md"
 
 
@@ -359,7 +358,7 @@ def test_execution_refreshes_system_and_tools_after_configure_skill_success():
                     ToolCall(
                         id="tc1",
                         name="configure_skill",
-                        arguments={"action": "add", "scope": "global"},
+                        arguments={"action": "add"},
                     )
                 ],
             ),

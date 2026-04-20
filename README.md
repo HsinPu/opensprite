@@ -1,46 +1,75 @@
 # OpenSprite
 
-OpenSprite is a lightweight, self-hosted personal AI assistant for people who want a small codebase, local control, and a standard Python install flow.
+**English:** A lightweight, self-hosted personal AI assistant with a small codebase, local control, and a standard Python packaging and install flow.
 
-## What It Does
+**中文：** 輕量、可自架設的個人 AI 助理：程式碼精簡、資料留在本機、以標準 Python 套件方式安裝與執行。
 
-- Runs as an installable Python CLI: `opensprite`
-- Supports multiple LLM providers through one config format
-- Receives messages from Telegram
-- Stores conversation history in memory or SQLite
-- Provides built-in tools for file edits, shell commands, web search, web fetch, and long-term memory
-- Can optionally index history and web tool results in SQLite FTS5, with background embeddings for hybrid reranking
+> This README is **bilingual (English / 繁體中文)**. Code blocks and JSON examples are language-neutral.
 
-## Current Status
+---
 
-This repository is now package-first.
+## Overview · 功能概覽
 
-- CLI entrypoint: `src/opensprite/cli/commands.py`
-- Module entrypoint: `src/opensprite/__main__.py`
-- Service runtime: `src/opensprite/runtime.py`
-- Install command: `python -m pip install .`
-- Default command: `opensprite` shows help
-- Start command: `opensprite gateway`
-- Runtime mode: foreground process; stop it with `Ctrl+C`
+**English**
 
-## Requirements
+- Installable Python CLI: `opensprite`
+- Multiple LLM providers in one config format (OpenRouter, OpenAI, MiniMax, …)
+- Incoming messages from **Telegram** (channel registry is extensible; only Telegram is implemented today)
+- Conversation storage: in-memory or **SQLite**
+- Built-in tools: filesystem, shell, web search and fetch, long-term memory, scheduling (`cron`), subagent delegation, skills, **MCP-hosted tools**
+- Optional: index history and web tool payloads in SQLite **FTS5**, with background embeddings for hybrid reranking
 
-- Python 3.11+
-- One configured LLM provider API key
-- Telegram bot token if you want incoming messages through Telegram
+**中文**
 
-## Install
+- 以 Python CLI 執行：`opensprite`
+- 透過統一設定格式支援多種 LLM 供應商（OpenRouter、OpenAI、MiniMax 等）
+- 從 **Telegram** 接收訊息（頻道採登錄表擴充；目前實作僅 Telegram）
+- 對話紀錄可使用記憶體或 **SQLite**
+- 內建工具：讀寫／編輯檔案、目錄列表、Shell、網路搜尋與擷取、長期記憶、排程（cron）、子代理委派、Skills、**MCP 外部工具**
+- 可選：將歷史與網路工具結果索引至 SQLite **FTS5**，並可搭配背景 embedding 做混合重排序
 
-### Windows
+---
+
+## Current layout · 目前狀態
+
+**English**
+
+- CLI entrypoint: `opensprite` (`opensprite.cli.commands`)
+- Module entrypoint: `python -m opensprite`
+- Service runtime: `gateway` in `src/opensprite/runtime.py`
+- Install: `python -m pip install .`
+- Default Typer behavior shows help; `opensprite gateway` runs the gateway as a foreground process (stop with `Ctrl+C`)
+
+**中文**
+
+- 套件入口：`opensprite`（`opensprite.cli.commands`）
+- 模組入口：`python -m opensprite`
+- 服務執行：`src/opensprite/runtime.py` 的 `gateway`
+- 安裝：`python -m pip install .`
+- 預設無子命令會顯示說明；`opensprite gateway` 啟動閘道（前景程序，以 `Ctrl+C` 結束）
+
+---
+
+## Requirements · 系統需求
+
+**English:** Python 3.11+, at least one configured LLM API key, and a Telegram bot token if you use Telegram.
+
+**中文：** Python 3.11+、至少一組已設定的 LLM API 金鑰；若使用 Telegram 則需要 Bot Token。
+
+---
+
+## Install · 安裝
+
+### Windows (recommended) · Windows（建議）
 
 ```powershell
 py -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install .
 ```
 
-### Linux or macOS
+### Linux / macOS
 
 ```bash
 python3 -m venv .venv
@@ -49,141 +78,156 @@ python -m pip install --upgrade pip
 python -m pip install .
 ```
 
-### Development Install
+### Development install · 開發模式安裝
 
-```bash
+```powershell
 python -m pip install -e ".[dev]"
 ```
 
-## Start
+**English:** Optional **sqlite-vec** extra for vector candidate backends:
 
-After installation, show the CLI help with:
+**中文：** 可選安裝 **sqlite-vec**（向量候選後端）：
 
-```bash
+```powershell
+python -m pip install -e ".[dev,vector]"
+```
+
+---
+
+## Quick start · 快速開始
+
+```powershell
 opensprite
-```
-
-Initialize and configure OpenSprite interactively with:
-
-```bash
 opensprite onboard
-```
-
-For automation or CI, skip prompts with:
-
-```bash
-opensprite onboard --no-input
-```
-
-Start the gateway with:
-
-```bash
 opensprite gateway
 ```
 
-Or via the module entrypoint:
+**English:** Non-interactive onboarding (CI / scripts):
 
-```bash
+**中文：** 非互動初始化（適合 CI 或腳本）：
+
+```powershell
+opensprite onboard --no-input
+```
+
+**English:** Module entrypoint:
+
+**中文：** 模組方式啟動：
+
+```powershell
 python -m opensprite gateway
 ```
 
-The process stays attached to the current terminal and does not daemonize itself.
+---
 
-## Linux Service
+## Linux systemd user service · Linux systemd 使用者服務
 
-On Linux, you can install OpenSprite as a `systemd --user` service after you have confirmed that `opensprite gateway` starts correctly in the foreground.
+**English:** After `opensprite gateway` works in the foreground, you can install a `systemd --user` unit. Service file path: `~/.config/systemd/user/opensprite-gateway.service`. To keep the user service after logout, run once: `loginctl enable-linger "$USER"`.
 
-Install and start the service:
+**中文：** 在確認 `opensprite gateway` 可正常前景執行後，可安裝為 `systemd --user` 服務。服務單元檔：`~/.config/systemd/user/opensprite-gateway.service`。登出後仍要保持使用者服務：執行一次 `loginctl enable-linger "$USER"`。
 
 ```bash
 opensprite service install
-```
-
-Install against a specific config file:
-
-```bash
 opensprite service install --config ~/.opensprite/opensprite.json
-```
-
-Common service commands:
-
-```bash
 opensprite service status
 opensprite service restart
-opensprite service stop
-opensprite service start
-opensprite service uninstall
 ```
 
-The service file is written to:
+---
 
-```text
-~/.config/systemd/user/opensprite-gateway.service
-```
+## Configuration layout · 設定檔架構（重要）
 
-To keep the user service running after logout, enable lingering once:
+**English:** `opensprite onboard` creates the app home directory. The main config defaults to `~/.opensprite/opensprite.json`. **Split config files** live next to the main file; paths are relative to the directory that contains `opensprite.json` (keys are customizable).
 
-```bash
-loginctl enable-linger "$USER"
-```
+**中文：** `opensprite onboard` 會在使用者目錄建立應用程式家目錄，預設主設定為 `~/.opensprite/opensprite.json`。主檔採 **分割設定檔**：路徑為相對於主設定檔所在目錄的檔名（可自訂鍵名）。
 
-To inspect runtime logs from systemd:
+| Main file key · 主檔欄位 | Default file · 預設檔名 | Purpose · 用途 |
+| --- | --- | --- |
+| `llm.providers_file` | `llm.providers.json` | LLM provider API keys, models, enabled flags / 各 LLM 供應商的 API／模型／啟用狀態 |
+| `channels_file` | `channels.json` | Channel sections (Telegram, console, …) / Telegram、console 等頻道區塊 |
+| `search_file` | `search.json` | Search and embedding settings / 搜尋與 embedding 相關設定 |
+| `media_file` | `media.json` | Vision, speech, video / 影像、語音、影片 |
+| `tools.mcp_servers_file` | `mcp_servers.json` | MCP server definitions / MCP 伺服器連線定義 |
 
-```bash
-journalctl --user -u opensprite-gateway.service -n 100 --no-pager
-```
+**English:** Example layout:
 
-## First Run
-
-Run `opensprite onboard` first. By default it creates the app directories and then opens menu-based prompts for provider, model, API key, and chat channel selection.
-
-If you need a non-interactive setup flow, use `opensprite onboard --no-input` and edit the config manually afterward.
-
-OpenSprite stores its default config at:
-
-```text
-~/.opensprite/opensprite.json
-```
-
-It also prepares these directories:
+**中文：** 目錄結構範例：
 
 ```text
 ~/.opensprite/
+├── opensprite.json      # main config / 主設定
+├── llm.providers.json
+├── channels.json
+├── search.json
+├── media.json
+├── mcp_servers.json
 ├── bootstrap/
 ├── memory/
 ├── skills/
-└── workspace/
+├── workspace/
+└── subagent_prompts/    # subagent prompts (tools may manage) / 子代理提示詞（可由工具維護）
 ```
 
-## Minimal Configuration
+**English:** Validate the main file and all split JSON files:
 
-If you use `opensprite onboard --no-input`, edit `~/.opensprite/opensprite.json`, enable one provider, and set `llm.default` to the provider you want to use.
+**中文：** 驗證主檔與所有外掛 JSON：
 
-Example using OpenRouter:
+```powershell
+opensprite config validate
+opensprite config validate --json
+```
+
+### Main file `opensprite.json` · 主設定節錄
+
+**English:** The authoritative template is `opensprite.json.template` in the package. It includes `llm`, `storage`, `channels_file`, `search_file`, `media_file`, `log`, `tools`, `agent`, `memory`, `user_profile`, `recent_summary`, and more.
+
+**中文：** 實際模板以套件內 `opensprite.json.template` 為準；結構包含 `llm`、`storage`、`channels_file`、`search_file`、`media_file`、`log`、`tools`、`agent`、`memory`、`user_profile`、`recent_summary` 等。
+
+### Channels `channels.json` · 頻道
+
+**English:** Only **`telegram`** has a registered channel adapter today. The template may set `console.enabled` to `true`, but without an adapter the runtime logs a warning and skips that channel.
+
+**中文：** 目前 **已註冊的頻道適配器僅有 `telegram`**。模板中的 `console.enabled` 可為 `true`，但若沒有對應適配器，啟動時會記錄警告並略過。
+
+Minimal Telegram example:
+
+```json
+{
+  "telegram": {
+    "enabled": true,
+    "token": "YOUR_TELEGRAM_BOT_TOKEN"
+  },
+  "console": {
+    "enabled": true
+  }
+}
+```
+
+### LLM `llm.providers.json`
+
+**English:** In the main file’s `llm` section, set `default` to a provider key and ensure that provider is `enabled` with `api_key` and `model` set.
+
+**中文：** 在主檔的 `llm` 區塊設定 `default` 指向其中一個鍵，並在對應供應商啟用且填好 `api_key`／`model`。
+
+OpenRouter example:
+
+```json
+{
+  "openrouter": {
+    "api_key": "sk-or-...",
+    "enabled": true,
+    "model": "openai/gpt-4o-mini",
+    "base_url": "https://openrouter.ai/api/v1"
+  }
+}
+```
+
+Main file snippet:
 
 ```json
 {
   "llm": {
-    "providers": {
-      "openrouter": {
-        "api_key": "sk-or-...",
-        "enabled": true,
-        "model": "openai/gpt-4o-mini",
-        "base_url": "https://openrouter.ai/api/v1"
-      },
-      "openai": {
-        "api_key": "",
-        "enabled": false,
-        "model": "",
-        "base_url": "https://api.openai.com/v1"
-      },
-      "minimax": {
-        "api_key": "",
-        "enabled": false,
-        "model": "MiniMax-M2.5",
-        "base_url": "https://api.minimax.io/v1"
-      }
-    },
+    "providers_file": "llm.providers.json",
     "default": "openrouter",
     "temperature": 0.7,
     "max_tokens": 8192
@@ -191,329 +235,42 @@ Example using OpenRouter:
   "storage": {
     "type": "sqlite",
     "path": "~/.opensprite/data/sessions.db"
-  },
-  "channels": {
-    "telegram": {
-      "enabled": false,
-      "token": ""
-    },
-    "console": {
-      "enabled": true
-    }
   }
 }
 ```
 
-The template still contains a `console` section, but there is no `ConsoleAdapter` yet. The runtime now boots enabled channels through the channel registry, and currently only `telegram` is implemented.
+### Search `search.json` · 搜尋
 
-## Architecture
+**English:** Requires `storage.type="sqlite"`. When enabled, indexes chats and `web_search` / `web_fetch` payloads; embeddings are optional and processed in a background queue. If `search.embedding.api_key` or `base_url` is empty, values fall back to the active LLM provider.
 
-OpenSprite uses an agent-centric architecture with ports-and-adapters boundaries.
-
-- `AgentLoop` is the main orchestrator. It owns the end-to-end request flow: store the inbound message, build context, call the execution engine, trigger maintenance work, and return one unified assistant response.
-- `ExecutionEngine` runs the LLM and tool-calling loop. It handles repeated LLM calls, tool execution, fallback handling, and iteration limits.
-- `ToolResultPersistence` stores tool outputs back into conversation history and optionally indexes them into the search store.
-- `tool_registration` builds the default tool set for the agent, including filesystem, shell, web, delegate, memory, and optional search tools.
-- `consolidation` contains maintenance services for long-term memory updates and global `USER.md` profile refreshes.
-- `channels`, `llms`, `storage`, and `search` are adapter layers around external systems. The agent core talks to these through shared interfaces rather than implementation-specific code.
-
-At a high level, the runtime flow looks like this:
-
-```text
-Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
-                                      |               |
-                                      |               -> ToolResultPersistence -> Storage / Search
-                                      -> Consolidation Services -> Memory / USER.md
-```
-
-This keeps the agent decision flow stable while letting channels, providers, storage backends, and search infrastructure evolve independently.
-
-## Telegram Setup
-
-If you want to use Telegram, update the `channels.telegram` section:
+**中文：** 需搭配 `storage.type` 為 `sqlite`。啟用後會索引對話、`web_search`／`web_fetch` 結果等；embedding 可選、於背景佇列處理。若 embedding 的 `api_key` 或 `base_url` 留空，會改採目前作用中的 LLM 供應商設定。
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "YOUR_TELEGRAM_BOT_TOKEN"
-    }
+  "enabled": true,
+  "history_top_k": 5,
+  "knowledge_top_k": 5,
+  "embedding": {
+    "enabled": false,
+    "provider": "openai",
+    "api_key": "",
+    "model": "",
+    "base_url": null,
+    "batch_size": 16,
+    "candidate_count": 20,
+    "candidate_strategy": "vector",
+    "vector_backend": "auto",
+    "vector_candidate_count": 50,
+    "retry_failed_on_startup": false
   }
 }
 ```
 
-Then restart OpenSprite:
+### Media `media.json` · 多媒體
 
-```bash
-opensprite gateway
-```
+**English:** Vision, speech-to-text, and video analysis are configured here. Values merge with any inline `vision` / `speech` / `video` blocks in the main file; the external file overrides on conflict.
 
-## Storage Options
-
-OpenSprite currently supports these storage modes through `storage.type`.
-
-- `memory`: in-process only
-- `sqlite`: SQLite database at `storage.path`
-
-Example:
-
-```json
-{
-  "storage": {
-    "type": "sqlite",
-    "path": "~/.opensprite/data/sessions.db"
-  }
-}
-```
-
-## Search Index
-
-Optional search uses the same SQLite database as `storage.path` and is configured in `search`.
-
-Search requires `storage.type="sqlite"`.
-
-```json
-{
-  "search": {
-    "enabled": true,
-    "history_top_k": 5,
-    "knowledge_top_k": 5,
-    "embedding": {
-      "enabled": false,
-      "provider": "openai",
-      "api_key": "",
-      "model": "",
-      "base_url": null,
-      "batch_size": 16,
-      "candidate_count": 20,
-      "candidate_strategy": "vector",
-      "vector_backend": "auto",
-      "vector_candidate_count": 50,
-      "retry_failed_on_startup": false
-    }
-  }
-}
-```
-
-When enabled, OpenSprite can index:
-
-- stored chat history
-- web search results
-- web fetch results
-
-Search data now lives in the same SQLite file as normal chat storage:
-
-- `messages` for normalized chat history
-- `knowledge_sources` for stored `web_search` and `web_fetch` payloads
-- `search_chunks` and `search_chunks_fts` for FTS5 search
-- `chunk_embeddings` for optional hybrid reranking
-
-When `search.embedding.enabled=true`:
-
-- chunk embeddings are queued in the background instead of blocking normal replies
-- search still works immediately through FTS5
-- hybrid reranking improves result quality as pending embedding jobs complete
-
-If `search.embedding.api_key` or `search.embedding.base_url` is empty, OpenSprite falls back to the active LLM provider settings.
-
-`search.embedding` options:
-
-- `candidate_count`: FTS candidate pool size before hybrid reranking
-- `candidate_strategy`: candidate selection mode, either `fts` or `vector`
-- `vector_backend`: vector candidate backend, one of `exact`, `sqlite_vec`, or `auto`
-- `vector_candidate_count`: vector candidate pool size when `candidate_strategy="vector"`
-- `retry_failed_on_startup`: whether failed embeddings should be re-queued automatically on startup
-
-Candidate strategies:
-
-- `fts` uses FTS5 to select candidates first, then embeddings rerank them when available
-- `vector` uses stored embeddings to pull candidates first, then applies the same score fusion and deduplication logic afterward
-
-Current note on `vector` mode:
-
-- the current default path is `candidate_strategy="vector"` with `vector_backend="auto"`
-- this means OpenSprite will try `sqlite_vec` first, then fall back to exact vector scanning, then fall back to FTS if vector candidates are unavailable
-- `vector_backend="exact"` uses exact vector scanning over `chunk_embeddings`
-- `vector_backend="sqlite_vec"` tries to use a `sqlite-vec` virtual table for vector candidates
-- `vector_backend="auto"` tries `sqlite-vec` first and falls back to exact scan automatically
-- if `sqlite-vec` is unavailable or fails, search falls back to the exact vector path and then to the existing FTS path automatically
-
-To enable `sqlite-vec`, install the optional extra:
-
-```bash
-python -m pip install -e ".[vector]"
-```
-
-### Automatic Maintenance
-
-Under normal service operation, search maintenance is mostly automatic:
-
-- new chat messages are indexed automatically
-- new `web_search` and `web_fetch` results are persisted and indexed automatically
-- if search is enabled after older SQLite history already exists, startup backfills the missing index rows
-- if the search index signature changes, startup rebuilds stale index structures automatically
-- if embeddings are enabled, new chunk embeddings are queued in the background instead of blocking normal replies
-- the gateway now starts a search queue worker automatically and keeps draining pending embedding jobs while the service is online
-- stale `processing` embedding rows are re-queued automatically after restart
-- missing or stale embeddings are refreshed automatically on startup
-- failed embeddings can also be retried automatically on startup when `search.embedding.retry_failed_on_startup=true`
-
-### Manual Maintenance
-
-Manual commands are mainly for recovery, forced refresh, or running maintenance when the normal service is not active:
-
-Search maintenance commands:
-
-```bash
-# rebuild all indexed history and knowledge
-opensprite search rebuild
-
-# rebuild one chat only
-opensprite search rebuild --chat-id telegram:user-a
-
-# inspect index and embedding job status
-opensprite search status
-opensprite search status --chat-id telegram:user-a
-
-# retry failed embedding jobs
-opensprite search retry-embeddings
-opensprite search retry-embeddings --chat-id telegram:user-a
-
-# refresh missing or stale embeddings
-opensprite search refresh-embeddings
-opensprite search refresh-embeddings --chat-id telegram:user-a
-opensprite search refresh-embeddings --force
-
-# run the embedding queue worker manually
-opensprite search run-queue
-opensprite search run-queue --watch
-opensprite search run-queue --watch --idle-exit-seconds 30
-opensprite search run-queue --force-refresh
-
-# benchmark FTS vs vector candidate selection
-opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide"
-opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5
-opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5 --json
-
-# seed synthetic benchmark data when no real chat history exists yet
-opensprite search seed-demo
-opensprite search seed-demo --chat-id demo:search-benchmark
-```
-
-In practice, you should usually only need these commands when:
-
-- the service is offline and you still want to drain the embedding queue
-- you want to force a full embedding refresh after changing models or ranking behavior
-- you want to inspect or recover failed jobs immediately instead of waiting for the next startup cycle
-
-### Benchmarking Candidate Strategies
-
-Use `opensprite search benchmark` when you want to compare `fts` and `vector` candidate selection for the same chat query.
-
-If you do not have real chat data yet, seed a synthetic benchmark chat first:
-
-```bash
-opensprite search seed-demo
-opensprite search seed-demo --chat-id demo:search-benchmark
-```
-
-Examples:
-
-```bash
-# compare both strategies on stored knowledge
-opensprite search benchmark \
-  --chat-id telegram:user-a \
-  --kind knowledge \
-  --query "full text docs" \
-  --strategy both \
-  --repeat 5
-
-# compare history search strategies
-opensprite search benchmark \
-  --chat-id telegram:user-a \
-  --kind history \
-  --query "sqlite guide" \
-  --strategy both \
-  --repeat 5
-
-# emit machine-readable JSON output
-opensprite search benchmark \
-  --chat-id telegram:user-a \
-  --query "sqlite guide" \
-  --strategy both \
-  --repeat 5 \
-  --json
-
-# run vector benchmarks without a remote embedding API key
-opensprite search benchmark \
-  --chat-id demo:search-benchmark \
-  --query "orchard irrigation" \
-  --strategy both \
-  --repeat 5 \
-  --demo-embeddings
-```
-
-The benchmark command reports:
-
-- elapsed time summary (`avg`, `min`, `max`, `median`)
-- hit count
-- top result preview
-- result overlap and top-hit agreement when comparing both strategies
-- optional JSON output for later comparison or scripting
-
-`--demo-embeddings` uses a deterministic local embedding provider. It is intended for local benchmarking and test validation only; it is not a replacement for your real embedding model.
-
-If embeddings are disabled, vector benchmarks are skipped automatically.
-If you request `sqlite-vec`, benchmark output also shows the requested backend versus the effective backend actually used.
-
-## Web Search Pipeline
-
-`web_search` and `web_fetch` now use one shared JSON payload shape.
-
-- `web_search` is the discovery step: it returns result items with titles, URLs, and snippets
-- `web_fetch` is the content step: it returns one page payload with final URL, title, extracted content, and fetch metadata
-
-When search is enabled, both tools are persisted into `knowledge_sources` with metadata such as:
-
-- `provider`
-- `extractor`
-- `status`
-- `content_type`
-- `truncated`
-
-That metadata is exposed back through knowledge search results and can also be used as filters by the agent-facing `search_knowledge` tool.
-
-## Built-In Tools
-
-The default agent registers tools for:
-
-- reading files
-- writing files
-- editing files
-- listing directories
-- executing shell commands
-- web search
-- web fetch
-- analyzing images from the current user turn
-- extracting visible text from images in the current user turn
-- scheduling per-session cron jobs
-- long-term memory save
-- search over indexed history and knowledge when SQLite search is enabled, including metadata filters for stored web knowledge
-
-## Vision
-
-OpenSprite now includes a minimal image-analysis path built around the `analyze_image` tool.
-
-Images are still downloaded by the Telegram adapter, but they are no longer sent directly into the normal text-model chat call. Instead, the agent sees that the current turn contains images and decides whether to call `analyze_image`.
-
-This keeps image handling agent-centric:
-
-- the agent decides whether visual analysis is actually needed
-- skills can influence the instruction before the tool is called
-- the image provider can be swapped independently from the normal text model
-
-Minimal vision config:
+**中文：** 影像分析、語音轉文字、影片分析皆由此檔設定（亦可與主檔內嵌的 `vision`／`speech`／`video` 合併，以外部檔為準覆寫）。
 
 ```json
 {
@@ -523,77 +280,14 @@ Minimal vision config:
     "api_key": "YOUR_VISION_API_KEY",
     "model": "YOUR_MINIMAX_VISION_MODEL",
     "base_url": "YOUR_MINIMAX_BASE_URL"
-  }
-}
-```
-
-If `vision.enabled` is false, the `analyze_image` tool still exists, but it returns a clear error explaining that no vision provider is configured.
-
-Typical uses for `analyze_image`:
-
-- describe what is shown in a screenshot
-- inspect a UI issue from an image
-- explain a chart, diagram, or photographed content
-- analyze the first or second image in a multi-image turn with `image_index`
-
-For image turns where the main goal is text extraction, OpenSprite also exposes `ocr_image`.
-
-Typical uses for `ocr_image`:
-
-- read text from screenshots and photographed error messages
-- extract visible text from receipts, forms, or labels
-- capture document text before summarizing or reasoning about it
-
-The current minimal image toolset is intentionally narrow:
-
-- it currently covers general image analysis and OCR-style text extraction
-- it does not yet cover audio or video-specific media tools
-- it is designed so future media tools can follow the same tool + provider-adapter pattern
-
-## Audio
-
-OpenSprite now includes a minimal audio path built around the `transcribe_audio` tool.
-
-Telegram voice messages and audio attachments are downloaded into the current turn, but they are not forced into the normal text-model chat call. Instead, the agent sees that the turn contains audio and decides whether to call `transcribe_audio`.
-
-Minimal speech config:
-
-```json
-{
+  },
   "speech": {
     "enabled": true,
     "provider": "minimax",
     "api_key": "YOUR_SPEECH_API_KEY",
     "model": "YOUR_MINIMAX_SPEECH_MODEL",
     "base_url": "YOUR_MINIMAX_BASE_URL"
-  }
-}
-```
-
-If `speech.enabled` is false, the `transcribe_audio` tool still exists, but it returns a clear error explaining that no speech provider is configured.
-
-Typical uses for `transcribe_audio`:
-
-- transcribe a Telegram voice note into plain text
-- extract spoken content before summarizing or planning next steps
-- capture audio notes before feeding them into normal text reasoning
-
-The current minimal audio tool is intentionally narrow:
-
-- it focuses on speech-to-text only
-- it does not yet add audio understanding beyond transcription
-- it follows the same tool + provider-adapter pattern as image analysis
-
-## Video
-
-OpenSprite now includes a minimal video path built around the `analyze_video` tool.
-
-Telegram video messages, video notes, and animations are downloaded into the current turn, but they are not forced into the normal text-model chat call. Instead, the agent sees that the turn contains video and decides whether to call `analyze_video`.
-
-Minimal video config:
-
-```json
-{
+  },
   "video": {
     "enabled": true,
     "provider": "minimax",
@@ -604,207 +298,150 @@ Minimal video config:
 }
 ```
 
-If `video.enabled` is false, the `analyze_video` tool still exists, but it returns a clear error explaining that no video provider is configured.
+---
 
-Typical uses for `analyze_video`:
+## MCP servers · MCP 伺服器
 
-- inspect what happens in a short clip or screen recording
-- analyze a motion sequence or a visual step-by-step process
-- understand a video turn before deciding whether more detailed follow-up is needed
+**English:** Define servers in `mcp_servers.json` (transport types such as `stdio`, `sse`, `streamableHttp`; see `MCPServerConfig` in the codebase). The gateway connects to MCP on startup and exposes remote tools to the agent. The `configure_mcp` tool can update config through a guarded workflow and trigger reload (see `ConfigureMCPTool`).
 
-The current minimal video tool is intentionally narrow:
+**中文：** 在 `mcp_servers.json` 定義伺服器（支援 `stdio`、`sse`、`streamableHttp` 等型別，詳見 `MCPServerConfig`）。閘道啟動時會先連線 MCP，將遠端工具掛入代理。代理可使用 `configure_mcp` 在安全流程下更新設定並觸發重新載入（實際行為見 `ConfigureMCPTool`）。
 
-- it defines the video-analysis tool path and provider boundary
-- it does not yet add richer video-specific parsing or timeline segmentation
-- it follows the same tool + provider-adapter pattern as image and audio
+---
 
-## Scheduling
+## Subagents and skills · 子代理與 Skills
 
-OpenSprite includes a per-session `cron` tool for scheduling future agent work.
+**English**
 
-The first version supports three schedule types:
+- **`delegate`**: run a subtask with a built-in or custom subagent type; available types come from `subagent_prompts` (bundled + user home).
+- **`configure_subagent`**: add or update `~/.opensprite/subagent_prompts/<id>.md` (subject to safety and confirmation rules inside the tool).
+- **`read_skill` / `configure_skill`**: read or adjust skill markdown under workspace `skills` when the skills loader is enabled.
+- Main `agent` section controls **skill review** (optional extra LLM pass after the main reply to maintain skills; costs extra API usage).
 
-- `at`: run once at a specific ISO datetime
-- `every`: run repeatedly at a fixed interval in seconds
-- `cron`: run on a cron expression, optionally with a timezone
+**中文**
 
-Scheduled jobs are stored inside the current session workspace:
+- **`delegate`**：將子任務交給內建或自訂子代理類型執行；可用類型來自 `subagent_prompts` 與套件內建範本。
+- **`configure_subagent`**：新增或更新 `~/.opensprite/subagent_prompts/<id>.md`（需遵守工具內的安全與確認規則）。
+- **`read_skill`／`configure_skill`**：讀取或調整工作區 `skills` 下的技能說明（有啟用 Skills 載入器時）。
+- 主設定中 `agent` 區塊可控制 **skill review**（在主回覆後可選的額外 LLM 通過以維護 skills，會增加 API 成本）。
 
-```text
-~/.opensprite/workspace/chats/<channel>/<chat_id>/cron/jobs.json
-```
+---
 
-This means each session keeps its own schedule file and scheduled jobs do not mix across sessions.
+## Architecture · 架構摘要
 
-When a job triggers, OpenSprite runs a new agent turn using the stored job message. If the job was created with `deliver=true`, the result is sent back to the original chat channel.
+**English:** Agent-centric design with ports-and-adapters boundaries: **AgentLoop** orchestrates storage, context, execution, maintenance, and replies; **ExecutionEngine** runs the LLM/tool loop; **ToolResultPersistence** writes tool output back and optionally indexes; **tool_registration** wires default tools; **consolidation** maintains long-term memory and `USER.md`; **channels / llms / storage / search / media** isolate external systems.
 
-The gateway must be running for schedules to execute:
-
-```bash
-opensprite gateway
-```
-
-Or, on Linux, install the gateway as a user service:
-
-```bash
-opensprite service install
-```
-
-Typical `cron` tool usage patterns:
-
-- One-time reminder: `at="2026-04-10T09:00:00"`
-- Recurring interval: `every_seconds=1800`
-- Cron schedule: `cron_expr="0 9 * * 1-5", tz="Asia/Taipei"`
-
-Current actions exposed by the tool:
-
-- `add`
-- `list`
-- `remove`
-
-You can also manage schedules directly from the CLI:
-
-```bash
-# list one session's jobs
-opensprite cron list --session telegram:user-a
-
-# add a recurring interval job
-opensprite cron add \
-  --session telegram:user-a \
-  --message "Check weather and report back" \
-  --every-seconds 300
-
-# add a calendar-based cron job
-opensprite cron add \
-  --session telegram:user-a \
-  --message "Send a weekday reminder" \
-  --cron-expr "0 9 * * 1-5" \
-  --tz Asia/Taipei
-
-# add a one-time job
-opensprite cron add \
-  --session telegram:user-a \
-  --message "Remind me later" \
-  --at 2026-04-10T09:00:00
-
-# pause and re-enable a job
-opensprite cron pause --session telegram:user-a --job-id abc12345
-opensprite cron enable --session telegram:user-a --job-id abc12345
-
-# remove a job
-opensprite cron remove --session telegram:user-a --job-id abc12345
-```
-
-Inside chat sessions, these immediate cron commands are also available:
+**中文：** 採用代理為核心、連接埠與適配器分層：**AgentLoop** 負責訊息儲存、組上下文、執行引擎、維護與回覆；**ExecutionEngine** 負責 LLM 與工具迴圈；**ToolResultPersistence** 將工具輸出寫回並可選索引；**tool_registration** 註冊預設工具；**consolidation** 維護長期記憶與 `USER.md`；**channels／llms／storage／search／media** 為對外適配層。
 
 ```text
-/cron
-/cron help
-/cron add every <seconds> <message>
-/cron add at <iso-datetime> <message>
-/cron add cron "<expr>" [--tz <timezone>] <message>
-/cron list
-/cron pause <job_id>
-/cron enable <job_id>
-/cron remove <job_id>
+Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
+                                      |               |
+                                      |               -> ToolResultPersistence -> Storage / Search
+                                      -> Consolidation -> Memory / USER.md
 ```
 
-These commands are handled immediately by the queue layer, similar to `/stop` and `/reset`, so they do not wait behind the current session task queue.
+---
 
-Examples:
+## Storage · 儲存模式
 
-```text
-/cron add every 300 "Check weather and report back"
-/cron add at 2026-04-10T09:00:00 "Remind me later"
-/cron add cron "0 9 * * 1-5" --tz Asia/Taipei "Send weekday reminder"
-/cron pause abc12345
-/cron enable abc12345
-/cron remove abc12345
+**English:** `storage.type` is either `memory` (in-process only) or `sqlite` (database at `storage.path`).
+
+**中文：** `storage.type`：`memory` 僅行程內；`sqlite` 資料庫路徑見 `storage.path`。
+
+---
+
+## Web search and fetch · 網路搜尋與擷取
+
+**English:** `tools.web_search.provider` supports `brave`, `duckduckgo`, `tavily`, `searxng`, and `jina` (each needs the right API key or URL). `web_search` and `web_fetch` share a consistent JSON payload shape; when search indexing is on, payloads are stored in `knowledge_sources` for `search_knowledge`.
+
+**中文：** `tools.web_search` 可設定供應商：`brave`、`duckduckgo`、`tavily`、`searxng`、`jina`（各需對應 API 金鑰或 URL）。`web_search` 與 `web_fetch` 共用一致的 JSON 結果形狀；啟用搜尋索引時會寫入 `knowledge_sources` 供 `search_knowledge` 使用。
+
+---
+
+## Built-in tools · 內建工具（預設註冊）
+
+**English:** Filesystem read/write/edit/list, shell, `web_search`, `web_fetch`, `analyze_image`, `ocr_image`, `transcribe_audio`, `analyze_video`, `cron`, `save_memory`, history/knowledge search when SQLite search is enabled, **dynamic MCP tools**, **`delegate`**, **`configure_mcp` / `configure_subagent`**, and skill-related tools.
+
+**中文：** 讀寫／編輯檔案、列目錄、Shell、`web_search`、`web_fetch`、影像分析（`analyze_image`）、OCR（`ocr_image`）、語音轉文字（`transcribe_audio`）、影片分析（`analyze_video`）、排程（`cron`）、長期記憶（`save_memory`）、索引歷史／知識搜尋（SQLite 搜尋啟用時）、**MCP 動態工具**、**`delegate`**、**`configure_mcp`／`configure_subagent`**、Skills 相關工具等。
+
+---
+
+## Scheduling (cron) · 排程（Cron）
+
+**English:** Per-session jobs live under the chat workspace, e.g. `~/.opensprite/workspace/chats/<channel>/<chat_id>/cron/jobs.json`. Supported kinds include `at` (one-shot ISO time), `every` (fixed interval in seconds), and `cron` (cron expression with optional timezone). When a job fires, the agent runs again with the stored message; if the job was created with `deliver=true`, the reply is sent back to the original channel. The **gateway must be running** (or a Linux user service installed) for jobs to execute. CLI: `opensprite cron list|add|remove|pause|enable --session telegram:<chat_id> ...`. In Telegram you can use `/cron`, `/cron help`, `/cron add every 300 "message"`, etc. (handled immediately by the queue layer, like `/stop`).
+
+**中文：** 排程檔放在該工作階段的 workspace 內，例如 `~/.opensprite/workspace/chats/<channel>/<chat_id>/cron/jobs.json`。支援 `at`（單次 ISO 時間）、`every`（固定秒數間隔）、`cron`（cron 表達式，可帶時區）。觸發時以儲存訊息再跑一輪代理；若建立工作時 `deliver=true`，結果會送回原頻道。**閘道必須在執行中**（或 Linux 上已安裝 user service）排程才會跑。CLI：`opensprite cron list|add|remove|pause|enable --session telegram:<chat_id> ...`。Telegram 內可使用 `/cron`、`/cron help`、`/cron add every 300 "訊息"` 等（與 `/stop` 類似，由佇列層立即處理）。
+
+---
+
+## Search maintenance CLI · 搜尋維護 CLI（精簡）
+
+```powershell
+opensprite search status
+opensprite search rebuild
+opensprite search rebuild --chat-id telegram:user-a
+opensprite search retry-embeddings
+opensprite search refresh-embeddings
+opensprite search run-queue
+opensprite search benchmark --chat-id telegram:user-a --query "keyword" --strategy both --repeat 5
+opensprite search seed-demo
 ```
 
-## Project Layout
+**English:** Optional `sqlite-vec`: `python -m pip install -e ".[vector]"`. Candidate strategies `fts` / `vector` and `vector_backend` (`exact`, `sqlite_vec`, `auto`) behave as in code and `search.json` templates.
+
+**中文：** 向量後端可選 `sqlite-vec`：`python -m pip install -e ".[vector]"`。候選策略 `fts`／`vector` 與 `vector_backend`（`exact`、`sqlite_vec`、`auto`）行為以程式與 `search.json` 模板為準。
+
+---
+
+## Project layout · 專案目錄
 
 ```text
 src/opensprite/
-├── cli/            # Typer CLI entrypoints
-├── agent/          # Agent orchestration, execution, and maintenance services
-├── bus/            # Message queue and message models
-├── channels/       # External channel adapters
-├── config/         # Config schema and default template
-├── context/        # Bootstrap files, paths, workspace helpers
-├── documents/      # Managed markdown stores and consolidators
-├── llms/           # LLM provider implementations
-├── search/         # SQLite-backed search, indexing, and embeddings
-├── storage/        # Memory and SQLite storage providers
-├── tools/          # Built-in tool implementations
-├── utils/          # Logging and shared helpers
-├── __main__.py     # python -m opensprite entrypoint
-└── runtime.py      # Service startup logic
+├── cli/              # Typer CLI
+├── agent/            # Agent loop, execution, maintenance
+├── bus/              # Message queue
+├── channels/         # Channel adapters (Telegram)
+├── config/           # Config schema and JSON templates
+├── context/          # Paths, workspace, bootstrap
+├── documents/        # Documents and consolidators
+├── llms/             # LLM implementations
+├── media/            # Vision / speech / video routing
+├── search/           # SQLite search and embeddings
+├── storage/          # Storage backends
+├── tools/            # Built-in tools and MCP
+├── skills/           # Bundled skill examples
+├── subagent_prompts/ # Bundled subagent prompts
+├── utils/
+├── __main__.py
+└── runtime.py
 ```
 
-## Useful Commands
+---
 
-```bash
-# install package
+## Useful commands · 常用指令
+
+```powershell
 python -m pip install .
-
-# development install
-python -m pip install -e ".[dev]"
-
-# development install with sqlite-vec support
 python -m pip install -e ".[dev,vector]"
-
-# show help
 opensprite
-
-# initialize config and app directories
 opensprite onboard
-
-# initialize without prompts
 opensprite onboard --no-input
-
-# start gateway
+opensprite config validate
 opensprite gateway
-
-# inspect config/runtime status
 opensprite status
-
-# inspect status as JSON
 opensprite status --json
-
-# inspect search index and embedding job state
-opensprite search status
-
-# rebuild indexed history and knowledge
-opensprite search rebuild
-
-# retry failed or refresh stale embeddings
-opensprite search retry-embeddings
-opensprite search refresh-embeddings
-
-# run the embedding queue worker manually
-opensprite search run-queue
-
-# compare candidate strategies
-opensprite search benchmark --chat-id telegram:user-a --query "sqlite guide" --strategy both --repeat 5
-
-# seed synthetic benchmark data and compare without remote embeddings
-opensprite search seed-demo
-opensprite search benchmark --chat-id demo:search-benchmark --query "orchard irrigation" --strategy both --repeat 5 --demo-embeddings
-
-# module entrypoint
-python -m opensprite gateway
-
-# uninstall from current environment
 python -m pip uninstall opensprite
 ```
 
-## Notes
+---
 
-- `opensprite gateway` runs in the foreground
-- the package install flow does not create a virtual environment for you; activate one before installing if you want isolation
-- the repository root no longer needs a separate launcher script
+## Notes · 備註
 
-## License
+**English:** `opensprite gateway` does not daemonize. Create and activate a venv yourself if you want isolation. The repository root does not require a separate launcher script.
+
+**中文：** `opensprite gateway` 為前景程序，不自行 daemonize。虛擬環境需自行建立；套件不會代為建立 venv。儲存庫根目錄不需要額外啟動腳本。
+
+---
+
+## License · 授權
 
 MIT

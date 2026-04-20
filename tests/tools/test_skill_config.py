@@ -6,7 +6,6 @@ from opensprite.tools.skill_config import (
     MIN_SKILL_BODY_LEN,
     MIN_SKILL_DESCRIPTION_LEN,
     MIN_SKILL_DESCRIPTION_WORDS,
-    PROTECTED_SKILL_IDS,
     ConfigureSkillTool,
 )
 
@@ -21,30 +20,32 @@ _VALID_BODY = (
 )
 
 
-def test_configure_skill_lists_global_skills(tmp_path):
-    skills_dir = tmp_path / "skills"
-    (skills_dir / "alpha").mkdir(parents=True)
-    (skills_dir / "alpha" / "SKILL.md").write_text(
+def test_configure_skill_lists_skills(tmp_path):
+    skills_root = tmp_path / "home_skills"
+    chat_ws = tmp_path / "chat_session"
+    user_dir = chat_ws / "skills"
+    (user_dir / "alpha").mkdir(parents=True)
+    (user_dir / "alpha" / "SKILL.md").write_text(
         "---\nname: alpha\ndescription: First skill\n---\n\n# Alpha\n",
         encoding="utf-8",
     )
 
-    loader = SkillsLoader(default_skills_dir=skills_dir)
+    loader = SkillsLoader(default_skills_dir=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
-        workspace_resolver=lambda: tmp_path / "ws",
+        workspace_resolver=lambda: chat_ws,
     )
 
-    result = asyncio.run(tool.execute(action="list", scope="global"))
+    result = asyncio.run(tool.execute(action="list"))
     payload = json.loads(result)
 
-    assert payload["scope"] == "global"
-    assert payload["skills_dir"] == str(skills_dir.resolve())
+    assert "scope" not in payload
+    assert payload["skills_dir"] == str(user_dir.resolve())
     assert "alpha" in payload["skills"]
     assert payload["skills"]["alpha"]["description"] == "First skill"
 
 
-def test_configure_skill_add_upsert_and_get_chat_scope(tmp_path):
+def test_configure_skill_add_upsert_and_get(tmp_path):
     ws = tmp_path / "workspace"
     loader = SkillsLoader(default_skills_dir=tmp_path / "global_skills")
     tool = ConfigureSkillTool(
@@ -55,7 +56,6 @@ def test_configure_skill_add_upsert_and_get_chat_scope(tmp_path):
     created = asyncio.run(
         tool.execute(
             action="add",
-            scope="chat",
             skill_name="my-skill",
             description=_VALID_DESCRIPTION,
             body=_VALID_BODY,
@@ -66,7 +66,6 @@ def test_configure_skill_add_upsert_and_get_chat_scope(tmp_path):
     duplicate = asyncio.run(
         tool.execute(
             action="add",
-            scope="chat",
             skill_name="my-skill",
             description=_VALID_DESCRIPTION,
             body=_VALID_BODY,
@@ -77,7 +76,6 @@ def test_configure_skill_add_upsert_and_get_chat_scope(tmp_path):
     updated = asyncio.run(
         tool.execute(
             action="upsert",
-            scope="chat",
             skill_name="my-skill",
             description=_VALID_DESCRIPTION,
             body=(
@@ -91,28 +89,30 @@ def test_configure_skill_add_upsert_and_get_chat_scope(tmp_path):
     skill_file = ws / "skills" / "my-skill" / "SKILL.md"
     assert skill_file.is_file()
 
-    got = asyncio.run(tool.execute(action="get", scope="chat", skill_name="my-skill"))
+    got = asyncio.run(tool.execute(action="get", skill_name="my-skill"))
     payload = json.loads(got)
+    assert "scope" not in payload
     assert payload["skill_name"] == "my-skill"
     assert "Replaced body" in payload["content"]
 
 
-def test_configure_skill_remove_global(tmp_path):
-    skills_dir = tmp_path / "skills"
-    skill_dir = skills_dir / "gone"
+def test_configure_skill_remove(tmp_path):
+    skills_root = tmp_path / "home_skills"
+    chat_ws = tmp_path / "chat_session"
+    skill_dir = chat_ws / "skills" / "gone"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         "---\nname: gone\ndescription: x\n---\n\n# Gone\n",
         encoding="utf-8",
     )
 
-    loader = SkillsLoader(default_skills_dir=skills_dir)
+    loader = SkillsLoader(default_skills_dir=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
-        workspace_resolver=lambda: tmp_path / "ws",
+        workspace_resolver=lambda: chat_ws,
     )
 
-    result = asyncio.run(tool.execute(action="remove", scope="global", skill_name="gone"))
+    result = asyncio.run(tool.execute(action="remove", skill_name="gone"))
     assert "Removed skill" in result
     assert not skill_dir.exists()
 
@@ -125,7 +125,6 @@ def test_configure_skill_rejects_invalid_skill_id(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="My_Skill",
             description=_VALID_DESCRIPTION,
             body=_VALID_BODY,
@@ -142,7 +141,6 @@ def test_configure_skill_rejects_short_description(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="ok-skill",
             description="too short",
             body=_VALID_BODY,
@@ -159,7 +157,6 @@ def test_configure_skill_rejects_short_body(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="ok-skill",
             description=_VALID_DESCRIPTION,
             body="short",
@@ -178,7 +175,6 @@ def test_configure_skill_rejects_too_few_english_words(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="ok-skill",
             description=padded,
             body=_VALID_BODY,
@@ -200,7 +196,6 @@ def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="ok-skill",
             description=glue,
             body=_VALID_BODY,
@@ -209,19 +204,29 @@ def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
     assert "substantive" in out.lower()
 
 
-def test_configure_skill_rejects_mutating_protected_spec_skill(tmp_path):
-    tool = ConfigureSkillTool(
-        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
-        workspace_resolver=lambda: tmp_path / "ws",
+def test_configure_skill_can_shadow_system_skill_id(tmp_path):
+    """Session workspace skills may shadow a bundled system skill id."""
+    skills_root = tmp_path / "home_skills"
+    chat_ws = tmp_path / "chat_session"
+    (skills_root / "memory").mkdir(parents=True)
+    (skills_root / "memory" / "SKILL.md").write_text(
+        "---\nname: memory\ndescription: system memory skill\n---\n\n# System\n",
+        encoding="utf-8",
     )
-    for skill_name in sorted(PROTECTED_SKILL_IDS):
-        for action in ("add", "upsert", "remove"):
-            kwargs = {"action": action, "scope": "global", "skill_name": skill_name}
-            if action in ("add", "upsert"):
-                kwargs["description"] = _VALID_DESCRIPTION
-                kwargs["body"] = _VALID_BODY
-            out = asyncio.run(tool.execute(**kwargs))
-            assert "bundled system skill" in out.lower()
+    loader = SkillsLoader(default_skills_dir=skills_root)
+    tool = ConfigureSkillTool(skills_loader=loader, workspace_resolver=lambda: chat_ws)
+    out = asyncio.run(
+        tool.execute(
+            action="upsert",
+            skill_name="memory",
+            description=_VALID_DESCRIPTION,
+            body=_VALID_BODY,
+        )
+    )
+    assert "memory" in out and "Error" not in out
+    user_skill = chat_ws / "skills" / "memory" / "SKILL.md"
+    assert user_skill.is_file()
+    assert "System" not in user_skill.read_text(encoding="utf-8")
 
 
 def test_configure_skill_rejects_repetitive_description(tmp_path):
@@ -233,7 +238,6 @@ def test_configure_skill_rejects_repetitive_description(tmp_path):
     out = asyncio.run(
         tool.execute(
             action="add",
-            scope="global",
             skill_name="ok-skill",
             description=padded,
             body=_VALID_BODY,

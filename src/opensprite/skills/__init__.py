@@ -14,11 +14,13 @@ class Skill:
 
 
 class SkillsLoader:
-    """Load skills from global and optional personal/per-chat directories.
+    """Load skills from exactly two places:
 
-    Looks in two places:
-    - Default global skills: ~/.opensprite/skills/
-    - Optional personal/per-chat override: <chat-workspace>/skills/
+    1. The current **session workspace** ``.../skills/<skill_id>/SKILL.md`` (mutable; same
+       tree the filesystem tools use for this chat).
+    2. **Bundled** skills under ``~/.opensprite/skills/<skill_id>/SKILL.md`` (read-only for agents).
+
+    When the same skill id exists in both, the session workspace copy wins.
 
     Skills are intended for on-demand loading: the agent should first see the
     available skill names and descriptions, then load a full SKILL.md only when
@@ -29,27 +31,34 @@ class SkillsLoader:
         self,
         workspace: Path | None = None,
         *,
+        skills_root: Path | None = None,
         default_skills_dir: Path | None = None,
         personal_skills_dir: Path | None = None,
         custom_skills_dir: Path | None = None,
     ):
         self.workspace = Path(workspace).expanduser() if workspace else None
-        self.default_skills_dir = (
-            Path(default_skills_dir).expanduser()
-            if default_skills_dir is not None
+        root = skills_root if skills_root is not None else default_skills_dir
+        self.skills_root = (
+            Path(root).expanduser()
+            if root is not None
             else Path.home() / ".opensprite" / "skills"
         )
         personal_dir = personal_skills_dir if personal_skills_dir is not None else custom_skills_dir
         self.personal_skills_dir = Path(personal_dir).expanduser() if personal_dir is not None else None
 
+    @property
+    def default_skills_dir(self) -> Path:
+        """Backward-compatible alias: the app-home skills root (``~/.opensprite/skills``)."""
+        return self.skills_root
+
     def _resolve_personal_skills_dir(self, personal_skills_dir: Path | None = None) -> Path | None:
-        """Resolve the personal/per-chat skills directory for this request."""
+        """Resolve the session workspace ``skills/`` directory for this request."""
         if personal_skills_dir is not None:
             return Path(personal_skills_dir).expanduser()
         return self.personal_skills_dir
 
     def _load_skills_from_dir(self, skills_dir: Path) -> list[Skill]:
-        """Load skills from a directory."""
+        """Load skills from a directory (each immediate child with ``SKILL.md``)."""
         skills = []
         if not skills_dir.exists():
             return skills
@@ -107,26 +116,28 @@ class SkillsLoader:
         return frontmatter, body
 
     def _iter_skill_dirs(self, personal_skills_dir: Path | None = None) -> list[Path]:
-        """Return unique skill directories in priority order."""
-        candidates = [self._resolve_personal_skills_dir(personal_skills_dir), self.default_skills_dir]
+        """Session ``skills/`` first, then app-home ``~/.opensprite/skills/``."""
         dirs: list[Path] = []
         seen: set[Path] = set()
 
-        for candidate in candidates:
-            if candidate is None or not candidate.exists():
-                continue
-
+        def add(candidate: Path | None) -> None:
+            if candidate is None:
+                return
+            if not candidate.is_dir():
+                return
             resolved = candidate.resolve()
             if resolved in seen:
-                continue
-
+                return
             seen.add(resolved)
-            dirs.append(candidate)
+            dirs.append(resolved)
+
+        add(self._resolve_personal_skills_dir(personal_skills_dir))
+        add(self.skills_root)
 
         return dirs
 
     def get_skills(self, personal_skills_dir: Path | None = None) -> list[Skill]:
-        """Get all available skills from personal then global directories."""
+        """Session workspace skills override bundled app-home skills for duplicate names."""
         skills: list[Skill] = []
         seen_names: set[str] = set()
 
