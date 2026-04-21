@@ -77,6 +77,7 @@ class OpenRouterLLM(LLMProvider):
         max_tokens: int = 2048,
         top_p: float | None = None,
         frequency_penalty: float | None = None,
+        presence_penalty: float | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenRouter Chat Completions API
@@ -109,6 +110,8 @@ class OpenRouterLLM(LLMProvider):
             params["top_p"] = top_p
         if frequency_penalty is not None:
             params["frequency_penalty"] = frequency_penalty
+        if presence_penalty is not None:
+            params["presence_penalty"] = presence_penalty
 
         # 加入 tools 如果有
         if tools:

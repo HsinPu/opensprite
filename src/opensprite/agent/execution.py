@@ -88,6 +88,7 @@ class ExecutionEngine:
         chat_max_tokens: int = 2048,
         chat_top_p: float | None = None,
         chat_frequency_penalty: float | None = None,
+        chat_presence_penalty: float | None = None,
     ):
         self.provider = provider
         self.tools = tools
@@ -95,6 +96,7 @@ class ExecutionEngine:
         self.chat_max_tokens = chat_max_tokens
         self.chat_top_p = chat_top_p
         self.chat_frequency_penalty = chat_frequency_penalty
+        self.chat_presence_penalty = chat_presence_penalty
         self.tools_config = tools_config or ToolsConfig()
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
@@ -235,6 +237,7 @@ class ExecutionEngine:
                     max_tokens=self.chat_max_tokens,
                     top_p=self.chat_top_p,
                     frequency_penalty=self.chat_frequency_penalty,
+                    presence_penalty=self.chat_presence_penalty,
                 )
             except Exception:
                 logger.exception(

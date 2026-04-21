@@ -269,6 +269,7 @@ class AgentLoop:
         llm_chat_max_tokens: int = 2048,
         llm_chat_top_p: float | None = None,
         llm_chat_frequency_penalty: float | None = None,
+        llm_chat_presence_penalty: float | None = None,
         log_config: LogConfig | None = None,
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
@@ -284,6 +285,7 @@ class AgentLoop:
         self.llm_chat_max_tokens = llm_chat_max_tokens
         self.llm_chat_top_p = llm_chat_top_p
         self.llm_chat_frequency_penalty = llm_chat_frequency_penalty
+        self.llm_chat_presence_penalty = llm_chat_presence_penalty
         self.memory_config = memory_config or MemoryConfig()
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
@@ -460,6 +462,7 @@ class AgentLoop:
             chat_max_tokens=self.llm_chat_max_tokens,
             chat_top_p=self.llm_chat_top_p,
             chat_frequency_penalty=self.llm_chat_frequency_penalty,
+            chat_presence_penalty=self.llm_chat_presence_penalty,
         )
 
     def _setup_user_profile_update(self) -> UserProfileUpdateService:

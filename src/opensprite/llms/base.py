@@ -96,6 +96,7 @@ class LLMProvider(ABC):
         max_tokens: int = 2048,
         top_p: float | None = None,
         frequency_penalty: float | None = None,
+        presence_penalty: float | None = None,
     ) -> LLMResponse:
         """
         發送對話請求到 LLM
@@ -108,6 +109,7 @@ class LLMProvider(ABC):
             max_tokens: 最大回覆長度
             top_p: nucleus sampling（None 表示由實作決定是否省略）
             frequency_penalty: 重複用詞懲罰，-2.0～2.0（None 表示由實作決定是否省略）
+            presence_penalty: 是否鼓勵新主題／少重複已出現概念，-2.0～2.0（None 表示由實作決定是否省略）
         
         回傳：
             LLMResponse: 包含回覆內容和使用的模型
