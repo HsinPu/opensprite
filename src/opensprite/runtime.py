@@ -186,6 +186,8 @@ async def create_agent(config: Config):
         storage,
         memory_config=config.memory,
         tools_config=config.tools,
+        llm_chat_temperature=config.llm.temperature,
+        llm_chat_max_tokens=config.llm.max_tokens,
         log_config=config.log,
         search_store=search_store,
         search_config=config.search,

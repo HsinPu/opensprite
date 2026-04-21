@@ -84,9 +84,13 @@ class ExecutionEngine:
         format_log_preview: Callable[..., str],
         summarize_messages: Callable[..., str],
         sanitize_response_content: Callable[[str], str],
+        chat_temperature: float = 0.7,
+        chat_max_tokens: int = 2048,
     ):
         self.provider = provider
         self.tools = tools
+        self.chat_temperature = chat_temperature
+        self.chat_max_tokens = chat_max_tokens
         self.tools_config = tools_config or ToolsConfig()
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
@@ -223,6 +227,8 @@ class ExecutionEngine:
                 response = await self.provider.chat(
                     messages=chat_messages,
                     tools=tools,
+                    temperature=self.chat_temperature,
+                    max_tokens=self.chat_max_tokens,
                 )
             except Exception:
                 logger.exception(
