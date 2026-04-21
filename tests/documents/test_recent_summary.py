@@ -14,7 +14,7 @@ class FakeProvider:
         self.content = content
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append({"messages": messages, "model": model})
         return LLMResponse(content=self.content, model=model or "fake-model")
 

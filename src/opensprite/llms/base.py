@@ -93,7 +93,9 @@ class LLMProvider(ABC):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048
+        max_tokens: int = 2048,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
     ) -> LLMResponse:
         """
         發送對話請求到 LLM
@@ -104,6 +106,8 @@ class LLMProvider(ABC):
             model: 模型名稱（可選，預設用 Provider 的預設模型）
             temperature: 創意程度
             max_tokens: 最大回覆長度
+            top_p: nucleus sampling（None 表示由實作決定是否省略）
+            frequency_penalty: 重複用詞懲罰，-2.0～2.0（None 表示由實作決定是否省略）
         
         回傳：
             LLMResponse: 包含回覆內容和使用的模型

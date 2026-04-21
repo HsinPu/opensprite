@@ -78,7 +78,9 @@ class MiniMaxLLM(LLMProvider):
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048
+        max_tokens: int = 2048,
+        top_p: float | None = None,
+        frequency_penalty: float | None = None,
     ) -> LLMResponse:
         """
         呼叫 MiniMax Chat Completions API
@@ -130,7 +132,11 @@ class MiniMaxLLM(LLMProvider):
             "temperature": temperature,
             "max_tokens": max_tokens
         }
-        
+        if top_p is not None:
+            params["top_p"] = top_p
+        if frequency_penalty is not None:
+            params["frequency_penalty"] = frequency_penalty
+
         # 加入 tools 如果有
         if tools:
             params["tools"] = tools

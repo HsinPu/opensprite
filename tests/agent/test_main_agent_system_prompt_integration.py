@@ -31,7 +31,7 @@ class CapturingProvider:
     def __init__(self) -> None:
         self.calls: list[list] = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append(list(messages))
         return LLMResponse(content="done", model="fake-model")
 

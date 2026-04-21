@@ -3,7 +3,9 @@
     "providers_file": "llm.providers.json",
     "default": null,
     "temperature": 0.7,
-    "max_tokens": 8192
+    "max_tokens": 8192,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0
   },
   "storage": {
     "type": "sqlite",

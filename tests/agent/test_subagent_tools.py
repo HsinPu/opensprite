@@ -73,7 +73,7 @@ class FakeProvider:
     def __init__(self):
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         if len(self.calls) == 1:
             return LLMResponse(

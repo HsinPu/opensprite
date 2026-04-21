@@ -32,7 +32,7 @@ class RecordingProvider:
     def __init__(self):
         self.system_prompts = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.system_prompts.append(str(messages[0].content))
         return LLMResponse(content=f"reply-{len(self.system_prompts)}", model="fake-model")
 

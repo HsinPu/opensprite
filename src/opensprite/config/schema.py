@@ -25,6 +25,8 @@ class LLMsConfig(BaseModel):
     base_url: str | None = None
     temperature: float
     max_tokens: int
+    top_p: float = Field(default=1.0, ge=0.0, le=1.0)
+    frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
 
     def get_active(self) -> ProviderConfig:
         """Get the active provider configuration."""
@@ -892,6 +894,8 @@ class Config:
                 "default": self.llm.default,
                 "temperature": self.llm.temperature,
                 "max_tokens": self.llm.max_tokens,
+                "top_p": self.llm.top_p,
+                "frequency_penalty": self.llm.frequency_penalty,
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels_file": self.channels_file,

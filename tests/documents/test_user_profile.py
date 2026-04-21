@@ -22,7 +22,7 @@ class FakeProvider:
     def __init__(self):
         self.prompts = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         prompt = messages[1]["content"]
         self.prompts.append(prompt)
         if "dark mode" in prompt:

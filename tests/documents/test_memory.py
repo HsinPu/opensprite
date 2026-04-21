@@ -21,7 +21,7 @@ class FakeProvider:
         self.memory_update = memory_update
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append({"messages": messages, "tools": tools, "model": model})
         return LLMResponse(
             content="",

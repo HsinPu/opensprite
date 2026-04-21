@@ -27,7 +27,7 @@ class FakeContextBuilder:
 
 
 class FakeProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048):
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         raise AssertionError("provider.chat should not be called")
 
     def get_default_model(self) -> str:
