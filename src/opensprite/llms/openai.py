@@ -4,7 +4,7 @@ opensprite/llms/openai.py - OpenAI LLM 實作
 實作 LLMProvider 介面，使用 OpenAI API（或相容 API 如 OpenRouter、vLLM）
 
 """
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
 from .tool_args import parse_tool_arguments
@@ -70,10 +70,12 @@ class OpenAILLM(LLMProvider):
         top_p: float | None = None,
         frequency_penalty: float | None = None,
         presence_penalty: float | None = None,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenAI Chat Completions API
         """
+        _ = status_callback
         # 轉換成 OpenAI 格式
         api_messages = []
         for m in messages:

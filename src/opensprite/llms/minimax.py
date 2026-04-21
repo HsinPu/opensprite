@@ -4,7 +4,9 @@ opensprite/llms/minimax.py - MiniMax LLM 實作
 實作 LLMProvider 介面，使用 MiniMax API
 官網：https://www.minimax.io/
 """
-from typing import Any
+import asyncio
+import random
+from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
 from .tool_args import parse_tool_arguments
@@ -41,6 +43,22 @@ def _count_system_reminders(value: Any) -> int:
     return _coerce_content(value).count("<system-reminder>")
 
 
+def _is_minimax_overloaded_error(exc: BaseException) -> bool:
+    """MiniMax 在流量過載時回傳 HTTP 529（OpenAI SDK 為 InternalServerError）。"""
+    code = getattr(exc, "status_code", None)
+    if code == 529:
+        return True
+    lowered = str(exc).lower()
+    if "overloaded_error" in lowered or "high traffic detected" in lowered:
+        return True
+    body = getattr(exc, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error")
+        if isinstance(err, dict) and err.get("type") == "overloaded_error":
+            return True
+    return False
+
+
 class MiniMaxLLM(LLMProvider):
     """
     MiniMax LLM 實作
@@ -71,6 +89,52 @@ class MiniMaxLLM(LLMProvider):
             api_key=api_key,
             base_url="https://api.minimax.io/v1"
         )
+
+    async def _chat_completions_create(
+        self,
+        params: dict[str, Any],
+        *,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
+    ) -> Any:
+        """呼叫 chat completions；遇 MiniMax 529（overloaded_error）時採指數退避重試。"""
+        from openai import InternalServerError
+
+        max_attempts = 5
+        base_delay_sec = 2.0
+
+        for attempt in range(max_attempts):
+            try:
+                return await self.client.chat.completions.create(**params)
+            except InternalServerError as e:
+                if not _is_minimax_overloaded_error(e):
+                    raise
+                if attempt >= max_attempts - 1:
+                    logger.error(
+                        "MiniMax API 流量過載（529）已重試 {} 次仍失敗；可稍後再試、升級方案或使用高速模型："
+                        "https://platform.minimax.io/subscribe/token-plan | {}",
+                        max_attempts,
+                        e,
+                    )
+                    raise
+                delay = base_delay_sec * (2**attempt) + random.uniform(0, 1.0)
+                logger.warning(
+                    "MiniMax API 流量過載（529），{:.1f} 秒後重試（第 {}／{} 次）",
+                    delay,
+                    attempt + 1,
+                    max_attempts,
+                )
+                if status_callback is not None:
+                    notice = (
+                        "MiniMax 目前流量較高（HTTP 529），"
+                        f"約 {delay:.0f} 秒後會自動重試（第 {attempt + 1}／{max_attempts} 次）。"
+                        "若經常發生，可考慮升級方案或使用高速模型："
+                        "https://platform.minimax.io/subscribe/token-plan"
+                    )
+                    try:
+                        await status_callback(notice)
+                    except Exception as cb_err:
+                        logger.warning("MiniMax status_callback 失敗（仍會繼續重試）：{}", cb_err)
+                await asyncio.sleep(delay)
     
     async def chat(
         self, 
@@ -82,6 +146,7 @@ class MiniMaxLLM(LLMProvider):
         top_p: float | None = None,
         frequency_penalty: float | None = None,
         presence_penalty: float | None = None,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 MiniMax Chat Completions API
@@ -145,8 +210,8 @@ class MiniMaxLLM(LLMProvider):
             params["tools"] = tools
             params["tool_choice"] = "auto"
         
-        # 呼叫 API
-        response = await self.client.chat.completions.create(**params)
+        # 呼叫 API（含 529 過載重試；可選通知使用者後再退避）
+        response = await self._chat_completions_create(params, status_callback=status_callback)
         choices = getattr(response, "choices", None)
         logger.info(
             "MiniMax response summary: model={}, choices_type={}, choices_len={}",

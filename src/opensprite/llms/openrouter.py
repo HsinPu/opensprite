@@ -4,7 +4,7 @@ opensprite/llms/openrouter.py - OpenRouter LLM 實作
 實作 LLMProvider 介面，使用 OpenRouter API
 OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 """
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
 from .tool_args import parse_tool_arguments
@@ -78,10 +78,12 @@ class OpenRouterLLM(LLMProvider):
         top_p: float | None = None,
         frequency_penalty: float | None = None,
         presence_penalty: float | None = None,
+        status_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenRouter Chat Completions API
         """
+        _ = status_callback
         # 轉換成 OpenAI 格式
         api_messages = []
         for m in messages:

@@ -256,6 +256,35 @@ class AgentLoop:
 
         return _hook
 
+    def _make_llm_status_hook(
+        self,
+        *,
+        channel: str | None,
+        transport_chat_id: str | None,
+        session_chat_id: str,
+        enabled: bool,
+    ) -> Callable[[str], Awaitable[None]] | None:
+        """在 LLM 長時間等待或重試前，對使用者發送短暫狀態（與工具進度相同走 MessageBus）。"""
+        if not enabled or not self._message_bus or not channel or transport_chat_id is None:
+            return None
+        bus = self._message_bus
+        ch = channel
+        tid = str(transport_chat_id)
+        sid = session_chat_id
+
+        async def _hook(text: str) -> None:
+            await bus.publish_outbound(
+                OutboundMessage(
+                    channel=ch,
+                    chat_id=tid,
+                    session_chat_id=sid,
+                    content=text,
+                    metadata={"interim": True, "kind": "llm_wait"},
+                )
+            )
+
+        return _hook
+
     def __init__(
         self,
         config: AgentConfig,
@@ -779,6 +808,7 @@ class AgentLoop:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
     ) -> ExecutionResult:
@@ -790,6 +820,7 @@ class AgentLoop:
             tool_result_chat_id=tool_result_chat_id,
             tool_registry=tool_registry,
             on_tool_before_execute=on_tool_before_execute,
+            on_llm_status=on_llm_status,
             refresh_system_prompt=refresh_system_prompt,
             max_tool_iterations=max_tool_iterations,
         )
@@ -957,12 +988,19 @@ class AgentLoop:
             session_chat_id=chat_id,
             enabled=emit_tool_progress,
         )
+        on_llm_status = self._make_llm_status_hook(
+            channel=channel,
+            transport_chat_id=transport_chat_id,
+            session_chat_id=chat_id,
+            enabled=emit_tool_progress,
+        )
         return await self._execute_messages(
             chat_id,
             chat_messages,
             allow_tools=allow_tools,
             tool_result_chat_id=chat_id if allow_tools else None,
             on_tool_before_execute=on_tool_before_execute,
+            on_llm_status=on_llm_status,
             refresh_system_prompt=lambda: self._context_builder.build_system_prompt(chat_id),
         )
 

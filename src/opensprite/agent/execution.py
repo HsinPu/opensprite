@@ -204,6 +204,7 @@ class ExecutionEngine:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
     ) -> ExecutionResult:
@@ -238,6 +239,7 @@ class ExecutionEngine:
                     top_p=self.chat_top_p,
                     frequency_penalty=self.chat_frequency_penalty,
                     presence_penalty=self.chat_presence_penalty,
+                    status_callback=on_llm_status,
                 )
             except Exception:
                 logger.exception(
