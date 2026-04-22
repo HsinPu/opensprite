@@ -2,6 +2,9 @@
 
 import asyncio
 import re
+import shlex
+import shutil
+import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -32,6 +35,60 @@ def _build_workspace_resolver(
 
     root = _resolve_workspace_root(workspace)
     return lambda: root
+
+
+def _strip_shell_line_background_ampersand(stripped: str) -> tuple[str, bool]:
+    """
+    Detect a single shell line that ends in a background job `&` (not `&&`).
+
+    Returns (text_before_trailing_ampersand, is_background_line).
+    """
+    if not stripped or stripped.startswith("#"):
+        return stripped, False
+    if stripped.endswith("&&"):
+        return stripped, False
+    if not stripped.endswith("&"):
+        return stripped, False
+    return stripped[:-1].rstrip(), True
+
+
+def _rewrite_background_command(command: str) -> str:
+    """
+    On Unix, rewrite lines that end with shell background `&` so the job does not
+    inherit the exec tool's stdout/stderr pipes (avoids hung pipe drain).
+
+    Uses `setsid` when available, otherwise `sh -c`, with stdin/stdout/stderr
+    attached to /dev/null for the detached wrapper; foreground lines are unchanged.
+    """
+    if sys.platform == "win32":
+        return command
+
+    lines = command.splitlines(keepends=True)
+    out: list[str] = []
+    for line in lines:
+        if line.endswith("\r\n"):
+            nl, core = "\r\n", line[:-2]
+        elif line.endswith("\n"):
+            nl, core = "\n", line[:-1]
+        else:
+            nl, core = "", line
+
+        stripped = core.strip()
+        inner, is_bg = _strip_shell_line_background_ampersand(stripped)
+        if not is_bg or not inner.strip():
+            out.append(line)
+            continue
+
+        lead = core[: len(core) - len(core.lstrip())]
+        inner_q = shlex.quote(inner)
+        setsid_path = shutil.which("setsid")
+        if setsid_path:
+            wrapped = f"{shlex.quote(setsid_path)} sh -c {inner_q} </dev/null >/dev/null 2>&1 &"
+        else:
+            wrapped = f"sh -c {inner_q} </dev/null >/dev/null 2>&1 &"
+        out.append(f"{lead}{wrapped}{nl}")
+
+    return "".join(out)
 
 
 class ExecTool(Tool):
@@ -135,6 +192,7 @@ class ExecTool(Tool):
         
         try:
             workspace = self._get_workspace()
+            command = _rewrite_background_command(command)
             # Security: run in workspace directory
             process = await asyncio.create_subprocess_shell(
                 command,
