@@ -299,6 +299,7 @@ class AgentLoop:
         llm_chat_top_p: float | None = None,
         llm_chat_frequency_penalty: float | None = None,
         llm_chat_presence_penalty: float | None = None,
+        llm_pass_decoding_params: bool = True,
         log_config: LogConfig | None = None,
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
@@ -315,6 +316,7 @@ class AgentLoop:
         self.llm_chat_top_p = llm_chat_top_p
         self.llm_chat_frequency_penalty = llm_chat_frequency_penalty
         self.llm_chat_presence_penalty = llm_chat_presence_penalty
+        self.llm_pass_decoding_params = llm_pass_decoding_params
         self.memory_config = memory_config or MemoryConfig()
         self.tools_config = tools_config or ToolsConfig()
         self.log_config = log_config or LogConfig()
@@ -473,6 +475,7 @@ class AgentLoop:
             provider=self.provider,
             threshold=self.memory_config.threshold,
             token_threshold=self.memory_config.token_threshold,
+            memory_llm=self.memory_config.llm,
         )
 
     def _setup_execution_engine(self) -> ExecutionEngine:
@@ -492,6 +495,7 @@ class AgentLoop:
             chat_top_p=self.llm_chat_top_p,
             chat_frequency_penalty=self.llm_chat_frequency_penalty,
             chat_presence_penalty=self.llm_chat_presence_penalty,
+            pass_decoding_params=self.llm_pass_decoding_params,
         )
 
     def _setup_user_profile_update(self) -> UserProfileUpdateService:

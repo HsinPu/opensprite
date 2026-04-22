@@ -89,6 +89,7 @@ class ExecutionEngine:
         chat_top_p: float | None = None,
         chat_frequency_penalty: float | None = None,
         chat_presence_penalty: float | None = None,
+        pass_decoding_params: bool = True,
     ):
         self.provider = provider
         self.tools = tools
@@ -97,6 +98,7 @@ class ExecutionEngine:
         self.chat_top_p = chat_top_p
         self.chat_frequency_penalty = chat_frequency_penalty
         self.chat_presence_penalty = chat_presence_penalty
+        self.pass_decoding_params = pass_decoding_params
         self.tools_config = tools_config or ToolsConfig()
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
@@ -231,14 +233,22 @@ class ExecutionEngine:
                 f"tools={'on' if tools else 'off'} tail={self.summarize_messages(chat_messages)}"
             )
             try:
+                if self.pass_decoding_params:
+                    dec_temp = self.chat_temperature
+                    dec_max = self.chat_max_tokens
+                    dec_top_p = self.chat_top_p
+                    dec_freq = self.chat_frequency_penalty
+                    dec_pres = self.chat_presence_penalty
+                else:
+                    dec_temp = dec_max = dec_top_p = dec_freq = dec_pres = None
                 response = await self.provider.chat(
                     messages=chat_messages,
                     tools=tools,
-                    temperature=self.chat_temperature,
-                    max_tokens=self.chat_max_tokens,
-                    top_p=self.chat_top_p,
-                    frequency_penalty=self.chat_frequency_penalty,
-                    presence_penalty=self.chat_presence_penalty,
+                    temperature=dec_temp,
+                    max_tokens=dec_max,
+                    top_p=dec_top_p,
+                    frequency_penalty=dec_freq,
+                    presence_penalty=dec_pres,
                     status_callback=on_llm_status,
                 )
             except Exception:

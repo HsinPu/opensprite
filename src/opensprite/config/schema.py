@@ -28,6 +28,8 @@ class LLMsConfig(BaseModel):
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     frequency_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
     presence_penalty: float = Field(default=0.0, ge=-2.0, le=2.0)
+    # 主對話（ExecutionEngine）呼叫 LLM 時是否帶入 temperature / max_tokens / top_p / penalties
+    pass_decoding_params: bool = True
 
     def get_active(self) -> ProviderConfig:
         """Get the active provider configuration."""
@@ -196,10 +198,22 @@ class ToolsConfig(BaseModel):
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
 
+class MemoryLlmConfig(BaseModel):
+    """LLM 解碼參數：用於 long-term memory（MEMORY.md）合併時的 API 呼叫。"""
+
+    pass_decoding_params: bool = True
+    temperature: float = 0.7
+    max_tokens: int = 2048
+    top_p: float | None = None
+    frequency_penalty: float | None = None
+    presence_penalty: float | None = None
+
+
 class MemoryConfig(BaseModel):
     """Memory configurations."""
     threshold: int = 50  # Trigger consolidation after this many messages
     token_threshold: int = 120000
+    llm: MemoryLlmConfig = Field(default_factory=MemoryLlmConfig)
 
 
 class UserProfileConfig(BaseModel):
@@ -898,6 +912,7 @@ class Config:
                 "top_p": self.llm.top_p,
                 "frequency_penalty": self.llm.frequency_penalty,
                 "presence_penalty": self.llm.presence_penalty,
+                "pass_decoding_params": self.llm.pass_decoding_params,
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels_file": self.channels_file,
@@ -923,6 +938,7 @@ class Config:
             "memory": {
                 "threshold": self.memory.threshold,
                 "token_threshold": self.memory.token_threshold,
+                "llm": self.memory.llm.model_dump(),
             },
             "user_profile": {
                 "enabled": self.user_profile.enabled,

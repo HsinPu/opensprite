@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..config.schema import MemoryLlmConfig
 from ..context.paths import get_memory_file
 from ..utils import count_text_tokens
 from ..utils.log import logger
@@ -136,6 +137,8 @@ async def consolidate(
     messages: list[dict[str, Any]],
     provider,
     model: str,
+    *,
+    memory_llm: MemoryLlmConfig | None = None,
 ) -> bool:
     """Consolidate old messages into per-chat memory via the active LLM."""
     if not messages:
@@ -170,6 +173,24 @@ Rules:
 Required memory template:
 {_MEMORY_TEMPLATE}"""
 
+    llm = memory_llm or MemoryLlmConfig()
+    if llm.pass_decoding_params:
+        dec_kw: dict[str, Any] = {
+            "temperature": llm.temperature,
+            "max_tokens": llm.max_tokens,
+            "top_p": llm.top_p,
+            "frequency_penalty": llm.frequency_penalty,
+            "presence_penalty": llm.presence_penalty,
+        }
+    else:
+        dec_kw = {
+            "temperature": None,
+            "max_tokens": None,
+            "top_p": None,
+            "frequency_penalty": None,
+            "presence_penalty": None,
+        }
+
     try:
         response = await provider.chat(
             messages=[
@@ -184,6 +205,7 @@ Required memory template:
             ],
             tools=_SAVE_MEMORY_TOOL,
             model=model,
+            **dec_kw,
         )
 
         if not response.tool_calls:

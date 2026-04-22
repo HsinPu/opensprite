@@ -191,6 +191,7 @@ async def create_agent(config: Config):
         llm_chat_top_p=config.llm.top_p,
         llm_chat_frequency_penalty=config.llm.frequency_penalty,
         llm_chat_presence_penalty=config.llm.presence_penalty,
+        llm_pass_decoding_params=config.llm.pass_decoding_params,
         log_config=config.log,
         search_store=search_store,
         search_config=config.search,

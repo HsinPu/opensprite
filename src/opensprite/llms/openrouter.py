@@ -73,8 +73,8 @@ class OpenRouterLLM(LLMProvider):
         messages: list[ChatMessage], 
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
         top_p: float | None = None,
         frequency_penalty: float | None = None,
         presence_penalty: float | None = None,
@@ -101,13 +101,14 @@ class OpenRouterLLM(LLMProvider):
                     msg["tool_calls"] = m.tool_calls
             api_messages.append(msg)
         
-        # API 參數
-        params = {
+        params: dict[str, Any] = {
             "model": model or self.default_model,
             "messages": api_messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens
         }
+        if temperature is not None:
+            params["temperature"] = temperature
+        if max_tokens is not None:
+            params["max_tokens"] = max_tokens
         if top_p is not None:
             params["top_p"] = top_p
         if frequency_penalty is not None:

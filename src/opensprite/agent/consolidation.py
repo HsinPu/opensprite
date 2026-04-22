@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..config.schema import MemoryLlmConfig
 from ..documents.memory import MemoryStore, consolidate
 from ..documents.user_profile import UserProfileConsolidator
 from ..llms import LLMProvider
@@ -23,12 +24,14 @@ class MemoryConsolidationService:
         provider: LLMProvider,
         threshold: int,
         token_threshold: int = 0,
+        memory_llm: MemoryLlmConfig | None = None,
     ):
         self.storage = storage
         self.memory_store = memory_store
         self.provider = provider
         self.threshold = threshold
         self.token_threshold = token_threshold
+        self.memory_llm = memory_llm or MemoryLlmConfig()
 
     @staticmethod
     def _to_message_dicts(messages: list[StoredMessage | dict[str, Any]]) -> list[dict[str, str]]:
@@ -73,6 +76,7 @@ class MemoryConsolidationService:
                 messages=pending_messages,
                 provider=self.provider,
                 model=self.provider.get_default_model(),
+                memory_llm=self.memory_llm,
             )
             if success:
                 await self.storage.set_consolidated_index(chat_id, message_count)
