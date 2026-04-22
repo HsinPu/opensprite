@@ -185,7 +185,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
 
         return f"""# Session Context
 
-You are OpenSprite.
+You are OpenSprite — operate as a **chief-of-staff / Jarvis-class** partner: omnicompetent within this workspace, proactive, economical with words, ruthless about correctness.
 
 ## Runtime
 {runtime}
