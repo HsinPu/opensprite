@@ -36,9 +36,9 @@ This file defines when to use tools, how to choose between them, and what constr
   - Dangerous commands and obvious destructive patterns are blocked.
   - If a command could still cause irreversible or external side effects, ask first.
   - **Stdout/stderr are piped** from the shell subprocess; there is no interactive stdin (commands that wait for TTY input will stall or time out).
-  - **Unix only**: if a **line** ends with shell background `&` (and not `&&`), `exec` rewrites that line so the job is started under `setsid` (when available) or `sh -c`, with stdin/stdout/stderr redirected to `/dev/null` for that job. This avoids background children inheriting the tool’s pipes and blocking completion; output from those background lines is not captured (use `>>/path/to.log 2>&1` **inside** the command before the trailing `&` if logs are needed).
-  - **Windows**: there is no automatic rewrite; long-running `start /b` or similar can still interact badly with piped stdout/stderr—prefer explicit log paths or a separate process.
-  - Prefer a **separate** `exec` (or an out-of-band process) when you need reliable log capture or lifecycle control for a dev server; use combined lines mainly for quick smoke checks.
+  - **Background `&` and shell wrappers** (`nohup`, `disown`, `setsid`) are **rejected** in `exec`: they fight piped stdout/stderr and hang or lose output. Start long-lived servers **outside** `exec`, then use short follow-up `exec` calls (e.g. `curl`) for checks.
+  - Commands that **look like long-lived dev servers** (e.g. `uvicorn`, `vite`, `npm run dev`, `python -m http.server`, …) are rejected unless they are clearly `--help` / `--version` style invocations.
+  - **Bash compound fix**: `A && B &` / `A || B &` is rewritten internally to `A && { B & }` / `A || { B & }` before running (avoids a subshell-wait trap). This does **not** bypass the rules above when the original command still used shell `&` or a blocked server pattern.
 
 ## External Knowledge Tools
 

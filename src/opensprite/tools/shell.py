@@ -2,9 +2,6 @@
 
 import asyncio
 import re
-import shlex
-import shutil
-import sys
 from pathlib import Path
 from typing import Any, Callable
 
@@ -37,58 +34,228 @@ def _build_workspace_resolver(
     return lambda: root
 
 
-def _strip_shell_line_background_ampersand(stripped: str) -> tuple[str, bool]:
+# ---------------------------------------------------------------------------
+# Bash `A && B &` compound-background rewrite
+# Adapted from hermes-agent/tools/terminal_tool.py::_rewrite_compound_background
+# (same project author; keeps `&&` / `||` semantics while avoiding subshell-wait).
+# ---------------------------------------------------------------------------
+
+
+def _read_shell_token(command: str, start: int) -> tuple[str, int]:
+    """Read one shell token, preserving quotes/escapes, starting at *start*."""
+    i = start
+    n = len(command)
+
+    while i < n:
+        ch = command[i]
+        if ch.isspace() or ch in ";|&()":
+            break
+        if ch == "'":
+            i += 1
+            while i < n and command[i] != "'":
+                i += 1
+            if i < n:
+                i += 1
+            continue
+        if ch == '"':
+            i += 1
+            while i < n:
+                inner = command[i]
+                if inner == "\\" and i + 1 < n:
+                    i += 2
+                    continue
+                if inner == '"':
+                    i += 1
+                    break
+                i += 1
+            continue
+        if ch == "\\" and i + 1 < n:
+            i += 2
+            continue
+        i += 1
+
+    return command[start:i], i
+
+
+def _rewrite_compound_background(command: str) -> str:
+    """Wrap `A && B &` (or `A || B &`) to `A && { B & }` at depth 0.
+
+    Bash parses ``A && B &`` with `&&` tighter than `&`, so it forks a
+    subshell for the whole `A && B` compound and backgrounds it. Inside
+    the subshell, `B` runs foreground, so the subshell waits for `B` to
+    finish. When `B` is long-running, the subshell never exits and can
+    hold stdout/stderr pipes open.
+
+    Rewriting the tail to `A && { B & }` preserves `&&`'s error semantics
+    while replacing the subshell with a brace group.
     """
-    Detect a single shell line that ends in a background job `&` (not `&&`).
+    n = len(command)
+    i = 0
+    paren_depth = 0
+    brace_depth = 0
+    last_chain_op_end = -1
+    rewrites: list[tuple[int, int]] = []
 
-    Returns (text_before_trailing_ampersand, is_background_line).
-    """
-    if not stripped or stripped.startswith("#"):
-        return stripped, False
-    if stripped.endswith("&&"):
-        return stripped, False
-    if not stripped.endswith("&"):
-        return stripped, False
-    return stripped[:-1].rstrip(), True
+    while i < n:
+        ch = command[i]
 
-
-def _rewrite_background_command(command: str) -> str:
-    """
-    On Unix, rewrite lines that end with shell background `&` so the job does not
-    inherit the exec tool's stdout/stderr pipes (avoids hung pipe drain).
-
-    Uses `setsid` when available, otherwise `sh -c`, with stdin/stdout/stderr
-    attached to /dev/null for the detached wrapper; foreground lines are unchanged.
-    """
-    if sys.platform == "win32":
-        return command
-
-    lines = command.splitlines(keepends=True)
-    out: list[str] = []
-    for line in lines:
-        if line.endswith("\r\n"):
-            nl, core = "\r\n", line[:-2]
-        elif line.endswith("\n"):
-            nl, core = "\n", line[:-1]
-        else:
-            nl, core = "", line
-
-        stripped = core.strip()
-        inner, is_bg = _strip_shell_line_background_ampersand(stripped)
-        if not is_bg or not inner.strip():
-            out.append(line)
+        if ch == "\n" and paren_depth == 0 and brace_depth == 0:
+            last_chain_op_end = -1
+            i += 1
             continue
 
-        lead = core[: len(core) - len(core.lstrip())]
-        inner_q = shlex.quote(inner)
-        setsid_path = shutil.which("setsid")
-        if setsid_path:
-            wrapped = f"{shlex.quote(setsid_path)} sh -c {inner_q} </dev/null >/dev/null 2>&1 &"
-        else:
-            wrapped = f"sh -c {inner_q} </dev/null >/dev/null 2>&1 &"
-        out.append(f"{lead}{wrapped}{nl}")
+        if ch.isspace():
+            i += 1
+            continue
 
-    return "".join(out)
+        if ch == "#":
+            nl = command.find("\n", i)
+            if nl == -1:
+                break
+            i = nl
+            continue
+
+        if ch == "\\" and i + 1 < n:
+            i += 2
+            continue
+
+        if ch in ("'", '"'):
+            _, next_i = _read_shell_token(command, i)
+            i = max(next_i, i + 1)
+            continue
+
+        if ch == "(":
+            paren_depth += 1
+            i += 1
+            continue
+
+        if ch == ")":
+            paren_depth = max(0, paren_depth - 1)
+            i += 1
+            continue
+
+        if ch == "{" and i + 1 < n and (command[i + 1].isspace() or command[i + 1] == "\n"):
+            brace_depth += 1
+            i += 1
+            continue
+        if ch == "}" and brace_depth > 0:
+            brace_depth -= 1
+            last_chain_op_end = -1
+            i += 1
+            continue
+
+        if paren_depth > 0 or brace_depth > 0:
+            i += 1
+            continue
+
+        if command.startswith("&&", i) or command.startswith("||", i):
+            last_chain_op_end = i + 2
+            i += 2
+            continue
+
+        if ch == ";":
+            last_chain_op_end = -1
+            i += 1
+            continue
+
+        if ch == "|":
+            last_chain_op_end = -1
+            i += 1
+            continue
+
+        if ch == "&":
+            if i + 1 < n and command[i + 1] == ">":
+                i += 2
+                continue
+            j = i - 1
+            while j >= 0 and command[j].isspace():
+                j -= 1
+            if j >= 0 and command[j] in "<>":
+                i += 1
+                continue
+            if last_chain_op_end >= 0:
+                rewrites.append((last_chain_op_end, i))
+            last_chain_op_end = -1
+            i += 1
+            continue
+
+        _, next_i = _read_shell_token(command, i)
+        i = max(next_i, i + 1)
+
+    if not rewrites:
+        return command
+
+    result = command
+    for chain_end, amp_pos in reversed(rewrites):
+        insert_pos = chain_end
+        while insert_pos < amp_pos and result[insert_pos].isspace():
+            insert_pos += 1
+        prefix = result[:insert_pos]
+        middle = result[insert_pos:amp_pos]
+        suffix = result[amp_pos + 1 :]
+        result = prefix + "{ " + middle + "& }" + suffix
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Foreground guardrails (aligned with hermes-agent terminal_tool policy)
+# ---------------------------------------------------------------------------
+
+_SHELL_LEVEL_BACKGROUND_RE = re.compile(r"\b(?:nohup|disown|setsid)\b", re.IGNORECASE)
+_INLINE_BACKGROUND_AMP_RE = re.compile(r"\s&\s")
+_TRAILING_BACKGROUND_AMP_RE = re.compile(r"\s&\s*(?:#.*)?$")
+_LONG_LIVED_FOREGROUND_PATTERNS = (
+    re.compile(r"\b(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|watch)\b", re.IGNORECASE),
+    re.compile(r"\bdocker\s+compose\s+up\b", re.IGNORECASE),
+    re.compile(r"\bnext\s+dev\b", re.IGNORECASE),
+    re.compile(r"\bvite(?:\s|$)", re.IGNORECASE),
+    re.compile(r"\bnodemon\b", re.IGNORECASE),
+    re.compile(r"\buvicorn\b", re.IGNORECASE),
+    re.compile(r"\bgunicorn\b", re.IGNORECASE),
+    re.compile(r"\bpython(?:3)?\s+-m\s+http\.server\b", re.IGNORECASE),
+)
+
+
+def _looks_like_help_or_version_command(command: str) -> bool:
+    """Return True for informational invocations that should never be blocked."""
+    normalized = " ".join(command.lower().split())
+    return (
+        " --help" in normalized
+        or normalized.endswith(" -h")
+        or " --version" in normalized
+        or normalized.endswith(" -v")
+    )
+
+
+def _foreground_exec_guidance(command: str) -> str | None:
+    """Return a human-readable reason to refuse exec, or None if allowed."""
+    if _looks_like_help_or_version_command(command):
+        return None
+
+    if _SHELL_LEVEL_BACKGROUND_RE.search(command):
+        return (
+            "exec cannot run commands that use nohup, disown, or setsid as shell-level "
+            "background wrappers. Start long-lived processes outside exec (host service, "
+            "tmux, systemd, or another terminal), then use exec only for short checks."
+        )
+
+    if _INLINE_BACKGROUND_AMP_RE.search(command) or _TRAILING_BACKGROUND_AMP_RE.search(command):
+        return (
+            "exec cannot mix shell background '&' with this tool's captured stdout/stderr "
+            "(the subprocess would hang or lose output). Start the server outside exec "
+            "with logs redirected to a file, then run curl/tests in a separate exec call."
+        )
+
+    for pattern in _LONG_LIVED_FOREGROUND_PATTERNS:
+        if pattern.search(command):
+            return (
+                "This command looks like it starts a long-lived dev server or watcher; "
+                "exec is meant for short foreground commands. Start it outside OpenSprite, "
+                "then verify with a separate short exec (curl, wget, etc.)."
+            )
+
+    return None
 
 
 class ExecTool(Tool):
@@ -184,15 +351,21 @@ class ExecTool(Tool):
 
     async def _execute(self, **kwargs: Any) -> str:
         command = str(kwargs["command"]).strip()
-        
+
         # Check for dangerous patterns
         for pattern in self.deny_patterns:
             if re.search(pattern, command, re.IGNORECASE):
                 return "Error: Command blocked by safety guard (dangerous pattern detected)"
-        
+
+        if not _looks_like_help_or_version_command(command):
+            guidance = _foreground_exec_guidance(command)
+            if guidance is not None:
+                return f"Error: {guidance}"
+
+        command = _rewrite_compound_background(command)
+
         try:
             workspace = self._get_workspace()
-            command = _rewrite_background_command(command)
             # Security: run in workspace directory
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -205,7 +378,7 @@ class ExecTool(Tool):
             stderr_chunks: list[bytes] = []
             stdout_task = asyncio.create_task(self._read_stream(process.stdout, stdout_chunks))
             stderr_task = asyncio.create_task(self._read_stream(process.stderr, stderr_chunks))
-            
+
             try:
                 await asyncio.wait_for(process.wait(), timeout=self.timeout)
             except asyncio.TimeoutError:
@@ -222,8 +395,7 @@ class ExecTool(Tool):
                 )
 
             # If the shell exited but a background child still inherits stdout/stderr
-            # pipes (e.g. `uvicorn ... &`), EOF never arrives and gather would hang
-            # forever. Cap post-exit pipe draining.
+            # pipes (e.g. a stray `&` in a subshell), EOF may never arrive. Cap draining.
             drain_timeout = max(5, min(30, self.timeout))
             try:
                 await asyncio.wait_for(
@@ -241,8 +413,8 @@ class ExecTool(Tool):
                     f"{output}\n\n"
                     f"[exec] Warning: output pipes did not close within {drain_timeout}s after "
                     "the shell exited. A background process may still be writing to the same "
-                    "stdout/stderr as the shell (e.g. `server &` without redirect). Redirect "
-                    "long-running servers to a file or /dev/null, or run them in a separate step."
+                    "stdout/stderr as the shell. Redirect long-running servers to a file or "
+                    "/dev/null, or run them outside exec."
                 )
 
             stdout = b"".join(stdout_chunks)
