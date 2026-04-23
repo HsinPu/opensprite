@@ -455,6 +455,10 @@ button {
   z-index: 20;
 }
 
+.settings-modal[hidden] {
+  display: none;
+}
+
 .settings-modal__backdrop {
   position: absolute;
   inset: 0;
