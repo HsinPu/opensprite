@@ -7,6 +7,7 @@ from .video import AnalyzeVideoTool
 from .filesystem import ReadFileTool, WriteFileTool, ListDirTool, EditFileTool
 from .skill import ReadSkillTool
 from .skill_config import ConfigureSkillTool
+from .process import ProcessTool
 from .shell import ExecTool
 from .search import SearchHistoryTool, SearchKnowledgeTool
 from .web_search import WebSearchTool
@@ -28,6 +29,7 @@ __all__ = [
     "EditFileTool",
     "ReadSkillTool",
     "ConfigureSkillTool",
+    "ProcessTool",
     "ExecTool",
     "SearchHistoryTool",
     "SearchKnowledgeTool",

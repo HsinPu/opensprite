@@ -161,7 +161,7 @@ def test_exec_warns_when_output_readers_linger_after_process_exit(tmp_path, monk
     monkeypatch.setattr(shell_module, "start_shell_process", fake_start_shell_process)
 
     tool = shell_module.ExecTool(workspace=Path(tmp_path), timeout=1)
-    tool._output_drain_timeout = lambda: 0.1
+    tool._output_drain_timeout = lambda timeout_seconds: 0.1
     result = asyncio.run(tool.execute(command="echo simulated"))
 
     assert "parent exiting" in result

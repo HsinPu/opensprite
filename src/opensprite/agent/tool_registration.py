@@ -23,6 +23,7 @@ from ..tools import (
     ListDirTool,
     EditFileTool,
     ExecTool,
+    ProcessTool,
     SearchHistoryTool,
     SearchKnowledgeTool,
     WebSearchTool,
@@ -124,12 +125,15 @@ def register_shell_tools(
 ) -> None:
     """Register shell execution tools."""
     current_tools_config = tools_config or ToolsConfig()
+    process_tool = ProcessTool()
     registry.register(
         ExecTool(
             workspace_resolver=workspace_resolver,
             timeout=current_tools_config.exec_tool.timeout,
+            process_manager=process_tool.manager,
         )
     )
+    registry.register(process_tool)
 
 
 def register_config_tools(

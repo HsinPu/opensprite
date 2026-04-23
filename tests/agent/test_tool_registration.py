@@ -5,6 +5,7 @@ from opensprite.config.schema import SearchConfig, ToolsConfig
 from opensprite.skills import SkillsLoader
 from opensprite.tools.cron import CronTool
 from opensprite.tools.mcp_config import ConfigureMCPTool
+from opensprite.tools.process import ProcessTool
 from opensprite.tools.skill_config import ConfigureSkillTool
 from opensprite.tools.subagent_config import ConfigureSubagentTool
 from opensprite.tools.shell import ExecTool
@@ -55,6 +56,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "configure_mcp",
         "configure_subagent",
         "exec",
+        "process",
         "web_search",
         "web_fetch",
         "analyze_image",
@@ -90,6 +92,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "configure_mcp",
         "configure_subagent",
         "exec",
+        "process",
         "web_search",
         "web_fetch",
         "analyze_image",
@@ -126,12 +129,14 @@ def test_register_default_tools_applies_typed_tools_config_values():
     )
 
     exec_tool = registry.get("exec")
+    process_tool = registry.get("process")
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
     cron_tool = registry.get("cron")
     configure_mcp_tool = registry.get("configure_mcp")
 
     assert isinstance(exec_tool, ExecTool)
+    assert isinstance(process_tool, ProcessTool)
     assert isinstance(cron_tool, CronTool)
     assert isinstance(configure_mcp_tool, ConfigureMCPTool)
     assert isinstance(web_search_tool, WebSearchTool)

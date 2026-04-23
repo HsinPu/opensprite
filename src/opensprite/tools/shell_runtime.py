@@ -31,7 +31,8 @@ def _append_stderr_text(text: str, result: list[str], needs_prefix: bool) -> boo
 def format_captured_output(
     output_chunks: list[CapturedOutputChunk],
     *,
-    max_chars: int = 3000,
+    max_chars: int | None = 3000,
+    empty_placeholder: str = "(no output)",
 ) -> str:
     """Render captured stdout/stderr chunks into user-facing text."""
     result: list[str] = []
@@ -46,9 +47,9 @@ def format_captured_output(
 
     output = "".join(result).strip()
     if not output:
-        output = "(no output)"
+        output = empty_placeholder
 
-    if len(output) > max_chars:
+    if max_chars is not None and len(output) > max_chars:
         output = output[:max_chars] + f"\n\n... (truncated, total {len(output)} chars)"
 
     return output

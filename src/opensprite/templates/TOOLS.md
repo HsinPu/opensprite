@@ -33,11 +33,17 @@ This file defines when to use tools, how to choose between them, and what constr
   - Runs shell commands inside the active workspace.
   - Default timeout: 60 seconds.
   - Use for verification, project inspection, builds, tests, and other command-line tasks.
+  - Supports managed background execution with `background=true` or `yield_ms=<milliseconds>`; background runs return a `session_id` for follow-up inspection via `process`.
   - Dangerous commands and obvious destructive patterns are blocked.
   - If a command could still cause irreversible or external side effects, ask first.
   - **Stdout/stderr are piped** from the shell subprocess and returned in arrival order; stderr lines are prefixed with `[stderr]`. There is no interactive stdin (commands that wait for TTY input will stall or time out).
-  - **Background `&` and shell wrappers** (`nohup`, `disown`, `setsid`) are **rejected** in `exec`: they fight piped stdout/stderr and hang or lose output. Start long-lived servers **outside** `exec`, then use short follow-up `exec` calls (e.g. `curl`) for checks.
-  - Commands that **look like long-lived dev servers** (e.g. `uvicorn`, `vite`, `npm run dev`, `python -m http.server`, …) are rejected unless they are clearly `--help` / `--version` style invocations.
+  - **Background `&` and shell wrappers** (`nohup`, `disown`, `setsid`) are **rejected** in `exec`: they fight piped stdout/stderr and hang or lose output. Use the managed `background=true` / `yield_ms` path instead.
+  - Commands that **look like long-lived dev servers** (e.g. `uvicorn`, `vite`, `npm run dev`, `python -m http.server`, …) are rejected unless they are clearly `--help` / `--version` style invocations or you explicitly request managed background execution.
+- `process`
+  - Inspects managed background exec sessions.
+  - `action="list"` shows known sessions.
+  - `action="poll"` returns newly captured output and current status for one `session_id`.
+  - `action="kill"` terminates one managed background session and returns its final status/output tail.
 
 ## External Knowledge Tools
 

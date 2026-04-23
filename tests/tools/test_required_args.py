@@ -3,6 +3,7 @@ from pathlib import Path
 
 from opensprite.tools.base import Tool
 from opensprite.tools.filesystem import WriteFileTool
+from opensprite.tools.process import ProcessTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.shell import ExecTool
 
@@ -68,6 +69,14 @@ def test_exec_rejects_overlong_command(tmp_path):
     result = asyncio.run(tool.execute(command="a" * 2001))
 
     assert result == "Error: Invalid arguments for exec: command must be at most 2000 characters."
+
+
+def test_process_poll_requires_session_id():
+    tool = ProcessTool()
+
+    result = asyncio.run(tool.execute(action="poll"))
+
+    assert result == "Error: process action 'poll' requires session_id."
 
 
 def test_exec_timeout_returns_partial_output(tmp_path):
