@@ -16,8 +16,10 @@ def test_run_onboard_creates_external_config_files(monkeypatch, tmp_path):
 
     app_home = tmp_path / ".opensprite"
     config_path = app_home / "opensprite.json"
+    channels = json.loads((app_home / "channels.json").read_text(encoding="utf-8"))
 
     assert result.created_config is True
+    assert result.channel_name == "web"
     assert config_path.exists()
     assert (app_home / "channels.json").exists()
     assert (app_home / "search.json").exists()
@@ -25,6 +27,7 @@ def test_run_onboard_creates_external_config_files(monkeypatch, tmp_path):
     assert (app_home / "messages.json").exists()
     assert (app_home / "mcp_servers.json").exists()
     assert (app_home / "llm.providers.json").exists()
+    assert channels["web"]["enabled"] is True
 
 
 def test_run_onboard_interactive_persists_external_config_updates(monkeypatch, tmp_path):
@@ -43,6 +46,7 @@ def test_run_onboard_interactive_persists_external_config_updates(monkeypatch, t
         updated["llm"]["providers"]["openai"]["enabled"] = True
         updated["llm"]["providers"]["openai"]["model"] = "gpt-4.1-mini"
         updated["llm"]["providers"]["openai"]["api_key"] = "secret-key"
+        updated["channels"]["web"]["enabled"] = False
         updated["channels"]["telegram"]["enabled"] = True
         updated["channels"]["telegram"]["token"] = "telegram-secret"
         return updated

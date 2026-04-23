@@ -337,7 +337,7 @@ def test_config_load_reads_channels_from_external_file(tmp_path):
 
     assert config.channels.telegram["enabled"] is True
     assert config.channels.telegram["token"] == "abc"
-    assert config.channels.web["enabled"] is False
+    assert config.channels.web["enabled"] is True
     assert config.channels.console["enabled"] is False
     assert config.channels_file == "channels.json"
 
@@ -367,7 +367,7 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
     assert "channels" not in saved_main
     assert saved_channels["telegram"]["enabled"] is True
     assert saved_channels["telegram"]["token"] == "secret"
-    assert saved_channels["web"]["enabled"] is False
+    assert saved_channels["web"]["enabled"] is True
 
 
 def test_config_save_writes_search_to_external_file(tmp_path):

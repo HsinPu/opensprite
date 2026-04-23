@@ -74,7 +74,7 @@ class ChannelsConfig(BaseModel):
         "drop_pending_updates": False,
     })
     web: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": False,
+        "enabled": True,
         "host": "127.0.0.1",
         "port": 8765,
         "path": "/ws",

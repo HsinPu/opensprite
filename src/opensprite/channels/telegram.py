@@ -654,7 +654,8 @@ class TelegramAdapter(MessageAdapter):
         """
         logger.info("Preparing Telegram adapter startup: {}", self._describe_startup_config())
         if not self.bot_token:
-            logger.warning("Telegram token is empty before application build")
+            logger.warning("Telegram token is empty; skipping Telegram adapter startup")
+            return
         elif ":" not in self.bot_token:
             logger.warning("Telegram token format looks unusual: {}", self._mask_token())
 

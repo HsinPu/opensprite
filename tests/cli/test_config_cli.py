@@ -51,7 +51,7 @@ def _write_split_config(root):
         encoding="utf-8",
     )
     (root / "channels.json").write_text(
-        json.dumps({"telegram": {"enabled": False, "token": ""}, "console": {"enabled": True}}, indent=2),
+        json.dumps({"telegram": {"enabled": False, "token": ""}, "web": {"enabled": True}, "console": {"enabled": True}}, indent=2),
         encoding="utf-8",
     )
     (root / "search.json").write_text(
@@ -157,7 +157,7 @@ def test_config_validate_reports_valid_split_config(tmp_path):
     assert result.exit_code == 0
     assert "OpenSprite Config Validation" in result.stdout
     assert "Valid: yes" in result.stdout
-    assert "Enabled channels: console" in result.stdout
+    assert "Enabled channels: web, console" in result.stdout
     assert "MCP servers: none" in result.stdout
 
 

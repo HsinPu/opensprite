@@ -208,3 +208,11 @@ def test_supported_message_filters_include_media_updates():
     assert bool(message_filter.check_update(video_update))
     assert not message_filter.check_update(command_update)
     assert filters.VOICE.check_update(voice_update)
+
+
+def test_run_skips_startup_when_token_is_empty():
+    adapter = TelegramAdapter("")
+
+    asyncio.run(adapter.run())
+
+    assert adapter.app is None
