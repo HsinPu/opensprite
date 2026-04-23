@@ -4,7 +4,15 @@ const STORAGE_KEYS = {
   activeChatId: "opensprite:web:activeChatId",
 };
 
-const DEFAULT_WS_URL = "ws://127.0.0.1:8765/ws";
+function resolveDefaultWsUrl() {
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProtocol}//${window.location.host}/ws`;
+  }
+  return "ws://127.0.0.1:8765/ws";
+}
+
+const DEFAULT_WS_URL = resolveDefaultWsUrl();
 
 const dom = {
   sessionList: document.getElementById("sessionList"),

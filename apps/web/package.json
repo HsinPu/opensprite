@@ -1,0 +1,10 @@
+{
+  "name": "@opensprite/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OpenSprite browser client source",
+  "scripts": {
+    "build": "node ./build.mjs",
+    "sync": "node ./build.mjs"
+  }
+}

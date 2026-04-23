@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 
 from aiohttp import ClientSession
 
@@ -86,3 +87,60 @@ async def _run_web_roundtrip():
 
 def test_web_adapter_roundtrip():
     asyncio.run(_run_web_roundtrip())
+
+
+async def _run_web_static_serving(tmp_path: Path):
+    frontend_dir = tmp_path / "frontend"
+    frontend_dir.mkdir()
+    (frontend_dir / "index.html").write_text(
+        "<!doctype html><html><body><h1>OpenSprite static shell</h1><script src=\"./app.js\"></script></body></html>",
+        encoding="utf-8",
+    )
+    (frontend_dir / "app.js").write_text("window.testLoaded = true;", encoding="utf-8")
+
+    agent = EchoAgent()
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "static_dir": str(frontend_dir),
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/") as resp:
+                assert resp.status == 200
+                html = await resp.text()
+                assert "OpenSprite static shell" in html
+
+            async with session.get(f"http://127.0.0.1:{port}/app.js") as resp:
+                assert resp.status == 200
+                script = await resp.text()
+                assert "window.testLoaded = true;" in script
+
+            async with session.get(f"http://127.0.0.1:{port}/missing.js") as resp:
+                assert resp.status == 404
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_serves_static_frontend(tmp_path):
+    asyncio.run(_run_web_static_serving(tmp_path))

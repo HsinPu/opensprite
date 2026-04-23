@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -41,6 +42,7 @@ class WebAdapter(MessageAdapter):
         self._started_event = asyncio.Event()
         self._session_connections: dict[str, web.WebSocketResponse] = {}
         self._socket_sessions: dict[web.WebSocketResponse, set[str]] = {}
+        self._frontend_dir = self._resolve_frontend_dir()
 
     def _get_host(self) -> str:
         return str(self.config.get("host", self.DEFAULT_CONFIG["host"]))
@@ -54,6 +56,37 @@ class WebAdapter(MessageAdapter):
     def _get_path(self, key: str) -> str:
         raw = str(self.config.get(key, self.DEFAULT_CONFIG[key]) or self.DEFAULT_CONFIG[key]).strip() or "/"
         return raw if raw.startswith("/") else f"/{raw}"
+
+    def _resolve_frontend_dir(self) -> Path | None:
+        configured = str(self.config.get("static_dir", "") or "").strip()
+        candidates: list[Path] = []
+        if configured:
+            candidates.append(Path(configured).expanduser())
+
+        module_path = Path(__file__).resolve()
+        candidates.extend(
+            [
+                module_path.parents[3] / "apps" / "web" / "dist",
+                module_path.parents[3] / "apps" / "web",
+                Path.cwd() / "apps" / "web" / "dist",
+                Path.cwd() / "apps" / "web",
+            ]
+        )
+
+        for candidate in candidates:
+            resolved = candidate.expanduser().resolve(strict=False)
+            if (resolved / "index.html").is_file():
+                return resolved
+        return None
+
+    def _resolve_frontend_asset(self, asset_path: str) -> Path:
+        if self._frontend_dir is None:
+            raise web.HTTPNotFound()
+
+        target = (self._frontend_dir / asset_path).resolve(strict=False)
+        if not target.is_relative_to(self._frontend_dir) or not target.is_file():
+            raise web.HTTPNotFound()
+        return target
 
     def _build_session_chat_id(self, chat_id: str | None) -> str:
         normalized_chat_id = self._coerce_optional_text(chat_id, default="default") or "default"
@@ -160,6 +193,13 @@ class WebAdapter(MessageAdapter):
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "channel": "web"})
 
+    async def _handle_frontend_index(self, request: web.Request) -> web.FileResponse:
+        return web.FileResponse(self._resolve_frontend_asset("index.html"))
+
+    async def _handle_frontend_asset(self, request: web.Request) -> web.FileResponse:
+        asset_path = request.match_info.get("asset_path", "")
+        return web.FileResponse(self._resolve_frontend_asset(asset_path))
+
     async def _handle_websocket(self, request: web.Request) -> web.WebSocketResponse:
         if self.mq is None:
             raise RuntimeError("WebAdapter requires a MessageQueue instance")
@@ -235,6 +275,12 @@ class WebAdapter(MessageAdapter):
         self.app = web.Application()
         self.app.router.add_get(ws_path, self._handle_websocket)
         self.app.router.add_get(health_path, self._handle_health)
+        if self._frontend_dir is not None:
+            self.app.router.add_get("/", self._handle_frontend_index)
+            self.app.router.add_get("/index.html", self._handle_frontend_index)
+            self.app.router.add_get(r"/{asset_path:.+\..+}", self._handle_frontend_asset)
+        else:
+            logger.info("Web adapter did not find a frontend directory; serving API endpoints only")
 
         self.mq.register_response_handler("web", self._on_response)
         self.runner = web.AppRunner(self.app)
@@ -244,13 +290,14 @@ class WebAdapter(MessageAdapter):
         self._started_event.set()
 
         logger.info(
-            "Web adapter listening on ws://{}:{}{} (health=http://{}:{}{})",
+            "Web adapter listening on ws://{}:{}{} (health=http://{}:{}{}, frontend={})",
             host,
             self.bound_port,
             ws_path,
             host,
             self.bound_port,
             health_path,
+            self._frontend_dir if self._frontend_dir is not None else "disabled",
         )
 
         try:
