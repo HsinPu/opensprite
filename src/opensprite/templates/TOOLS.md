@@ -123,7 +123,8 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 - `configure_mcp`
   - Use when the user wants to add, update, inspect, or remove MCP server configuration.
-  - Prefer this over telling the user to edit MCP JSON manually.
+  - Use `configure_mcp` first for MCP setup or changes.
+  - prefer using `configure_mcp` instead of telling the user to edit config files manually.
   - Reload MCP in the current session after config changes when the tool supports it.
   - Ask the user to edit config files directly only if the tool cannot express the required change.
 

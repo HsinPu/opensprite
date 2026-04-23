@@ -293,6 +293,7 @@ async def run(config_path: str | Path | None = None) -> None:
         await processor
         await stop_background_task(search_queue_worker, name="search embedding queue worker")
         await cron_manager.stop()
+        await agent.close_background_maintenance()
         await agent.close_mcp()
         logger.info("再見！")
 

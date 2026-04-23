@@ -119,37 +119,37 @@ def test_connect_mcp_registers_tools_once(tmp_path, monkeypatch):
 
 
 def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
-    agent = _make_agent(tmp_path)
-    order = []
+    async def scenario():
+        agent = _make_agent(tmp_path)
+        order = []
 
-    async def fake_connect_mcp():
-        order.append("connect")
-        assert agent.storage.saved == []
+        async def fake_connect_mcp():
+            order.append("connect")
+            assert agent.storage.saved == []
 
-    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
-        from opensprite.agent.execution import ExecutionResult
+        async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
+            from opensprite.agent.execution import ExecutionResult
 
-        order.append("call_llm")
-        assert order[0] == "connect"
-        return ExecutionResult(content="assistant reply", executed_tool_calls=0, used_configure_skill=False)
+            order.append("call_llm")
+            assert order[0] == "connect"
+            return ExecutionResult(content="assistant reply", executed_tool_calls=0, used_configure_skill=False)
 
-    async def fake_consolidate(chat_id):
-        order.append("memory")
+        async def fake_consolidate(chat_id):
+            order.append("memory")
 
-    async def fake_update_profile(chat_id):
-        order.append("profile")
+        async def fake_update_profile(chat_id):
+            order.append("profile")
 
-    async def fake_update_recent_summary(chat_id):
-        order.append("recent-summary")
+        async def fake_update_recent_summary(chat_id):
+            order.append("recent-summary")
 
-    agent.connect_mcp = fake_connect_mcp
-    agent.call_llm = fake_call_llm
-    agent._maybe_consolidate_memory = fake_consolidate
-    agent._maybe_update_recent_summary = fake_update_recent_summary
-    agent._maybe_update_user_profile = fake_update_profile
+        agent.connect_mcp = fake_connect_mcp
+        agent.call_llm = fake_call_llm
+        agent._maybe_consolidate_memory = fake_consolidate
+        agent._maybe_update_recent_summary = fake_update_recent_summary
+        agent._maybe_update_user_profile = fake_update_profile
 
-    response = asyncio.run(
-        agent.process(
+        response = await agent.process(
             UserMessage(
                 text="hello",
                 channel="telegram",
@@ -157,7 +157,10 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
                 session_chat_id="telegram:room-1",
             )
         )
-    )
+        await agent.wait_for_background_maintenance()
+        return response, order
+
+    response, order = asyncio.run(scenario())
 
     assert order == ["connect", "call_llm", "memory", "recent-summary", "profile"]
     assert response.text == "assistant reply"

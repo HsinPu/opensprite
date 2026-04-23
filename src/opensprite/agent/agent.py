@@ -421,6 +421,8 @@ class AgentLoop:
         self._mcp_connecting = False
         self._mcp_connect_lock = asyncio.Lock()
         self._skill_review_lock = asyncio.Lock()
+        self._maintenance_tasks: dict[tuple[str, str], asyncio.Task] = {}
+        self._maintenance_rerun: set[tuple[str, str]] = set()
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
 
@@ -715,6 +717,76 @@ class AgentLoop:
             await stack.aclose()
         except Exception as exc:
             logger.warning("agent.mcp.close.error | error={}", exc)
+
+    def _schedule_background_maintenance(
+        self,
+        *,
+        kind: str,
+        chat_id: str,
+        runner: Callable[[str], Awaitable[None]],
+    ) -> None:
+        """Run one maintenance path in the background with per-chat coalescing."""
+        key = (kind, chat_id)
+        existing = self._maintenance_tasks.get(key)
+        if existing is not None and not existing.done():
+            self._maintenance_rerun.add(key)
+            return
+
+        task: asyncio.Task | None = None
+
+        async def _run() -> None:
+            try:
+                while True:
+                    self._maintenance_rerun.discard(key)
+                    await runner(chat_id)
+                    if key not in self._maintenance_rerun:
+                        break
+                    logger.info("[{}] maintenance.rerun | kind={}", chat_id, kind)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                if task is not None and self._maintenance_tasks.get(key) is task:
+                    self._maintenance_tasks.pop(key, None)
+                self._maintenance_rerun.discard(key)
+
+        task = asyncio.create_task(_run())
+        self._maintenance_tasks[key] = task
+
+    def _schedule_post_response_maintenance(self, chat_id: str) -> None:
+        """Queue post-response document maintenance without blocking the reply."""
+        self._schedule_background_maintenance(
+            kind="memory",
+            chat_id=chat_id,
+            runner=self._maybe_consolidate_memory,
+        )
+        self._schedule_background_maintenance(
+            kind="recent_summary",
+            chat_id=chat_id,
+            runner=self._maybe_update_recent_summary,
+        )
+        self._schedule_background_maintenance(
+            kind="user_profile",
+            chat_id=chat_id,
+            runner=self._maybe_update_user_profile,
+        )
+
+    async def wait_for_background_maintenance(self) -> None:
+        """Wait until all currently scheduled maintenance tasks finish."""
+        while True:
+            tasks = [task for task in self._maintenance_tasks.values() if not task.done()]
+            if not tasks:
+                return
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def close_background_maintenance(self) -> None:
+        """Cancel and drain any in-flight maintenance tasks."""
+        tasks = [task for task in self._maintenance_tasks.values() if not task.done()]
+        self._maintenance_tasks.clear()
+        self._maintenance_rerun.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def reload_mcp_from_config(self) -> str:
         """Reload MCP settings from disk and reconnect MCP tools for this agent."""
@@ -1285,10 +1357,8 @@ class AgentLoop:
             # 3. 把 AI 回覆存入 storage
             await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
 
-            # 4. 檢查是否需要 consolidation
-            await self._maybe_consolidate_memory(session_chat_id)
-            await self._maybe_update_recent_summary(session_chat_id)
-            await self._maybe_update_user_profile(session_chat_id)
+            # 4. 在背景排程維護工作，避免拖慢主回覆
+            self._schedule_post_response_maintenance(session_chat_id)
 
             self._maybe_schedule_skill_review(session_chat_id, exec_result)
 

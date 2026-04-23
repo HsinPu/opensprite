@@ -126,46 +126,50 @@ class LargeSchemaTool(Tool):
 
 
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
-    registry = ToolRegistry()
-    registry.register(DummyTool())
-    storage = FakeStorage()
-    agent = AgentLoop(
-        config=AgentConfig(),
-        provider=FakeProvider(),
-        storage=storage,
-        context_builder=FakeContextBuilder(tmp_path),
-        tools=registry,
-        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-        tools_config=ToolsConfig(),
-        log_config=LogConfig(),
-        search_config=SearchConfig(),
-        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-        **Config.packaged_agent_llm_chat_kwargs(),
-    )
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        agent = AgentLoop(
+            config=AgentConfig(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path),
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
 
-    call_order = []
+        call_order = []
+        release_maintenance = asyncio.Event()
 
-    async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
-        call_order.append(("call_llm", chat_id, current_message, channel, list(user_images or [])))
-        assert storage.saved[0][1] == "user"
-        return ExecutionResult(content="assistant reply", executed_tool_calls=0, used_configure_skill=False)
+        async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
+            call_order.append(("call_llm", chat_id, current_message, channel, list(user_images or [])))
+            assert storage.saved[0][1] == "user"
+            return ExecutionResult(content="assistant reply", executed_tool_calls=0, used_configure_skill=False)
 
-    async def fake_consolidate(chat_id):
-        call_order.append(("memory", chat_id))
+        async def fake_consolidate(chat_id):
+            await release_maintenance.wait()
+            call_order.append(("memory", chat_id))
 
-    async def fake_update_profile(chat_id):
-        call_order.append(("profile", chat_id))
+        async def fake_update_profile(chat_id):
+            await release_maintenance.wait()
+            call_order.append(("profile", chat_id))
 
-    async def fake_update_recent_summary(chat_id):
-        call_order.append(("recent-summary", chat_id))
+        async def fake_update_recent_summary(chat_id):
+            await release_maintenance.wait()
+            call_order.append(("recent-summary", chat_id))
 
-    agent.call_llm = fake_call_llm
-    agent._maybe_consolidate_memory = fake_consolidate
-    agent._maybe_update_recent_summary = fake_update_recent_summary
-    agent._maybe_update_user_profile = fake_update_profile
+        agent.call_llm = fake_call_llm
+        agent._maybe_consolidate_memory = fake_consolidate
+        agent._maybe_update_recent_summary = fake_update_recent_summary
+        agent._maybe_update_user_profile = fake_update_profile
 
-    response = asyncio.run(
-        agent.process(
+        response = await agent.process(
             UserMessage(
                 text="hello",
                 channel="telegram",
@@ -177,7 +181,17 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
                 metadata={"source": "test"},
             )
         )
-    )
+
+        assert call_order == [
+            ("call_llm", "telegram:room-1", "hello", "telegram", ["img1"]),
+        ]
+
+        release_maintenance.set()
+        await agent.wait_for_background_maintenance()
+
+        return response, storage, call_order
+
+    response, storage, call_order = asyncio.run(scenario())
 
     assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
     assert storage.saved[0][3]["sender_name"] == "alice"
