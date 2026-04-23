@@ -43,6 +43,7 @@ This file defines when to use tools, how to choose between them, and what constr
 - `process`
   - Inspects managed background exec sessions.
   - `action="list"` shows known sessions with current runtime.
+  - `action="inspect"` returns metadata only for one `session_id` (status, timing, output flags, exit info).
   - `action="poll"` returns newly captured output and current status/timing for one `session_id`.
   - `action="log"` returns the full captured output plus timing for one `session_id`.
   - `action="kill"` terminates one managed background session and returns its final status/output tail.

@@ -89,6 +89,35 @@ def test_exec_yield_ms_moves_running_command_to_background(tmp_path):
     asyncio.run(run())
 
 
+def test_process_inspect_returns_metadata_without_output_sections(tmp_path):
+    async def run() -> None:
+        manager = BackgroundProcessManager()
+        exec_tool = ExecTool(workspace=Path(tmp_path), process_manager=manager, timeout=5)
+        process_tool = ProcessTool(manager)
+
+        started = await exec_tool.execute(
+            command=_python_shell_command("print('inspect me', flush=True)"),
+            background=True,
+            timeout_seconds=5,
+        )
+        session_id = _extract_session_id(started)
+        await asyncio.sleep(0.2)
+
+        inspected = await process_tool.execute(action="inspect", session_id=session_id)
+
+        assert f"Session ID: {session_id}" in inspected
+        assert "Started: " in inspected
+        assert "Runtime: " in inspected
+        assert "Has output: yes" in inspected
+        assert "Output drained: yes" in inspected
+        assert "Termination: exit" in inspected
+        assert "Full output:" not in inspected
+        assert "New output:" not in inspected
+        assert "Output tail:" not in inspected
+
+    asyncio.run(run())
+
+
 def test_process_log_and_clear_handle_exited_session(tmp_path):
     async def run() -> None:
         manager = BackgroundProcessManager()

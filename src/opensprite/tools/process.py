@@ -48,6 +48,8 @@ def _format_session_details(session: BackgroundSession) -> list[str]:
         f"PID: {session.pid}",
         f"Started: {_format_timestamp(session.started_at_wall)}",
         f"Runtime: {_format_runtime(session)}",
+        f"Has output: {'yes' if bool(session.output_chunks) else 'no'}",
+        f"Output drained: {'yes' if session.output_drained else 'no'}",
         f"Command: {session.command}",
     ]
     if session.state == "exited":
@@ -86,8 +88,8 @@ class ProcessTool(Tool):
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["list", "poll", "log", "kill", "clear"],
-                    "description": "Required. list sessions, poll one session for new output, show full output with log, kill one session, or clear exited sessions.",
+                    "enum": ["list", "inspect", "poll", "log", "kill", "clear"],
+                    "description": "Required. list sessions, inspect one session's metadata, poll one session for new output, show full output with log, kill one session, or clear exited sessions.",
                 },
                 "session_id": {
                     "type": "string",
@@ -138,6 +140,12 @@ class ProcessTool(Tool):
             lines = _format_session_details(session)
             lines.extend(["New output:", new_output])
             return "\n".join(lines)
+
+        if action == "inspect":
+            session = await self.manager.get_session(session_id)
+            if session is None:
+                return f"Error: background session '{session_id}' not found."
+            return "\n".join(_format_session_details(session))
 
         if action == "log":
             session = await self.manager.get_session(session_id)
