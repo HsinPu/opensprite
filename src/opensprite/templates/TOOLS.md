@@ -34,6 +34,7 @@ This file defines when to use tools, how to choose between them, and what constr
   - Default timeout: 60 seconds.
   - Use for verification, project inspection, builds, tests, and other command-line tasks.
   - Supports managed background execution with `background=true` or `yield_ms=<milliseconds>`; background runs return a `session_id` for follow-up inspection via `process`.
+  - Managed background notifications default to `notify_on_exit=true` and `notify_on_exit_empty_success=false`; quiet successful runs stay silent unless you opt in.
   - Dangerous commands and obvious destructive patterns are blocked.
   - If a command could still cause irreversible or external side effects, ask first.
   - **Stdout/stderr are piped** from the shell subprocess and returned in arrival order; stderr lines are prefixed with `[stderr]`. There is no interactive stdin (commands that wait for TTY input will stall or time out).

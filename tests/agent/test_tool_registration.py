@@ -116,7 +116,11 @@ def test_register_default_tools_applies_typed_tools_config_values():
         reload_mcp=_fake_reload_mcp,
         tools_config=ToolsConfig(
             **{
-                "exec": {"timeout": 12},
+                "exec": {
+                    "timeout": 12,
+                    "notify_on_exit": False,
+                    "notify_on_exit_empty_success": True,
+                },
                 "web_search": {"provider": "jina", "max_results": 7},
                 "web_fetch": {
                     "max_chars": 1234,
@@ -142,6 +146,8 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
     assert exec_tool.timeout == 12
+    assert exec_tool.notify_on_exit is False
+    assert exec_tool.notify_on_exit_empty_success is True
     assert "UTC" in cron_tool.description
     assert web_search_tool.provider == "jina"
     assert web_search_tool.max_results == 7

@@ -83,6 +83,8 @@ def test_tools_config_provides_typed_tool_defaults():
     config = ToolsConfig()
 
     assert config.exec_tool.timeout == 60
+    assert config.exec_tool.notify_on_exit is True
+    assert config.exec_tool.notify_on_exit_empty_success is False
     assert config.web_search.provider == "brave"
     assert config.web_search.max_results == 10
     assert config.web_fetch.max_chars == 50000
@@ -95,7 +97,11 @@ def test_tools_config_provides_typed_tool_defaults():
 def test_tools_config_parses_nested_tool_sections_from_json_shape():
     config = ToolsConfig(
         **{
-            "exec": {"timeout": 15},
+            "exec": {
+                "timeout": 15,
+                "notify_on_exit": False,
+                "notify_on_exit_empty_success": True,
+            },
             "web_search": {"provider": "jina", "max_results": 7},
             "web_fetch": {"max_chars": 1234, "timeout": 9, "prefer_trafilatura": False},
             "cron": {"default_timezone": "Asia/Taipei"},
@@ -103,6 +109,8 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     )
 
     assert config.exec_tool.timeout == 15
+    assert config.exec_tool.notify_on_exit is False
+    assert config.exec_tool.notify_on_exit_empty_success is True
     assert config.web_search.provider == "jina"
     assert config.web_search.max_results == 7
     assert config.web_fetch.max_chars == 1234

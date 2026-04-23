@@ -133,6 +133,8 @@ def register_shell_tools(
             timeout=current_tools_config.exec_tool.timeout,
             process_manager=process_tool.manager,
             background_notification_factory=background_notification_factory,
+            notify_on_exit=current_tools_config.exec_tool.notify_on_exit,
+            notify_on_exit_empty_success=current_tools_config.exec_tool.notify_on_exit_empty_success,
         )
     )
     registry.register(process_tool)

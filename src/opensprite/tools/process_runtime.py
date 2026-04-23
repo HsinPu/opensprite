@@ -40,7 +40,9 @@ class BackgroundSession:
     last_polled_chars: int = 0
     finished_at: float | None = None
     finished_at_wall: float | None = None
-    notify_on_exit: SessionExitNotifier | None = None
+    exit_notifier: SessionExitNotifier | None = None
+    notify_on_exit: bool = True
+    notify_on_exit_empty_success: bool = False
     suppress_exit_notification: bool = False
 
     @property
@@ -79,7 +81,9 @@ class BackgroundProcessManager:
         output_chunks: list[CapturedOutputChunk],
         timeout_seconds: float,
         drain_timeout: float,
-        notify_on_exit: SessionExitNotifier | None = None,
+        exit_notifier: SessionExitNotifier | None = None,
+        notify_on_exit: bool = True,
+        notify_on_exit_empty_success: bool = False,
     ) -> BackgroundSession:
         session = BackgroundSession(
             session_id=uuid.uuid4().hex[:12],
@@ -90,11 +94,32 @@ class BackgroundProcessManager:
             output_chunks=output_chunks,
             timeout_seconds=max(0.001, float(timeout_seconds)),
             drain_timeout=max(0.001, float(drain_timeout)),
+            exit_notifier=exit_notifier,
             notify_on_exit=notify_on_exit,
+            notify_on_exit_empty_success=notify_on_exit_empty_success,
         )
         session.watch_task = asyncio.create_task(self._watch_session(session))
         self._sessions[session.session_id] = session
         return session
+
+    @staticmethod
+    def _session_output_text(session: BackgroundSession) -> str:
+        return format_captured_output(
+            session.output_chunks,
+            max_chars=None,
+            empty_placeholder="",
+        )
+
+    @classmethod
+    def _should_notify_on_exit(cls, session: BackgroundSession) -> bool:
+        if session.suppress_exit_notification or session.exit_notifier is None:
+            return False
+        if not session.notify_on_exit:
+            return False
+        if session.termination_reason == "exit" and session.exit_code == 0:
+            if not cls._session_output_text(session):
+                return session.notify_on_exit_empty_success
+        return True
 
     async def _watch_session(self, session: BackgroundSession) -> None:
         try:
@@ -125,9 +150,9 @@ class BackgroundProcessManager:
             session.finished_at = time.monotonic()
             session.finished_at_wall = time.time()
             self._prune_exited_sessions()
-            if session.notify_on_exit is not None and not session.suppress_exit_notification:
+            if self._should_notify_on_exit(session):
                 try:
-                    await session.notify_on_exit(session)
+                    await session.exit_notifier(session)
                 except Exception:
                     logger.exception(
                         "background.process.notify-failed | session_id={} reason={}",

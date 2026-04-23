@@ -155,6 +155,8 @@ class ExecToolConfig(BaseModel):
     """Shell execution tool configuration."""
 
     timeout: int = Field(default=60, ge=1)
+    notify_on_exit: bool = True
+    notify_on_exit_empty_success: bool = False
 
 
 class WebSearchToolConfig(BaseModel):

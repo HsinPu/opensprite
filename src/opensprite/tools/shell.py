@@ -275,12 +275,16 @@ class ExecTool(Tool):
         deny_patterns: list[str] | None = None,
         process_manager: BackgroundProcessManager | None = None,
         background_notification_factory: BackgroundNotificationFactory | None = None,
+        notify_on_exit: bool = True,
+        notify_on_exit_empty_success: bool = False,
     ):
         self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
         self.timeout = timeout
         self.deny_patterns = deny_patterns or self.DENY_PATTERNS
         self.process_manager = process_manager or BackgroundProcessManager()
         self._background_notification_factory = background_notification_factory
+        self.notify_on_exit = notify_on_exit
+        self.notify_on_exit_empty_success = notify_on_exit_empty_success
 
     def _get_workspace(self) -> Path:
         return self._workspace_resolver()
@@ -354,6 +358,8 @@ class ExecTool(Tool):
         output_chunks: list[CapturedOutputChunk],
         timeout_seconds: float,
         yield_ms: int | None,
+        notify_on_exit: bool,
+        notify_on_exit_empty_success: bool,
     ) -> str:
         session = self.process_manager.register_session(
             command=command,
@@ -363,11 +369,13 @@ class ExecTool(Tool):
             output_chunks=output_chunks,
             timeout_seconds=timeout_seconds,
             drain_timeout=self._output_drain_timeout(timeout_seconds),
-            notify_on_exit=(
+            exit_notifier=(
                 self._background_notification_factory()
                 if self._background_notification_factory is not None
                 else None
             ),
+            notify_on_exit=notify_on_exit,
+            notify_on_exit_empty_success=notify_on_exit_empty_success,
         )
         output = self.process_manager.render_output(session, max_chars=1200)
         return _build_background_session_result(session, output, yield_ms=yield_ms)
@@ -407,6 +415,14 @@ class ExecTool(Tool):
                     "type": "integer",
                     "minimum": 1,
                     "description": "Optional. Override the per-command timeout in seconds for this run or background session.",
+                },
+                "notify_on_exit": {
+                    "type": "boolean",
+                    "description": "Optional. Override whether a managed background session should publish a completion notification when it exits.",
+                },
+                "notify_on_exit_empty_success": {
+                    "type": "boolean",
+                    "description": "Optional. Override whether successful managed background sessions with no output should still publish a completion notification.",
                 }
             },
             "required": ["command"]
@@ -417,6 +433,10 @@ class ExecTool(Tool):
         background = bool(kwargs.get("background", False))
         yield_ms = kwargs.get("yield_ms")
         timeout_seconds = int(kwargs.get("timeout_seconds") or self.timeout)
+        notify_on_exit = bool(kwargs.get("notify_on_exit", self.notify_on_exit))
+        notify_on_exit_empty_success = bool(
+            kwargs.get("notify_on_exit_empty_success", self.notify_on_exit_empty_success)
+        )
 
         validation_error = self._validate_command(
             command,
@@ -443,6 +463,8 @@ class ExecTool(Tool):
                     output_chunks=output_chunks,
                     timeout_seconds=timeout_seconds,
                     yield_ms=None,
+                    notify_on_exit=notify_on_exit,
+                    notify_on_exit_empty_success=notify_on_exit_empty_success,
                 )
 
             if yield_ms is not None:
@@ -468,6 +490,8 @@ class ExecTool(Tool):
                         output_chunks=output_chunks,
                         timeout_seconds=max(0.001, float(timeout_seconds) - elapsed),
                         yield_ms=yield_ms,
+                        notify_on_exit=notify_on_exit,
+                        notify_on_exit_empty_success=notify_on_exit_empty_success,
                     )
 
                 return await self._handle_completed_process(

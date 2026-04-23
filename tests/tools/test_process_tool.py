@@ -157,6 +157,89 @@ def test_background_session_exit_notifier_runs_on_natural_completion(tmp_path):
     asyncio.run(run())
 
 
+def test_background_session_quiet_success_does_not_notify_by_default(tmp_path):
+    async def run() -> None:
+        notifications = []
+        manager = BackgroundProcessManager()
+
+        async def notify(session):
+            notifications.append(session.session_id)
+
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_notification_factory=lambda: notify,
+        )
+
+        await exec_tool.execute(
+            command=_python_shell_command("pass"),
+            background=True,
+            timeout_seconds=5,
+        )
+        await asyncio.sleep(0.2)
+
+        assert notifications == []
+
+    asyncio.run(run())
+
+
+def test_background_session_quiet_success_can_notify_when_enabled(tmp_path):
+    async def run() -> None:
+        notifications = []
+        manager = BackgroundProcessManager()
+
+        async def notify(session):
+            notifications.append((session.session_id, session.termination_reason, session.exit_code))
+
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_notification_factory=lambda: notify,
+        )
+
+        started = await exec_tool.execute(
+            command=_python_shell_command("pass"),
+            background=True,
+            timeout_seconds=5,
+            notify_on_exit_empty_success=True,
+        )
+        session_id = _extract_session_id(started)
+        await asyncio.sleep(0.2)
+
+        assert notifications == [(session_id, "exit", 0)]
+
+    asyncio.run(run())
+
+
+def test_background_session_non_success_notifies_even_without_output(tmp_path):
+    async def run() -> None:
+        notifications = []
+        manager = BackgroundProcessManager()
+
+        async def notify(session):
+            notifications.append((session.termination_reason, session.exit_code))
+
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_notification_factory=lambda: notify,
+        )
+
+        await exec_tool.execute(
+            command=_python_shell_command("import sys; sys.exit(2)"),
+            background=True,
+            timeout_seconds=5,
+        )
+        await asyncio.sleep(0.2)
+
+        assert notifications == [("exit", 2)]
+
+    asyncio.run(run())
+
+
 def test_background_session_exit_notifier_is_suppressed_for_manual_kill(tmp_path):
     async def run() -> None:
         notifications = []
