@@ -237,7 +237,28 @@ class TelegramAdapter(MessageAdapter):
         except Exception:
             pass
     
-    async def to_user_message(self, raw_update: Update) -> UserMessage:
+    @staticmethod
+    def _resolve_update_bot(raw_update: Any, explicit_bot: Any = None) -> Any:
+        """Resolve the Telegram bot object across real PTB updates and tests."""
+        if explicit_bot is not None:
+            return explicit_bot
+
+        bot = getattr(raw_update, "bot", None)
+        if bot is not None:
+            return bot
+
+        get_bot = getattr(raw_update, "get_bot", None)
+        if callable(get_bot):
+            try:
+                bot = get_bot()
+            except Exception:
+                bot = None
+            if bot is not None:
+                return bot
+
+        return getattr(raw_update, "_bot", None)
+
+    async def to_user_message(self, raw_update: Update, bot: Any = None) -> UserMessage:
         """
         把 Telegram Update 轉成統一的 UserMessage
         
@@ -276,42 +297,46 @@ class TelegramAdapter(MessageAdapter):
         chat_id = str(message.chat.id) if message.chat else None
         session_chat_id = f"telegram:{chat_id}" if chat_id else None
         
+        telegram_bot = self._resolve_update_bot(raw_update, bot)
+
         # 處理圖片
         images = []
         photos = getattr(message, "photo", None)
-        if photos:
-            images = await self._download_images(photos, raw_update.bot)
+        if photos and telegram_bot is not None:
+            images = await self._download_images(photos, telegram_bot)
 
         # 處理音訊 / 語音
         audios = []
         voice = getattr(message, "voice", None)
-        if voice:
-            audio = await self._download_audio(voice, raw_update.bot, default_mime_type="audio/ogg")
+        if voice and telegram_bot is not None:
+            audio = await self._download_audio(voice, telegram_bot, default_mime_type="audio/ogg")
             if audio:
                 audios.append(audio)
         audio_message = getattr(message, "audio", None)
-        if audio_message:
-            audio = await self._download_audio(audio_message, raw_update.bot, default_mime_type="audio/mpeg")
+        if audio_message and telegram_bot is not None:
+            audio = await self._download_audio(audio_message, telegram_bot, default_mime_type="audio/mpeg")
             if audio:
                 audios.append(audio)
 
         # 處理影片
         videos = []
         video_message = getattr(message, "video", None)
-        if video_message:
-            video = await self._download_media_blob(video_message, raw_update.bot, default_mime_type="video/mp4")
+        if video_message and telegram_bot is not None:
+            video = await self._download_media_blob(video_message, telegram_bot, default_mime_type="video/mp4")
             if video:
                 videos.append(video)
         video_note = getattr(message, "video_note", None)
-        if video_note:
-            video = await self._download_media_blob(video_note, raw_update.bot, default_mime_type="video/mp4")
+        if video_note and telegram_bot is not None:
+            video = await self._download_media_blob(video_note, telegram_bot, default_mime_type="video/mp4")
             if video:
                 videos.append(video)
         animation = getattr(message, "animation", None)
-        if animation:
-            video = await self._download_media_blob(animation, raw_update.bot, default_mime_type="video/mp4")
+        if animation and telegram_bot is not None:
+            video = await self._download_media_blob(animation, telegram_bot, default_mime_type="video/mp4")
             if video:
                 videos.append(video)
+        if telegram_bot is None and any((photos, voice, audio_message, video_message, video_note, animation)):
+            logger.warning("Telegram media update has no bot available; skipping media download")
 
         metadata = {
             "update_id": raw_update.update_id,
@@ -362,7 +387,7 @@ class TelegramAdapter(MessageAdapter):
             b64 = base64.b64encode(bytes(file_content)).decode('utf-8')
             
             # 偵測 MIME type
-            mime_type = photo.mime_type or "image/jpeg"
+            mime_type = getattr(photo, "mime_type", None) or "image/jpeg"
             
             images.append(f"data:{mime_type};base64,{b64}")
             
@@ -767,7 +792,7 @@ class TelegramAdapter(MessageAdapter):
         # 註冊訊息 handler
         async def handle_update(update: Update, context):
             # 轉換成統一格式
-            user_msg = await self.to_user_message(update)
+            user_msg = await self.to_user_message(update, bot=getattr(context, "bot", None))
             
             # 檢查是否是空訊息
             if not user_msg.text and not user_msg.images and not user_msg.audios and not user_msg.videos:

@@ -101,6 +101,60 @@ def test_telegram_adapter_downloads_video_message_as_video_data_url():
     assert user_message.videos[0].startswith("data:video/mp4;base64,")
 
 
+def test_telegram_adapter_uses_explicit_bot_when_update_has_no_bot_attribute():
+    async def scenario():
+        adapter = TelegramAdapter("token")
+        update = SimpleNamespace(
+            update_id=1,
+            message=SimpleNamespace(
+                text=None,
+                caption=None,
+                from_user=SimpleNamespace(id=1, username="alice", full_name="Alice"),
+                chat=SimpleNamespace(id=123, type="private"),
+                message_id=7,
+                photo=[SimpleNamespace(file_id="photo-small"), SimpleNamespace(file_id="photo-large")],
+                voice=None,
+                audio=None,
+                video=None,
+                video_note=None,
+                animation=None,
+            ),
+        )
+        return await adapter.to_user_message(update, bot=FakeBot())
+
+    user_message = asyncio.run(scenario())
+
+    assert user_message.images is not None
+    assert len(user_message.images) == 1
+    assert user_message.images[0].startswith("data:image/jpeg;base64,")
+
+
+def test_telegram_adapter_skips_media_download_when_bot_is_unavailable():
+    async def scenario():
+        adapter = TelegramAdapter("token")
+        update = SimpleNamespace(
+            update_id=1,
+            message=SimpleNamespace(
+                text=None,
+                caption=None,
+                from_user=SimpleNamespace(id=1, username="alice", full_name="Alice"),
+                chat=SimpleNamespace(id=123, type="private"),
+                message_id=7,
+                photo=[SimpleNamespace(file_id="photo-large")],
+                voice=None,
+                audio=None,
+                video=None,
+                video_note=None,
+                animation=None,
+            ),
+        )
+        return await adapter.to_user_message(update)
+
+    user_message = asyncio.run(scenario())
+
+    assert user_message.images is None
+
+
 def test_telegram_adapter_sends_outbound_media_attachments():
     async def scenario():
         adapter = TelegramAdapter("token")
