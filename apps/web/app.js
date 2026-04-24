@@ -39,8 +39,18 @@ const dom = {
   wsUrlInput: document.getElementById("wsUrlInput"),
   displayNameInput: document.getElementById("displayNameInput"),
   chatIdInput: document.getElementById("chatIdInput"),
+  settingsTitle: document.getElementById("settingsTitle"),
+  settingsTabs: document.querySelectorAll("[data-settings-section]"),
+  settingsPages: document.querySelectorAll("[data-settings-page]"),
   emptyState: document.getElementById("emptyState"),
   promptCards: document.querySelectorAll("[data-prompt]"),
+};
+
+const SETTINGS_TITLES = {
+  general: "一般",
+  shortcuts: "快速鍵",
+  providers: "提供者",
+  models: "模型",
 };
 
 function readStoredValue(key, fallback) {
@@ -123,6 +133,13 @@ function getCurrentSession() {
   return state.sessions.find((session) => session.chatId === state.activeChatId) || null;
 }
 
+function getSessionDisplayId(session) {
+  if (!session) {
+    return "No active chat";
+  }
+  return session.sessionChatId || `web:${session.chatId}`;
+}
+
 function ensureSession(chatId, sessionChatId) {
   let session = state.sessions.find((entry) => entry.chatId === chatId);
   if (!session) {
@@ -164,9 +181,21 @@ function setActiveSession(chatId) {
   render();
 }
 
-function openSettings() {
+function selectSettingsSection(sectionName) {
+  const nextSection = SETTINGS_TITLES[sectionName] ? sectionName : "general";
+  dom.settingsTabs.forEach((button) => {
+    button.classList.toggle("settings-nav__item--active", button.dataset.settingsSection === nextSection);
+  });
+  dom.settingsPages.forEach((page) => {
+    page.hidden = page.dataset.settingsPage !== nextSection;
+  });
+  dom.settingsTitle.textContent = SETTINGS_TITLES[nextSection];
+}
+
+function openSettings(sectionName = "general") {
   dom.settingsModal.hidden = false;
   document.body.classList.add("settings-open");
+  selectSettingsSection(sectionName);
   renderSettings();
 }
 
@@ -252,7 +281,7 @@ function connectSocket() {
   } catch {
     setNotice("The WebSocket URL is invalid. Check it in settings first.", "error");
     render();
-    openSettings();
+    openSettings("providers");
     return;
   }
 
@@ -335,7 +364,7 @@ function renderSessionList() {
     const title = document.createElement("strong");
     title.textContent = session.title;
     const subtitle = document.createElement("span");
-    subtitle.textContent = session.sessionChatId || session.chatId;
+    subtitle.textContent = getSessionDisplayId(session);
 
     button.append(title, subtitle);
     button.addEventListener("click", () => setActiveSession(session.chatId));
@@ -380,10 +409,9 @@ function renderMessages() {
 
 function renderStatus() {
   const currentSession = getCurrentSession();
-  const sessionLabel = currentSession?.sessionChatId || "Waiting for live session";
   const chatId = currentSession?.chatId || "No active chat";
 
-  dom.sessionMeta.textContent = `${currentSession?.title || "New chat"} · ${sessionLabel}`;
+  dom.sessionMeta.textContent = `${currentSession?.title || "New chat"} · ${getSessionDisplayId(currentSession)}`;
   dom.runtimeHint.textContent = chatId;
 
   const labels = {
@@ -472,7 +500,7 @@ function submitMessage(event) {
     }
     setNotice("The automatic connection is not active. Check the endpoint, then retry.", "warning");
     render();
-    openSettings();
+    openSettings("providers");
     return;
   }
 
@@ -513,7 +541,10 @@ dom.promptCards.forEach((button) => {
   });
 });
 
-dom.settingsToggle.addEventListener("click", openSettings);
+dom.settingsToggle.addEventListener("click", () => openSettings());
+dom.settingsTabs.forEach((button) => {
+  button.addEventListener("click", () => selectSettingsSection(button.dataset.settingsSection));
+});
 dom.settingsClose.addEventListener("click", closeSettings);
 dom.settingsBackdrop.addEventListener("click", closeSettings);
 dom.saveSettingsButton.addEventListener("click", saveSettingsAndConnect);
