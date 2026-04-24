@@ -21,6 +21,8 @@ opensprite/agent.py - Agent Loop
 """
 
 import asyncio
+import base64
+import binascii
 from contextvars import ContextVar
 from contextlib import AsyncExitStack
 import json
@@ -37,7 +39,7 @@ from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, _extract_task_field, build_initial_active_task_block, build_task_block_from_text, create_active_task_store, infer_immediate_task_transition, should_replace_active_task
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
-from ..context.paths import get_recent_summary_state_file
+from ..context.paths import get_chat_workspace, get_recent_summary_state_file
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
@@ -91,6 +93,28 @@ class AgentLoop:
         "voice": "voices",
         "audio": "audios",
         "video": "videos",
+    }
+    INBOUND_IMAGE_EXTENSIONS = {
+        "image/jpeg": "jpg",
+        "image/jpg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+    }
+    INBOUND_AUDIO_EXTENSIONS = {
+        "audio/ogg": "ogg",
+        "audio/mpeg": "mp3",
+        "audio/mp3": "mp3",
+        "audio/wav": "wav",
+        "audio/x-wav": "wav",
+        "audio/webm": "webm",
+        "audio/mp4": "m4a",
+    }
+    INBOUND_VIDEO_EXTENSIONS = {
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "video/quicktime": "mov",
+        "video/x-matroska": "mkv",
     }
 
     @staticmethod
@@ -942,11 +966,103 @@ class AgentLoop:
 
     def _get_current_workspace(self) -> Path:
         """Resolve the current task-local workspace."""
-        from ..context.paths import get_chat_workspace
-
         workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
         chat_id = self._get_current_chat_id() or "default"
         return get_chat_workspace(chat_id, workspace_root=workspace_root)
+
+    @staticmethod
+    def _decode_media_data_url(payload: str, media_prefix: str) -> tuple[str, bytes] | None:
+        """Decode a media data URL into a MIME type and bytes."""
+        value = str(payload or "").strip()
+        if not value.startswith("data:"):
+            return None
+
+        header, separator, encoded = value.partition(",")
+        if not separator or ";base64" not in header.lower():
+            return None
+
+        mime_type = header[5:].split(";", 1)[0].strip().lower()
+        if not mime_type.startswith(f"{media_prefix}/"):
+            return None
+
+        try:
+            return mime_type, base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError):
+            return None
+
+    def _persist_inbound_media(
+        self,
+        chat_id: str,
+        media_items: list[str] | None,
+        *,
+        media_prefix: str,
+        directory_name: str,
+        extensions: dict[str, str],
+    ) -> list[str]:
+        """Persist inbound media data URLs under a chat workspace directory."""
+        if not media_items:
+            return []
+
+        workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
+        workspace = get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=self.app_home)
+        media_dir = workspace / directory_name
+        saved_files: list[str] = []
+
+        for index, item in enumerate(media_items, start=1):
+            decoded = self._decode_media_data_url(item, media_prefix)
+            if decoded is None:
+                logger.warning(
+                    "[{}] inbound.{}.persist.skip | index={} reason=unsupported-payload",
+                    chat_id,
+                    media_prefix,
+                    index,
+                )
+                continue
+
+            mime_type, media_bytes = decoded
+            extension = extensions.get(mime_type, "bin")
+            try:
+                media_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = time.strftime("%Y%m%d-%H%M%S")
+                filename = f"inbound-{timestamp}-{time.time_ns()}-{index}.{extension}"
+                target = media_dir / filename
+                target.write_bytes(media_bytes)
+                saved_files.append(target.relative_to(workspace).as_posix())
+                logger.info("[{}] inbound.{}.persisted | file={}", chat_id, media_prefix, target)
+            except Exception as exc:
+                logger.warning("[{}] inbound.{}.persist.failed | index={} error={}", chat_id, media_prefix, index, exc)
+
+        return saved_files
+
+    def _persist_inbound_images(self, chat_id: str, images: list[str] | None) -> list[str]:
+        """Persist inbound image data URLs under the chat workspace images directory."""
+        return self._persist_inbound_media(
+            chat_id,
+            images,
+            media_prefix="image",
+            directory_name="images",
+            extensions=self.INBOUND_IMAGE_EXTENSIONS,
+        )
+
+    def _persist_inbound_audios(self, chat_id: str, audios: list[str] | None) -> list[str]:
+        """Persist inbound audio data URLs under the chat workspace audios directory."""
+        return self._persist_inbound_media(
+            chat_id,
+            audios,
+            media_prefix="audio",
+            directory_name="audios",
+            extensions=self.INBOUND_AUDIO_EXTENSIONS,
+        )
+
+    def _persist_inbound_videos(self, chat_id: str, videos: list[str] | None) -> list[str]:
+        """Persist inbound video data URLs under the chat workspace videos directory."""
+        return self._persist_inbound_media(
+            chat_id,
+            videos,
+            media_prefix="video",
+            directory_name="videos",
+            extensions=self.INBOUND_VIDEO_EXTENSIONS,
+        )
 
     def _register_default_tools(self) -> None:
         """
@@ -1165,6 +1281,9 @@ class AgentLoop:
         user_images: list[str] | None,
         user_audios: list[str] | None,
         user_videos: list[str] | None,
+        user_image_files: list[str] | None = None,
+        user_audio_files: list[str] | None = None,
+        user_video_files: list[str] | None = None,
     ) -> str:
         """Add lightweight prompt hints when the current turn includes media."""
         hints: list[str] = []
@@ -1172,14 +1291,20 @@ class AgentLoop:
             hints.append(
                 f"User attached {len(user_images)} image(s). Use analyze_image or ocr_image if visual understanding is needed."
             )
+            if user_image_files:
+                hints.append(f"Saved inbound image file(s) under the chat workspace: {', '.join(user_image_files)}.")
         if user_audios:
             hints.append(
                 f"User attached {len(user_audios)} audio clip(s). Use transcribe_audio if spoken content is needed."
             )
+            if user_audio_files:
+                hints.append(f"Saved inbound audio file(s) under the chat workspace: {', '.join(user_audio_files)}.")
         if user_videos:
             hints.append(
                 f"User attached {len(user_videos)} video clip(s). Use analyze_video if understanding the video content is needed."
             )
+            if user_video_files:
+                hints.append(f"Saved inbound video file(s) under the chat workspace: {', '.join(user_video_files)}.")
         if not hints:
             return current_message
         return f"{current_message}\n\n[{ ' '.join(hints) }]"
@@ -1191,6 +1316,9 @@ class AgentLoop:
         channel: str | None = None,
         allow_tools: bool = True,
         user_images: list[str] | None = None,
+        user_image_files: list[str] | None = None,
+        user_audio_files: list[str] | None = None,
+        user_video_files: list[str] | None = None,
         *,
         transport_chat_id: str | None = None,
         emit_tool_progress: bool = False,
@@ -1262,7 +1390,15 @@ class AgentLoop:
         )
         current_audios = self._get_current_audios()
         current_videos = self._get_current_videos()
-        prompt_message = self._augment_message_for_media(current_message, user_images, current_audios, current_videos)
+        prompt_message = self._augment_message_for_media(
+            current_message,
+            user_images,
+            current_audios,
+            current_videos,
+            user_image_files=user_image_files,
+            user_audio_files=user_audio_files,
+            user_video_files=user_video_files,
+        )
         tool_schema_tokens = self._estimate_tool_schema_tokens(allow_tools=allow_tools)
         history_dicts, base_tokens, history_tokens, final_tokens = self._trim_history_to_token_budget(
             history=history_dicts,
@@ -1461,6 +1597,9 @@ class AgentLoop:
             f"[{session_chat_id}] inbound | channel={channel or '-'} sender={sender} images={len(user_message.images or [])} "
             f"text={self._format_log_preview(user_message.text, max_chars=200)}"
         )
+        image_files = self._persist_inbound_images(session_chat_id, user_message.images)
+        audio_files = self._persist_inbound_audios(session_chat_id, user_message.audios)
+        video_files = self._persist_inbound_videos(session_chat_id, user_message.videos)
 
         user_metadata = {
             **dict(user_message.metadata or {}),
@@ -1469,8 +1608,14 @@ class AgentLoop:
             "sender_id": user_message.sender_id,
             "sender_name": user_message.sender_name,
             "images_count": len(user_message.images or []),
+            "image_files": image_files or None,
+            "images_dir": "images" if image_files else None,
             "audios_count": len(user_message.audios or []),
+            "audio_files": audio_files or None,
+            "audios_dir": "audios" if audio_files else None,
             "videos_count": len(user_message.videos or []),
+            "video_files": video_files or None,
+            "videos_dir": "videos" if video_files else None,
         }
         user_metadata = {key: value for key, value in user_metadata.items() if value is not None}
         assistant_metadata = {
@@ -1519,6 +1664,9 @@ class AgentLoop:
                 current_message=user_message.text,
                 channel=channel,
                 user_images=user_message.images,
+                user_image_files=image_files,
+                user_audio_files=audio_files,
+                user_video_files=video_files,
                 transport_chat_id=str(user_message.chat_id) if user_message.chat_id is not None else None,
                 emit_tool_progress=True,
             )
