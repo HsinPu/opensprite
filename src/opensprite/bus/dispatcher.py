@@ -124,27 +124,35 @@ class MessageQueue:
         self._response_handlers[normalized_channel] = handler
 
     @staticmethod
+    def _first_command(text: str | None) -> str:
+        """Return the first whitespace-delimited command token, or empty string."""
+        parts = (text or "").strip().split(maxsplit=1)
+        if not parts:
+            return ""
+        return parts[0].lower()
+
+    @staticmethod
     def is_stop_command(text: str | None) -> bool:
         """Return whether a message should interrupt the current session."""
-        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        command = MessageQueue._first_command(text)
         return command in {"/stop", "/stop@openspritebot"}
 
     @staticmethod
     def is_reset_command(text: str | None) -> bool:
         """Return whether a message should reset the current session."""
-        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        command = MessageQueue._first_command(text)
         return command in {"/reset", "/reset@openspritebot"}
 
     @staticmethod
     def is_cron_command(text: str | None) -> bool:
         """Return whether a message should use immediate cron command handling."""
-        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        command = MessageQueue._first_command(text)
         return command in {"/cron", "/cron@openspritebot"}
 
     @staticmethod
     def is_task_command(text: str | None) -> bool:
         """Return whether a message should use immediate task command handling."""
-        command = (text or "").strip().split(maxsplit=1)[0].lower()
+        command = MessageQueue._first_command(text)
         return command in {"/task", "/task@openspritebot"}
 
     @staticmethod

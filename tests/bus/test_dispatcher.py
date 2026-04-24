@@ -63,6 +63,43 @@ def test_message_queue_falls_back_to_inbound_channel_when_response_channel_unkno
     assert received == [("telegram", "telegram", "chat-1", "pong")]
 
 
+def test_command_detection_ignores_empty_text():
+    assert MessageQueue.is_stop_command("") is False
+    assert MessageQueue.is_stop_command("   ") is False
+    assert MessageQueue.is_reset_command("") is False
+    assert MessageQueue.is_cron_command("") is False
+    assert MessageQueue.is_task_command("") is False
+
+
+def test_message_queue_accepts_empty_text_media_message():
+    async def scenario():
+        agent = FakeAgent(response_channel="telegram")
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, chat_id):
+            responses.append((message.session_chat_id, message.text))
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="", chat_id="media-chat", channel="telegram", images=["img-a"])
+            await asyncio.wait_for(event.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses, agent.seen_messages
+
+    responses, seen_messages = asyncio.run(scenario())
+
+    assert responses == [("telegram:media-chat", "pong")]
+    assert seen_messages[0].text == ""
+    assert seen_messages[0].images == ["img-a"]
+
+
 def test_message_queue_processor_exits_cleanly_when_cancelled_while_idle():
     async def scenario():
         queue = MessageQueue(FakeAgent())
