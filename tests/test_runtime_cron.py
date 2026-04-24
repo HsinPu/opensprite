@@ -26,6 +26,9 @@ class FakeAgent:
     async def close_background_skill_reviews(self):
         self.calls.append("close-skill-review")
 
+    async def close_background_processes(self):
+        self.calls.append("close-processes")
+
 
 class FakeQueue:
     def __init__(self):

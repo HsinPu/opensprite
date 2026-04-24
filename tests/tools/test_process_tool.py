@@ -7,6 +7,7 @@ from pathlib import Path
 
 from opensprite.tools.process import ProcessTool
 from opensprite.tools.process_runtime import BackgroundProcessManager
+import opensprite.tools.shell as shell_module
 from opensprite.tools.shell import ExecTool
 
 
@@ -360,6 +361,32 @@ def test_background_manager_prunes_old_exited_sessions(tmp_path):
         assert first_id not in session_ids
         assert second_id in session_ids
         assert len(session_ids) == 1
+
+    asyncio.run(run())
+
+
+def test_exec_cancellation_terminates_foreground_process(tmp_path, monkeypatch):
+    async def run() -> None:
+        real_terminate = shell_module.terminate_process_tree
+        terminated_pids = []
+
+        async def recording_terminate(process, *, wait_timeout=5):
+            terminated_pids.append(process.pid)
+            await real_terminate(process, wait_timeout=wait_timeout)
+
+        monkeypatch.setattr(shell_module, "terminate_process_tree", recording_terminate)
+        tool = ExecTool(workspace=Path(tmp_path), timeout=30)
+        command = _python_shell_command("import time; time.sleep(30)")
+        task = asyncio.create_task(tool.execute(command=command, timeout_seconds=30))
+        await asyncio.sleep(0.2)
+
+        task.cancel()
+        try:
+            await asyncio.wait_for(task, timeout=5)
+        except asyncio.CancelledError:
+            pass
+
+        assert terminated_pids
 
     asyncio.run(run())
 

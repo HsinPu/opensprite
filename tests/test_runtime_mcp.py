@@ -26,6 +26,9 @@ class FakeAgent:
     async def close_background_skill_reviews(self):
         self.calls.append("close-skill-review")
 
+    async def close_background_processes(self):
+        self.calls.append("close-processes")
+
 
 class FakeQueue:
     def __init__(self):
@@ -76,7 +79,7 @@ def test_runtime_run_connects_and_closes_mcp(monkeypatch):
 
     asyncio.run(runtime.run())
 
-    assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close"]
+    assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close-processes", "close"]
     assert fake_cron.calls == ["start", "stop"]
     assert sorted(fake_queue.calls) == ["process", "stop"]
     assert started_channels == [(fake_queue, fake_config.channels)]
@@ -107,6 +110,28 @@ def test_runtime_run_still_starts_when_llm_not_configured(monkeypatch):
 
     asyncio.run(runtime.run())
 
-    assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close"]
+    assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close-processes", "close"]
+
+
+def test_runtime_run_treats_channel_cancellation_as_shutdown(monkeypatch):
+    fake_agent = FakeAgent()
+    fake_queue = FakeQueue()
+    fake_cron = FakeCronManager()
+    fake_config = FakeConfig()
+
+    async def fake_create_agent(config):
+        return fake_agent, fake_queue, fake_cron
+
+    async def fake_start_channels(mq, channels_config):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(runtime.Config, "load", classmethod(lambda cls, path=None: fake_config))
+    monkeypatch.setattr(runtime, "create_agent", fake_create_agent)
+    monkeypatch.setattr("opensprite.utils.log.setup_log", lambda config=None, console=True: None)
+    monkeypatch.setattr("opensprite.channels.start_channels", fake_start_channels)
+
+    asyncio.run(runtime.run())
+
+    assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close-processes", "close"]
     assert fake_cron.calls == ["start", "stop"]
-    assert sorted(fake_queue.calls) == ["process", "stop"]
+    assert "stop" in fake_queue.calls

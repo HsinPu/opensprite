@@ -233,6 +233,19 @@ class BackgroundProcessManager:
             self._sessions.pop(session_id, None)
         return len(exited_ids)
 
+    async def close(self) -> None:
+        """Terminate all managed background sessions and drain their watcher tasks."""
+        sessions = list(self._sessions.values())
+        for session in sessions:
+            session.suppress_exit_notification = True
+            if session.state == "running":
+                if session.termination_reason is None:
+                    session.termination_reason = "shutdown"
+                await terminate_process_tree(session.process, wait_timeout=session.drain_timeout)
+            if session.watch_task is not None:
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await session.watch_task
+
     @staticmethod
     def render_output(
         session: BackgroundSession,

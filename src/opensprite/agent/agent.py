@@ -860,6 +860,14 @@ class AgentLoop:
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
 
+    async def close_background_processes(self) -> None:
+        """Terminate managed background exec sessions before the event loop closes."""
+        process_tool = self.tools.get("process")
+        manager = getattr(process_tool, "manager", None)
+        close = getattr(manager, "close", None)
+        if close is not None:
+            await close()
+
     async def _maybe_seed_active_task(self, chat_id: str, current_message: str) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
         if not self.active_task_config.enabled or self.app_home is None:

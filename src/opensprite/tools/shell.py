@@ -445,6 +445,8 @@ class ExecTool(Tool):
         if validation_error is not None:
             return validation_error
 
+        process: asyncio.subprocess.Process | None = None
+        read_tasks: list[asyncio.Task[None]] = []
         try:
             workspace = self._get_workspace()
             output_chunks: list[CapturedOutputChunk] = []
@@ -515,5 +517,14 @@ class ExecTool(Tool):
                 output_chunks,
                 timeout_seconds=timeout_seconds,
             )
+        except asyncio.CancelledError:
+            if process is not None:
+                await terminate_process_tree(process)
+            if read_tasks:
+                await drain_process_output(
+                    read_tasks,
+                    timeout=self._output_drain_timeout(timeout_seconds),
+                )
+            raise
         except Exception as e:
             return f"Error executing command: {str(e)}"

@@ -287,7 +287,7 @@ async def run(config_path: str | Path | None = None) -> None:
 
         # 等待直到被中斷
         await asyncio.Event().wait()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("正在關閉...")
     finally:
         await mq.stop()
@@ -296,6 +296,9 @@ async def run(config_path: str | Path | None = None) -> None:
         await cron_manager.stop()
         await agent.close_background_maintenance()
         await agent.close_background_skill_reviews()
+        close_background_processes = getattr(agent, "close_background_processes", None)
+        if close_background_processes is not None:
+            await close_background_processes()
         await agent.close_mcp()
         logger.info("再見！")
 
