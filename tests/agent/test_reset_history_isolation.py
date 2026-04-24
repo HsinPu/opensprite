@@ -3,6 +3,7 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.documents.active_task import create_active_task_store
 from opensprite.documents.recent_summary import RecentSummaryStore
 from opensprite.storage.base import StoredMessage
 from opensprite.storage.memory import MemoryStorage
@@ -12,6 +13,8 @@ from opensprite.tools.registry import ToolRegistry
 
 class FakeContextBuilder:
     def __init__(self, workspace: Path):
+        self.app_home = workspace / "home"
+        self.tool_workspace = workspace / "workspace"
         self.workspace = workspace
         self.memory_dir = workspace / "memory"
 
@@ -90,14 +93,22 @@ def test_reset_history_only_clears_target_session(tmp_path):
         summary_store.write("telegram:user-b", "# Active Threads\n- keep context")
         summary_store.set_processed_index("telegram:user-a", 5)
         summary_store.set_processed_index("telegram:user-b", 7)
+        task_a = create_active_task_store(agent.app_home, "telegram:user-a", workspace_root=agent.tool_workspace)
+        task_b = create_active_task_store(agent.app_home, "telegram:user-b", workspace_root=agent.tool_workspace)
+        task_a.write_managed_block(
+            "- Status: active\n- Goal: Fix chat A\n- Deliverable: patch\n- Definition of done:\n  - done\n- Constraints:\n  - none\n- Assumptions:\n  - none\n- Plan:\n  1. inspect\n- Current step: 1. inspect\n- Next step: 1. inspect\n- Completed steps:\n  - none\n- Open questions:\n  - none"
+        )
+        task_b.write_managed_block(
+            "- Status: active\n- Goal: Keep chat B\n- Deliverable: notes\n- Definition of done:\n  - done\n- Constraints:\n  - none\n- Assumptions:\n  - none\n- Plan:\n  1. inspect\n- Current step: 1. inspect\n- Next step: 1. inspect\n- Completed steps:\n  - none\n- Open questions:\n  - none"
+        )
 
         await agent.reset_history("telegram:user-a")
 
         messages_a = await storage.get_messages("telegram:user-a")
         messages_b = await storage.get_messages("telegram:user-b")
-        return messages_a, messages_b, search_store.cleared, summary_store
+        return messages_a, messages_b, search_store.cleared, summary_store, task_a, task_b
 
-    messages_a, messages_b, cleared, summary_store = asyncio.run(scenario())
+    messages_a, messages_b, cleared, summary_store, task_a, task_b = asyncio.run(scenario())
 
     assert messages_a == []
     assert [message.content for message in messages_b] == ["B1"]
@@ -106,3 +117,5 @@ def test_reset_history_only_clears_target_session(tmp_path):
     assert summary_store.read("telegram:user-b") == "# Active Threads\n- keep context"
     assert summary_store.get_processed_index("telegram:user-a") == 0
     assert summary_store.get_processed_index("telegram:user-b") == 7
+    assert task_a.read_status() == "inactive"
+    assert task_b.read_status() == "active"

@@ -160,6 +160,10 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
             await release_maintenance.wait()
             call_order.append(("profile", chat_id))
 
+        async def fake_update_active_task(chat_id):
+            await release_maintenance.wait()
+            call_order.append(("active-task", chat_id))
+
         async def fake_update_recent_summary(chat_id):
             await release_maintenance.wait()
             call_order.append(("recent-summary", chat_id))
@@ -168,6 +172,7 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
         agent._maybe_consolidate_memory = fake_consolidate
         agent._maybe_update_recent_summary = fake_update_recent_summary
         agent._maybe_update_user_profile = fake_update_profile
+        agent._maybe_update_active_task = fake_update_active_task
 
         response = await agent.process(
             UserMessage(
@@ -197,12 +202,13 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
     assert storage.saved[0][3]["sender_name"] == "alice"
     assert storage.saved[0][3]["images_count"] == 1
     assert storage.saved[1][3] == {"channel": "telegram", "transport_chat_id": "room-1"}
-    assert call_order == [
-        ("call_llm", "telegram:room-1", "hello", "telegram", ["img1"]),
+    assert call_order[0] == ("call_llm", "telegram:room-1", "hello", "telegram", ["img1"])
+    assert set(call_order[1:]) == {
         ("memory", "telegram:room-1"),
         ("recent-summary", "telegram:room-1"),
         ("profile", "telegram:room-1"),
-    ]
+        ("active-task", "telegram:room-1"),
+    }
     assert response.text == "assistant reply"
     assert response.channel == "telegram"
     assert response.session_chat_id == "telegram:room-1"

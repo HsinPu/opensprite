@@ -20,6 +20,7 @@ from opensprite.config.schema import (
 )
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
+from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse
 from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
@@ -207,3 +208,163 @@ def test_main_agent_system_prompt_lists_connected_mcp_tools(tmp_path: Path) -> N
     assert "# Available MCP Tools" in system_text
     assert "These MCP tools are already connected and available through normal tool calling." in system_text
     assert "`mcp_demo_echo`: Echo text through demo MCP" in system_text
+
+
+def test_main_agent_call_llm_seeds_active_task_on_first_turn(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = CapturingProvider()
+    agent = AgentLoop(
+        config=AgentConfig(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    chat_id = "telegram:room-1"
+
+    async def _run() -> str:
+        return await agent.call_llm(
+            chat_id,
+            "Refactor the agent in small safe steps and keep it on task.",
+            channel="telegram",
+            allow_tools=False,
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    system_text = provider.calls[0][0].content
+    assert "# Active Task" in system_text
+    assert "Goal: Refactor the agent in small safe steps and keep it on task." in system_text
+    assert "Current step: 1. inspect the relevant context and refine the task if needed" in system_text
+
+
+def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = CapturingProvider()
+    agent = AgentLoop(
+        config=AgentConfig(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    chat_id = "telegram:room-1"
+
+    async def _run() -> str:
+        task_store = create_active_task_store(app_home, chat_id, workspace_root=context_builder.tool_workspace)
+        task_store.write_managed_block(
+            "- Status: active\n"
+            "- Goal: Refactor the agent in small safe steps.\n"
+            "- Deliverable: a safe refactor and verification\n"
+            "- Definition of done:\n"
+            "  - tests pass\n"
+            "- Constraints:\n"
+            "  - minimal changes\n"
+            "- Assumptions:\n"
+            "  - none\n"
+            "- Plan:\n"
+            "  1. inspect\n"
+            "- Current step: 1. inspect\n"
+            "- Next step: 1. inspect\n"
+            "- Completed steps:\n"
+            "  - none\n"
+            "- Open questions:\n"
+            "  - none"
+        )
+        return await agent.call_llm(
+            chat_id,
+            "改成先幫我檢查 MCP lifecycle",
+            channel="telegram",
+            allow_tools=False,
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    system_text = provider.calls[0][0].content
+    assert "Goal: 改成先幫我檢查 MCP lifecycle" in system_text
+
+
+def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = CapturingProvider()
+    agent = AgentLoop(
+        config=AgentConfig(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    chat_id = "telegram:room-1"
+
+    async def _run() -> str:
+        return await agent.call_llm(
+            chat_id,
+            "你覺得這樣可以嗎？",
+            channel="telegram",
+            allow_tools=False,
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    system_text = provider.calls[0][0].content
+    assert "# Active Task" not in system_text

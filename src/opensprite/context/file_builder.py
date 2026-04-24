@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .paths import (
+    get_active_task_file,
     get_app_home,
     get_bootstrap_dir,
     get_chat_workspace,
@@ -118,6 +119,10 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
         """Resolve the USER.md path for the current user/session scope."""
         return get_user_profile_file(self.app_home, chat_id=chat_id, workspace_root=self.tool_workspace)
 
+    def get_active_task_path(self, chat_id: str = "default") -> Path:
+        """Resolve the ACTIVE_TASK.md path for the current session scope."""
+        return get_active_task_file(self.app_home, chat_id=chat_id, workspace_root=self.tool_workspace)
+
     def _read_user_profile(self, chat_id: str) -> str:
         """Load the current user/session profile text, creating it from the template when needed."""
         return create_user_profile_store(
@@ -126,6 +131,16 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
             bootstrap_dir=self.bootstrap_dir,
             workspace_root=self.tool_workspace,
         ).read_text()
+
+    def _read_active_task(self, chat_id: str) -> str:
+        """Load the current session's active task context when present."""
+        from ..documents.active_task import create_active_task_store
+
+        return create_active_task_store(
+            self.app_home,
+            chat_id,
+            workspace_root=self.tool_workspace,
+        ).get_context(chat_id)
 
     def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
@@ -140,6 +155,10 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
                     parts.append(section)
                 else:
                     parts.append(f"## {key}\n\n{section}")
+
+        active_task = self._read_active_task(chat_id)
+        if active_task:
+            parts.append(active_task)
 
         # Skills follow the on-demand model from OpenCode docs: list available
         # skill metadata in the main prompt, then load a full SKILL.md only when
@@ -179,6 +198,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         bootstrap_path = str(self.bootstrap_dir.expanduser().resolve())
         workspace_path = str(self.get_chat_workspace(chat_id).expanduser().resolve())
         user_profile_path = str(self.get_user_profile_path(chat_id).expanduser().resolve())
+        active_task_path = str(self.get_active_task_path(chat_id).expanduser().resolve())
         memory_path = str(get_memory_file(self.memory_dir, chat_id).expanduser().resolve())
         system = platform.system()
         runtime = f"{system} {platform.machine()}, Python {platform.python_version()}"
@@ -190,11 +210,12 @@ You are OpenSprite — operate as a **chief-of-staff / Jarvis-class** partner: o
 ## Runtime
 {runtime}
 
-## App Paths
-- App home: {app_home_path}
-- Bootstrap files: {bootstrap_path}
-- User profile: {user_profile_path}
-- Long-term memory: {memory_path}
+        ## App Paths
+        - App home: {app_home_path}
+        - Bootstrap files: {bootstrap_path}
+        - User profile: {user_profile_path}
+        - Active task: {active_task_path}
+        - Long-term memory: {memory_path}
 
 ## Active Workspace
 {workspace_path}

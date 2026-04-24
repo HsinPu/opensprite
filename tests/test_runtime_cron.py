@@ -23,6 +23,9 @@ class FakeAgent:
     async def close_background_maintenance(self):
         self.calls.append("close-maintenance")
 
+    async def close_background_skill_reviews(self):
+        self.calls.append("close-skill-review")
+
 
 class FakeQueue:
     def __init__(self):

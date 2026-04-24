@@ -196,6 +196,7 @@ async def create_agent(config: Config):
         search_store=search_store,
         search_config=config.search,
         user_profile_config=config.user_profile,
+        active_task_config=config.active_task,
         recent_summary_config=config.recent_summary,
         cron_manager=None,
         media_router=media_router,
@@ -294,6 +295,7 @@ async def run(config_path: str | Path | None = None) -> None:
         await stop_background_task(search_queue_worker, name="search embedding queue worker")
         await cron_manager.stop()
         await agent.close_background_maintenance()
+        await agent.close_background_skill_reviews()
         await agent.close_mcp()
         logger.info("再見！")
 

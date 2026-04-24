@@ -341,6 +341,15 @@ class RecentSummaryConfig(BaseModel):
     llm: DocumentLlmConfig
 
 
+class ActiveTaskConfig(BaseModel):
+    """Per-chat ACTIVE_TASK.md update configuration."""
+
+    enabled: bool = True
+    threshold: int = 2
+    lookback_messages: int = 40
+    llm: DocumentLlmConfig
+
+
 class SearchEmbeddingConfig(BaseModel):
     """Embedding and hybrid reranking configuration."""
 
@@ -378,6 +387,7 @@ class Config:
                  memory: MemoryConfig | None = None, search: SearchConfig | None = None,
                  user_profile: UserProfileConfig | None = None, vision: VisionConfig | None = None,
                  speech: SpeechConfig | None = None, video: VideoConfig | None = None,
+                 active_task: ActiveTaskConfig | None = None,
                  recent_summary: RecentSummaryConfig | None = None, source_path: str | Path | None = None,
                  channels_file: str = "channels.json", search_file: str = "search.json", media_file: str = "media.json",
                  messages: MessagesConfig | None = None, messages_file: str = "messages.json"):
@@ -393,6 +403,9 @@ class Config:
         self.search = search or SearchConfig()
         self.user_profile = user_profile or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
+        )
+        self.active_task = active_task or ActiveTaskConfig(
+            **Config._merge_document_section({}, Config.load_template_data().get("active_task", {}))
         )
         self.recent_summary = recent_summary or RecentSummaryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("recent_summary", {}))
@@ -982,6 +995,9 @@ class Config:
             user_profile=UserProfileConfig(
                 **cls._merge_document_section(dict(data.get("user_profile", {})), template_data.get("user_profile", {}))
             ),
+            active_task=ActiveTaskConfig(
+                **cls._merge_document_section(dict(data.get("active_task", {})), template_data.get("active_task", {}))
+            ),
             recent_summary=RecentSummaryConfig(
                 **cls._merge_document_section(
                     dict(data.get("recent_summary", {})), template_data.get("recent_summary", {})
@@ -1209,6 +1225,12 @@ class Config:
                 "threshold": self.user_profile.threshold,
                 "lookback_messages": self.user_profile.lookback_messages,
                 "llm": self.user_profile.llm.model_dump(),
+            },
+            "active_task": {
+                "enabled": self.active_task.enabled,
+                "threshold": self.active_task.threshold,
+                "lookback_messages": self.active_task.lookback_messages,
+                "llm": self.active_task.llm.model_dump(),
             },
             "recent_summary": {
                 "enabled": self.recent_summary.enabled,

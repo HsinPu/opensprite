@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..documents.active_task import ActiveTaskConsolidator
 from ..config.schema import DocumentLlmConfig
 from ..documents.memory import MemoryStore, consolidate
 from ..documents.user_profile import UserProfileConsolidator
@@ -125,3 +126,19 @@ class RecentSummaryUpdateService:
             await self.consolidator.maybe_update(chat_id)
         except Exception as exc:
             logger.error(f"[{chat_id}] recent_summary.update.error | error={exc}")
+
+
+class ActiveTaskUpdateService:
+    """Wrap optional ACTIVE_TASK.md updates behind a stable interface."""
+
+    def __init__(self, consolidator: ActiveTaskConsolidator | None = None):
+        self.consolidator = consolidator
+
+    async def maybe_update(self, chat_id: str) -> None:
+        if self.consolidator is None:
+            return
+
+        try:
+            await self.consolidator.maybe_update(chat_id)
+        except Exception as exc:
+            logger.error(f"[{chat_id}] active_task.update.error | error={exc}")

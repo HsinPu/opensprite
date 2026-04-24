@@ -33,6 +33,8 @@ from ..bus.events import OutboundMessage
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
+from ..storage.base import get_storage_message_count
+from ..documents.active_task import ActiveTaskConsolidator, build_initial_active_task_block, create_active_task_store, should_replace_active_task
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
 from ..context.paths import get_recent_summary_state_file
@@ -45,8 +47,8 @@ from ..tools.process_runtime import BackgroundSession
 from ..tools.shell_runtime import format_captured_output
 from ..utils import count_messages_tokens, count_text_tokens, sanitize_assistant_visible_text, strip_assistant_internal_scaffolding
 from ..utils.log import logger
-from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, RecentSummaryConfig, MessagesConfig, Config
-from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService
+from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
+from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
 from .execution import ExecutionEngine, ExecutionResult
 from .skill_review import (
     SKILL_REVIEW_SYSTEM,
@@ -365,6 +367,7 @@ class AgentLoop:
         search_store: SearchStore | None = None,
         search_config: SearchConfig | None = None,
         user_profile_config: UserProfileConfig | None = None,
+        active_task_config: ActiveTaskConfig | None = None,
         recent_summary_config: RecentSummaryConfig | None = None,
         cron_manager: Any | None = None,
         media_router: MediaRouter | None = None,
@@ -398,6 +401,9 @@ class AgentLoop:
         self.user_profile_config = user_profile_config or UserProfileConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("user_profile", {}))
         )
+        self.active_task_config = active_task_config or ActiveTaskConfig(
+            **Config._merge_document_section({}, Config.load_template_data().get("active_task", {}))
+        )
         self.recent_summary_config = recent_summary_config or RecentSummaryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("recent_summary", {}))
         )
@@ -424,7 +430,8 @@ class AgentLoop:
         self._mcp_connect_lock = asyncio.Lock()
         self._mcp_connect_failures = 0
         self._mcp_retry_after = 0.0
-        self._skill_review_lock = asyncio.Lock()
+        self._skill_review_tasks: dict[str, asyncio.Task] = {}
+        self._skill_review_rerun: set[str] = set()
         self._maintenance_tasks: dict[tuple[str, str], asyncio.Task] = {}
         self._maintenance_rerun: set[tuple[str, str]] = set()
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
@@ -438,6 +445,7 @@ class AgentLoop:
         self._register_memory_tool()
         self.execution_engine = self._setup_execution_engine()
         self.user_profile_update = self._setup_user_profile_update()
+        self.active_task_update = self._setup_active_task_update()
         self.recent_summary_update = self._setup_recent_summary_update()
 
     def _trim_history_to_token_budget(
@@ -628,6 +636,27 @@ class AgentLoop:
         )
         return RecentSummaryUpdateService(consolidator)
 
+    def _setup_active_task_update(self) -> ActiveTaskUpdateService:
+        """Create the optional ACTIVE_TASK.md update service."""
+        if self.app_home is None:
+            return ActiveTaskUpdateService(None)
+
+        consolidator = ActiveTaskConsolidator(
+            storage=self.storage,
+            provider=self.provider,
+            model=self.provider.get_default_model(),
+            active_task_store_factory=lambda chat_id: create_active_task_store(
+                self.app_home,
+                chat_id,
+                workspace_root=self.tool_workspace,
+            ),
+            threshold=self.active_task_config.threshold,
+            lookback_messages=self.active_task_config.lookback_messages,
+            enabled=self.active_task_config.enabled,
+            llm=self.active_task_config.llm,
+        )
+        return ActiveTaskUpdateService(consolidator)
+
     def _clear_recent_summary(self, chat_id: str) -> None:
         memory_dir = getattr(self._context_builder, "memory_dir", None)
         if memory_dir is None:
@@ -789,6 +818,11 @@ class AgentLoop:
             chat_id=chat_id,
             runner=self._maybe_update_user_profile,
         )
+        self._schedule_background_maintenance(
+            kind="active_task",
+            chat_id=chat_id,
+            runner=self._maybe_update_active_task,
+        )
 
     async def wait_for_background_maintenance(self) -> None:
         """Wait until all currently scheduled maintenance tasks finish."""
@@ -807,6 +841,50 @@ class AgentLoop:
             task.cancel()
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def wait_for_background_skill_reviews(self) -> None:
+        """Wait until all currently scheduled skill review tasks finish."""
+        while True:
+            tasks = [task for task in self._skill_review_tasks.values() if not task.done()]
+            if not tasks:
+                return
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def close_background_skill_reviews(self) -> None:
+        """Cancel and drain any in-flight skill review tasks."""
+        tasks = [task for task in self._skill_review_tasks.values() if not task.done()]
+        self._skill_review_tasks.clear()
+        self._skill_review_rerun.clear()
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _maybe_seed_active_task(self, chat_id: str, current_message: str) -> None:
+        """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
+        if not self.active_task_config.enabled or self.app_home is None:
+            return
+
+        store = create_active_task_store(
+            self.app_home,
+            chat_id,
+            workspace_root=self.tool_workspace,
+        )
+        current_status = store.read_status()
+        replacing = False
+        if current_status in {"active", "blocked", "waiting_user"}:
+            if not should_replace_active_task(store.read_managed_block(), current_message):
+                return
+            replacing = True
+
+        initial_task = build_initial_active_task_block(current_message)
+        if not initial_task:
+            return
+
+        store.write_managed_block(initial_task)
+        message_count = await get_storage_message_count(self.storage, chat_id)
+        store.set_processed_index(chat_id, max(0, message_count - 1))
+        logger.info("[{}] active_task.seeded | replace={}", chat_id, replacing)
 
     async def reload_mcp_from_config(self) -> str:
         """Reload MCP settings from disk and reconnect MCP tools for this agent."""
@@ -1093,6 +1171,8 @@ class AgentLoop:
             RuntimeError: 如果工具執行失敗或超過最大迭代次數。
                           If tool execution fails or exceeds max iterations.
         """
+        await self._maybe_seed_active_task(chat_id, current_message)
+
         # 從 storage 載入歷史
         logger.info(f"[{chat_id}] history.load | requested=true")
         history_messages = await self._load_history(chat_id)
@@ -1206,17 +1286,37 @@ class AgentLoop:
             return
         if self._skill_review_tool_registry() is None:
             return
+
+        existing = self._skill_review_tasks.get(chat_id)
+        if existing is not None and not existing.done():
+            self._skill_review_rerun.add(chat_id)
+            return
+
+        task: asyncio.Task | None = None
+
+        async def _run() -> None:
+            try:
+                while True:
+                    self._skill_review_rerun.discard(chat_id)
+                    try:
+                        await self._run_skill_review(chat_id)
+                    except Exception:
+                        logger.exception("[%s] skill.review.failed", chat_id)
+                    if chat_id not in self._skill_review_rerun:
+                        break
+                    logger.info("[%s] skill.review.rerun", chat_id)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                if task is not None and self._skill_review_tasks.get(chat_id) is task:
+                    self._skill_review_tasks.pop(chat_id, None)
+                self._skill_review_rerun.discard(chat_id)
+
         try:
-            asyncio.get_running_loop().create_task(self._skill_review_guarded(chat_id))
+            task = asyncio.get_running_loop().create_task(_run())
+            self._skill_review_tasks[chat_id] = task
         except RuntimeError:
             logger.warning("[%s] skill.review.skip | reason=no-running-event-loop", chat_id)
-
-    async def _skill_review_guarded(self, chat_id: str) -> None:
-        async with self._skill_review_lock:
-            try:
-                await self._run_skill_review(chat_id)
-            except Exception:
-                logger.exception("[%s] skill.review.failed", chat_id)
 
     async def _run_skill_review(self, chat_id: str) -> None:
         tool_registry = self._skill_review_tool_registry()
@@ -1425,9 +1525,23 @@ class AgentLoop:
         """Check whether this chat's USER.md (session workspace) should be refreshed."""
         await self.user_profile_update.maybe_update(chat_id)
 
+    async def _maybe_update_active_task(self, chat_id: str) -> None:
+        """Check whether this chat's ACTIVE_TASK.md should be refreshed."""
+        await self.active_task_update.maybe_update(chat_id)
+
     async def _maybe_update_recent_summary(self, chat_id: str) -> None:
         """Check whether RECENT_SUMMARY.md should be refreshed."""
         await self.recent_summary_update.maybe_update(chat_id)
+
+    def _clear_active_task(self, chat_id: str) -> None:
+        """Reset ACTIVE_TASK.md for one chat session."""
+        if self.app_home is None:
+            return
+        create_active_task_store(
+            self.app_home,
+            chat_id,
+            workspace_root=self.tool_workspace,
+        ).clear(chat_id)
 
     async def reset_history(self, chat_id: str | None = None) -> None:
         """
@@ -1441,6 +1555,7 @@ class AgentLoop:
         """
         if chat_id:
             await self.storage.clear_messages(chat_id)
+            self._clear_active_task(chat_id)
             self._clear_recent_summary(chat_id)
             if self.search_store is not None:
                 try:
@@ -1452,6 +1567,7 @@ class AgentLoop:
             all_chats = await self.storage.get_all_chats()
             for c in all_chats:
                 await self.storage.clear_messages(c)
+                self._clear_active_task(c)
                 self._clear_recent_summary(c)
                 if self.search_store is not None:
                     try:
