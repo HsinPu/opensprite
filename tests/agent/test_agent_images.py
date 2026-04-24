@@ -97,7 +97,10 @@ def test_call_llm_replaces_direct_image_payload_with_tool_hint(tmp_path):
     )
 
     assert result.content == "ok"
-    assert "User attached 1 image(s). Use analyze_image or ocr_image if visual understanding is needed." in captured["content"]
+    assert (
+        "User attached 1 image(s). Use analyze_image or ocr_image only if the user's text asks for visual understanding or text extraction."
+        in captured["content"]
+    )
 
 
 def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):
@@ -149,7 +152,7 @@ def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):
         agent._current_audios.reset(audio_token)
 
     assert result.content == "ok"
-    assert "User attached 1 audio clip(s). Use transcribe_audio if spoken content is needed." in captured["content"]
+    assert "User attached 1 audio clip(s). Use transcribe_audio only if the user's text asks for spoken content." in captured["content"]
 
 
 def test_call_llm_adds_video_tool_hint_to_prompt(tmp_path):
@@ -201,4 +204,4 @@ def test_call_llm_adds_video_tool_hint_to_prompt(tmp_path):
         agent._current_videos.reset(video_token)
 
     assert result.content == "ok"
-    assert "User attached 1 video clip(s). Use analyze_video if understanding the video content is needed." in captured["content"]
+    assert "User attached 1 video clip(s). Use analyze_video only if the user's text asks for video understanding." in captured["content"]

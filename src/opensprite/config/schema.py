@@ -90,6 +90,7 @@ class AgentMessagesConfig(BaseModel):
         "尚未設定 LLM，請先設定後再試。可執行 opensprite onboard，"
         "或在 llm.providers.json 設定預設 provider 的 api_key。"
     )
+    media_saved_ack: str = "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
 
 
 class QueueMessagesConfig(BaseModel):

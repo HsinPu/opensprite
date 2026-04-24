@@ -1,7 +1,8 @@
 {
   "agent": {
     "empty_response_fallback": "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
-    "llm_not_configured": "尚未設定 LLM，請先設定後再試。可執行 opensprite onboard，或在 llm.providers.json 設定預設 provider 的 api_key。"
+    "llm_not_configured": "尚未設定 LLM，請先設定後再試。可執行 opensprite onboard，或在 llm.providers.json 設定預設 provider 的 api_key。",
+    "media_saved_ack": "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
   },
   "queue": {
     "stop_cancelled": "已停止目前這段對話。",

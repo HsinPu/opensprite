@@ -226,7 +226,83 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
     assert response.session_chat_id == "telegram:room-1"
 
 
-def test_agent_process_persists_inbound_media_to_chat_workspace(tmp_path):
+def test_agent_process_persists_media_only_message_without_llm(tmp_path):
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        context_builder = FakeContextBuilder(tmp_path / "workspace")
+        agent = AgentLoop(
+            config=AgentConfig(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=context_builder,
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fail_call_llm(*args, **kwargs):
+            raise AssertionError("media-only messages should not call the LLM")
+
+        async def fake_maintenance(chat_id):
+            return None
+
+        agent.call_llm = fail_call_llm
+        agent._maybe_consolidate_memory = fake_maintenance
+        agent._maybe_update_recent_summary = fake_maintenance
+        agent._maybe_update_user_profile = fake_maintenance
+        agent._maybe_update_active_task = fake_maintenance
+
+        response = await agent.process(
+            UserMessage(
+                text="",
+                channel="telegram",
+                chat_id="room-1",
+                session_chat_id="telegram:room-1",
+                images=[_image_data_url(b"image-bytes")],
+                audios=[_media_data_url(b"audio-bytes", "audio/ogg")],
+                videos=[_media_data_url(b"video-bytes", "video/mp4")],
+            )
+        )
+        await agent.wait_for_background_maintenance()
+        return response, storage, context_builder.workspace
+
+    response, storage, workspace_root = asyncio.run(scenario())
+
+    user_metadata = storage.saved[0][3]
+    image_files = user_metadata["image_files"]
+    audio_files = user_metadata["audio_files"]
+    video_files = user_metadata["video_files"]
+    saved_image = workspace_root / "chats" / "telegram" / "room-1" / image_files[0]
+    saved_audio = workspace_root / "chats" / "telegram" / "room-1" / audio_files[0]
+    saved_video = workspace_root / "chats" / "telegram" / "room-1" / video_files[0]
+
+    assert response.text == "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
+    assert user_metadata["images_dir"] == "images"
+    assert user_metadata["audios_dir"] == "audios"
+    assert user_metadata["videos_dir"] == "videos"
+    assert image_files[0].startswith("images/inbound-")
+    assert image_files[0].endswith(".png")
+    assert audio_files[0].startswith("audios/inbound-")
+    assert audio_files[0].endswith(".ogg")
+    assert video_files[0].startswith("videos/inbound-")
+    assert video_files[0].endswith(".mp4")
+    assert saved_image.read_bytes() == b"image-bytes"
+    assert saved_audio.read_bytes() == b"audio-bytes"
+    assert saved_video.read_bytes() == b"video-bytes"
+    assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
+    assert storage.saved[0][2].startswith("[Media-only message saved to workspace]")
+    assert f"Images: {image_files[0]}" in storage.saved[0][2]
+    assert f"Audios: {audio_files[0]}" in storage.saved[0][2]
+    assert f"Videos: {video_files[0]}" in storage.saved[0][2]
+
+
+def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_path):
     async def scenario():
         registry = ToolRegistry()
         registry.register(DummyTool())
@@ -259,10 +335,11 @@ def test_agent_process_persists_inbound_media_to_chat_workspace(tmp_path):
             allow_tools=True,
             **kwargs,
         ):
+            captured["current_message"] = current_message
             captured["user_image_files"] = list(user_image_files or [])
             captured["user_audio_files"] = list(user_audio_files or [])
             captured["user_video_files"] = list(user_video_files or [])
-            return ExecutionResult(content="assistant reply", executed_tool_calls=0, used_configure_skill=False)
+            return ExecutionResult(content="analysis reply", executed_tool_calls=0, used_configure_skill=False)
 
         async def fake_maintenance(chat_id):
             return None
@@ -275,7 +352,7 @@ def test_agent_process_persists_inbound_media_to_chat_workspace(tmp_path):
 
         response = await agent.process(
             UserMessage(
-                text="",
+                text="請幫我分析這些檔案",
                 channel="telegram",
                 chat_id="room-1",
                 session_chat_id="telegram:room-1",
@@ -285,34 +362,15 @@ def test_agent_process_persists_inbound_media_to_chat_workspace(tmp_path):
             )
         )
         await agent.wait_for_background_maintenance()
-        return response, storage, captured, context_builder.workspace
+        return response, captured
 
-    response, storage, captured, workspace_root = asyncio.run(scenario())
+    response, captured = asyncio.run(scenario())
 
-    user_metadata = storage.saved[0][3]
-    image_files = user_metadata["image_files"]
-    audio_files = user_metadata["audio_files"]
-    video_files = user_metadata["video_files"]
-    saved_image = workspace_root / "chats" / "telegram" / "room-1" / image_files[0]
-    saved_audio = workspace_root / "chats" / "telegram" / "room-1" / audio_files[0]
-    saved_video = workspace_root / "chats" / "telegram" / "room-1" / video_files[0]
-
-    assert response.text == "assistant reply"
-    assert user_metadata["images_dir"] == "images"
-    assert user_metadata["audios_dir"] == "audios"
-    assert user_metadata["videos_dir"] == "videos"
-    assert image_files[0].startswith("images/inbound-")
-    assert image_files[0].endswith(".png")
-    assert audio_files[0].startswith("audios/inbound-")
-    assert audio_files[0].endswith(".ogg")
-    assert video_files[0].startswith("videos/inbound-")
-    assert video_files[0].endswith(".mp4")
-    assert saved_image.read_bytes() == b"image-bytes"
-    assert saved_audio.read_bytes() == b"audio-bytes"
-    assert saved_video.read_bytes() == b"video-bytes"
-    assert captured["user_image_files"] == image_files
-    assert captured["user_audio_files"] == audio_files
-    assert captured["user_video_files"] == video_files
+    assert response.text == "analysis reply"
+    assert captured["current_message"] == "請幫我分析這些檔案"
+    assert captured["user_image_files"][0].startswith("images/inbound-")
+    assert captured["user_audio_files"][0].startswith("audios/inbound-")
+    assert captured["user_video_files"][0].startswith("videos/inbound-")
 
 
 def test_agent_process_returns_queued_outbound_media(tmp_path):

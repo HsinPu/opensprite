@@ -1064,6 +1064,29 @@ class AgentLoop:
             extensions=self.INBOUND_VIDEO_EXTENSIONS,
         )
 
+    @staticmethod
+    def _is_media_only_message(user_message: UserMessage) -> bool:
+        """Return whether a turn only carries media without user instructions."""
+        has_media = bool(user_message.images or user_message.audios or user_message.videos)
+        return has_media and not (user_message.text or "").strip()
+
+    @staticmethod
+    def _format_saved_media_history_content(
+        *,
+        image_files: list[str],
+        audio_files: list[str],
+        video_files: list[str],
+    ) -> str:
+        """Format saved media paths as readable user-message history content."""
+        lines = ["[Media-only message saved to workspace]"]
+        if image_files:
+            lines.append("Images: " + ", ".join(image_files))
+        if audio_files:
+            lines.append("Audios: " + ", ".join(audio_files))
+        if video_files:
+            lines.append("Videos: " + ", ".join(video_files))
+        return "\n".join(lines)
+
     def _register_default_tools(self) -> None:
         """
         註冊代理人的預設工具。
@@ -1289,19 +1312,19 @@ class AgentLoop:
         hints: list[str] = []
         if user_images:
             hints.append(
-                f"User attached {len(user_images)} image(s). Use analyze_image or ocr_image if visual understanding is needed."
+                f"User attached {len(user_images)} image(s). Use analyze_image or ocr_image only if the user's text asks for visual understanding or text extraction."
             )
             if user_image_files:
                 hints.append(f"Saved inbound image file(s) under the chat workspace: {', '.join(user_image_files)}.")
         if user_audios:
             hints.append(
-                f"User attached {len(user_audios)} audio clip(s). Use transcribe_audio if spoken content is needed."
+                f"User attached {len(user_audios)} audio clip(s). Use transcribe_audio only if the user's text asks for spoken content."
             )
             if user_audio_files:
                 hints.append(f"Saved inbound audio file(s) under the chat workspace: {', '.join(user_audio_files)}.")
         if user_videos:
             hints.append(
-                f"User attached {len(user_videos)} video clip(s). Use analyze_video if understanding the video content is needed."
+                f"User attached {len(user_videos)} video clip(s). Use analyze_video only if the user's text asks for video understanding."
             )
             if user_video_files:
                 hints.append(f"Saved inbound video file(s) under the chat workspace: {', '.join(user_video_files)}.")
@@ -1623,6 +1646,26 @@ class AgentLoop:
             "transport_chat_id": user_message.chat_id,
         }
         assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
+
+        if self._is_media_only_message(user_message):
+            media_history_content = self._format_saved_media_history_content(
+                image_files=image_files,
+                audio_files=audio_files,
+                video_files=video_files,
+            )
+            await self._save_message(session_chat_id, "user", media_history_content, metadata=user_metadata)
+            response = self.messages.agent.media_saved_ack
+            logger.info(
+                f"[{session_chat_id}] outbound | media_only=true text={self._format_log_preview(response, max_chars=200)}"
+            )
+            await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
+            return AssistantMessage(
+                text=response,
+                channel=channel or "unknown",
+                chat_id=user_message.chat_id,
+                session_chat_id=session_chat_id,
+                metadata=assistant_metadata,
+            )
 
         token = self._current_chat_id.set(session_chat_id)
         channel_token = self._current_channel.set(channel)
