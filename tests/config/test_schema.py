@@ -85,8 +85,9 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.exec_tool.timeout == 60
     assert config.exec_tool.notify_on_exit is True
     assert config.exec_tool.notify_on_exit_empty_success is False
-    assert config.web_search.provider == "brave"
-    assert config.web_search.max_results == 10
+    assert config.web_search.provider == "duckduckgo"
+    assert config.web_search.max_results == 25
+    assert config.web_search.duckduckgo_max_pages == 10
     assert config.web_fetch.max_chars == 50000
     assert config.web_fetch.timeout == 30
     assert config.web_fetch.prefer_trafilatura is True
@@ -102,7 +103,7 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "notify_on_exit": False,
                 "notify_on_exit_empty_success": True,
             },
-            "web_search": {"provider": "jina", "max_results": 7},
+            "web_search": {"provider": "jina", "max_results": 7, "duckduckgo_max_pages": 3},
             "web_fetch": {"max_chars": 1234, "timeout": 9, "prefer_trafilatura": False},
             "cron": {"default_timezone": "Asia/Taipei"},
         }
@@ -113,6 +114,7 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.exec_tool.notify_on_exit_empty_success is True
     assert config.web_search.provider == "jina"
     assert config.web_search.max_results == 7
+    assert config.web_search.duckduckgo_max_pages == 3
     assert config.web_fetch.max_chars == 1234
     assert config.web_fetch.timeout == 9
     assert config.web_fetch.prefer_trafilatura is False
@@ -305,7 +307,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.max_history == 120
     assert config.agent.history_token_budget == 64000
     assert config.tools.exec_tool.timeout == 60
-    assert config.tools.web_search.max_results == 10
+    assert config.tools.web_search.max_results == 25
     assert config.tools.web_fetch.timeout == 30
     assert config.tools.cron.default_timezone == "UTC"
 

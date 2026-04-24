@@ -285,12 +285,13 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = "brave"
+    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = "duckduckgo"
     brave_api_key: str = ""
     tavily_api_key: str = ""
     jina_api_key: str = ""
     searxng_url: str = "https://searx.be"
-    max_results: int = Field(default=10, ge=1, le=10)
+    max_results: int = Field(default=25, ge=1)
+    duckduckgo_max_pages: int = Field(default=10, ge=1)
     proxy: str | None = None
 
 

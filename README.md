@@ -353,9 +353,13 @@ Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
 
 ## Web search and fetch · 網路搜尋與擷取
 
-**English:** `tools.web_search.provider` supports `brave`, `duckduckgo`, `tavily`, `searxng`, and `jina` (each needs the right API key or URL). `web_search` and `web_fetch` share a consistent JSON payload shape; when search indexing is on, payloads are stored in `knowledge_sources` for `search_knowledge`.
+**English:** `tools.web_search.provider` defaults to `duckduckgo` and also supports `brave`, `tavily`, `searxng`, and `jina` (providers other than DuckDuckGo need the right API key or URL). `web_search` and `web_fetch` share a consistent JSON payload shape; when search indexing is on, payloads are stored in `knowledge_sources` for `search_knowledge`.
 
-**中文：** `tools.web_search` 可設定供應商：`brave`、`duckduckgo`、`tavily`、`searxng`、`jina`（各需對應 API 金鑰或 URL）。`web_search` 與 `web_fetch` 共用一致的 JSON 結果形狀；啟用搜尋索引時會寫入 `knowledge_sources` 供 `search_knowledge` 使用。
+**中文：** `tools.web_search.provider` 預設為 `duckduckgo`，也可設定 `brave`、`tavily`、`searxng`、`jina`（DuckDuckGo 以外的供應商需對應 API 金鑰或 URL）。`web_search` 與 `web_fetch` 共用一致的 JSON 結果形狀；啟用搜尋索引時會寫入 `knowledge_sources` 供 `search_knowledge` 使用。
+
+**English:** DuckDuckGo search follows result pages up to `tools.web_search.duckduckgo_max_pages` (default `10`) and returns up to `tools.web_search.max_results` results (default `25`).
+
+**中文：** DuckDuckGo 搜尋會依 `tools.web_search.duckduckgo_max_pages` 追分頁（預設 `10` 頁），最多回傳 `tools.web_search.max_results` 筆結果（預設 `25` 筆）。
 
 ---
 

@@ -30,12 +30,13 @@
       "timeout": 60
     },
     "web_search": {
-      "provider": "brave",
+      "provider": "duckduckgo",
       "brave_api_key": "",
       "tavily_api_key": "",
       "jina_api_key": "",
       "searxng_url": "https://searx.be",
-      "max_results": 10,
+      "max_results": 25,
+      "duckduckgo_max_pages": 10,
       "proxy": null
     },
     "web_fetch": {
