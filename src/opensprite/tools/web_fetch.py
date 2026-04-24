@@ -615,14 +615,16 @@ class WebFetcher:
     
     # 圖片類型 (不包含 SVG 和特定類型)
     IMAGE_EXCLUDE = {'image/svg+xml', 'image/vnd.fastbidsheet'}
-    MAX_RESPONSE_SIZE = 5 * 1024 * 1024  # 5MB
+    DEFAULT_MAX_RESPONSE_SIZE = 5 * 1024 * 1024  # 5MB
     
     def __init__(self, max_chars: int = 50000, timeout: int = 30, 
+                 max_response_size: int = DEFAULT_MAX_RESPONSE_SIZE,
                  prefer_trafilatura: bool = True,
                  permission_callback: callable = None,  # 權限詢問回調
                  retry_on_403: bool = True,             # 403 重試
                  firecrawl_api_key: str = None):       # Firecrawl API Key
         self.max_chars = max_chars
+        self.max_response_size = max_response_size
         self.timeout = timeout
         self.prefer_trafilatura = prefer_trafilatura and TRAFILATURA_AVAILABLE
         self.permission_callback = permission_callback
@@ -639,8 +641,8 @@ class WebFetcher:
         content_type, content, status = fetch_url(url, self.timeout, self.retry_on_403)
         
         # 檢查回應大小
-        if len(content) > self.MAX_RESPONSE_SIZE:
-            raise Exception("Response too large (exceeds 5MB limit)")
+        if len(content) > self.max_response_size:
+            raise Exception(f"Response too large (exceeds {self.max_response_size} bytes limit)")
         
         result = {
             'url': url, 'finalUrl': url, 'status': status,
@@ -749,12 +751,14 @@ class WebFetchTool(Tool):
     def __init__(
         self,
         max_chars: int = 50000,
+        max_response_size: int = WebFetcher.DEFAULT_MAX_RESPONSE_SIZE,
         timeout: int = 30,
         prefer_trafilatura: bool = True,
         firecrawl_api_key: str | None = None,
     ):
         self.fetcher = WebFetcher(
             max_chars=max_chars,
+            max_response_size=max_response_size,
             timeout=timeout,
             prefer_trafilatura=prefer_trafilatura,
             firecrawl_api_key=firecrawl_api_key,
@@ -788,6 +792,7 @@ class WebFetchTool(Tool):
         effective_max_chars = max_chars if max_chars is not None else self.fetcher.max_chars
         result = WebFetcher(
             max_chars=effective_max_chars,
+            max_response_size=self.fetcher.max_response_size,
             timeout=self.fetcher.timeout,
             prefer_trafilatura=self.fetcher.prefer_trafilatura,
             firecrawl_api_key=self.fetcher.firecrawl_api_key,
@@ -817,6 +822,7 @@ class WebFetchTool(Tool):
 # ============================================
 
 def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
+          max_response_size: int = WebFetcher.DEFAULT_MAX_RESPONSE_SIZE,
           permission_callback: callable = None, retry_on_403: bool = True,
           firecrawl_api_key: str = None) -> dict:
     """快速擷取網頁
@@ -825,12 +831,14 @@ def fetch(url: str, max_chars: int = 50000, timeout: int = 30,
         url: 網址
         max_chars: 最大字數
         timeout: 超時秒數
+        max_response_size: 最大 HTTP 回應大小（bytes）
         permission_callback: 權限詢問回調 (url, mode, timeout) -> None
         retry_on_403: 是否在 403 時重試 (預設 True)
         firecrawl_api_key: Firecrawl API Key (可選，付費服務)
     """
     return WebFetcher(
         max_chars=max_chars, 
+        max_response_size=max_response_size,
         timeout=timeout,
         permission_callback=permission_callback,
         retry_on_403=retry_on_403,

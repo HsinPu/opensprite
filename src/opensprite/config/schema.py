@@ -299,6 +299,7 @@ class WebFetchToolConfig(BaseModel):
     """Web fetch tool configuration."""
 
     max_chars: int = Field(default=50000, ge=1)
+    max_response_size: int = Field(default=5 * 1024 * 1024, ge=1)
     timeout: int = Field(default=30, ge=1)
     prefer_trafilatura: bool = True
     firecrawl_api_key: str = ""

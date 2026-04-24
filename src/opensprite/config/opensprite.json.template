@@ -41,6 +41,7 @@
     },
     "web_fetch": {
       "max_chars": 50000,
+      "max_response_size": 5242880,
       "timeout": 30,
       "prefer_trafilatura": true,
       "firecrawl_api_key": ""

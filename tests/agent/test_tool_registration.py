@@ -124,6 +124,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
                 "web_search": {"provider": "jina", "max_results": 7},
                 "web_fetch": {
                     "max_chars": 1234,
+                    "max_response_size": 2048,
                     "timeout": 9,
                     "prefer_trafilatura": False,
                     "firecrawl_api_key": "firecrawl-key",
@@ -152,6 +153,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_search_tool.provider == "jina"
     assert web_search_tool.max_results == 7
     assert web_fetch_tool.fetcher.max_chars == 1234
+    assert web_fetch_tool.fetcher.max_response_size == 2048
     assert web_fetch_tool.fetcher.timeout == 9
     assert web_fetch_tool.fetcher.prefer_trafilatura is False
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"

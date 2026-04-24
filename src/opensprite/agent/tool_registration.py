@@ -177,6 +177,7 @@ def register_web_tools(
     registry.register(
         WebFetchTool(
             max_chars=web_fetch_config.max_chars,
+            max_response_size=web_fetch_config.max_response_size,
             timeout=web_fetch_config.timeout,
             prefer_trafilatura=web_fetch_config.prefer_trafilatura,
             firecrawl_api_key=web_fetch_config.firecrawl_api_key,

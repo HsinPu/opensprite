@@ -361,6 +361,10 @@ Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
 
 **中文：** DuckDuckGo 搜尋會依 `tools.web_search.duckduckgo_max_pages` 追分頁（預設 `10` 頁），最多回傳 `tools.web_search.max_results` 筆結果（預設 `25` 筆）。
 
+**English:** `web_fetch` limits extracted text with `tools.web_fetch.max_chars` (default `50000`) and raw HTTP response size with `tools.web_fetch.max_response_size` in bytes (default `5242880`).
+
+**中文：** `web_fetch` 會用 `tools.web_fetch.max_chars` 限制擷取文字長度（預設 `50000`），並用 `tools.web_fetch.max_response_size` 限制原始 HTTP 回應大小，單位 bytes（預設 `5242880`）。
+
 ---
 
 ## Built-in tools · 內建工具（預設註冊）
