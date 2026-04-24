@@ -87,13 +87,13 @@ function createIntroMessages() {
   return [
     makeMessage(
       "assistant",
-      "This is a simple OpenSprite web prototype. Use the lower-left settings button to point the page at your local WebSocket gateway.",
+      "OpenSprite is ready in the browser. This page connects to your local gateway automatically when it opens.",
       "OpenSprite"
     ),
     makeMessage(
       "assistant",
-      "The sidebar keeps local drafts, while the main panel stays focused on one conversation, similar to the OpenAI layout you referenced.",
-      "Prototype"
+      "Use the Connection panel only when you need to change the endpoint, display name, or pinned chat ID.",
+      "Local console"
     ),
   ];
 }
@@ -119,7 +119,7 @@ const state = {
   socket: null,
   connectionState: "disconnected",
   notice: {
-    text: "Open the lower-left settings panel when you want to change the endpoint or pin a custom chat ID.",
+    text: "Opening a live connection to your local gateway...",
     tone: "info",
   },
 };
@@ -186,10 +186,12 @@ function closeSettings() {
 
 function openSidebar() {
   document.body.classList.add("sidebar-open");
+  dom.mobileNavToggle.setAttribute("aria-expanded", "true");
 }
 
 function closeSidebar() {
   document.body.classList.remove("sidebar-open");
+  dom.mobileNavToggle.setAttribute("aria-expanded", "false");
 }
 
 function disconnectSocket(reason, tone = "warning") {
@@ -396,9 +398,14 @@ function renderStatus() {
     dom.statusDot.classList.add("status-dot--connecting");
   }
 
-  dom.connectButton.textContent = state.connectionState === "connected" ? "Reconnect" : "Connect";
+  const connectLabels = {
+    disconnected: "Retry",
+    connecting: "Connecting",
+    connected: "Reconnect",
+  };
+  dom.connectButton.textContent = connectLabels[state.connectionState] || "Retry";
   dom.connectButton.disabled = state.connectionState === "connecting";
-  dom.sendButton.disabled = state.connectionState === "connecting";
+  dom.sendButton.disabled = state.connectionState !== "connected";
 
   dom.noticeBanner.hidden = !state.notice.text;
   dom.noticeBanner.dataset.tone = state.notice.tone || "info";
@@ -456,7 +463,12 @@ function submitMessage(event) {
   }
 
   if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-    setNotice("Connect to the gateway first. The settings button in the lower-left corner is the fastest way in.", "warning");
+    if (state.connectionState === "connecting") {
+      setNotice("Still connecting to the local gateway. Your message can be sent once the status turns connected.", "info");
+      render();
+      return;
+    }
+    setNotice("The automatic connection is not active. Check the endpoint, then retry.", "warning");
     render();
     openSettings();
     return;
@@ -519,3 +531,4 @@ document.addEventListener("keydown", (event) => {
 render();
 resizeComposer();
 scrollMessagesToBottom();
+connectSocket();

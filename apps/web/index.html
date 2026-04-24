@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpenSprite Web Prototype</title>
+    <title>OpenSprite Web</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,8 +15,8 @@
   </head>
   <body>
     <div class="app-shell">
-      <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-controls="sidebar">
-        Sessions
+      <button class="mobile-nav-toggle" id="mobileNavToggle" type="button" aria-controls="sidebar" aria-expanded="false">
+        Menu
       </button>
 
       <aside class="sidebar" id="sidebar">
@@ -25,8 +25,8 @@
             <div class="brand-card__mark">OS</div>
             <div>
               <p class="eyebrow">OpenSprite</p>
-              <h1>Web studio</h1>
-              <p class="brand-card__copy">A lightweight shell for your local assistant.</p>
+              <h1>Local console</h1>
+              <p class="brand-card__copy">Browser workspace for your local assistant.</p>
             </div>
           </div>
 
@@ -43,9 +43,9 @@
           </section>
 
           <section class="sidebar__note" aria-label="Prototype notes">
-            <p class="eyebrow">Why this layout</p>
+            <p class="eyebrow">Mode</p>
             <p>
-              The left rail keeps quick context, while the right panel stays focused on the current thread.
+              Opens on your machine, connects automatically, and keeps the session scoped to this browser.
             </p>
           </section>
         </div>
@@ -54,8 +54,8 @@
           <button class="settings-button" id="settingsToggle" type="button">
             <span class="settings-button__icon">+</span>
             <span>
-              <strong>Settings</strong>
-              <small>Socket, profile, session</small>
+              <strong>Connection</strong>
+              <small>Endpoint, profile, session</small>
             </span>
           </button>
         </div>
@@ -64,8 +64,8 @@
       <main class="chat-panel">
         <header class="chat-panel__header">
           <div>
-            <p class="eyebrow">Live web channel</p>
-            <h2>Talk to your local model in a browser-style workspace.</h2>
+            <p class="eyebrow">Live workspace</p>
+            <h2>Ask your local assistant without leaving the browser.</h2>
             <p class="header-copy" id="sessionMeta"></p>
           </div>
 
@@ -77,11 +77,11 @@
                 <strong id="connectionState">Disconnected</strong>
               </div>
             </div>
-            <button class="secondary-button" id="connectButton" type="button">Connect</button>
+            <button class="secondary-button" id="connectButton" type="button">Reconnect</button>
           </div>
         </header>
 
-        <div class="notice-banner" id="noticeBanner" hidden></div>
+        <div class="notice-banner" id="noticeBanner" role="status" hidden></div>
 
         <section class="message-stage" id="messageStage" aria-live="polite">
           <div class="message-list" id="messageList"></div>
@@ -99,7 +99,7 @@
             <button class="primary-button" id="sendButton" type="submit">Send</button>
           </div>
           <div class="composer__footer">
-            <span>Enter to send. Shift+Enter for a new line.</span>
+            <span>Auto-connects on page load. Enter to send. Shift+Enter for a new line.</span>
             <span id="runtimeHint"></span>
           </div>
         </form>
