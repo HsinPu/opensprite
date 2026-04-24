@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "history_top_k": 5,
   "knowledge_top_k": 5,
   "embedding": {

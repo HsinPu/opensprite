@@ -419,7 +419,7 @@ class SearchEmbeddingConfig(BaseModel):
 class SearchConfig(BaseModel):
     """Search index configuration."""
 
-    enabled: bool = False
+    enabled: bool = True
     history_top_k: int = Field(default=5, ge=1)
     knowledge_top_k: int = Field(default=5, ge=1)
     embedding: SearchEmbeddingConfig = Field(default_factory=SearchEmbeddingConfig)

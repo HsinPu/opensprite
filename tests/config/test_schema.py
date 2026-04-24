@@ -243,6 +243,7 @@ def test_search_embedding_config_requires_model_when_enabled():
 def test_search_config_provides_embedding_defaults():
     config = SearchConfig()
 
+    assert config.enabled is True
     assert config.embedding.enabled is False
     assert config.embedding.provider == "openai"
     assert config.embedding.batch_size == 16
