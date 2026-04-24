@@ -86,6 +86,12 @@ class AgentLoop:
     MAX_TOOL_ITERATIONS = 10
     MCP_INITIAL_RETRY_BACKOFF_SECONDS = 15.0
     MCP_MAX_RETRY_BACKOFF_SECONDS = 300.0
+    OUTBOUND_MEDIA_KEYS = {
+        "image": "images",
+        "voice": "voices",
+        "audio": "audios",
+        "video": "videos",
+    }
 
     @staticmethod
     def _sanitize_log_filename(value: str) -> str:
@@ -419,6 +425,10 @@ class AgentLoop:
         self._current_images: ContextVar[list[str] | None] = ContextVar("current_images", default=None)
         self._current_audios: ContextVar[list[str] | None] = ContextVar("current_audios", default=None)
         self._current_videos: ContextVar[list[str] | None] = ContextVar("current_videos", default=None)
+        self._current_outbound_media: ContextVar[dict[str, list[str]] | None] = ContextVar(
+            "current_outbound_media",
+            default=None,
+        )
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
         self.config_path: Path | None = Path(config_path).expanduser().resolve() if config_path is not None else None
@@ -965,6 +975,7 @@ class AgentLoop:
             get_current_images=self._get_current_images,
             get_current_audios=self._get_current_audios,
             get_current_videos=self._get_current_videos,
+            queue_outbound_media=self._queue_outbound_media,
             background_notification_factory=self._make_background_session_exit_notifier,
         )
         
@@ -1125,6 +1136,28 @@ class AgentLoop:
     def _get_current_videos(self) -> list[str] | None:
         """Return videos attached to the current active turn."""
         return self._current_videos.get()
+
+    def _queue_outbound_media(self, kind: str, payload: str) -> str | None:
+        """Queue one media payload to be attached to the current assistant reply."""
+        media = self._current_outbound_media.get()
+        if media is None:
+            return "Error: outbound media can only be queued while processing a user message."
+
+        key = self.OUTBOUND_MEDIA_KEYS.get(kind)
+        if key is None:
+            return f"Error: unsupported outbound media kind: {kind}"
+
+        value = str(payload or "").strip()
+        if not value:
+            return "Error: outbound media payload cannot be empty."
+
+        media.setdefault(key, []).append(value)
+        return None
+
+    def _get_queued_outbound_media(self) -> dict[str, list[str]]:
+        """Return queued outbound media for the current turn."""
+        media = self._current_outbound_media.get() or {}
+        return {key: list(media.get(key) or []) for key in ("images", "voices", "audios", "videos")}
 
     @staticmethod
     def _augment_message_for_media(
@@ -1454,6 +1487,9 @@ class AgentLoop:
         images_token = self._current_images.set(list(user_message.images or []))
         audios_token = self._current_audios.set(list(user_message.audios or []))
         videos_token = self._current_videos.set(list(user_message.videos or []))
+        outbound_media_token = self._current_outbound_media.set(
+            {"images": [], "voices": [], "audios": [], "videos": []}
+        )
         try:
             if not self.llm_configured:
                 logger.warning("[{}] agent.skip | reason=llm-not-configured", session_chat_id)
@@ -1487,6 +1523,7 @@ class AgentLoop:
                 emit_tool_progress=True,
             )
             response = exec_result.content
+            outbound_media = self._get_queued_outbound_media()
 
             logger.info(
                 f"[{session_chat_id}] outbound | text={self._format_log_preview(response, max_chars=200)}"
@@ -1509,6 +1546,10 @@ class AgentLoop:
                 channel=channel or "unknown",
                 chat_id=user_message.chat_id,
                 session_chat_id=session_chat_id,
+                images=outbound_media["images"] or None,
+                voices=outbound_media["voices"] or None,
+                audios=outbound_media["audios"] or None,
+                videos=outbound_media["videos"] or None,
                 metadata=assistant_metadata,
             )
         except Exception:
@@ -1518,6 +1559,7 @@ class AgentLoop:
             )
             raise
         finally:
+            self._current_outbound_media.reset(outbound_media_token)
             self._current_videos.reset(videos_token)
             self._current_audios.reset(audios_token)
             self._current_images.reset(images_token)

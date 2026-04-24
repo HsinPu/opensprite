@@ -17,6 +17,7 @@ from .mcp_config import ConfigureMCPTool
 from .subagent_config import ConfigureSubagentTool
 from .cron import CronTool
 from .image import AnalyzeImageTool, OCRImageTool
+from .outbound_media import SendMediaTool
 
 __all__ = [
     "Tool",
@@ -42,4 +43,5 @@ __all__ = [
     "CronTool",
     "AnalyzeImageTool",
     "OCRImageTool",
+    "SendMediaTool",
 ]

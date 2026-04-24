@@ -215,6 +215,62 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
     assert response.session_chat_id == "telegram:room-1"
 
 
+def test_agent_process_returns_queued_outbound_media(tmp_path):
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        agent = AgentLoop(
+            config=AgentConfig(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path),
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_call_llm(chat_id, current_message, channel=None, user_images=None, allow_tools=True, **kwargs):
+            assert agent._queue_outbound_media("image", "img-out") is None
+            assert agent._queue_outbound_media("voice", "voice-out") is None
+            assert agent._queue_outbound_media("audio", "audio-out") is None
+            assert agent._queue_outbound_media("video", "video-out") is None
+            return ExecutionResult(content="sending media", executed_tool_calls=1, used_configure_skill=False)
+
+        async def fake_maintenance(chat_id):
+            return None
+
+        agent.call_llm = fake_call_llm
+        agent._maybe_consolidate_memory = fake_maintenance
+        agent._maybe_update_recent_summary = fake_maintenance
+        agent._maybe_update_user_profile = fake_maintenance
+        agent._maybe_update_active_task = fake_maintenance
+
+        response = await agent.process(
+            UserMessage(
+                text="send it",
+                channel="telegram",
+                chat_id="room-1",
+                session_chat_id="telegram:room-1",
+            )
+        )
+        await agent.wait_for_background_maintenance()
+        return response, storage
+
+    response, storage = asyncio.run(scenario())
+
+    assert response.text == "sending media"
+    assert response.images == ["img-out"]
+    assert response.voices == ["voice-out"]
+    assert response.audios == ["audio-out"]
+    assert response.videos == ["video-out"]
+    assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
+
+
 def test_mark_active_task_status_updates_processed_index_for_terminal_states(tmp_path):
     async def scenario():
         registry = ToolRegistry()

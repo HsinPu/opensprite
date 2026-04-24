@@ -12,7 +12,10 @@ opensprite/channels/telegram.py - Telegram 訊息 Adapter
 """
 
 import asyncio
+import base64
+import binascii
 import html
+import io
 import re
 from typing import Any
 
@@ -47,6 +50,18 @@ class TelegramAdapter(MessageAdapter):
         "bootstrap_retries": 3,
         "drop_pending_updates": False,
         "typing_action_interval": 4,
+    }
+    OUTBOUND_MEDIA_EXTENSIONS = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "audio/ogg": "ogg",
+        "audio/mpeg": "mp3",
+        "audio/mp3": "mp3",
+        "audio/wav": "wav",
+        "video/mp4": "mp4",
+        "video/webm": "webm",
     }
 
     def __init__(self, bot_token: str, mq=None, config: dict[str, Any] | None = None):
@@ -331,9 +346,6 @@ class TelegramAdapter(MessageAdapter):
         回傳：
             list: base64 編碼的圖片清單
         """
-        import base64
-        import io
-        
         images = []
         
         # 取最大張的圖片
@@ -365,8 +377,6 @@ class TelegramAdapter(MessageAdapter):
 
     async def _download_media_blob(self, media_obj, bot, default_mime_type: str) -> str | None:
         """Download one Telegram media object and return a base64 data URL."""
-        import base64
-
         try:
             file = await bot.get_file(media_obj.file_id)
             file_content = await file.download_as_bytearray()
@@ -376,6 +386,92 @@ class TelegramAdapter(MessageAdapter):
         except Exception as e:
             logger.warning(f"下載媒體失敗: {e}")
             return None
+
+    @staticmethod
+    def _has_outbound_media(message: AssistantMessage) -> bool:
+        """Return whether an assistant message carries outbound media."""
+        return bool(message.images or message.voices or message.audios or message.videos)
+
+    @classmethod
+    def _outbound_media_extension(cls, mime_type: str, fallback: str) -> str:
+        return cls.OUTBOUND_MEDIA_EXTENSIONS.get(mime_type.lower(), fallback)
+
+    @classmethod
+    def _coerce_outbound_media(
+        cls,
+        payload: str,
+        *,
+        default_mime_type: str,
+        fallback_extension: str,
+        filename_stem: str,
+    ):
+        """Convert an outbound media payload into a Telegram-compatible value."""
+        value = str(payload or "").strip()
+        if not value:
+            raise ValueError("outbound media payload is empty")
+        if not value.startswith("data:"):
+            return value
+
+        header, separator, encoded = value.partition(",")
+        if not separator:
+            raise ValueError("outbound media data URL is missing payload")
+        if ";base64" not in header.lower():
+            raise ValueError("outbound media data URL must be base64 encoded")
+
+        mime_type = default_mime_type
+        declared_mime_type = header[5:].split(";", 1)[0].strip()
+        if declared_mime_type:
+            mime_type = declared_mime_type
+
+        try:
+            media_bytes = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("outbound media data URL has invalid base64 payload") from exc
+
+        media_file = io.BytesIO(media_bytes)
+        extension = cls._outbound_media_extension(mime_type, fallback_extension)
+        media_file.name = f"{filename_stem}.{extension}"
+        return media_file
+
+    async def _send_outbound_media(self, message: AssistantMessage) -> None:
+        """Send media attachments carried by an assistant message."""
+        assert self.app is not None
+
+        for index, image in enumerate(message.images or [], start=1):
+            payload = self._coerce_outbound_media(
+                image,
+                default_mime_type="image/jpeg",
+                fallback_extension="jpg",
+                filename_stem=f"image-{index}",
+            )
+            await self.app.bot.send_photo(chat_id=message.chat_id, photo=payload)
+
+        for index, voice in enumerate(message.voices or [], start=1):
+            payload = self._coerce_outbound_media(
+                voice,
+                default_mime_type="audio/ogg",
+                fallback_extension="ogg",
+                filename_stem=f"voice-{index}",
+            )
+            await self.app.bot.send_voice(chat_id=message.chat_id, voice=payload)
+
+        for index, audio in enumerate(message.audios or [], start=1):
+            payload = self._coerce_outbound_media(
+                audio,
+                default_mime_type="audio/mpeg",
+                fallback_extension="mp3",
+                filename_stem=f"audio-{index}",
+            )
+            await self.app.bot.send_audio(chat_id=message.chat_id, audio=payload)
+
+        for index, video in enumerate(message.videos or [], start=1):
+            payload = self._coerce_outbound_media(
+                video,
+                default_mime_type="video/mp4",
+                fallback_extension="mp4",
+                filename_stem=f"video-{index}",
+            )
+            await self.app.bot.send_video(chat_id=message.chat_id, video=payload)
     
     async def send(self, message: AssistantMessage) -> None:
         """
@@ -392,8 +488,9 @@ class TelegramAdapter(MessageAdapter):
         if message.chat_id is None:
             raise ValueError("AssistantMessage 缺少 chat_id，無法發送")
         
+        has_media = self._has_outbound_media(message)
         text = message.text or ""
-        if not text.strip():
+        if not text.strip() and not has_media:
             logger.warning(
                 "Telegram reply text is empty for chat {} session {}; sending fallback notice",
                 message.chat_id,
@@ -402,34 +499,39 @@ class TelegramAdapter(MessageAdapter):
             text = self.messages.telegram.empty_message_fallback
         max_length = 4000
         
-        # 截斷過長的訊息
-        if len(text) > max_length:
-            text = text[:max_length] + f"\n\n... (訊息太長，已截斷，共 {len(message.text)} 字)"
-        
-        # 轉換為 Telegram 官方支援的 HTML 子集
-        html_text = self._render_telegram_html(text)
-        if not html_text.strip():
-            logger.warning(
-                "Telegram HTML renderer produced empty output for chat {} session {}; using escaped plain text",
-                message.chat_id,
-                message.session_chat_id,
-            )
-            html_text = html.escape(text)
-        
-        # 嘗試發送 HTML，失敗則用純文字
-        try:
-            await self.app.bot.send_message(
-                chat_id=message.chat_id,
-                text=html_text,
-                parse_mode="HTML"
-            )
-        except Exception as exc:
-            logger.warning("Telegram HTML send failed, falling back to plain text: {}", exc)
-            # Fallback 到純文字
-            await self.app.bot.send_message(
-                chat_id=message.chat_id,
-                text=text
-            )
+        if text.strip():
+            # 截斷過長的訊息
+            if len(text) > max_length:
+                original_length = len(message.text or "")
+                text = text[:max_length] + f"\n\n... (訊息太長，已截斷，共 {original_length} 字)"
+            
+            # 轉換為 Telegram 官方支援的 HTML 子集
+            html_text = self._render_telegram_html(text)
+            if not html_text.strip():
+                logger.warning(
+                    "Telegram HTML renderer produced empty output for chat {} session {}; using escaped plain text",
+                    message.chat_id,
+                    message.session_chat_id,
+                )
+                html_text = html.escape(text)
+            
+            # 嘗試發送 HTML，失敗則用純文字
+            try:
+                await self.app.bot.send_message(
+                    chat_id=message.chat_id,
+                    text=html_text,
+                    parse_mode="HTML"
+                )
+            except Exception as exc:
+                logger.warning("Telegram HTML send failed, falling back to plain text: {}", exc)
+                # Fallback 到純文字
+                await self.app.bot.send_message(
+                    chat_id=message.chat_id,
+                    text=text
+                )
+
+        if has_media:
+            await self._send_outbound_media(message)
     
     def _format_inline_telegram_html(self, text: str) -> str:
         """Convert inline reply markup into Telegram-safe HTML."""

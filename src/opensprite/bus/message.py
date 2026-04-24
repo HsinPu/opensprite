@@ -64,6 +64,10 @@ class AssistantMessage:
         channel: 要送回哪個頻道
         chat_id: 平台原始聊天室 ID（用於實際發送）
         session_chat_id: 內部標準化 session ID（用於 storage / tracing）
+        images: 圖片列表（base64 data URL 或平台可接受的 URL）
+        voices: 語音列表（base64 data URL 或平台可接受的 URL）
+        audios: 音訊列表（base64 data URL 或平台可接受的 URL）
+        videos: 影片列表（base64 data URL 或平台可接受的 URL）
         metadata: 額外 metadata
         raw: （可選）可放入平台特定的回覆物件
     """
@@ -71,6 +75,10 @@ class AssistantMessage:
     channel: str = "unknown"
     chat_id: str | None = None
     session_chat_id: str | None = None
+    images: list[str] | None = None
+    voices: list[str] | None = None
+    audios: list[str] | None = None
+    videos: list[str] | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     raw: Any = None
 

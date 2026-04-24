@@ -18,6 +18,7 @@ from ..tools import (
     CronTool,
     TranscribeAudioTool,
     AnalyzeVideoTool,
+    SendMediaTool,
     ReadFileTool,
     WriteFileTool,
     ListDirTool,
@@ -192,6 +193,7 @@ def register_media_tools(
     get_current_images: Callable[[], list[str] | None],
     get_current_audios: Callable[[], list[str] | None],
     get_current_videos: Callable[[], list[str] | None],
+    queue_outbound_media: Callable[[str, str], str | None] | None = None,
 ) -> None:
     """Register media-analysis tools."""
     registry.register(
@@ -215,6 +217,14 @@ def register_media_tools(
     registry.register(
         AnalyzeVideoTool(
             media_router or MediaRouter(),
+            get_current_videos=get_current_videos,
+        )
+    )
+    registry.register(
+        SendMediaTool(
+            queue_media=queue_outbound_media or (lambda kind, payload: "Error: outbound media is unavailable."),
+            get_current_images=get_current_images,
+            get_current_audios=get_current_audios,
             get_current_videos=get_current_videos,
         )
     )
@@ -304,6 +314,7 @@ def register_default_tools(
     get_current_images: Callable[[], list[str] | None] | None = None,
     get_current_audios: Callable[[], list[str] | None] | None = None,
     get_current_videos: Callable[[], list[str] | None] | None = None,
+    queue_outbound_media: Callable[[str, str], str | None] | None = None,
     background_notification_factory: Callable[[], Any | None] | None = None,
 ) -> None:
     """Register the built-in tools used by AgentLoop."""
@@ -338,6 +349,7 @@ def register_default_tools(
         get_current_images=get_current_images or (lambda: None),
         get_current_audios=get_current_audios or (lambda: None),
         get_current_videos=get_current_videos or (lambda: None),
+        queue_outbound_media=queue_outbound_media,
     )
     register_delegate_tools(
         registry,

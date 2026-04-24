@@ -92,6 +92,12 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use `video_index` when multiple video clips are attached.
   - If the main need is spoken content rather than visual sequence, prefer `transcribe_audio` first when applicable.
 
+- `send_media`
+  - Use when the user asks you to send, return, or resend an image, voice message, audio file, or video.
+  - Provide `payload` when you already have a data URL, URL, or platform file id to send.
+  - Omit `payload` and set `media_index` to resend media attached to the current user turn.
+  - Choose `kind="voice"` for Telegram-style voice messages and `kind="audio"` for regular audio files.
+
 ## Skill Tools
 
 - `read_skill`

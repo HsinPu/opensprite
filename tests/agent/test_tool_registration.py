@@ -12,6 +12,7 @@ from opensprite.tools.shell import ExecTool
 from opensprite.tools.search import SearchKnowledgeTool
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool
+from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -63,6 +64,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "ocr_image",
         "transcribe_audio",
         "analyze_video",
+        "send_media",
         "delegate",
         "search_history",
         "search_knowledge",
@@ -70,6 +72,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
     ]
     assert isinstance(registry.get("configure_skill"), ConfigureSkillTool)
     assert isinstance(registry.get("configure_subagent"), ConfigureSubagentTool)
+    assert isinstance(registry.get("send_media"), SendMediaTool)
 
 
 def test_register_default_tools_skips_optional_skill_and_search_tools_when_dependencies_missing():
@@ -99,6 +102,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "ocr_image",
         "transcribe_audio",
         "analyze_video",
+        "send_media",
         "delegate",
         "cron",
     ]

@@ -370,9 +370,9 @@ Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
 
 ## Built-in tools · 內建工具（預設註冊）
 
-**English:** Filesystem read/write/edit/list, shell, `web_search`, `web_fetch`, `analyze_image`, `ocr_image`, `transcribe_audio`, `analyze_video`, `cron`, `save_memory`, history/knowledge search when SQLite search is enabled, **dynamic MCP tools**, **`delegate`**, **`configure_mcp` / `configure_subagent`**, and skill-related tools.
+**English:** Filesystem read/write/edit/list, shell, `web_search`, `web_fetch`, `analyze_image`, `ocr_image`, `transcribe_audio`, `analyze_video`, `send_media`, `cron`, `save_memory`, history/knowledge search when SQLite search is enabled, **dynamic MCP tools**, **`delegate`**, **`configure_mcp` / `configure_subagent`**, and skill-related tools.
 
-**中文：** 讀寫／編輯檔案、列目錄、Shell、`web_search`、`web_fetch`、影像分析（`analyze_image`）、OCR（`ocr_image`）、語音轉文字（`transcribe_audio`）、影片分析（`analyze_video`）、排程（`cron`）、長期記憶（`save_memory`）、索引歷史／知識搜尋（SQLite 搜尋啟用時）、**MCP 動態工具**、**`delegate`**、**`configure_mcp`／`configure_subagent`**、Skills 相關工具等。
+**中文：** 讀寫／編輯檔案、列目錄、Shell、`web_search`、`web_fetch`、影像分析（`analyze_image`）、OCR（`ocr_image`）、語音轉文字（`transcribe_audio`）、影片分析（`analyze_video`）、傳送媒體（`send_media`）、排程（`cron`）、長期記憶（`save_memory`）、索引歷史／知識搜尋（SQLite 搜尋啟用時）、**MCP 動態工具**、**`delegate`**、**`configure_mcp`／`configure_subagent`**、Skills 相關工具等。
 
 ---
 
