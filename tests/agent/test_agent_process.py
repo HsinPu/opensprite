@@ -4,10 +4,12 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ExecutionResult
+from opensprite.bus import MessageBus
 from opensprite.bus.events import OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
+from opensprite.storage import MemoryStorage
 from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
 from opensprite.tools.process_runtime import BackgroundSession
@@ -224,6 +226,117 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
     assert response.text == "assistant reply"
     assert response.channel == "telegram"
     assert response.session_chat_id == "telegram:room-1"
+
+
+def test_agent_process_emits_run_lifecycle_events(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_call_llm(*args, **kwargs):
+            return ExecutionResult(content="assistant reply", executed_tool_calls=0)
+
+        async def fake_transition(*args, **kwargs):
+            return None
+
+        agent.call_llm = fake_call_llm
+        agent._maybe_apply_immediate_task_transition = fake_transition
+        agent._schedule_post_response_maintenance = lambda chat_id: None
+        agent._maybe_schedule_skill_review = lambda chat_id, result: None
+
+        response = await agent.process(
+            UserMessage(
+                text="hello",
+                channel="web",
+                chat_id="browser-1",
+                session_chat_id="web:browser-1",
+                sender_id="user-1",
+            )
+        )
+
+        run = next(iter(storage._runs.values()))
+        events = next(iter(storage._run_events.values()))
+        return response, run, events
+
+    response, run, events = asyncio.run(scenario())
+
+    assert response.text == "assistant reply"
+    assert run.status == "completed"
+    assert run.chat_id == "web:browser-1"
+    assert [event.event_type for event in events] == ["run_started", "llm_status", "run_finished"]
+    assert events[0].payload["status"] == "running"
+    assert events[-1].payload["status"] == "completed"
+
+
+def test_agent_verify_hooks_emit_verification_events(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        bus = MessageBus()
+        agent._message_bus = bus
+        await storage.create_run("web:browser-1", "run-1")
+
+        before = agent._make_tool_progress_hook(
+            channel="web",
+            transport_chat_id="browser-1",
+            session_chat_id="web:browser-1",
+            run_id="run-1",
+            enabled=True,
+        )
+        after = agent._make_tool_result_hook(
+            channel="web",
+            transport_chat_id="browser-1",
+            session_chat_id="web:browser-1",
+            run_id="run-1",
+            enabled=True,
+        )
+
+        await before("verify", {"action": "python_compile", "path": "src"})
+        await after("verify", {"action": "python_compile", "path": "src"}, "Verification passed: python_compile")
+
+        stored_events = await storage.get_run_events("web:browser-1", "run-1")
+        bus_events = []
+        while bus.run_events_size:
+            bus_events.append(await bus.consume_run_event())
+        return stored_events, bus_events
+
+    stored_events, bus_events = asyncio.run(scenario())
+
+    assert [event.event_type for event in stored_events] == [
+        "tool_started",
+        "verification_started",
+        "tool_result",
+        "verification_result",
+    ]
+    assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
+    assert stored_events[1].payload == {"action": "python_compile", "path": "src"}
+    assert stored_events[-1].payload["ok"] is True
 
 
 def test_agent_process_persists_media_only_message_without_llm(tmp_path):
@@ -718,6 +831,7 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
         tool_result_chat_id=None,
         tool_registry=None,
         on_tool_before_execute=None,
+        on_tool_after_execute=None,
         on_llm_status=None,
         refresh_system_prompt=None,
         max_tool_iterations=None,

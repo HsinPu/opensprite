@@ -704,6 +704,7 @@ Output exactly these sections when applicable:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_tool_after_execute: Callable[[str, dict[str, Any], str], Awaitable[None]] | None = None,
         on_llm_status: Callable[[str], Awaitable[None]] | None = None,
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
@@ -955,6 +956,13 @@ Output exactly these sections when applicable:
                     logger.info(
                         f"[{log_id}] tool.result | name={tool_name} preview={self.format_log_preview(result, max_chars=200)}"
                     )
+                    if on_tool_after_execute is not None:
+                        try:
+                            await on_tool_after_execute(tool_name, tool_args, result)
+                        except Exception:
+                            logger.exception(
+                                f"[{log_id}] tool.result-hook.error | name={tool_name}"
+                            )
                     result_for_context = self._summarize_tool_result_for_context(tool_name, result)
 
                     repeated_error_marker = self._classify_tool_result(result)

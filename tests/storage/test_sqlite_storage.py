@@ -147,3 +147,53 @@ def test_sqlite_storage_supports_count_and_slice_reads(tmp_path):
     assert count == 5
     assert [message.content for message in middle] == ["m1", "m2", "m3"]
     assert [message.content for message in tail] == ["m3", "m4"]
+
+
+def test_sqlite_storage_persists_runs_and_events(tmp_path):
+    db_path = tmp_path / "runs.db"
+    storage = SQLiteStorage(db_path)
+
+    async def scenario():
+        created = await storage.create_run(
+            "chat-1",
+            "run-1",
+            status="running",
+            metadata={"channel": "web"},
+            created_at=10.0,
+        )
+        event = await storage.add_run_event(
+            "chat-1",
+            "run-1",
+            "run_started",
+            payload={"status": "running"},
+            created_at=11.0,
+        )
+        updated = await storage.update_run_status(
+            "chat-1",
+            "run-1",
+            "completed",
+            metadata={"executed_tool_calls": 0},
+            finished_at=12.0,
+        )
+        latest = await storage.get_latest_run("chat-1")
+        events = await storage.get_run_events("chat-1", "run-1")
+        chats = await storage.get_all_chats()
+        return created, event, updated, latest, events, chats
+
+    created, event, updated, latest, events, chats = asyncio.run(scenario())
+
+    assert created is not None
+    assert created.status == "running"
+    assert created.metadata == {"channel": "web"}
+    assert event is not None
+    assert event.event_type == "run_started"
+    assert event.payload == {"status": "running"}
+    assert updated is not None
+    assert updated.status == "completed"
+    assert updated.finished_at == 12.0
+    assert updated.metadata == {"channel": "web", "executed_tool_calls": 0}
+    assert latest is not None
+    assert latest.run_id == "run-1"
+    assert latest.status == "completed"
+    assert [entry.event_type for entry in events] == ["run_started"]
+    assert chats == ["chat-1"]

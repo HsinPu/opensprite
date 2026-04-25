@@ -10,7 +10,7 @@ opensprite/bus/message_bus.py - 非同步訊息匯流排
 
 import asyncio
 
-from .events import InboundMessage, OutboundMessage
+from .events import InboundMessage, OutboundMessage, RunEvent
 
 
 class MessageBus:
@@ -24,6 +24,7 @@ class MessageBus:
     def __init__(self):
         self.inbound: asyncio.Queue[InboundMessage] = asyncio.Queue()
         self.outbound: asyncio.Queue[OutboundMessage] = asyncio.Queue()
+        self.run_events: asyncio.Queue[RunEvent] = asyncio.Queue()
 
     async def publish_inbound(self, msg: InboundMessage) -> None:
         """Publish a message from a channel to the agent."""
@@ -41,6 +42,14 @@ class MessageBus:
         """Consume the next outbound message (blocks until available)."""
         return await self.outbound.get()
 
+    async def publish_run_event(self, event: RunEvent) -> None:
+        """Publish a structured run event to interested channel adapters."""
+        await self.run_events.put(event)
+
+    async def consume_run_event(self) -> RunEvent:
+        """Consume the next run event (blocks until available)."""
+        return await self.run_events.get()
+
     @property
     def inbound_size(self) -> int:
         """Number of pending inbound messages."""
@@ -50,3 +59,8 @@ class MessageBus:
     def outbound_size(self) -> int:
         """Number of pending outbound messages."""
         return self.outbound.qsize()
+
+    @property
+    def run_events_size(self) -> int:
+        """Number of pending run events."""
+        return self.run_events.qsize()

@@ -19,9 +19,9 @@ from ..search.indexing import (
     build_knowledge_documents_from_message,
 )
 from ..utils.log import logger
-from .base import StorageProvider, StoredMessage
+from .base import StorageProvider, StoredMessage, StoredRun, StoredRunEvent
 
-SQLITE_SCHEMA_VERSION = 4
+SQLITE_SCHEMA_VERSION = 5
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -48,6 +48,37 @@ CREATE TABLE IF NOT EXISTS messages (
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat_created
     ON messages(chat_id, created_at, id);
+
+CREATE TABLE IF NOT EXISTS runs (
+    run_id TEXT PRIMARY KEY,
+    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    finished_at REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_chat_created
+    ON runs(chat_id, created_at, run_id);
+
+CREATE INDEX IF NOT EXISTS idx_runs_status
+    ON runs(status, updated_at);
+
+CREATE TABLE IF NOT EXISTS run_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
+    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    payload_json TEXT NOT NULL DEFAULT '{}',
+    created_at REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_run_events_run_created
+    ON run_events(run_id, created_at, id);
+
+CREATE INDEX IF NOT EXISTS idx_run_events_chat_created
+    ON run_events(chat_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS knowledge_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -587,6 +618,36 @@ class SQLiteStorage(StorageProvider):
             for row in rows
         ]
 
+    @staticmethod
+    def _row_to_run(row: sqlite3.Row | None) -> StoredRun | None:
+        """Convert one run row into a StoredRun object."""
+        if row is None:
+            return None
+        return StoredRun(
+            run_id=str(row["run_id"]),
+            chat_id=str(row["chat_id"]),
+            status=str(row["status"]),
+            created_at=float(row["created_at"] or 0),
+            updated_at=float(row["updated_at"] or 0),
+            finished_at=None if row["finished_at"] is None else float(row["finished_at"]),
+            metadata=_load_metadata(row["metadata_json"]),
+        )
+
+    @staticmethod
+    def _rows_to_run_events(rows: list[sqlite3.Row]) -> list[StoredRunEvent]:
+        """Convert selected run event rows into StoredRunEvent objects."""
+        return [
+            StoredRunEvent(
+                event_id=int(row["id"]),
+                run_id=str(row["run_id"]),
+                chat_id=str(row["chat_id"]),
+                event_type=str(row["event_type"]),
+                payload=_load_metadata(row["payload_json"]),
+                created_at=float(row["created_at"] or 0),
+            )
+            for row in rows
+        ]
+
     async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
         """Return the persisted messages for one chat."""
         async with self._lock:
@@ -723,6 +784,168 @@ class SQLiteStorage(StorageProvider):
                     (chat_id, int(index)),
                 )
                 conn.commit()
+            finally:
+                conn.close()
+
+    async def create_run(
+        self,
+        chat_id: str,
+        run_id: str,
+        *,
+        status: str = "running",
+        metadata: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRun | None:
+        """Persist the start of one user-facing run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                conn.execute(
+                    """
+                    INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(run_id) DO UPDATE SET
+                        status = excluded.status,
+                        metadata_json = excluded.metadata_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        run_id,
+                        chat_id,
+                        status,
+                        json.dumps(json_safe(metadata or {}), ensure_ascii=False),
+                        now,
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                return self._row_to_run(row)
+            finally:
+                conn.close()
+
+    async def update_run_status(
+        self,
+        chat_id: str,
+        run_id: str,
+        status: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        finished_at: float | None = None,
+    ) -> StoredRun | None:
+        """Update the lifecycle status for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = time.time()
+                row = conn.execute("SELECT metadata_json FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                if row is None:
+                    return None
+                merged_metadata = _load_metadata(row["metadata_json"])
+                if metadata:
+                    merged_metadata.update(metadata)
+                conn.execute(
+                    """
+                    UPDATE runs
+                    SET status = ?, metadata_json = ?, updated_at = ?, finished_at = COALESCE(?, finished_at)
+                    WHERE run_id = ? AND chat_id = ?
+                    """,
+                    (
+                        status,
+                        json.dumps(json_safe(merged_metadata), ensure_ascii=False),
+                        now,
+                        finished_at,
+                        run_id,
+                        chat_id,
+                    ),
+                )
+                conn.commit()
+                updated = conn.execute("SELECT * FROM runs WHERE run_id = ?", (run_id,)).fetchone()
+                return self._row_to_run(updated)
+            finally:
+                conn.close()
+
+    async def get_runs(self, chat_id: str, limit: int | None = None) -> list[StoredRun]:
+        """Return persisted runs for one chat from newest to oldest."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                params: tuple[Any, ...]
+                query = """
+                    SELECT *
+                    FROM runs
+                    WHERE chat_id = ?
+                    ORDER BY created_at DESC, run_id DESC
+                """
+                params = (chat_id,)
+                if limit is not None:
+                    query += " LIMIT ?"
+                    params = (chat_id, int(limit))
+                rows = conn.execute(query, params).fetchall()
+                return [run for run in (self._row_to_run(row) for row in rows) if run is not None]
+            finally:
+                conn.close()
+
+    async def add_run_event(
+        self,
+        chat_id: str,
+        run_id: str,
+        event_type: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        created_at: float | None = None,
+    ) -> StoredRunEvent | None:
+        """Persist one structured event for a run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                now = float(created_at or time.time())
+                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
+                    conn.execute(
+                        """
+                        INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                        VALUES (?, ?, 'running', '{}', ?, ?)
+                        """,
+                        (run_id, chat_id, now, now),
+                    )
+                cursor = conn.execute(
+                    """
+                    INSERT INTO run_events (run_id, chat_id, event_type, payload_json, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        run_id,
+                        chat_id,
+                        event_type,
+                        json.dumps(json_safe(payload or {}), ensure_ascii=False),
+                        now,
+                    ),
+                )
+                conn.commit()
+                row = conn.execute("SELECT * FROM run_events WHERE id = ?", (cursor.lastrowid,)).fetchone()
+                events = self._rows_to_run_events([row]) if row is not None else []
+                return events[0] if events else None
+            finally:
+                conn.close()
+
+    async def get_run_events(self, chat_id: str, run_id: str) -> list[StoredRunEvent]:
+        """Return all events persisted for one run."""
+        async with self._lock:
+            conn = self._get_conn()
+            try:
+                rows = conn.execute(
+                    """
+                    SELECT id, run_id, chat_id, event_type, payload_json, created_at
+                    FROM run_events
+                    WHERE chat_id = ? AND run_id = ?
+                    ORDER BY id ASC
+                    """,
+                    (chat_id, run_id),
+                ).fetchall()
+                return self._rows_to_run_events(rows)
             finally:
                 conn.close()
 

@@ -123,6 +123,37 @@
               </div>
             </article>
           </div>
+
+          <section
+            v-if="currentRunSummary"
+            class="run-timeline"
+            :data-tone="currentRunSummary.tone"
+            aria-live="polite"
+          >
+            <div class="run-timeline__header">
+              <div>
+                <span class="run-timeline__eyebrow">Run {{ currentRunSummary.shortId }}</span>
+                <strong>{{ currentRunSummary.title }}</strong>
+              </div>
+              <span class="run-timeline__status">{{ currentRunSummary.statusLabel }}</span>
+            </div>
+
+            <ol class="run-timeline__list">
+              <li
+                v-for="event in currentRunTimeline"
+                :key="event.id"
+                class="run-timeline__item"
+                :data-tone="event.tone"
+              >
+                <span class="run-timeline__dot" aria-hidden="true"></span>
+                <div class="run-timeline__text">
+                  <strong>{{ event.label }}</strong>
+                  <span v-if="event.detail">{{ event.detail }}</span>
+                </div>
+                <time>{{ formatEventTime(event.createdAt) }}</time>
+              </li>
+            </ol>
+          </section>
         </div>
       </section>
 
@@ -384,6 +415,18 @@ const SETTINGS_TITLES = {
   models: "模型",
 };
 
+const MAX_RUN_EVENTS = 80;
+const MAX_TIMELINE_EVENTS = 8;
+const TIMELINE_EVENT_TYPES = new Set([
+  "run_started",
+  "llm_status",
+  "tool_started",
+  "verification_started",
+  "verification_result",
+  "run_finished",
+  "run_failed",
+]);
+
 const prompts = [
   {
     title: "Summarize capabilities",
@@ -466,6 +509,8 @@ function createSession(chatId) {
     title: "New chat",
     updatedAt: Date.now(),
     messages: [],
+    activeRunId: null,
+    runs: [],
   };
 }
 
@@ -503,6 +548,33 @@ const currentSession = computed(() => {
 });
 
 const currentMessages = computed(() => currentSession.value?.messages || []);
+
+const currentRun = computed(() => {
+  const session = currentSession.value;
+  if (!session?.runs?.length) {
+    return null;
+  }
+  return session.runs.find((run) => run.runId === session.activeRunId) || session.runs[0];
+});
+
+const currentRunTimeline = computed(() => {
+  const events = currentRun.value?.events || [];
+  return events.slice(-MAX_TIMELINE_EVENTS);
+});
+
+const currentRunSummary = computed(() => {
+  const run = currentRun.value;
+  const latestEvent = currentRunTimeline.value.at(-1);
+  if (!run || !latestEvent) {
+    return null;
+  }
+  return {
+    shortId: shortRunId(run.runId),
+    statusLabel: runStatusLabel(run.status),
+    title: latestEvent.label,
+    tone: runTone(run.status, latestEvent.tone),
+  };
+});
 
 const settingsTitle = computed(() => SETTINGS_TITLES[settingsSection.value] || SETTINGS_TITLES.general);
 
@@ -586,6 +658,201 @@ function addMessage(chatId, message) {
     session.title = summarizeTitle(message.text);
   }
   sortSessions();
+}
+
+function normalizeEventTimestamp(value) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return Date.now();
+  }
+  return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
+}
+
+function coerceEventPayload(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function shortRunId(runId) {
+  const normalized = String(runId || "run").replace(/^run[_-]?/, "");
+  return normalized.length > 8 ? normalized.slice(0, 8) : normalized;
+}
+
+function runStatusLabel(status) {
+  const labels = {
+    running: "Running",
+    completed: "Complete",
+    failed: "Failed",
+    cancelled: "Cancelled",
+  };
+  return labels[status] || "Running";
+}
+
+function runTone(status, fallbackTone = "running") {
+  if (status === "completed") {
+    return fallbackTone === "warning" ? "warning" : "success";
+  }
+  if (status === "failed") {
+    return "error";
+  }
+  if (status === "cancelled") {
+    return "warning";
+  }
+  return fallbackTone || "running";
+}
+
+function statusFromRunEvent(eventType, payload) {
+  if (eventType === "run_started") {
+    return "running";
+  }
+  if (eventType === "run_finished") {
+    return payload.status || "completed";
+  }
+  if (eventType === "run_failed") {
+    return payload.status || "failed";
+  }
+  return null;
+}
+
+function formatRunFinishDetail(payload) {
+  const parts = [];
+  if (Number.isFinite(Number(payload.executed_tool_calls))) {
+    parts.push(`${payload.executed_tool_calls} tool call(s)`);
+  }
+  if (Number.isFinite(Number(payload.context_compactions)) && Number(payload.context_compactions) > 0) {
+    parts.push(`${payload.context_compactions} compaction(s)`);
+  }
+  if (payload.had_tool_error) {
+    parts.push("tool warning recorded");
+  }
+  return parts.join(" · ");
+}
+
+function describeRunEvent(eventType, payload) {
+  if (!TIMELINE_EVENT_TYPES.has(eventType)) {
+    return null;
+  }
+
+  if (eventType === "run_started") {
+    return { label: "Run started", detail: "Preparing the local task.", tone: "running" };
+  }
+
+  if (eventType === "llm_status") {
+    const message = String(payload.message || "Thinking");
+    return {
+      label: message === "processing" ? "Thinking" : "LLM status",
+      detail: message === "processing" ? "Preparing prompt and tool context." : message,
+      tone: "running",
+    };
+  }
+
+  if (eventType === "tool_started") {
+    if (payload.tool_name === "verify") {
+      return null;
+    }
+    return {
+      label: `Tool: ${payload.tool_name || "unknown"}`,
+      detail: payload.args_preview || "Executing tool.",
+      tone: "running",
+    };
+  }
+
+  if (eventType === "verification_started") {
+    return {
+      label: `Verifying: ${payload.action || "auto"}`,
+      detail: payload.path ? `Path: ${payload.path}` : "Running project checks.",
+      tone: "running",
+    };
+  }
+
+  if (eventType === "verification_result") {
+    const ok = payload.ok !== false;
+    return {
+      label: ok ? "Verification passed" : "Verification failed",
+      detail: payload.result_preview || "Verification completed.",
+      tone: ok ? "success" : "error",
+    };
+  }
+
+  if (eventType === "run_finished") {
+    return {
+      label: payload.had_tool_error ? "Run completed with warnings" : "Run completed",
+      detail: formatRunFinishDetail(payload) || "Final response delivered.",
+      tone: payload.had_tool_error ? "warning" : "success",
+    };
+  }
+
+  if (eventType === "run_failed") {
+    const cancelled = payload.status === "cancelled";
+    return {
+      label: cancelled ? "Run cancelled" : "Run failed",
+      detail: payload.error || "The run stopped before completion.",
+      tone: cancelled ? "warning" : "error",
+    };
+  }
+
+  return null;
+}
+
+function findOrCreateRun(session, runId, createdAt) {
+  let run = session.runs.find((entry) => entry.runId === runId);
+  if (!run) {
+    run = {
+      runId,
+      status: "running",
+      createdAt,
+      updatedAt: createdAt,
+      events: [],
+    };
+    session.runs.unshift(run);
+  }
+  session.activeRunId = runId;
+  return run;
+}
+
+function handleRunEvent(payload) {
+  const chatId = payload.chat_id || currentSession.value?.chatId || generateChatId();
+  const session = ensureSession(chatId, payload.session_chat_id);
+  const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
+  const eventType = String(payload.event_type || "run_event");
+  const eventPayload = coerceEventPayload(payload.payload);
+  const createdAt = normalizeEventTimestamp(payload.created_at);
+  const run = findOrCreateRun(session, runId, createdAt);
+  const nextStatus = statusFromRunEvent(eventType, eventPayload);
+  if (nextStatus) {
+    run.status = nextStatus;
+  } else if (!["completed", "failed", "cancelled"].includes(run.status)) {
+    run.status = "running";
+  }
+
+  const description = describeRunEvent(eventType, eventPayload);
+  if (description) {
+    run.events.push({
+      id: `${runId}-${eventType}-${createdAt}-${randomToken()}`,
+      eventType,
+      createdAt,
+      payload: eventPayload,
+      ...description,
+    });
+    if (run.events.length > MAX_RUN_EVENTS) {
+      run.events.splice(0, run.events.length - MAX_RUN_EVENTS);
+    }
+  }
+
+  run.updatedAt = createdAt;
+  session.updatedAt = createdAt;
+  session.runs.sort((left, right) => right.updatedAt - left.updatedAt);
+  sortSessions();
+}
+
+function formatEventTime(timestamp) {
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return "--:--";
+  }
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
 }
 
 function setNotice(text, tone) {
@@ -673,6 +940,12 @@ function handleSocketMessage(rawData) {
     const chatId = payload.chat_id || currentSession.value?.chatId || generateChatId();
     const session = ensureSession(chatId, payload.session_chat_id);
     addMessage(session.chatId, makeMessage("assistant", payload.text || "", payload.session_chat_id || "OpenSprite"));
+    scrollMessagesToBottom();
+    return;
+  }
+
+  if (payload.type === "run_event") {
+    handleRunEvent(payload);
     scrollMessagesToBottom();
     return;
   }

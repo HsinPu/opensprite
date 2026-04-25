@@ -29,6 +29,7 @@ from ..tools import (
     ListDirTool,
     EditFileTool,
     ExecTool,
+    VerifyTool,
     ProcessTool,
     SearchHistoryTool,
     SearchKnowledgeTool,
@@ -170,6 +171,15 @@ def register_shell_tools(
         )
     )
     registry.register(process_tool)
+
+
+def register_verify_tools(
+    registry: ToolRegistry,
+    *,
+    workspace_resolver: Callable[[], Path],
+) -> None:
+    """Register fixed project verification checks."""
+    registry.register(VerifyTool(workspace_resolver=workspace_resolver))
 
 
 def register_config_tools(
@@ -388,6 +398,7 @@ def register_default_tools(
         tools_config=current_tools_config,
         background_notification_factory=background_notification_factory,
     )
+    register_verify_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=current_tools_config)
     register_media_tools(
         registry,

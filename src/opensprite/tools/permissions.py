@@ -43,6 +43,7 @@ DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
     "task_update": frozenset({"write", "memory"}),
     "exec": frozenset({"execute"}),
     "process": frozenset({"execute"}),
+    "verify": frozenset({"execute"}),
     "delegate": frozenset({"delegation"}),
     "web_search": frozenset({"network"}),
     "web_fetch": frozenset({"network"}),

@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 import shlex
 from typing import Any, Awaitable, Callable
-from . import MessageBus, InboundMessage, OutboundMessage
+from . import MessageBus, InboundMessage, OutboundMessage, RunEvent
 from .message import UserMessage, AssistantMessage
 from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
@@ -43,6 +43,7 @@ class Conversation:
 
 
 ResponseHandler = Callable[[AssistantMessage, str, str | None], Awaitable[None]]
+RunEventHandler = Callable[[RunEvent], Awaitable[None]]
 
 
 class MessageQueue:
@@ -75,6 +76,8 @@ class MessageQueue:
         """
         self.agent = agent
         self.bus = bus or MessageBus()
+        if hasattr(agent, "_message_bus"):
+            agent._message_bus = self.bus
         self.messages = messages_config or getattr(agent, "messages", None) or MessagesConfig()
         self.conversations: dict[str, Conversation] = {}  # chat_id -> Conversation
         self.running = False
@@ -82,8 +85,10 @@ class MessageQueue:
         self._active_tasks: dict[str, list[asyncio.Task]] = {}
         self._session_tails: dict[str, asyncio.Task] = {}
         self._response_handlers: dict[str, ResponseHandler] = {}
+        self._run_event_handlers: dict[str, RunEventHandler] = {}
         # Outbound 消費者任務
         self._outbound_task: asyncio.Task | None = None
+        self._run_event_task: asyncio.Task | None = None
 
     @staticmethod
     def normalize_channel(channel: str | None) -> str:
@@ -122,6 +127,11 @@ class MessageQueue:
         """Register the outbound response handler for a channel."""
         normalized_channel = self.normalize_channel(channel)
         self._response_handlers[normalized_channel] = handler
+
+    def register_run_event_handler(self, channel: str, handler: RunEventHandler) -> None:
+        """Register the structured run event handler for a channel."""
+        normalized_channel = self.normalize_channel(channel)
+        self._run_event_handlers[normalized_channel] = handler
 
     @staticmethod
     def _first_command(text: str | None) -> str:
@@ -592,6 +602,11 @@ class MessageQueue:
         """Remove the outbound response handler for a channel."""
         normalized_channel = self.normalize_channel(channel)
         self._response_handlers.pop(normalized_channel, None)
+
+    def unregister_run_event_handler(self, channel: str) -> None:
+        """Remove the run event handler for a channel."""
+        normalized_channel = self.normalize_channel(channel)
+        self._run_event_handlers.pop(normalized_channel, None)
     
     async def enqueue(self, user_message: UserMessage) -> None:
         """
@@ -815,6 +830,24 @@ class MessageQueue:
                 continue
             except Exception as e:
                 logger.exception(f"Outbound consumer 發生錯誤: {e}")
+
+    async def _consume_run_events(self) -> None:
+        """Consume structured run events and dispatch them to channel handlers."""
+        while self.running:
+            try:
+                event = await asyncio.wait_for(
+                    self.bus.consume_run_event(),
+                    timeout=1.0,
+                )
+                normalized_channel = self.normalize_channel(event.channel)
+                handler = self._run_event_handlers.get(normalized_channel)
+                if handler is None:
+                    continue
+                await handler(event)
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                logger.exception(f"Run event consumer 發生錯誤: {e}")
     
     async def process_queue(self) -> None:
         """
@@ -827,6 +860,7 @@ class MessageQueue:
         
         # 啟動 outbound 消費者
         self._outbound_task = asyncio.create_task(self._consume_outbound())
+        self._run_event_task = asyncio.create_task(self._consume_run_events())
         
         while self.running:
             try:
@@ -911,6 +945,13 @@ class MessageQueue:
             self._outbound_task.cancel()
             try:
                 await self._outbound_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._run_event_task and not self._run_event_task.done():
+            self._run_event_task.cancel()
+            try:
+                await self._run_event_task
             except asyncio.CancelledError:
                 pass
         

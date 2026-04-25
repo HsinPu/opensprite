@@ -4,6 +4,7 @@ from pathlib import Path
 from aiohttp import ClientSession
 
 from opensprite.bus.dispatcher import MessageQueue
+from opensprite.bus.events import RunEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
 
@@ -55,6 +56,29 @@ async def _run_web_roundtrip():
                 assert session_frame["type"] == "session"
                 assert session_frame["channel"] == "web"
                 assert session_frame["session_chat_id"].startswith("web:")
+
+                await queue.bus.publish_run_event(
+                    RunEvent(
+                        channel="web",
+                        chat_id=session_frame["chat_id"],
+                        session_chat_id=session_frame["session_chat_id"],
+                        run_id="run-test",
+                        event_type="run_started",
+                        payload={"status": "running"},
+                        created_at=123.0,
+                    )
+                )
+                run_frame = await ws.receive_json(timeout=2)
+                assert run_frame == {
+                    "type": "run_event",
+                    "channel": "web",
+                    "chat_id": session_frame["chat_id"],
+                    "session_chat_id": session_frame["session_chat_id"],
+                    "run_id": "run-test",
+                    "event_type": "run_started",
+                    "payload": {"status": "running"},
+                    "created_at": 123.0,
+                }
 
                 await ws.send_str("hello from browser")
                 reply = await ws.receive_json(timeout=2)

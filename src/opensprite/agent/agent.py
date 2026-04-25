@@ -30,8 +30,9 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
+from uuid import uuid4
 
-from ..bus.events import OutboundMessage
+from ..bus.events import OutboundMessage, RunEvent
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..storage import StorageProvider, StoredMessage
@@ -203,6 +204,27 @@ class AgentLoop:
         return text[: max_chars - 3] + "..."
 
     @staticmethod
+    def _json_safe_event_value(value: Any) -> Any:
+        """Convert run event payload values into JSON-safe shapes."""
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        if isinstance(value, dict):
+            return {str(key): AgentLoop._json_safe_event_value(val) for key, val in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [AgentLoop._json_safe_event_value(item) for item in value]
+        return str(value)
+
+    @classmethod
+    def _json_safe_event_payload(cls, payload: dict[str, Any] | None) -> dict[str, Any]:
+        """Return a JSON-serializable event payload dictionary."""
+        if not payload:
+            return {}
+        return {
+            str(key): cls._json_safe_event_value(value)
+            for key, value in payload.items()
+        }
+
+    @staticmethod
     def _summarize_messages(messages: list[ChatMessage], tail: int = 4) -> str:
         """Build a compact summary of the trailing chat messages for diagnostics."""
         summary = []
@@ -275,18 +297,43 @@ class AgentLoop:
         channel: str | None,
         transport_chat_id: str | None,
         session_chat_id: str,
+        run_id: str | None,
         enabled: bool,
     ) -> Callable[[str, dict[str, Any]], Awaitable[None]] | None:
-        """Publish a brief outbound status before selected tools run; requires gateway MessageBus."""
-        if not enabled or not self._message_bus or not channel or transport_chat_id is None:
+        """Publish run telemetry and a brief outbound status before selected tools run."""
+        if not enabled or run_id is None:
             return None
         bus = self._message_bus
         ch = channel
-        tid = str(transport_chat_id)
+        tid = str(transport_chat_id) if transport_chat_id is not None else None
         sid = session_chat_id
+        rid = run_id
 
         async def _hook(tool_name: str, tool_args: dict[str, Any]) -> None:
-            if not AgentLoop._tool_warrants_progress_notice(tool_name):
+            await self._emit_run_event(
+                sid,
+                rid,
+                "tool_started",
+                {
+                    "tool_name": tool_name,
+                    "args_preview": self._format_log_preview(json.dumps(tool_args or {}, ensure_ascii=False), max_chars=240),
+                },
+                channel=ch,
+                transport_chat_id=tid,
+            )
+            if tool_name == "verify":
+                await self._emit_run_event(
+                    sid,
+                    rid,
+                    "verification_started",
+                    {
+                        "action": (tool_args or {}).get("action", "auto"),
+                        "path": (tool_args or {}).get("path", "."),
+                    },
+                    channel=ch,
+                    transport_chat_id=tid,
+                )
+            if bus is None or not ch or tid is None or not AgentLoop._tool_warrants_progress_notice(tool_name):
                 return
             text = AgentLoop._format_tool_progress_message(tool_name, tool_args)
             await bus.publish_outbound(
@@ -301,23 +348,81 @@ class AgentLoop:
 
         return _hook
 
+    def _make_tool_result_hook(
+        self,
+        *,
+        channel: str | None,
+        transport_chat_id: str | None,
+        session_chat_id: str,
+        run_id: str | None,
+        enabled: bool,
+    ) -> Callable[[str, dict[str, Any], str], Awaitable[None]] | None:
+        """Publish structured run telemetry after a tool finishes."""
+        if not enabled or run_id is None:
+            return None
+        tid = str(transport_chat_id) if transport_chat_id is not None else None
+        rid = run_id
+
+        async def _hook(tool_name: str, tool_args: dict[str, Any], result: str) -> None:
+            await self._emit_run_event(
+                session_chat_id,
+                rid,
+                "tool_result",
+                {
+                    "tool_name": tool_name,
+                    "ok": not str(result or "").lstrip().startswith("Error:"),
+                    "result_len": len(result or ""),
+                    "result_preview": self._format_log_preview(result, max_chars=240),
+                },
+                channel=channel,
+                transport_chat_id=tid,
+            )
+            if tool_name == "verify":
+                await self._emit_run_event(
+                    session_chat_id,
+                    rid,
+                    "verification_result",
+                    {
+                        "action": (tool_args or {}).get("action", "auto"),
+                        "path": (tool_args or {}).get("path", "."),
+                        "ok": not str(result or "").lstrip().startswith("Error:"),
+                        "result_preview": self._format_log_preview(result, max_chars=240),
+                    },
+                    channel=channel,
+                    transport_chat_id=tid,
+                )
+
+        return _hook
+
     def _make_llm_status_hook(
         self,
         *,
         channel: str | None,
         transport_chat_id: str | None,
         session_chat_id: str,
+        run_id: str | None,
         enabled: bool,
     ) -> Callable[[str], Awaitable[None]] | None:
         """在 LLM 長時間等待或重試前，對使用者發送短暫狀態（與工具進度相同走 MessageBus）。"""
-        if not enabled or not self._message_bus or not channel or transport_chat_id is None:
+        if not enabled or run_id is None:
             return None
         bus = self._message_bus
         ch = channel
-        tid = str(transport_chat_id)
+        tid = str(transport_chat_id) if transport_chat_id is not None else None
         sid = session_chat_id
+        rid = run_id
 
         async def _hook(text: str) -> None:
+            await self._emit_run_event(
+                sid,
+                rid,
+                "llm_status",
+                {"message": text},
+                channel=ch,
+                transport_chat_id=tid,
+            )
+            if bus is None or not ch or tid is None:
+                return
             await bus.publish_outbound(
                 OutboundMessage(
                     channel=ch,
@@ -329,6 +434,78 @@ class AgentLoop:
             )
 
         return _hook
+
+    async def _create_run(
+        self,
+        chat_id: str,
+        run_id: str,
+        *,
+        status: str = "running",
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        """Create a durable run record when the configured storage supports it."""
+        creator = getattr(self.storage, "create_run", None)
+        if not callable(creator):
+            return
+        try:
+            await creator(chat_id, run_id, status=status, metadata=metadata)
+        except Exception as e:
+            logger.warning("[{}] run.create.failed | run_id={} error={}", chat_id, run_id, e)
+
+    async def _update_run_status(
+        self,
+        chat_id: str,
+        run_id: str,
+        status: str,
+        *,
+        metadata: dict[str, Any] | None = None,
+        finished_at: float | None = None,
+    ) -> None:
+        """Update a durable run record when the configured storage supports it."""
+        updater = getattr(self.storage, "update_run_status", None)
+        if not callable(updater):
+            return
+        try:
+            await updater(chat_id, run_id, status, metadata=metadata, finished_at=finished_at)
+        except Exception as e:
+            logger.warning("[{}] run.update.failed | run_id={} status={} error={}", chat_id, run_id, status, e)
+
+    async def _emit_run_event(
+        self,
+        chat_id: str,
+        run_id: str,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+        *,
+        channel: str | None = None,
+        transport_chat_id: str | None = None,
+    ) -> None:
+        """Persist and publish one structured run event."""
+        created_at = time.time()
+        safe_payload = self._json_safe_event_payload(payload)
+        add_event = getattr(self.storage, "add_run_event", None)
+        if callable(add_event):
+            try:
+                await add_event(chat_id, run_id, event_type, payload=safe_payload, created_at=created_at)
+            except Exception as e:
+                logger.warning("[{}] run.event.persist.failed | run_id={} type={} error={}", chat_id, run_id, event_type, e)
+
+        if self._message_bus is None or not channel or transport_chat_id is None:
+            return
+        try:
+            await self._message_bus.publish_run_event(
+                RunEvent(
+                    channel=channel,
+                    chat_id=str(transport_chat_id),
+                    session_chat_id=chat_id,
+                    run_id=run_id,
+                    event_type=event_type,
+                    payload=safe_payload,
+                    created_at=created_at,
+                )
+            )
+        except Exception as e:
+            logger.warning("[{}] run.event.publish.failed | run_id={} type={} error={}", chat_id, run_id, event_type, e)
 
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:
@@ -465,6 +642,7 @@ class AgentLoop:
             "current_outbound_media",
             default=None,
         )
+        self._current_run_id: ContextVar[str | None] = ContextVar("current_run_id", default=None)
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
         self.config_path: Path | None = Path(config_path).expanduser().resolve() if config_path is not None else None
@@ -1267,6 +1445,7 @@ class AgentLoop:
         tool_result_chat_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[[str, dict[str, Any]], Awaitable[None]] | None = None,
+        on_tool_after_execute: Callable[[str, dict[str, Any], str], Awaitable[None]] | None = None,
         on_llm_status: Callable[[str], Awaitable[None]] | None = None,
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
@@ -1279,6 +1458,7 @@ class AgentLoop:
             tool_result_chat_id=tool_result_chat_id,
             tool_registry=tool_registry,
             on_tool_before_execute=on_tool_before_execute,
+            on_tool_after_execute=on_tool_after_execute,
             on_llm_status=on_llm_status,
             refresh_system_prompt=refresh_system_prompt,
             max_tool_iterations=max_tool_iterations,
@@ -1486,27 +1666,38 @@ class AgentLoop:
             chat_messages.append(msg)
 
         self._log_prepared_messages(chat_id, full_messages)
+        run_id = self._current_run_id.get()
         on_tool_before_execute = self._make_tool_progress_hook(
             channel=channel,
             transport_chat_id=transport_chat_id,
             session_chat_id=chat_id,
+            run_id=run_id,
+            enabled=emit_tool_progress,
+        )
+        on_tool_after_execute = self._make_tool_result_hook(
+            channel=channel,
+            transport_chat_id=transport_chat_id,
+            session_chat_id=chat_id,
+            run_id=run_id,
             enabled=emit_tool_progress,
         )
         on_llm_status = self._make_llm_status_hook(
             channel=channel,
             transport_chat_id=transport_chat_id,
             session_chat_id=chat_id,
+            run_id=run_id,
             enabled=emit_tool_progress,
         )
-        return await self._execute_messages(
-            chat_id,
-            chat_messages,
-            allow_tools=allow_tools,
-            tool_result_chat_id=chat_id if allow_tools else None,
-            on_tool_before_execute=on_tool_before_execute,
-            on_llm_status=on_llm_status,
-            refresh_system_prompt=lambda: self._context_builder.build_system_prompt(chat_id),
-        )
+        execute_kwargs = {
+            "allow_tools": allow_tools,
+            "tool_result_chat_id": chat_id if allow_tools else None,
+            "on_tool_before_execute": on_tool_before_execute,
+            "on_llm_status": on_llm_status,
+            "refresh_system_prompt": lambda: self._context_builder.build_system_prompt(chat_id),
+        }
+        if on_tool_after_execute is not None:
+            execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
+        return await self._execute_messages(chat_id, chat_messages, **execute_kwargs)
 
     def _skill_review_tool_registry(self) -> ToolRegistry | None:
         """Tools allowed during background skill review (subset of main registry)."""
@@ -1769,6 +1960,31 @@ class AgentLoop:
         }
         assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
 
+        transport_chat_id = str(user_message.chat_id) if user_message.chat_id is not None else None
+        run_id = f"run_{uuid4().hex}"
+        run_metadata = {
+            "channel": channel,
+            "transport_chat_id": transport_chat_id,
+            "sender_id": user_message.sender_id,
+            "sender_name": user_message.sender_name,
+        }
+        run_metadata = {key: value for key, value in run_metadata.items() if value is not None}
+        await self._create_run(session_chat_id, run_id, status="running", metadata=run_metadata)
+        await self._emit_run_event(
+            session_chat_id,
+            run_id,
+            "run_started",
+            {
+                "status": "running",
+                "text_len": len(user_message.text or ""),
+                "images_count": len(user_message.images or []),
+                "audios_count": len(user_message.audios or []),
+                "videos_count": len(user_message.videos or []),
+            },
+            channel=channel,
+            transport_chat_id=transport_chat_id,
+        )
+
         if self._is_media_only_message(user_message):
             media_history_content = self._format_saved_media_history_content(
                 image_files=image_files,
@@ -1781,6 +1997,16 @@ class AgentLoop:
                 f"[{session_chat_id}] outbound | media_only=true text={self._format_log_preview(response, max_chars=200)}"
             )
             await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
+            finished_at = time.time()
+            await self._emit_run_event(
+                session_chat_id,
+                run_id,
+                "run_finished",
+                {"status": "completed", "reason": "media_only", "response_len": len(response or "")},
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+            )
+            await self._update_run_status(session_chat_id, run_id, "completed", finished_at=finished_at)
             return AssistantMessage(
                 text=response,
                 channel=channel or "unknown",
@@ -1800,6 +2026,7 @@ class AgentLoop:
         outbound_media_token = self._current_outbound_media.set(
             {"images": [], "voices": [], "audios": [], "videos": []}
         )
+        run_token = self._current_run_id.set(run_id)
         try:
             if not self.llm_configured:
                 logger.warning("[{}] agent.skip | reason=llm-not-configured", session_chat_id)
@@ -1809,6 +2036,16 @@ class AgentLoop:
                     f"[{session_chat_id}] outbound | text={self._format_log_preview(response, max_chars=200)}"
                 )
                 await self._save_message(session_chat_id, "assistant", response, metadata=assistant_metadata)
+                finished_at = time.time()
+                await self._emit_run_event(
+                    session_chat_id,
+                    run_id,
+                    "run_finished",
+                    {"status": "completed", "reason": "llm_not_configured", "response_len": len(response or "")},
+                    channel=channel,
+                    transport_chat_id=transport_chat_id,
+                )
+                await self._update_run_status(session_chat_id, run_id, "completed", finished_at=finished_at)
                 return AssistantMessage(
                     text=response,
                     channel=channel or "unknown",
@@ -1824,6 +2061,14 @@ class AgentLoop:
 
             # 2. 呼叫 LLM（傳入 channel 和圖片）
             logger.info(f"[{session_chat_id}] agent.run | status=processing")
+            await self._emit_run_event(
+                session_chat_id,
+                run_id,
+                "llm_status",
+                {"message": "processing"},
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+            )
             exec_result = await self.call_llm(
                 session_chat_id,
                 current_message=user_message.text,
@@ -1832,7 +2077,7 @@ class AgentLoop:
                 user_image_files=image_files,
                 user_audio_files=audio_files,
                 user_video_files=video_files,
-                transport_chat_id=str(user_message.chat_id) if user_message.chat_id is not None else None,
+                transport_chat_id=transport_chat_id,
                 emit_tool_progress=True,
             )
             response = exec_result.content
@@ -1853,6 +2098,33 @@ class AgentLoop:
 
             self._maybe_schedule_skill_review(session_chat_id, exec_result)
 
+            finished_at = time.time()
+            await self._emit_run_event(
+                session_chat_id,
+                run_id,
+                "run_finished",
+                {
+                    "status": "completed",
+                    "response_len": len(response or ""),
+                    "executed_tool_calls": exec_result.executed_tool_calls,
+                    "had_tool_error": exec_result.had_tool_error,
+                    "context_compactions": exec_result.context_compactions,
+                },
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+            )
+            await self._update_run_status(
+                session_chat_id,
+                run_id,
+                "completed",
+                metadata={
+                    "executed_tool_calls": exec_result.executed_tool_calls,
+                    "had_tool_error": exec_result.had_tool_error,
+                    "context_compactions": exec_result.context_compactions,
+                },
+                finished_at=finished_at,
+            )
+
             # 5. 回傳
             return AssistantMessage(
                 text=response,
@@ -1865,13 +2137,39 @@ class AgentLoop:
                 videos=outbound_media["videos"] or None,
                 metadata=assistant_metadata,
             )
-        except Exception:
+        except asyncio.CancelledError:
+            finished_at = time.time()
+            await self._emit_run_event(
+                session_chat_id,
+                run_id,
+                "run_failed",
+                {"status": "cancelled", "error": "cancelled"},
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+            )
+            await self._update_run_status(session_chat_id, run_id, "cancelled", finished_at=finished_at)
+            raise
+        except Exception as exc:
             logger.exception(
                 f"[{session_chat_id}] Agent.process failed: channel={channel}, "
                 f"text_len={len(user_message.text or '')}, images={len(user_message.images or [])}, audios={len(user_message.audios or [])}, videos={len(user_message.videos or [])}"
             )
+            finished_at = time.time()
+            await self._emit_run_event(
+                session_chat_id,
+                run_id,
+                "run_failed",
+                {
+                    "status": "failed",
+                    "error": self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240),
+                },
+                channel=channel,
+                transport_chat_id=transport_chat_id,
+            )
+            await self._update_run_status(session_chat_id, run_id, "failed", finished_at=finished_at)
             raise
         finally:
+            self._current_run_id.reset(run_token)
             self._current_outbound_media.reset(outbound_media_token)
             self._current_videos.reset(videos_token)
             self._current_audios.reset(audios_token)

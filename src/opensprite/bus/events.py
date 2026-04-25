@@ -8,6 +8,7 @@ opensprite/bus/events.py - 訊息匯流排的事件類型
 
 from dataclasses import dataclass, field
 from datetime import datetime
+import time
 from typing import Any
 
 
@@ -46,3 +47,16 @@ class OutboundMessage:
     images: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     raw: Any = None
+
+
+@dataclass
+class RunEvent:
+    """Structured status event emitted while a user-facing run executes."""
+
+    channel: str
+    chat_id: str
+    session_chat_id: str
+    run_id: str
+    event_type: str
+    payload: dict[str, Any] = field(default_factory=dict)
+    created_at: float = field(default_factory=time.time)

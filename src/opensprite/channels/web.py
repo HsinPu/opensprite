@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from aiohttp import WSMsgType, web
 
+from ..bus.events import RunEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import MessagesConfig
 from ..utils.log import logger
@@ -336,6 +337,25 @@ class WebAdapter(MessageAdapter):
             }
         )
 
+    async def send_run_event(self, event: RunEvent) -> None:
+        """Send one structured run event to the browser session socket."""
+        ws = self._session_connections.get(event.session_chat_id)
+        if ws is None or ws.closed:
+            return
+
+        await ws.send_json(
+            {
+                "type": "run_event",
+                "channel": "web",
+                "chat_id": event.chat_id,
+                "session_chat_id": event.session_chat_id,
+                "run_id": event.run_id,
+                "event_type": event.event_type,
+                "payload": dict(event.payload or {}),
+                "created_at": event.created_at,
+            }
+        )
+
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "channel": "web"})
 
@@ -400,6 +420,9 @@ class WebAdapter(MessageAdapter):
     async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str | None) -> None:
         await self.send(response)
 
+    async def _on_run_event(self, event: RunEvent) -> None:
+        await self.send_run_event(event)
+
     async def _shutdown(self) -> None:
         for ws in list(self._socket_sessions):
             self._unbind_socket(ws)
@@ -408,6 +431,7 @@ class WebAdapter(MessageAdapter):
 
         if self.mq is not None:
             self.mq.unregister_response_handler("web")
+            self.mq.unregister_run_event_handler("web")
 
         if self.runner is not None:
             await self.runner.cleanup()
@@ -436,6 +460,7 @@ class WebAdapter(MessageAdapter):
             logger.info("Web adapter did not find a frontend directory; serving API endpoints only")
 
         self.mq.register_response_handler("web", self._on_response)
+        self.mq.register_run_event_handler("web", self._on_run_event)
         self.runner = web.AppRunner(self.app)
         await self.runner.setup()
         self.site = web.TCPSite(self.runner, host=host, port=port)
