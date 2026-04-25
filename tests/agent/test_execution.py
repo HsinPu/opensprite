@@ -498,6 +498,19 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
 
     assert result.content == "after compact"
     assert result.context_compactions == 1
+    assert len(result.context_compaction_events) == 1
+    event = result.context_compaction_events[0]
+    assert event.trigger == "proactive"
+    assert event.strategy == "deterministic"
+    assert event.outcome == "compacted"
+    assert event.iteration == 1
+    assert event.messages_before == 4
+    assert event.messages_after == 3
+    assert event.budget_tokens == 120
+    assert event.threshold_tokens == 60
+    assert event.estimated_tokens is not None and event.estimated_tokens > event.threshold_tokens
+    assert event.compacted_tokens is not None and event.compacted_tokens < event.estimated_tokens
+    assert event.tool_schema_tokens == 0
     assert len(provider.calls) == 1
     sent_messages = provider.calls[0]["messages"]
     assert [message.role for message in sent_messages] == ["system", "system", "user"]
@@ -532,6 +545,7 @@ def test_execution_skips_proactive_compaction_below_budget():
 
     assert result.content == "done"
     assert result.context_compactions == 0
+    assert result.context_compaction_events == []
     assert len(provider.calls) == 1
     assert provider.calls[0]["messages"] == messages
 
@@ -563,6 +577,14 @@ def test_execution_uses_llm_compactor_when_configured():
 
     assert result.content == "after llm compact"
     assert result.context_compactions == 1
+    assert len(result.context_compaction_events) == 1
+    event = result.context_compaction_events[0]
+    assert event.trigger == "proactive"
+    assert event.strategy == "llm"
+    assert event.outcome == "compacted"
+    assert event.fallback_reason is None
+    assert event.messages_before == 4
+    assert event.messages_after == 3
     assert len(provider.calls) == 2
     compactor_call = provider.calls[0]
     assert compactor_call["tools"] is None
@@ -603,6 +625,12 @@ def test_execution_falls_back_when_llm_compactor_returns_empty():
 
     assert result.content == "after fallback compact"
     assert result.context_compactions == 1
+    assert len(result.context_compaction_events) == 1
+    event = result.context_compaction_events[0]
+    assert event.trigger == "proactive"
+    assert event.strategy == "deterministic"
+    assert event.outcome == "fallback"
+    assert event.fallback_reason == "llm_empty"
     assert len(provider.calls) == 2
     sent_messages = provider.calls[1]["messages"]
     assert "approaching the configured context budget" in sent_messages[1].content
@@ -642,6 +670,8 @@ def test_proactive_compaction_does_not_consume_overflow_retry():
 
     assert result.content == "after overflow retry"
     assert result.context_compactions == 2
+    assert [event.trigger for event in result.context_compaction_events] == ["proactive", "overflow"]
+    assert [event.strategy for event in result.context_compaction_events] == ["deterministic", "deterministic"]
     assert len(provider.calls) == 2
     assert statuses == [
         ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE,
@@ -675,6 +705,17 @@ def test_execution_compacts_and_retries_after_context_overflow():
 
     assert result.content == "after compact"
     assert result.context_compactions == 1
+    assert len(result.context_compaction_events) == 1
+    event = result.context_compaction_events[0]
+    assert event.trigger == "overflow"
+    assert event.strategy == "deterministic"
+    assert event.outcome == "compacted"
+    assert event.iteration == 1
+    assert event.messages_before == 5
+    assert event.messages_after == 3
+    assert event.estimated_tokens is not None
+    assert event.compacted_tokens is not None and event.compacted_tokens < event.estimated_tokens
+    assert "maximum context length" in (event.error or "")
     assert len(provider.calls) == 2
     retried_messages = provider.calls[1]["messages"]
     assert [message.role for message in retried_messages] == ["system", "system", "user"]

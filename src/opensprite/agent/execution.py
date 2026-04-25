@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
 from ..config import DocumentLlmConfig, ToolsConfig
@@ -15,6 +15,26 @@ from ..utils.log import logger
 
 
 @dataclass
+class ContextCompactionEvent:
+    """Structured telemetry for one context compaction decision."""
+
+    trigger: str
+    strategy: str
+    outcome: str
+    iteration: int
+    messages_before: int
+    messages_after: int
+    estimated_tokens: int | None = None
+    compacted_tokens: int | None = None
+    threshold_tokens: int | None = None
+    budget_tokens: int | None = None
+    message_tokens: int | None = None
+    tool_schema_tokens: int | None = None
+    fallback_reason: str | None = None
+    error: str | None = None
+
+
+@dataclass
 class ExecutionResult:
     """Outcome of one execute_messages run (visible reply plus tool-use telemetry)."""
 
@@ -23,6 +43,31 @@ class ExecutionResult:
     used_configure_skill: bool = False
     had_tool_error: bool = False
     context_compactions: int = 0
+    context_compaction_events: list[ContextCompactionEvent] = field(default_factory=list)
+
+
+@dataclass
+class _LlmCompactionAttempt:
+    """Internal result for one optional LLM compaction attempt."""
+
+    messages: list[ChatMessage] | None = None
+    fallback_reason: str | None = None
+    error: str | None = None
+
+
+@dataclass
+class _ProactiveCompactionResult:
+    """Internal result for one proactive compaction build."""
+
+    messages: list[ChatMessage]
+    estimated_tokens: int
+    compacted_tokens: int
+    threshold_tokens: int
+    message_tokens: int
+    tool_schema_tokens: int
+    strategy: str
+    fallback_reason: str | None = None
+    error: str | None = None
 
 
 class ToolResultPersistence:
@@ -315,7 +360,7 @@ Output exactly these sections when applicable:
         *,
         tools: list[dict[str, Any]] | None,
         tool_results_history: list[str],
-    ) -> tuple[list[ChatMessage], int, int, int, int, int] | None:
+    ) -> _ProactiveCompactionResult | None:
         """Return compacted messages when the next request is nearing the configured budget."""
         if not self.context_compaction_enabled:
             return None
@@ -329,28 +374,35 @@ Output exactly these sections when applicable:
         if estimated_tokens < threshold_tokens:
             return None
 
-        compacted_messages: list[ChatMessage] | None = None
+        llm_fallback_reason: str | None = None
+        llm_fallback_error: str | None = None
         if self.context_compaction_strategy == "llm":
-            compacted_messages = await self._compact_messages_with_llm(
+            llm_attempt = await self._compact_messages_with_llm(
                 log_id,
                 chat_messages,
                 tool_results_history=tool_results_history,
             )
+            compacted_messages = llm_attempt.messages
             if compacted_messages is not None:
                 compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
                 if compacted_tokens < estimated_tokens:
-                    return (
-                        compacted_messages,
-                        estimated_tokens,
-                        compacted_tokens,
-                        threshold_tokens,
-                        message_tokens,
-                        tool_schema_tokens,
+                    return _ProactiveCompactionResult(
+                        messages=compacted_messages,
+                        estimated_tokens=estimated_tokens,
+                        compacted_tokens=compacted_tokens,
+                        threshold_tokens=threshold_tokens,
+                        message_tokens=message_tokens,
+                        tool_schema_tokens=tool_schema_tokens,
+                        strategy="llm",
                     )
+                llm_fallback_reason = "llm_too_large"
                 logger.warning(
                     f"[{log_id}] llm.context-compact.llm-too-large | "
                     f"estimated_tokens={estimated_tokens} compacted_tokens={compacted_tokens} fallback=deterministic"
                 )
+            else:
+                llm_fallback_reason = llm_attempt.fallback_reason
+                llm_fallback_error = llm_attempt.error
 
         compacted_messages = self._compact_messages_for_continuation(
             chat_messages,
@@ -367,13 +419,16 @@ Output exactly these sections when applicable:
         if compacted_tokens >= estimated_tokens:
             return None
 
-        return (
-            compacted_messages,
-            estimated_tokens,
-            compacted_tokens,
-            threshold_tokens,
-            message_tokens,
-            tool_schema_tokens,
+        return _ProactiveCompactionResult(
+            messages=compacted_messages,
+            estimated_tokens=estimated_tokens,
+            compacted_tokens=compacted_tokens,
+            threshold_tokens=threshold_tokens,
+            message_tokens=message_tokens,
+            tool_schema_tokens=tool_schema_tokens,
+            strategy="deterministic",
+            fallback_reason=llm_fallback_reason,
+            error=llm_fallback_error,
         )
 
     @classmethod
@@ -440,21 +495,21 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         tool_results_history: list[str],
-    ) -> list[ChatMessage] | None:
+    ) -> _LlmCompactionAttempt:
         compaction_llm = self.context_compaction_llm
         if compaction_llm is None:
-            return None
+            return _LlmCompactionAttempt(fallback_reason="llm_config_missing")
 
         leading_system, body = self._split_leading_system_messages(chat_messages)
         if not body:
-            return None
+            return _LlmCompactionAttempt(fallback_reason="no_body")
 
         compaction_messages = self._build_llm_compaction_prompt(
             chat_messages,
             tool_results_history=tool_results_history,
         )
         if compaction_messages is None:
-            return None
+            return _LlmCompactionAttempt(fallback_reason="no_prompt")
 
         try:
             response = await self.provider.chat(
@@ -464,16 +519,17 @@ Output exactly these sections when applicable:
                 **compaction_llm.decoding_kwargs(),
             )
         except Exception as exc:
+            error_preview = self.format_log_preview(str(exc), max_chars=240)
             logger.warning(
                 f"[{log_id}] llm.context-compact.llm-error | fallback=deterministic "
-                f"error={self.format_log_preview(str(exc), max_chars=240)}"
+                f"error={error_preview}"
             )
-            return None
+            return _LlmCompactionAttempt(fallback_reason="llm_error", error=error_preview)
 
         summary = self.sanitize_response_content(response.content or "").strip()
         if not summary:
             logger.warning(f"[{log_id}] llm.context-compact.llm-empty | fallback=deterministic")
-            return None
+            return _LlmCompactionAttempt(fallback_reason="llm_empty")
 
         summary_sections = [
             "# Compacted Conversation State",
@@ -482,11 +538,13 @@ Output exactly these sections when applicable:
             "",
             summary,
         ]
-        return [
-            *leading_system,
-            ChatMessage(role="system", content="\n".join(summary_sections)),
-            ChatMessage(role="user", content=self.CONTINUATION_AFTER_COMPACTION_MESSAGE),
-        ]
+        return _LlmCompactionAttempt(
+            messages=[
+                *leading_system,
+                ChatMessage(role="system", content="\n".join(summary_sections)),
+                ChatMessage(role="user", content=self.CONTINUATION_AFTER_COMPACTION_MESSAGE),
+            ]
+        )
 
     @staticmethod
     def _message_content_to_text(content: Any) -> str:
@@ -665,6 +723,7 @@ Output exactly these sections when applicable:
         used_configure_skill = False
         had_tool_error = False
         context_compactions = 0
+        context_compaction_events: list[ContextCompactionEvent] = []
         proactive_context_compactions = 0
         overflow_context_compactions = 0
         iteration_limit = (
@@ -680,24 +739,35 @@ Output exactly these sections when applicable:
                     tool_results_history=tool_results_history,
                 )
                 if proactive_compaction is not None:
-                    (
-                        compacted_messages,
-                        estimated_tokens,
-                        compacted_tokens,
-                        threshold_tokens,
-                        message_tokens,
-                        tool_schema_tokens,
-                    ) = proactive_compaction
                     proactive_context_compactions += 1
                     context_compactions += 1
                     before_count = len(chat_messages)
-                    chat_messages[:] = compacted_messages
+                    chat_messages[:] = proactive_compaction.messages
+                    context_compaction_events.append(
+                        ContextCompactionEvent(
+                            trigger="proactive",
+                            strategy=proactive_compaction.strategy,
+                            outcome="fallback" if proactive_compaction.fallback_reason else "compacted",
+                            iteration=iteration + 1,
+                            messages_before=before_count,
+                            messages_after=len(chat_messages),
+                            estimated_tokens=proactive_compaction.estimated_tokens,
+                            compacted_tokens=proactive_compaction.compacted_tokens,
+                            threshold_tokens=proactive_compaction.threshold_tokens,
+                            budget_tokens=self.context_compaction_token_budget,
+                            message_tokens=proactive_compaction.message_tokens,
+                            tool_schema_tokens=proactive_compaction.tool_schema_tokens,
+                            fallback_reason=proactive_compaction.fallback_reason,
+                            error=proactive_compaction.error,
+                        )
+                    )
                     logger.warning(
                         f"[{log_id}] llm.context-proactive-compact | iter={iteration + 1} "
                         f"compaction={proactive_context_compactions}/{self.PROACTIVE_CONTEXT_COMPACTION_LIMIT} "
-                        f"estimated_tokens={estimated_tokens} compacted_tokens={compacted_tokens} "
-                        f"threshold={threshold_tokens} budget={self.context_compaction_token_budget} "
-                        f"message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens} "
+                        f"strategy={proactive_compaction.strategy} outcome={context_compaction_events[-1].outcome} "
+                        f"estimated_tokens={proactive_compaction.estimated_tokens} compacted_tokens={proactive_compaction.compacted_tokens} "
+                        f"threshold={proactive_compaction.threshold_tokens} budget={self.context_compaction_token_budget} "
+                        f"message_tokens={proactive_compaction.message_tokens} tool_schema_tokens={proactive_compaction.tool_schema_tokens} "
                         f"messages_before={before_count} messages_after={len(chat_messages)}"
                     )
                     if on_llm_status is not None:
@@ -744,12 +814,34 @@ Output exactly these sections when applicable:
                             overflow_context_compactions += 1
                             context_compactions += 1
                             before_count = len(chat_messages)
+                            estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(
+                                chat_messages,
+                                tools,
+                            )
+                            compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
+                            error_preview = self.format_log_preview(str(exc), max_chars=240)
                             chat_messages[:] = compacted_messages
+                            context_compaction_events.append(
+                                ContextCompactionEvent(
+                                    trigger="overflow",
+                                    strategy="deterministic",
+                                    outcome="compacted",
+                                    iteration=iteration + 1,
+                                    messages_before=before_count,
+                                    messages_after=len(chat_messages),
+                                    estimated_tokens=estimated_tokens,
+                                    compacted_tokens=compacted_tokens,
+                                    budget_tokens=self.context_compaction_token_budget,
+                                    message_tokens=message_tokens,
+                                    tool_schema_tokens=tool_schema_tokens,
+                                    error=error_preview,
+                                )
+                            )
                             logger.warning(
                                 f"[{log_id}] llm.context-overflow | iter={iteration + 1} "
                                 f"compaction={overflow_context_compactions}/{self.CONTEXT_COMPACTION_RETRY_LIMIT} "
                                 f"messages_before={before_count} messages_after={len(chat_messages)} retrying=true "
-                                f"error={self.format_log_preview(str(exc), max_chars=240)}"
+                                f"error={error_preview}"
                             )
                             if on_llm_status is not None:
                                 try:
@@ -806,6 +898,7 @@ Output exactly these sections when applicable:
                             used_configure_skill=used_configure_skill,
                             had_tool_error=had_tool_error,
                             context_compactions=context_compactions,
+                            context_compaction_events=context_compaction_events,
                         )
 
                     return ExecutionResult(
@@ -814,6 +907,7 @@ Output exactly these sections when applicable:
                         used_configure_skill=used_configure_skill,
                         had_tool_error=had_tool_error,
                         context_compactions=context_compactions,
+                        context_compaction_events=context_compaction_events,
                     )
 
                 logger.info(
@@ -885,6 +979,7 @@ Output exactly these sections when applicable:
                                 used_configure_skill=used_configure_skill,
                                 had_tool_error=had_tool_error,
                                 context_compactions=context_compactions,
+                                context_compaction_events=context_compaction_events,
                             )
                     else:
                         repeated_tool_error_key = None
@@ -955,6 +1050,7 @@ Output exactly these sections when applicable:
                     used_configure_skill=used_configure_skill,
                     had_tool_error=had_tool_error,
                     context_compactions=context_compactions,
+                    context_compaction_events=context_compaction_events,
                 )
 
             return ExecutionResult(
@@ -963,6 +1059,7 @@ Output exactly these sections when applicable:
                 used_configure_skill=used_configure_skill,
                 had_tool_error=had_tool_error,
                 context_compactions=context_compactions,
+                context_compaction_events=context_compaction_events,
             )
 
         logger.warning(f"[{log_id}] llm.max-iterations | limit={iteration_limit}")
@@ -982,4 +1079,5 @@ Output exactly these sections when applicable:
             used_configure_skill=used_configure_skill,
             had_tool_error=had_tool_error,
             context_compactions=context_compactions,
+            context_compaction_events=context_compaction_events,
         )
