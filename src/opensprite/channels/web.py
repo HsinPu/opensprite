@@ -66,23 +66,31 @@ class WebAdapter(MessageAdapter):
         raw = str(self.config.get(key, self.DEFAULT_CONFIG[key]) or self.DEFAULT_CONFIG[key]).strip() or "/"
         return raw if raw.startswith("/") else f"/{raw}"
 
+    @staticmethod
+    def _is_frontend_source_dir(path: Path) -> bool:
+        return (path / "package.json").is_file()
+
     def _resolve_frontend_source_dir(self) -> Path | None:
         configured = str(self.config.get("frontend_source_dir", "") or "").strip()
+        configured_static = str(self.config.get("static_dir", "") or "").strip()
         candidates: list[Path] = []
         if configured:
             candidates.append(Path(configured).expanduser())
+        if configured_static:
+            candidates.append(Path(configured_static).expanduser())
 
-        module_path = Path(__file__).resolve()
-        candidates.extend(
-            [
-                module_path.parents[3] / "apps" / "web",
-                Path.cwd() / "apps" / "web",
-            ]
-        )
+        if not configured_static:
+            module_path = Path(__file__).resolve()
+            candidates.extend(
+                [
+                    module_path.parents[3] / "apps" / "web",
+                    Path.cwd() / "apps" / "web",
+                ]
+            )
 
         for candidate in candidates:
             resolved = candidate.expanduser().resolve(strict=False)
-            if (resolved / "package.json").is_file():
+            if self._is_frontend_source_dir(resolved):
                 return resolved
         return None
 
@@ -106,8 +114,6 @@ class WebAdapter(MessageAdapter):
         return bool(value)
 
     def _maybe_build_frontend(self) -> None:
-        if self.config.get("static_dir"):
-            return
         if not self._is_frontend_auto_build_enabled():
             return
 
@@ -152,7 +158,8 @@ class WebAdapter(MessageAdapter):
         configured = str(self.config.get("static_dir", "") or "").strip()
         candidates: list[Path] = []
         if configured:
-            candidates.append(Path(configured).expanduser())
+            resolved = Path(configured).expanduser().resolve(strict=False)
+            candidates.append(resolved / "dist" if self._is_frontend_source_dir(resolved) else resolved)
 
         module_path = Path(__file__).resolve()
         candidates.extend(

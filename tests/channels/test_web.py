@@ -146,3 +146,59 @@ async def _run_web_static_serving(tmp_path: Path):
 
 def test_web_adapter_serves_static_frontend(tmp_path):
     asyncio.run(_run_web_static_serving(tmp_path))
+
+
+async def _run_web_source_static_dir_serves_dist(tmp_path: Path):
+    source_dir = tmp_path / "web"
+    dist_dir = source_dir / "dist"
+    dist_dir.mkdir(parents=True)
+    (source_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}', encoding="utf-8")
+    (source_dir / "index.html").write_text(
+        '<!doctype html><html><body><script type="module" src="/src/main.js"></script></body></html>',
+        encoding="utf-8",
+    )
+    (dist_dir / "index.html").write_text(
+        "<!doctype html><html><body><h1>OpenSprite built shell</h1></body></html>",
+        encoding="utf-8",
+    )
+
+    agent = EchoAgent()
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "static_dir": str(source_dir),
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/") as resp:
+                assert resp.status == 200
+                html = await resp.text()
+                assert "OpenSprite built shell" in html
+                assert "/src/main.js" not in html
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_static_source_dir_serves_dist(tmp_path):
+    asyncio.run(_run_web_source_static_dir_serves_dist(tmp_path))
