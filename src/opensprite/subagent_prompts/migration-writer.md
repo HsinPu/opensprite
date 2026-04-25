@@ -3,6 +3,7 @@ name: migration-writer
 description: Plan and describe schema migrations, data backfills, compatibility steps, and rollback considerations for evolving stored data safely.
 version: "1.0"
 scope: migration
+tool_profile: implementation
 language: zh-TW
 ---
 

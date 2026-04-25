@@ -3,6 +3,7 @@ name: observability-engineer
 description: Improve logs, metrics, traces, and runtime visibility so failures and behavior are easier to understand in production.
 version: "1.0"
 scope: observability
+tool_profile: implementation
 language: zh-TW
 ---
 

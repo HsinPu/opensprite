@@ -1,5 +1,9 @@
 """Filesystem tools for reading and writing files."""
 
+import difflib
+import fnmatch
+import hashlib
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -14,9 +18,17 @@ ConfigPathResolver = Callable[[], Path | None]
 
 
 _CONFIG_WRITE_GUARD_MSG = (
-    "Error: Cannot modify OpenSprite configuration files with write_file or edit_file. "
+    "Error: Cannot modify OpenSprite configuration files with write_file, edit_file, or apply_patch. "
     "Edit them outside the agent or use `opensprite onboard`."
 )
+_DEFAULT_READ_LIMIT = 2000
+_MAX_READ_LIMIT = 2000
+_MAX_READ_CHARS = 50_000
+_MAX_LINE_LENGTH = 2000
+_SEARCH_RESULT_LIMIT = 100
+_MAX_DIFF_CHARS = 12_000
+_MAX_PATCH_CHANGES = 20
+_SHA256_PATTERN = r"^[a-fA-F0-9]{64}$"
 
 
 def path_touches_protected_system_config(
@@ -87,6 +99,138 @@ def _build_workspace_resolver(
     return lambda: root
 
 
+def _write_guard(
+    file_path: Path,
+    *,
+    config_path_resolver: ConfigPathResolver | None = None,
+) -> str | None:
+    prot_cfg = path_touches_protected_system_config(
+        file_path,
+        config_path_resolver=config_path_resolver,
+    )
+    if prot_cfg:
+        return prot_cfg
+    return path_touches_read_only_app_skills_dir(file_path)
+
+
+def _display_path(workspace: Path, path: Path) -> str:
+    """Return a stable workspace-relative path for tool output."""
+    try:
+        return path.relative_to(workspace).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _format_unified_diff(
+    display_path: str,
+    before: str | None,
+    after: str | None,
+) -> str:
+    """Return a concise unified diff for user-visible tool results."""
+    if before == after:
+        return "(no changes)"
+
+    before_text = before or ""
+    after_text = after or ""
+    fromfile = "/dev/null" if before is None else f"a/{display_path}"
+    tofile = "/dev/null" if after is None else f"b/{display_path}"
+    diff = "\n".join(
+        difflib.unified_diff(
+            before_text.splitlines(),
+            after_text.splitlines(),
+            fromfile=fromfile,
+            tofile=tofile,
+            lineterm="",
+        )
+    )
+    if not diff:
+        if before is None:
+            diff = f"--- /dev/null\n+++ b/{display_path}\n@@\n(empty file created)"
+        elif after is None:
+            diff = f"--- a/{display_path}\n+++ /dev/null\n@@\n(empty file deleted)"
+        else:
+            diff = "(no changes)"
+    if len(diff) > _MAX_DIFF_CHARS:
+        return diff[:_MAX_DIFF_CHARS] + f"\n... (diff truncated, total {len(diff)} chars)"
+    return diff
+
+
+def _content_sha256(content: str) -> str:
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _hash_label(content: str | None) -> str:
+    if content is None:
+        return "missing"
+    return _content_sha256(content)
+
+
+def _format_file_metadata(display_path: str, before: str | None, after: str | None) -> str:
+    return f"- {display_path}: before={_hash_label(before)}, after={_hash_label(after)}"
+
+
+def _validate_expected_sha256(path: str, content: str, expected_sha256: Any) -> str | None:
+    if expected_sha256 is None:
+        return (
+            f"Error: Stale-read guard failed for {path}: expected_sha256 is required when modifying an existing file. "
+            "Read the file first and pass the SHA256 shown by read_file."
+        )
+    if not isinstance(expected_sha256, str):
+        return f"Error: Stale-read guard failed for {path}: expected_sha256 must be a string."
+
+    current_sha256 = _content_sha256(content)
+    if expected_sha256.lower() != current_sha256:
+        return (
+            f"Error: Stale-read guard failed for {path}: current SHA256 is {current_sha256}, "
+            f"but expected {expected_sha256}. Re-read the file before editing."
+        )
+    return None
+
+
+def _read_existing_text(file_path: Path, path: str) -> str | None:
+    if not file_path.exists():
+        return None
+    if not file_path.is_file():
+        raise ValueError(f"Not a file: {path}")
+    return file_path.read_text(encoding="utf-8")
+
+
+def _truncate_line(line: str) -> str:
+    if len(line) <= _MAX_LINE_LENGTH:
+        return line
+    return line[:_MAX_LINE_LENGTH] + f"... (line truncated to {_MAX_LINE_LENGTH} chars)"
+
+
+def _matches_glob(path: str, pattern: str) -> bool:
+    """Match glob patterns while treating **/ as zero or more directories."""
+    if fnmatch.fnmatch(path, pattern):
+        return True
+    if "**/" in pattern and fnmatch.fnmatch(path, pattern.replace("**/", "")):
+        return True
+    return False
+
+
+def _iter_workspace_files(workspace: Path, base: Path, include: str | None = None):
+    """Yield files under base without following symlinks outside the workspace."""
+    for file_path in base.rglob("*"):
+        resolved = file_path.resolve(strict=False)
+        try:
+            relative_to_workspace = resolved.relative_to(workspace).as_posix()
+        except ValueError:
+            continue
+        if not resolved.is_file():
+            continue
+        if include:
+            relative_to_base = file_path.relative_to(base).as_posix()
+            if (
+                not _matches_glob(file_path.name, include)
+                and not _matches_glob(relative_to_base, include)
+                and not _matches_glob(relative_to_workspace, include)
+            ):
+                continue
+        yield resolved
+
+
 class ReadFileTool(Tool):
     """Tool to read file contents."""
 
@@ -111,7 +255,8 @@ class ReadFileTool(Tool):
     def description(self) -> str:
         return (
             "Read the contents of one file inside the current workspace. "
-            "Always provide a non-empty 'path'. Use read_skill instead of reading SKILL.md files directly when possible."
+            "Always provide a non-empty 'path'. Supports optional 1-indexed 'offset' and 'limit' for large files. "
+            "Output is line-numbered for precise follow-up edits. Use read_skill instead of reading SKILL.md files directly when possible."
         )
 
     @property
@@ -123,7 +268,18 @@ class ReadFileTool(Tool):
                     "type": "string",
                     "description": "Required. File path to read, relative to the current workspace unless already absolute inside it.",
                     "pattern": NON_EMPTY_STRING_PATTERN,
-                }
+                },
+                "offset": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional. 1-indexed line number to start reading from. Defaults to 1.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": _MAX_READ_LIMIT,
+                    "description": f"Optional. Maximum number of lines to read. Defaults to {_DEFAULT_READ_LIMIT}.",
+                },
             },
             "required": ["path"]
         }
@@ -151,14 +307,432 @@ class ReadFileTool(Tool):
             
             if not file_path.exists():
                 return f"Error: File not found: {path}"
+            if not file_path.is_file():
+                return f"Error: Not a file: {path}"
             
+            offset = int(kwargs.get("offset", 1))
+            limit = int(kwargs.get("limit", _DEFAULT_READ_LIMIT))
             content = file_path.read_text(encoding="utf-8")
-            # Limit output size
-            if len(content) > 5000:
-                content = content[:5000] + f"\n\n... (truncated, total {len(content)} chars)"
-            return content
+            lines = content.splitlines()
+            total_lines = len(lines)
+            if total_lines and offset > total_lines:
+                return f"Error: Offset {offset} is out of range for {path} ({total_lines} lines)."
+
+            start = offset - 1
+            selected: list[str] = []
+            used_chars = 0
+            truncated_by_chars = False
+            for line_no, line in enumerate(lines[start:start + limit], start=offset):
+                rendered = f"{line_no}: {_truncate_line(line)}"
+                if selected and used_chars + len(rendered) + 1 > _MAX_READ_CHARS:
+                    truncated_by_chars = True
+                    break
+                selected.append(rendered)
+                used_chars += len(rendered) + 1
+
+            last_line = offset + len(selected) - 1
+            has_more = total_lines > last_line or truncated_by_chars
+            header = [
+                f"File: {_display_path(workspace, file_path)}",
+                f"SHA256: {_content_sha256(content)}",
+                f"Lines: {offset}-{last_line if selected else 0} of {total_lines}",
+                "",
+            ]
+            if not selected:
+                header.append("(empty file)")
+                return "\n".join(header)
+
+            output = [*header, *selected]
+            if has_more:
+                output.extend([
+                    "",
+                    f"(Showing lines {offset}-{last_line} of {total_lines}. Use offset={last_line + 1} to continue.)",
+                ])
+            else:
+                output.extend(["", f"(End of file - total {total_lines} lines)"])
+            return "\n".join(output)
         except Exception as e:
             return f"Error reading file: {str(e)}"
+
+
+class GlobFilesTool(Tool):
+    """Tool to find files by glob pattern."""
+
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
+
+    @property
+    def name(self) -> str:
+        return "glob_files"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Find files inside the current workspace using a glob pattern such as '**/*.py' or 'src/**/*.md'. "
+            "Use this before reading when you are unsure of exact file paths."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Required. Glob pattern to match files inside the search path.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional. Directory to search, relative to the current workspace. Defaults to '.'.",
+                },
+            },
+            "required": ["pattern"],
+        }
+
+    async def _execute(self, **kwargs: Any) -> str:
+        try:
+            pattern = str(kwargs["pattern"])
+            path = str(kwargs.get("path", "."))
+            workspace = self._get_workspace()
+            search_path = _resolve_workspace_path(workspace, path)
+            if search_path is None:
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
+            if not search_path.exists():
+                return f"Error: Directory not found: {path}"
+            if not search_path.is_dir():
+                return f"Error: Not a directory: {path}"
+
+            matches = []
+            for item in search_path.glob(pattern):
+                item = item.resolve(strict=False)
+                try:
+                    item.relative_to(workspace)
+                except ValueError:
+                    continue
+                if item.is_file():
+                    matches.append(item)
+            matches.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+            truncated = len(matches) > _SEARCH_RESULT_LIMIT
+            matches = matches[:_SEARCH_RESULT_LIMIT]
+            if not matches:
+                return "No files found"
+
+            output = [_display_path(workspace, item) for item in matches]
+            if truncated:
+                output.extend([
+                    "",
+                    f"(Results truncated: showing first {_SEARCH_RESULT_LIMIT} files. Use a more specific pattern.)",
+                ])
+            return "\n".join(output)
+        except Exception as e:
+            return f"Error finding files: {str(e)}"
+
+
+class GrepFilesTool(Tool):
+    """Tool to search file contents by regular expression."""
+
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
+
+    @property
+    def name(self) -> str:
+        return "grep_files"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Search text files inside the current workspace using a regular expression. "
+            "Supports optional 'path' and 'include' glob filters such as '*.py' or 'src/**/*.py'."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "pattern": {
+                    "type": "string",
+                    "description": "Required. Regular expression to search for.",
+                    "pattern": NON_EMPTY_STRING_PATTERN,
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Optional. Directory to search, relative to the current workspace. Defaults to '.'.",
+                },
+                "include": {
+                    "type": "string",
+                    "description": "Optional. File glob filter such as '*.py' or 'src/**/*.py'.",
+                },
+            },
+            "required": ["pattern"],
+        }
+
+    async def _execute(self, **kwargs: Any) -> str:
+        try:
+            pattern = str(kwargs["pattern"])
+            try:
+                regex = re.compile(pattern)
+            except re.error as e:
+                return f"Error: Invalid regex: {e}"
+
+            path = str(kwargs.get("path", "."))
+            include = kwargs.get("include")
+            include = str(include) if include else None
+            workspace = self._get_workspace()
+            search_path = _resolve_workspace_path(workspace, path)
+            if search_path is None:
+                return f"Error: Access denied. Path must be within workspace: {workspace}"
+            if not search_path.exists():
+                return f"Error: Directory not found: {path}"
+            if not search_path.is_dir():
+                return f"Error: Not a directory: {path}"
+
+            matches: list[tuple[float, str, int, str]] = []
+            total = 0
+            for file_path in _iter_workspace_files(workspace, search_path, include):
+                try:
+                    text = file_path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                except OSError:
+                    continue
+                for line_no, line in enumerate(text.splitlines(), start=1):
+                    if not regex.search(line):
+                        continue
+                    total += 1
+                    matches.append(
+                        (
+                            file_path.stat().st_mtime,
+                            _display_path(workspace, file_path),
+                            line_no,
+                            _truncate_line(line),
+                        )
+                    )
+
+            if total == 0:
+                return "No files found"
+
+            matches.sort(key=lambda item: item[0], reverse=True)
+            shown_matches = matches[:_SEARCH_RESULT_LIMIT]
+            output = [
+                f"Found {total} matches"
+                + (f" (showing first {_SEARCH_RESULT_LIMIT})" if total > _SEARCH_RESULT_LIMIT else "")
+            ]
+            current_file = ""
+            for _, file_name, line_no, line in shown_matches:
+                if file_name != current_file:
+                    if current_file:
+                        output.append("")
+                    current_file = file_name
+                    output.append(f"{file_name}:")
+                output.append(f"  Line {line_no}: {line}")
+            if total > _SEARCH_RESULT_LIMIT:
+                output.extend([
+                    "",
+                    f"(Results truncated: showing {_SEARCH_RESULT_LIMIT} of {total} matches. Use a more specific path, include, or pattern.)",
+                ])
+            return "\n".join(output)
+        except Exception as e:
+            return f"Error searching files: {str(e)}"
+
+
+class ApplyPatchTool(Tool):
+    """Tool to apply one or more structured text file changes."""
+
+    def __init__(
+        self,
+        workspace: Path | None = None,
+        *,
+        workspace_resolver: WorkspaceResolver | None = None,
+        config_path_resolver: ConfigPathResolver | None = None,
+    ):
+        self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+        self._config_path_resolver = config_path_resolver
+
+    def _get_workspace(self) -> Path:
+        return self._workspace_resolver()
+
+    @property
+    def name(self) -> str:
+        return "apply_patch"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Apply a structured patch inside the current workspace. Use this for multi-file code edits. "
+            "Each change action is 'add', 'update', or 'delete'. Updates require exact old_text and refuse ambiguous matches. "
+            "For update/delete of existing files, provide expected_sha256 from the latest read_file output. "
+            "The tool validates all changes before writing and returns unified diffs."
+        )
+
+    @property
+    def parameters(self) -> dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "changes": {
+                    "type": "array",
+                    "description": f"Required. Ordered list of up to {_MAX_PATCH_CHANGES} file changes to apply.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "action": {
+                                "type": "string",
+                                "enum": ["add", "update", "delete"],
+                                "description": "Required. Patch action for this file change.",
+                            },
+                            "path": {
+                                "type": "string",
+                                "pattern": NON_EMPTY_STRING_PATTERN,
+                                "description": "Required. File path inside the workspace.",
+                            },
+                            "old_text": {
+                                "type": "string",
+                                "description": "Required for update. Exact existing text to replace; must appear exactly once.",
+                            },
+                            "new_text": {
+                                "type": "string",
+                                "description": "Required for update. Replacement text.",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "Required for add. Complete file content for the new file.",
+                            },
+                            "expected_sha256": {
+                                "type": "string",
+                                "pattern": _SHA256_PATTERN,
+                                "description": "Required for update/delete of an existing file. SHA256 shown by the latest read_file output.",
+                            },
+                        },
+                        "required": ["action", "path"],
+                    },
+                }
+            },
+            "required": ["changes"],
+        }
+
+    async def _execute(self, **kwargs: Any) -> str:
+        try:
+            changes = kwargs["changes"]
+            if not changes:
+                return "Error: changes must contain at least one file change."
+            if len(changes) > _MAX_PATCH_CHANGES:
+                return f"Error: apply_patch supports at most {_MAX_PATCH_CHANGES} changes per call."
+
+            workspace = self._get_workspace()
+            original: dict[Path, str | None] = {}
+            current: dict[Path, str | None] = {}
+            display_paths: dict[Path, str] = {}
+
+            def load_state(file_path: Path, path: str) -> str | None:
+                if file_path not in current:
+                    original[file_path] = _read_existing_text(file_path, path)
+                    current[file_path] = original[file_path]
+                    display_paths[file_path] = _display_path(workspace, file_path)
+                return current[file_path]
+
+            for index, change in enumerate(changes, start=1):
+                action = str(change["action"])
+                path = str(change["path"])
+                file_path = _resolve_workspace_path(workspace, path)
+                if file_path is None:
+                    return f"Error: Change {index}: access denied. Path must be within workspace: {workspace}"
+
+                guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+                if guard:
+                    return guard
+
+                existing = load_state(file_path, path)
+
+                if action == "add":
+                    if existing is not None:
+                        return f"Error: Change {index}: file already exists: {path}"
+                    content = change.get("content")
+                    if not isinstance(content, str):
+                        return f"Error: Change {index}: add requires string content."
+                    current[file_path] = content
+                    continue
+
+                if action == "update":
+                    if existing is None:
+                        return f"Error: Change {index}: file not found: {path}"
+                    if original[file_path] is not None:
+                        stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
+                        if stale_error:
+                            return f"Error: Change {index}: {stale_error.removeprefix('Error: ')}"
+                    old_text = change.get("old_text")
+                    new_text = change.get("new_text")
+                    if not isinstance(old_text, str) or not old_text:
+                        return f"Error: Change {index}: update requires non-empty string old_text."
+                    if not isinstance(new_text, str):
+                        return f"Error: Change {index}: update requires string new_text."
+                    count = existing.count(old_text)
+                    if count == 0:
+                        return f"Error: Change {index}: old_text not found in {path}."
+                    if count > 1:
+                        return f"Error: Change {index}: old_text appears {count} times in {path}. Provide more context."
+                    current[file_path] = existing.replace(old_text, new_text, 1)
+                    continue
+
+                if action == "delete":
+                    if existing is None:
+                        return f"Error: Change {index}: file not found: {path}"
+                    if original[file_path] is not None:
+                        stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
+                        if stale_error:
+                            return f"Error: Change {index}: {stale_error.removeprefix('Error: ')}"
+                    current[file_path] = None
+
+            diffs: list[str] = []
+            metadata: list[str] = []
+            changed_paths: list[Path] = []
+            for file_path, after in current.items():
+                before = original[file_path]
+                if before == after:
+                    continue
+                changed_paths.append(file_path)
+                metadata.append(_format_file_metadata(display_paths[file_path], before, after))
+                diffs.append(_format_unified_diff(display_paths[file_path], before, after))
+
+            if not changed_paths:
+                return "No changes to apply."
+
+            for file_path in changed_paths:
+                after = current[file_path]
+                if after is None:
+                    file_path.unlink()
+                else:
+                    file_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_path.write_text(after, encoding="utf-8")
+
+            return (
+                f"Successfully applied patch ({len(changed_paths)} file(s) changed)\n\n"
+                "File Versions:\n"
+                + "\n".join(metadata)
+                + "\n\nDiff:\n"
+                + "\n\n".join(diffs)
+            )
+        except ValueError as e:
+            return f"Error: {str(e)}"
+        except Exception as e:
+            return f"Error applying patch: {str(e)}"
 
 
 class WriteFileTool(Tool):
@@ -186,6 +760,8 @@ class WriteFileTool(Tool):
         return (
             "Write content to one file inside the current workspace. "
             "Always provide both 'path' and 'content'. Creates parent directories and the file if needed. "
+            "When replacing an existing file, provide expected_sha256 from the latest read_file output. "
+            "Returns a unified diff after writing. "
             "Cannot write under ~/.opensprite/skills/ (read-only bundled skills); use session workspace skills/ or configure_skill. "
             "Cannot write opensprite.json, split JSON config files (channels, search, MCP, media, LLM providers), "
             "or the active config paths (edit outside the agent or use onboard)."
@@ -204,6 +780,11 @@ class WriteFileTool(Tool):
                 "content": {
                     "type": "string",
                     "description": "Required. Complete file contents to write at the target path."
+                },
+                "expected_sha256": {
+                    "type": "string",
+                    "pattern": _SHA256_PATTERN,
+                    "description": "Required when replacing an existing file. SHA256 shown by the latest read_file output."
                 }
             },
             "required": ["path", "content"]
@@ -218,19 +799,20 @@ class WriteFileTool(Tool):
             if file_path is None:
                 return f"Error: Access denied. Path must be within workspace: {workspace}"
 
-            prot_cfg = path_touches_protected_system_config(
-                file_path, config_path_resolver=self._config_path_resolver
-            )
-            if prot_cfg:
-                return prot_cfg
+            guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+            if guard:
+                return guard
 
-            prot = path_touches_read_only_app_skills_dir(file_path)
-            if prot:
-                return prot
-
+            before = _read_existing_text(file_path, path)
+            if before is not None:
+                stale_error = _validate_expected_sha256(path, before, kwargs.get("expected_sha256"))
+                if stale_error:
+                    return stale_error
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
-            return f"Successfully wrote to {path} ({len(content)} chars)"
+            diff = _format_unified_diff(_display_path(workspace, file_path), before, content)
+            metadata = _format_file_metadata(_display_path(workspace, file_path), before, content)
+            return f"Successfully wrote to {path} ({len(content)} chars)\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
         except Exception as e:
             return f"Error writing file: {str(e)}"
 
@@ -318,6 +900,8 @@ class EditFileTool(Tool):
         return (
             "Edit one file inside the current workspace by replacing 'old_text' with 'new_text'. "
             "Always provide 'path', 'old_text', and 'new_text'. The old_text must match existing file content exactly. "
+            "Provide expected_sha256 from the latest read_file output so stale reads cannot overwrite newer changes. "
+            "Returns a unified diff after editing. "
             "Cannot edit under ~/.opensprite/skills/ (read-only bundled skills). "
             "Cannot edit opensprite.json or other OpenSprite JSON configuration files."
         )
@@ -330,6 +914,7 @@ class EditFileTool(Tool):
                 "path": {"type": "string", "description": "Required. Target file path inside the current workspace.", "pattern": NON_EMPTY_STRING_PATTERN},
                 "old_text": {"type": "string", "description": "Required. Exact existing text to replace. It must appear exactly once or the tool will refuse the edit.", "minLength": 1},
                 "new_text": {"type": "string", "description": "Required. Replacement text for the matching old_text."},
+                "expected_sha256": {"type": "string", "pattern": _SHA256_PATTERN, "description": "Required. SHA256 shown by the latest read_file output."},
             },
             "required": ["path", "old_text", "new_text"],
         }
@@ -344,20 +929,17 @@ class EditFileTool(Tool):
             if file_path is None:
                 return f"Error: Access denied. Path must be within workspace: {workspace}"
 
-            prot_cfg = path_touches_protected_system_config(
-                file_path, config_path_resolver=self._config_path_resolver
-            )
-            if prot_cfg:
-                return prot_cfg
-
-            prot = path_touches_read_only_app_skills_dir(file_path)
-            if prot:
-                return prot
+            guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+            if guard:
+                return guard
 
             if not file_path.exists():
                 return f"Error: File not found: {path}"
 
             content = file_path.read_text(encoding="utf-8")
+            stale_error = _validate_expected_sha256(path, content, kwargs.get("expected_sha256"))
+            if stale_error:
+                return stale_error
 
             if old_text not in content:
                 return f"Error: old_text not found in file. Please provide exact text to replace."
@@ -369,7 +951,9 @@ class EditFileTool(Tool):
 
             new_content = content.replace(old_text, new_text, 1)
             file_path.write_text(new_content, encoding="utf-8")
+            diff = _format_unified_diff(_display_path(workspace, file_path), content, new_content)
+            metadata = _format_file_metadata(_display_path(workspace, file_path), content, new_content)
 
-            return f"Successfully edited {path}"
+            return f"Successfully edited {path}\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
         except Exception as e:
             return f"Error editing file: {str(e)}"

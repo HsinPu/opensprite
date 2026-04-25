@@ -3,6 +3,7 @@ name: performance-optimizer
 description: Identify and improve slow paths, redundant work, and scaling bottlenecks with practical optimizations and clear tradeoffs.
 version: "1.0"
 scope: performance
+tool_profile: implementation
 language: zh-TW
 ---
 

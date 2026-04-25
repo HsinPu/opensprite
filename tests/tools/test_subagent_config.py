@@ -49,6 +49,7 @@ def test_configure_subagent_list_and_add(tmp_path):
             subagent_id="my-reviewer",
             description=_VALID_DESCRIPTION,
             body=_VALID_BODY,
+            tool_profile="read-only",
             user_confirmed=True,
         )
     )
@@ -69,7 +70,29 @@ def test_configure_subagent_list_and_add(tmp_path):
     data = json.loads(got)
     assert data["subagent_id"] == "my-reviewer"
     assert "my-reviewer" in data["content"]
+    assert "tool_profile: read-only" in data["content"]
     assert "---" in data["content"]
+
+
+def test_configure_subagent_rejects_invalid_tool_profile(tmp_path):
+    app_home = tmp_path / "opensprite-home"
+    session_ws = _session_workspace(tmp_path)
+    tool = ConfigureSubagentTool(app_home=app_home, workspace_resolver=lambda: session_ws)
+
+    out = asyncio.run(
+        tool.execute(
+            action="add",
+            subagent_id="bad-agent",
+            description=_VALID_DESCRIPTION,
+            body=_VALID_BODY,
+            tool_profile="root",
+            user_confirmed=True,
+        )
+    )
+
+    assert "Invalid arguments for configure_subagent" in out
+    assert "tool_profile must be one of" in out
+    assert not (session_ws / "subagent_prompts" / "bad-agent.md").exists()
 
 
 def test_configure_subagent_upsert_then_remove(tmp_path):

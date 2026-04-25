@@ -3,6 +3,7 @@ name: editor
 description: Improve an existing draft for structure, tone, clarity, and readability; useful for polishing or rewriting after the first draft is complete.
 version: "1.0"
 scope: editing
+tool_profile: read-only
 language: zh-TW
 ---
 

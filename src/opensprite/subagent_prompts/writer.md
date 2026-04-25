@@ -3,6 +3,7 @@ name: writer
 description: Turn the provided topic, research, outline, and writing requirements into a final deliverable article; focus on drafting rather than primary research, fact-checking, or post-editing.
 version: "1.1"
 scope: writing
+tool_profile: research
 language: zh-TW
 ---
 

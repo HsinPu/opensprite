@@ -3,6 +3,7 @@ name: integration-engineer
 description: Design and implement integrations with external services, APIs, SDKs, webhooks, and provider boundaries with clear contracts and failure handling.
 version: "1.0"
 scope: integration
+tool_profile: implementation
 language: zh-TW
 ---
 

@@ -3,6 +3,7 @@ name: security-reviewer
 description: Review code and design changes for auth, permissions, secret handling, unsafe input flows, and other practical security risks.
 version: "1.0"
 scope: security-review
+tool_profile: read-only
 language: zh-TW
 ---
 

@@ -316,6 +316,30 @@ class CronToolConfig(BaseModel):
     default_timezone: str = "UTC"
 
 
+class ToolPermissionsConfig(BaseModel):
+    """Centralized tool exposure and execution policy."""
+
+    enabled: bool = True
+    allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
+    denied_tools: list[str] = Field(default_factory=list)
+    allowed_risk_levels: list[str] = Field(
+        default_factory=lambda: [
+            "read",
+            "write",
+            "execute",
+            "network",
+            "external_side_effect",
+            "configuration",
+            "delegation",
+            "memory",
+            "mcp",
+        ]
+    )
+    denied_risk_levels: list[str] = Field(default_factory=list)
+    approval_required_tools: list[str] = Field(default_factory=list)
+    approval_required_risk_levels: list[str] = Field(default_factory=list)
+
+
 class ToolsConfig(BaseModel):
     """Tool configurations."""
 
@@ -326,6 +350,7 @@ class ToolsConfig(BaseModel):
     web_search: WebSearchToolConfig = Field(default_factory=WebSearchToolConfig)
     web_fetch: WebFetchToolConfig = Field(default_factory=WebFetchToolConfig)
     cron: CronToolConfig = Field(default_factory=CronToolConfig)
+    permissions: ToolPermissionsConfig = Field(default_factory=ToolPermissionsConfig)
     mcp_servers_file: str = "mcp_servers.json"
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 

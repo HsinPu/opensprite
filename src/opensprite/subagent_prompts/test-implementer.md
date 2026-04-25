@@ -3,6 +3,7 @@ name: test-implementer
 description: Implement concrete test cases for an already-defined feature, bug fix, or test plan, using the smallest practical coverage that protects behavior.
 version: "1.0"
 scope: test-implementation
+tool_profile: testing
 language: zh-TW
 ---
 

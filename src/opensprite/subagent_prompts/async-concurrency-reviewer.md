@@ -3,6 +3,7 @@ name: async-concurrency-reviewer
 description: Review async flows, queues, cancellation, locking, and shared-state behavior for race conditions, ordering bugs, and lifecycle hazards.
 version: "1.0"
 scope: async-concurrency
+tool_profile: read-only
 language: zh-TW
 ---
 

@@ -1,0 +1,96 @@
+import asyncio
+import os
+
+from opensprite.tools.filesystem import GlobFilesTool, GrepFilesTool, ReadFileTool
+
+
+def test_read_file_returns_line_numbers_and_pagination_hint(tmp_path):
+    target = tmp_path / "notes.txt"
+    target.write_text("one\ntwo\nthree\nfour\n", encoding="utf-8")
+    tool = ReadFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="notes.txt", offset=2, limit=2))
+
+    assert "File: notes.txt" in result
+    assert "Lines: 2-3 of 4" in result
+    assert "2: two" in result
+    assert "3: three" in result
+    assert "1: one" not in result
+    assert "Use offset=4 to continue" in result
+
+
+def test_read_file_rejects_offset_out_of_range(tmp_path):
+    target = tmp_path / "notes.txt"
+    target.write_text("one\ntwo\n", encoding="utf-8")
+    tool = ReadFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="notes.txt", offset=3))
+
+    assert result == "Error: Offset 3 is out of range for notes.txt (2 lines)."
+
+
+def test_glob_files_finds_workspace_files_by_pattern(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hi')", encoding="utf-8")
+    (tmp_path / "src" / "app.md").write_text("notes", encoding="utf-8")
+    tool = GlobFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="**/*.py"))
+
+    assert "src/app.py" in result
+    assert "src/app.md" not in result
+
+
+def test_grep_files_searches_with_include_filter(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("class Sprite:\n    pass\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("class Sprite docs\n", encoding="utf-8")
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern=r"class\s+Sprite", include="*.py"))
+
+    assert "Found 1 matches" in result
+    assert "src/app.py:" in result
+    assert "Line 1: class Sprite:" in result
+    assert "README.md" not in result
+
+
+def test_grep_files_include_filter_can_match_workspace_relative_path(tmp_path):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("needle\n", encoding="utf-8")
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="needle", path="src", include="src/**/*.py"))
+
+    assert "Found 1 matches" in result
+    assert "src/app.py:" in result
+
+
+def test_grep_files_truncates_after_sorting_by_mtime(tmp_path):
+    for index in range(101):
+        path = tmp_path / f"match_{index:03}.txt"
+        path.write_text("needle\n", encoding="utf-8")
+        os.utime(path, (index, index))
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="needle", include="*.txt"))
+
+    assert "Found 101 matches (showing first 100)" in result
+    assert "match_100.txt:" in result
+    assert "match_000.txt:" not in result
+
+
+def test_navigation_tools_reject_external_search_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    outside = tmp_path / "outside.txt"
+    outside.write_text("secret", encoding="utf-8")
+
+    glob_tool = GlobFilesTool(workspace=workspace)
+    grep_tool = GrepFilesTool(workspace=workspace)
+
+    glob_result = asyncio.run(glob_tool.execute(pattern="*.txt", path=".."))
+    grep_result = asyncio.run(grep_tool.execute(pattern="secret", path=".."))
+
+    assert glob_result.startswith("Error: Access denied.")
+    assert grep_result.startswith("Error: Access denied.")

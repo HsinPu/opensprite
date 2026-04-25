@@ -4,6 +4,8 @@ from opensprite.agent.tool_registration import register_default_tools
 from opensprite.config.schema import SearchConfig, ToolsConfig
 from opensprite.skills import SkillsLoader
 from opensprite.tools.cron import CronTool
+from opensprite.tools.active_task import TaskUpdateTool
+from opensprite.tools.batch import BatchTool
 from opensprite.tools.mcp_config import ConfigureMCPTool
 from opensprite.tools.process import ProcessTool
 from opensprite.tools.skill_config import ConfigureSkillTool
@@ -16,8 +18,8 @@ from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
 
 
-async def _fake_run_subagent(task: str, prompt_type: str) -> str:
-    return f"{prompt_type}:{task}"
+async def _fake_run_subagent(task: str, prompt_type: str | None, task_id: str | None) -> str:
+    return f"{prompt_type or 'writer'}:{task_id or 'new'}:{task}"
 
 
 async def _fake_reload_mcp() -> str:
@@ -49,11 +51,15 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
 
     assert registry.tool_names == [
         "read_file",
+        "glob_files",
+        "grep_files",
+        "apply_patch",
         "write_file",
         "edit_file",
         "list_dir",
         "read_skill",
         "configure_skill",
+        "task_update",
         "configure_mcp",
         "configure_subagent",
         "exec",
@@ -69,10 +75,13 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "search_history",
         "search_knowledge",
         "cron",
+        "batch",
     ]
     assert isinstance(registry.get("configure_skill"), ConfigureSkillTool)
+    assert isinstance(registry.get("task_update"), TaskUpdateTool)
     assert isinstance(registry.get("configure_subagent"), ConfigureSubagentTool)
     assert isinstance(registry.get("send_media"), SendMediaTool)
+    assert isinstance(registry.get("batch"), BatchTool)
 
 
 def test_register_default_tools_skips_optional_skill_and_search_tools_when_dependencies_missing():
@@ -89,9 +98,13 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
 
     assert registry.tool_names == [
         "read_file",
+        "glob_files",
+        "grep_files",
+        "apply_patch",
         "write_file",
         "edit_file",
         "list_dir",
+        "task_update",
         "configure_mcp",
         "configure_subagent",
         "exec",
@@ -105,6 +118,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "send_media",
         "delegate",
         "cron",
+        "batch",
     ]
 
 
@@ -161,6 +175,28 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.timeout == 9
     assert web_fetch_tool.fetcher.prefer_trafilatura is False
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
+
+
+def test_register_default_tools_applies_permission_policy():
+    registry = ToolRegistry()
+
+    register_default_tools(
+        registry,
+        workspace_resolver=lambda: Path.cwd(),
+        get_chat_id=lambda: "chat-1",
+        run_subagent=_fake_run_subagent,
+        config_path_resolver=lambda: Path.cwd() / "opensprite.json",
+        reload_mcp=_fake_reload_mcp,
+        tools_config=ToolsConfig(
+            **{"permissions": {"denied_tools": ["exec"], "denied_risk_levels": ["network"]}}
+        ),
+    )
+
+    assert "exec" not in registry.tool_names
+    assert "web_search" not in registry.tool_names
+    assert "web_fetch" not in registry.tool_names
+    assert "read_file" in registry.tool_names
+    assert "batch" in registry.tool_names
 
 
 def test_search_and_web_tools_describe_retrieval_preference():

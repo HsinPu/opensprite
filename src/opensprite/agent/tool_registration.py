@@ -13,6 +13,8 @@ from ..search.base import SearchStore
 from ..tools import (
     Tool,
     ToolRegistry,
+    TaskUpdateTool,
+    BatchTool,
     AnalyzeImageTool,
     OCRImageTool,
     CronTool,
@@ -20,6 +22,9 @@ from ..tools import (
     AnalyzeVideoTool,
     SendMediaTool,
     ReadFileTool,
+    GlobFilesTool,
+    GrepFilesTool,
+    ApplyPatchTool,
     WriteFileTool,
     ListDirTool,
     EditFileTool,
@@ -35,6 +40,7 @@ from ..tools import (
     ConfigureSubagentTool,
 )
 from ..tools.delegate import DelegateTool
+from ..tools.permissions import ToolPermissionPolicy
 
 
 class SaveMemoryTool(Tool):
@@ -72,6 +78,23 @@ def register_memory_tool(
     registry.register(SaveMemoryTool(memory_store, get_chat_id))
 
 
+def register_task_tools(
+    registry: ToolRegistry,
+    *,
+    get_chat_id: Callable[[], str | None],
+    active_task_store_factory: Callable[[str], Any | None] | None = None,
+    get_message_count: Callable[[str], Awaitable[int]] | None = None,
+) -> None:
+    """Register explicit active-task state management tools."""
+    registry.register(
+        TaskUpdateTool(
+            get_chat_id=get_chat_id,
+            active_task_store_factory=active_task_store_factory,
+            get_message_count=get_message_count,
+        )
+    )
+
+
 def register_filesystem_tools(
     registry: ToolRegistry,
     *,
@@ -81,6 +104,14 @@ def register_filesystem_tools(
 ) -> None:
     """Register filesystem-oriented tools."""
     registry.register(ReadFileTool(workspace_resolver=workspace_resolver, skills_loader=skills_loader))
+    registry.register(GlobFilesTool(workspace_resolver=workspace_resolver))
+    registry.register(GrepFilesTool(workspace_resolver=workspace_resolver))
+    registry.register(
+        ApplyPatchTool(
+            workspace_resolver=workspace_resolver,
+            config_path_resolver=config_path_resolver,
+        )
+    )
     registry.register(
         WriteFileTool(
             workspace_resolver=workspace_resolver,
@@ -233,7 +264,7 @@ def register_media_tools(
 def register_delegate_tools(
     registry: ToolRegistry,
     *,
-    run_subagent: Callable[[str, str], Awaitable[str]],
+    run_subagent: Callable[[str, str | None, str | None], Awaitable[str]],
     app_home: Path | None = None,
     workspace_resolver: Callable[[], Path] | None = None,
 ) -> None:
@@ -295,12 +326,17 @@ def register_cron_tools(
     )
 
 
+def register_batch_tools(registry: ToolRegistry) -> None:
+    """Register safe parallel read-only batch execution."""
+    registry.register(BatchTool(registry_resolver=lambda: registry))
+
+
 def register_default_tools(
     registry: ToolRegistry,
     *,
     workspace_resolver: Callable[[], Path],
     get_chat_id: Callable[[], str | None],
-    run_subagent: Callable[[str, str], Awaitable[str]],
+    run_subagent: Callable[[str, str | None, str | None], Awaitable[str]],
     config_path_resolver: Callable[[], Path | None],
     reload_mcp: Callable[[], Awaitable[str]],
     app_home: Path | None = None,
@@ -316,8 +352,12 @@ def register_default_tools(
     get_current_videos: Callable[[], list[str] | None] | None = None,
     queue_outbound_media: Callable[[str, str], str | None] | None = None,
     background_notification_factory: Callable[[], Any | None] | None = None,
+    active_task_store_factory: Callable[[str], Any | None] | None = None,
+    get_message_count: Callable[[str], Awaitable[int]] | None = None,
 ) -> None:
     """Register the built-in tools used by AgentLoop."""
+    current_tools_config = tools_config or ToolsConfig()
+    registry.set_permission_policy(ToolPermissionPolicy.from_config(current_tools_config.permissions))
     register_filesystem_tools(
         registry,
         workspace_resolver=workspace_resolver,
@@ -329,6 +369,12 @@ def register_default_tools(
         skills_loader=skills_loader,
         workspace_resolver=workspace_resolver,
     )
+    register_task_tools(
+        registry,
+        get_chat_id=get_chat_id,
+        active_task_store_factory=active_task_store_factory,
+        get_message_count=get_message_count,
+    )
     register_config_tools(
         registry,
         config_path_resolver=config_path_resolver,
@@ -339,10 +385,10 @@ def register_default_tools(
     register_shell_tools(
         registry,
         workspace_resolver=workspace_resolver,
-        tools_config=tools_config,
+        tools_config=current_tools_config,
         background_notification_factory=background_notification_factory,
     )
-    register_web_tools(registry, tools_config=tools_config)
+    register_web_tools(registry, tools_config=current_tools_config)
     register_media_tools(
         registry,
         media_router=media_router,
@@ -366,7 +412,8 @@ def register_default_tools(
     register_cron_tools(
         registry,
         cron_manager=cron_manager,
-        tools_config=tools_config,
+        tools_config=current_tools_config,
         messages_config=cron_messages_config,
         get_chat_id=get_chat_id,
     )
+    register_batch_tools(registry)

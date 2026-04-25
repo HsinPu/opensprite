@@ -13,6 +13,7 @@ from ..context.paths import (
     sync_subagent_prompts_from_package,
 )
 from ..subagent_prompts import load_all_metadata, read_prompt_document
+from ..subagent_profiles import allowed_tool_profile_names, validate_tool_profile_name
 from .base import Tool
 from .skill_config import (
     _validate_body_for_write,
@@ -26,7 +27,7 @@ WorkspaceResolver = Callable[[], Path]
 
 _CONFIGURE_SUBAGENT_RULES_SUMMARY = (
     "Writes go only under the current session workspace: <workspace>/subagent_prompts/<subagent_id>.md with YAML frontmatter "
-    "(name must match subagent_id, description required) and a markdown body used as the subagent system prompt. "
+    "(name must match subagent_id, description required, optional tool_profile) and a markdown body used as the subagent system prompt. "
     "list/get reflect merged ids (session overrides ~/.opensprite/subagent_prompts for the same id). "
     f"Follow read_skill + skill_name '{AGENT_PROMPT_GUIDE_SKILL_NAME}' for structure (Role, Task, Constraints, Output). "
     "Use action=add only for a brand-new id (no file in session and no prompt under app home for that id). "
@@ -35,10 +36,17 @@ _CONFIGURE_SUBAGENT_RULES_SUMMARY = (
 )
 
 
-def _build_subagent_prompt_md(subagent_id: str, description: str, body: str) -> str:
+def _build_subagent_prompt_md(
+    subagent_id: str,
+    description: str,
+    body: str,
+    *,
+    tool_profile: str | None = None,
+) -> str:
     desc = (description or "").strip().replace("\n", " ").replace("\r", "")
     body_text = (body or "").strip()
-    return f"---\nname: {subagent_id}\ndescription: {desc}\n---\n\n{body_text}\n"
+    profile_line = f"tool_profile: {tool_profile}\n" if tool_profile else ""
+    return f"---\nname: {subagent_id}\ndescription: {desc}\n{profile_line}---\n\n{body_text}\n"
 
 
 def _classify_subagent_session_write(
@@ -100,6 +108,15 @@ class ConfigureSubagentTool(Tool):
                 "description": (
                     "Markdown body for add and upsert (system prompt after frontmatter). "
                     "Same minimum length rules as configure_skill body."
+                ),
+            },
+            "tool_profile": {
+                "type": "string",
+                "enum": allowed_tool_profile_names(),
+                "description": (
+                    "Optional runtime tool capability profile for add and upsert. "
+                    "read-only: read/search only; research: read plus web; implementation: read/write/exec; "
+                    "testing: read/write/exec with writes limited to test paths. If omitted, runtime falls back to the built-in id profile or read-only for custom ids."
                 ),
             },
             "user_confirmed": {
@@ -178,12 +195,18 @@ class ConfigureSubagentTool(Tool):
         if action in {"add", "upsert"}:
             description = kwargs.get("description")
             body = kwargs.get("body")
+            tool_profile = kwargs.get("tool_profile")
             desc_err = _validate_description_for_write(description, action=action)
             if desc_err:
                 return desc_err
             body_err = _validate_body_for_write(body, action=action)
             if body_err:
                 return body_err
+            if tool_profile is not None:
+                profile_err = validate_tool_profile_name(tool_profile)
+                if profile_err:
+                    return profile_err
+                tool_profile = str(tool_profile).strip()
 
             where = _classify_subagent_session_write(subagent_id, app_home=self._app_home, session_workspace=session_ws)
             if action == "add":
@@ -205,7 +228,12 @@ class ConfigureSubagentTool(Tool):
 
             existed_session = session_path.is_file()
             session_root.mkdir(parents=True, exist_ok=True)
-            content = _build_subagent_prompt_md(subagent_id, str(description), str(body))
+            content = _build_subagent_prompt_md(
+                subagent_id,
+                str(description),
+                str(body),
+                tool_profile=tool_profile,
+            )
             session_path.write_text(content, encoding="utf-8")
             guide = (
                 f" Next: ensure read_skill '{AGENT_PROMPT_GUIDE_SKILL_NAME}' was applied for structure and metadata; "

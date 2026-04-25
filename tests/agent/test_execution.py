@@ -34,6 +34,21 @@ class FakeProvider:
         return self.responses.pop(0)
 
 
+class OverflowThenSuccessProvider:
+    def __init__(self, final_response: str = "done"):
+        self.final_response = final_response
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({
+            "messages": [ChatMessage(role=m.role, content=m.content, tool_call_id=m.tool_call_id, tool_calls=m.tool_calls) for m in messages],
+            "tools": tools,
+        })
+        if len(self.calls) == 1:
+            raise RuntimeError("This model's maximum context length was exceeded")
+        return LLMResponse(content=self.final_response, model="fake-model")
+
+
 async def _save_message_collector(calls, chat_id, role, content, tool_name=None, metadata=None):
     calls.append((chat_id, role, content, tool_name, dict(metadata or {})))
 
@@ -428,3 +443,96 @@ def test_execution_respects_max_tool_iterations_override():
 
     assert "超過了最大迭代次數（1次）" in result.content
     assert result.executed_tool_calls == 1
+
+
+def test_execution_compacts_and_retries_after_context_overflow():
+    provider = OverflowThenSuccessProvider("after compact")
+    engine = _make_engine(provider, ToolRegistry(), [])
+    statuses = []
+    messages = [
+        ChatMessage(role="system", content="SYSTEM"),
+        ChatMessage(role="user", content="old detail " + "A" * 5000),
+        ChatMessage(role="assistant", content="intermediate answer"),
+        ChatMessage(role="tool", content="tool result " + "B" * 5000, tool_call_id="tc1"),
+        ChatMessage(role="user", content="latest instruction"),
+    ]
+
+    async def status_hook(text: str):
+        statuses.append(text)
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            messages,
+            allow_tools=False,
+            on_llm_status=status_hook,
+        )
+    )
+
+    assert result.content == "after compact"
+    assert result.context_compactions == 1
+    assert len(provider.calls) == 2
+    retried_messages = provider.calls[1]["messages"]
+    assert [message.role for message in retried_messages] == ["system", "system", "user"]
+    assert retried_messages[0].content == "SYSTEM"
+    assert "# Compacted Conversation State" in retried_messages[1].content
+    assert "latest instruction" in retried_messages[1].content
+    assert "A" * 5000 not in retried_messages[1].content
+    assert retried_messages[2].content == ExecutionEngine.CONTINUATION_AFTER_COMPACTION_MESSAGE
+    assert statuses == ["上下文已接近上限，正在壓縮目前任務並繼續…"]
+
+
+def test_execution_context_compaction_does_not_consume_tool_iteration():
+    class ToolThenOverflowProvider:
+        def __init__(self):
+            self.calls = []
+
+        async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+            self.calls.append({"messages": list(messages), "tools": tools})
+            if len(self.calls) == 1:
+                return LLMResponse(
+                    content="need tool",
+                    model="fake-model",
+                    tool_calls=[ToolCall(id="tc1", name="demo_tool", arguments={"value": "abc"})],
+                )
+            if len(self.calls) == 2:
+                raise RuntimeError("context_length_exceeded")
+            return LLMResponse(content="done", model="fake-model")
+
+    registry = ToolRegistry()
+    registry.register(DummyTool())
+    provider = ToolThenOverflowProvider()
+    save_calls = []
+    engine = _make_engine(provider, registry, save_calls, tools_config=ToolsConfig(max_tool_iterations=2))
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="hi")],
+            allow_tools=True,
+            tool_result_chat_id="chat-1",
+        )
+    )
+
+    assert result.content == "done"
+    assert result.executed_tool_calls == 1
+    assert result.context_compactions == 1
+    assert len(provider.calls) == 3
+    assert save_calls == [
+        ("chat-1", "tool", "tool:abc", "demo_tool", {"tool_args": {"value": "abc"}})
+    ]
+
+
+def test_execution_does_not_compact_unrelated_llm_errors():
+    class BrokenProvider:
+        async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+            raise RuntimeError("network unavailable")
+
+    engine = _make_engine(BrokenProvider(), ToolRegistry(), [])
+
+    try:
+        asyncio.run(engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False))
+    except RuntimeError as exc:
+        assert str(exc) == "network unavailable"
+    else:
+        raise AssertionError("expected RuntimeError")

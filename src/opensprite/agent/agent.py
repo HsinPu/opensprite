@@ -44,6 +44,12 @@ from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryS
 from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..search.base import SearchStore
+from ..subagent_session import (
+    build_child_subagent_chat_id,
+    extract_subagent_prompt_type,
+    new_subagent_task_id,
+    validate_subagent_task_id,
+)
 from ..tools import ToolRegistry
 from ..tools.process_runtime import BackgroundSession
 from ..tools.shell_runtime import format_captured_output
@@ -57,6 +63,7 @@ from .skill_review import (
     build_skill_review_user_content,
     format_stored_messages_for_transcript,
 )
+from .subagent_policy import build_subagent_tool_registry, profile_for_subagent
 from .tool_registration import register_default_tools, register_memory_tool
 
 
@@ -252,7 +259,10 @@ class AgentLoop:
             name = args.get("skill_name") or "?"
             return f"正在讀取技能〈{name}〉…"
         if tool_name == "delegate":
+            task_id = args.get("task_id")
             ptype = args.get("prompt_type") or "writer"
+            if task_id:
+                return f"正在續跑子代理任務（{task_id}）…"
             return f"正在委派子代理（{ptype}）…"
         if tool_name.startswith("mcp_"):
             tail = tool_name[4:] if tool_name.startswith("mcp_") else tool_name
@@ -1116,6 +1126,8 @@ class AgentLoop:
             get_current_videos=self._get_current_videos,
             queue_outbound_media=self._queue_outbound_media,
             background_notification_factory=self._make_background_session_exit_notifier,
+            active_task_store_factory=self._get_active_task_store,
+            get_message_count=lambda chat_id: get_storage_message_count(self.storage, chat_id),
         )
         
         logger.info(f"agent.init | tools={', '.join(self.tools.tool_names)}")
@@ -1252,16 +1264,13 @@ class AgentLoop:
             max_tool_iterations=max_tool_iterations,
         )
 
-    def _build_subagent_tools(self) -> ToolRegistry:
-        """Build the tool registry exposed to subagents."""
-        return self.tools.filtered(
-            exclude_names={
-                "delegate",
-                "cron",
-                "configure_mcp",
-                "configure_skill",
-                "configure_subagent",
-            }
+    def _build_subagent_tools(self, prompt_type: str, *, workspace: Path | None = None) -> ToolRegistry:
+        """Build the tool registry exposed to one subagent profile."""
+        return build_subagent_tool_registry(
+            self.tools,
+            prompt_type,
+            app_home=self.app_home,
+            session_workspace=workspace or self._get_current_workspace(),
         )
 
     def _get_current_images(self) -> list[str] | None:
@@ -1559,42 +1568,131 @@ class AgentLoop:
             self._current_chat_id.reset(token)
         logger.info("[%s] skill.review.done", chat_id)
 
-    async def run_subagent(self, task: str, prompt_type: str = "writer") -> str:
-        """Run a delegated subagent task through the shared execution core."""
+    async def run_subagent(
+        self,
+        task: str,
+        prompt_type: str | None = None,
+        task_id: str | None = None,
+    ) -> str:
+        """Run or resume a delegated subagent task through a child storage session."""
         from .subagent_builder import SubagentMessageBuilder
         from ..subagent_prompts import get_all_subagents
 
+        task_text = str(task or "").strip()
+        if not task_text:
+            return "Error: subagent task must be a non-empty string."
+
         workspace = self._get_current_workspace()
         subagents = get_all_subagents(self.app_home, session_workspace=workspace)
-        if prompt_type not in subagents:
-            available = ", ".join(subagents)
-            return f"Error: unknown subagent type '{prompt_type}'. Available: {available}"
-
         parent_chat_id = self._get_current_chat_id() or "default"
-        log_id = f"{parent_chat_id}:subagent:{prompt_type}"
+
+        resume_task_id = str(task_id or "").strip() or None
+        is_resume = resume_task_id is not None
+        if resume_task_id:
+            validation_error = validate_subagent_task_id(resume_task_id)
+            if validation_error:
+                return validation_error
+            child_task_id = resume_task_id
+        else:
+            child_task_id = new_subagent_task_id()
+
+        child_chat_id = build_child_subagent_chat_id(parent_chat_id, child_task_id)
+        existing_child_messages = await self.storage.get_messages(child_chat_id)
+        if is_resume and not existing_child_messages:
+            return f"Error: unknown task_id '{child_task_id}' for current chat. Start a new delegate task instead."
+
+        stored_prompt_type = extract_subagent_prompt_type(existing_child_messages)
+        requested_prompt_type = str(prompt_type).strip() if prompt_type is not None else ""
+        effective_prompt_type = requested_prompt_type or stored_prompt_type or "writer"
+        if stored_prompt_type and requested_prompt_type and requested_prompt_type != stored_prompt_type:
+            return (
+                f"Error: task_id '{child_task_id}' was created with prompt_type '{stored_prompt_type}', "
+                f"not '{requested_prompt_type}'. Omit prompt_type or use the original prompt_type to resume."
+            )
+        if effective_prompt_type not in subagents:
+            available = ", ".join(subagents)
+            return f"Error: unknown subagent type '{effective_prompt_type}'. Available: {available}"
+
+        try:
+            subagent_tools = self._build_subagent_tools(effective_prompt_type, workspace=workspace)
+            subagent_profile = profile_for_subagent(
+                effective_prompt_type,
+                app_home=self.app_home,
+                session_workspace=workspace,
+            )
+        except ValueError as e:
+            return f"Error: {str(e)}"
+
+        await self._save_message(
+            child_chat_id,
+            "user",
+            task_text,
+            metadata={
+                "kind": "subagent_task",
+                "task_id": child_task_id,
+                "parent_chat_id": parent_chat_id,
+                "prompt_type": effective_prompt_type,
+                "resume": is_resume,
+            },
+        )
+
+        log_id = f"{parent_chat_id}:subagent:{effective_prompt_type}:{child_task_id}"
 
         subagent_builder = SubagentMessageBuilder(
             skills_loader=getattr(self._context_builder, "skills_loader", None)
         )
-        chat_messages = subagent_builder.build_messages(
-            task, prompt_type=prompt_type, workspace=workspace, app_home=self.app_home
-        )
+        chat_messages = [
+            ChatMessage(
+                role="system",
+                content=subagent_builder.build_system_prompt(
+                    effective_prompt_type,
+                    workspace=workspace,
+                    app_home=self.app_home,
+                ),
+            )
+        ]
+        stored_child_messages = await self.storage.get_messages(child_chat_id, limit=self.config.max_history)
+        for message in stored_child_messages:
+            role = message.get("role", "?") if isinstance(message, dict) else getattr(message, "role", "?")
+            if role == "tool":
+                continue
+            content = message.get("content", "") if isinstance(message, dict) else getattr(message, "content", "")
+            chat_messages.append(ChatMessage(role=role, content=content))
+
         self._log_prepared_messages(
             log_id,
             [{"role": msg.role, "content": msg.content} for msg in chat_messages],
         )
         logger.info(
-            f"[{log_id}] subagent.run | workspace={workspace} task={self._format_log_preview(task, max_chars=200)}"
+            f"[{log_id}] subagent.run | child_chat_id={child_chat_id} resume={is_resume} "
+            f"workspace={workspace} task={self._format_log_preview(task_text, max_chars=200)}"
         )
-        subagent_tools = self._build_subagent_tools()
+        logger.info(
+            f"[{log_id}] subagent.tools | profile={subagent_profile.name} names={', '.join(subagent_tools.tool_names) or '<none>'}"
+        )
         sub_result = await self._execute_messages(
             log_id,
             chat_messages,
             allow_tools=bool(subagent_tools.tool_names),
-            tool_result_chat_id=parent_chat_id,
+            tool_result_chat_id=child_chat_id,
             tool_registry=subagent_tools,
         )
-        return sub_result.content
+        await self._save_message(
+            child_chat_id,
+            "assistant",
+            sub_result.content,
+            metadata={
+                "kind": "subagent_result",
+                "task_id": child_task_id,
+                "parent_chat_id": parent_chat_id,
+                "prompt_type": effective_prompt_type,
+            },
+        )
+        return (
+            f"Task ID: {child_task_id}\n"
+            f"Subagent: {effective_prompt_type}\n\n"
+            f"Result:\n{sub_result.content}"
+        )
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

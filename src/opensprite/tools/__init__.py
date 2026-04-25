@@ -2,9 +2,19 @@
 
 from .base import Tool
 from .registry import ToolRegistry
+from .active_task import TaskUpdateTool
 from .audio import TranscribeAudioTool
+from .batch import BatchTool
 from .video import AnalyzeVideoTool
-from .filesystem import ReadFileTool, WriteFileTool, ListDirTool, EditFileTool
+from .filesystem import (
+    ApplyPatchTool,
+    EditFileTool,
+    GlobFilesTool,
+    GrepFilesTool,
+    ListDirTool,
+    ReadFileTool,
+    WriteFileTool,
+)
 from .skill import ReadSkillTool
 from .skill_config import ConfigureSkillTool
 from .process import ProcessTool
@@ -22,9 +32,14 @@ from .outbound_media import SendMediaTool
 __all__ = [
     "Tool",
     "ToolRegistry",
+    "TaskUpdateTool",
+    "BatchTool",
     "TranscribeAudioTool",
     "AnalyzeVideoTool",
     "ReadFileTool",
+    "GlobFilesTool",
+    "GrepFilesTool",
+    "ApplyPatchTool",
     "WriteFileTool",
     "ListDirTool",
     "EditFileTool",

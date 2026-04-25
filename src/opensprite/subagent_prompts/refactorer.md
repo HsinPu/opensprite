@@ -3,6 +3,7 @@ name: refactorer
 description: Improve code structure without changing behavior, focusing on clarity, responsibility boundaries, and reducing duplication.
 version: "1.0"
 scope: refactoring
+tool_profile: implementation
 language: zh-TW
 ---
 

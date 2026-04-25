@@ -21,6 +21,7 @@ class ExecutionResult:
     executed_tool_calls: int = 0
     used_configure_skill: bool = False
     had_tool_error: bool = False
+    context_compactions: int = 0
 
 
 class ToolResultPersistence:
@@ -77,6 +78,29 @@ class ExecutionEngine:
     SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE = (
         "Previous attempt only contained hidden or non-displayable content. "
         "Do not output <think> or hidden reasoning. If tools are needed, call them. Otherwise answer now in plain visible text for the user."
+    )
+    CONTEXT_COMPACTION_RETRY_LIMIT = 1
+    COMPACTED_MESSAGE_MAX_CHARS = 900
+    COMPACTED_LATEST_USER_MAX_CHARS = 1600
+    COMPACTED_TRANSCRIPT_MAX_CHARS = 10_000
+    CONTEXT_OVERFLOW_MARKERS = (
+        "context length",
+        "context_length_exceeded",
+        "context window",
+        "maximum context",
+        "maximum context length",
+        "maximum token",
+        "too many tokens",
+        "token limit",
+        "tokens exceed",
+        "input is too long",
+        "prompt is too long",
+        "reduce the length",
+    )
+    CONTINUATION_AFTER_COMPACTION_MESSAGE = (
+        "Continue from the compacted conversation state above. "
+        "Do not ask the user to repeat information that is present in the compacted state. "
+        "If more tool work is needed, continue using tools; otherwise provide the final answer."
     )
 
     def __init__(
@@ -214,6 +238,156 @@ class ExecutionEngine:
             preview += f", ... (+{len(names) - 5} more)"
         return preview
 
+    @classmethod
+    def _looks_like_context_overflow(cls, exc: Exception) -> bool:
+        """Return whether an LLM exception appears to be caused by context size."""
+        text = f"{type(exc).__name__}: {str(exc)}".lower()
+        return any(marker in text for marker in cls.CONTEXT_OVERFLOW_MARKERS)
+
+    @staticmethod
+    def _message_content_to_text(content: Any) -> str:
+        """Render ChatMessage content into compact text for deterministic summaries."""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            parts: list[str] = []
+            for item in content:
+                if not isinstance(item, dict):
+                    parts.append(str(item))
+                    continue
+                item_type = item.get("type")
+                if item_type == "text":
+                    parts.append(str(item.get("text", "")))
+                elif item_type == "image_url":
+                    parts.append("[image attachment omitted during compaction]")
+                else:
+                    try:
+                        parts.append(json.dumps(item, ensure_ascii=False))
+                    except Exception:
+                        parts.append(str(item))
+            return "\n".join(part for part in parts if part)
+        return str(content or "")
+
+    @staticmethod
+    def _truncate_text(text: str, max_chars: int) -> str:
+        """Truncate text while retaining both the beginning and the end."""
+        value = str(text or "").strip()
+        if len(value) <= max_chars:
+            return value
+        tail_chars = max(120, max_chars // 3)
+        head_chars = max_chars - tail_chars
+        return (
+            value[:head_chars].rstrip()
+            + f"\n... (truncated {len(value) - max_chars} chars during compaction) ...\n"
+            + value[-tail_chars:].lstrip()
+        )
+
+    @classmethod
+    def _format_tool_calls_for_compaction(cls, tool_calls: list[dict[str, Any]] | None) -> str:
+        if not tool_calls:
+            return ""
+
+        formatted: list[str] = []
+        for call in tool_calls:
+            if not isinstance(call, dict):
+                formatted.append(cls._truncate_text(str(call), 240))
+                continue
+            function = call.get("function") if isinstance(call.get("function"), dict) else {}
+            name = function.get("name") or call.get("name") or "<unknown>"
+            args = function.get("arguments") or call.get("arguments") or "{}"
+            formatted.append(f"{name}({cls._truncate_text(str(args), 240)})")
+        return "; ".join(formatted)
+
+    @classmethod
+    def _build_compacted_transcript(
+        cls,
+        messages: list[ChatMessage],
+        *,
+        max_chars: int,
+    ) -> str:
+        lines: list[str] = []
+        used_chars = 0
+        for index, message in enumerate(messages, start=1):
+            role = getattr(message, "role", "?")
+            content = cls._truncate_text(
+                cls._message_content_to_text(getattr(message, "content", "")),
+                cls.COMPACTED_MESSAGE_MAX_CHARS,
+            )
+            tool_call_summary = cls._format_tool_calls_for_compaction(getattr(message, "tool_calls", None))
+            tool_call_id = getattr(message, "tool_call_id", None)
+            parts = [f"{index}. role={role}"]
+            if tool_call_id:
+                parts.append(f"tool_call_id={tool_call_id}")
+            header = " ".join(parts)
+            rendered = header
+            if content:
+                rendered += f"\n{content}"
+            if tool_call_summary:
+                rendered += f"\ntool_calls: {tool_call_summary}"
+
+            if lines and used_chars + len(rendered) + 2 > max_chars:
+                lines.append("... (older compacted transcript entries omitted due to size) ...")
+                break
+            lines.append(rendered)
+            used_chars += len(rendered) + 2
+        return "\n\n".join(lines)
+
+    @classmethod
+    def _compact_messages_for_continuation(
+        cls,
+        chat_messages: list[ChatMessage],
+        *,
+        tool_results_history: list[str],
+    ) -> list[ChatMessage] | None:
+        """Create a smaller message list that can retry the same turn after overflow."""
+        if not chat_messages:
+            return None
+
+        leading_system: list[ChatMessage] = []
+        body_start = 0
+        for message in chat_messages:
+            if getattr(message, "role", None) != "system":
+                break
+            leading_system.append(ChatMessage(role="system", content=getattr(message, "content", "")))
+            body_start += 1
+
+        body = chat_messages[body_start:]
+        if not body:
+            return None
+
+        latest_user = next((message for message in reversed(body) if getattr(message, "role", None) == "user"), None)
+        latest_user_text = ""
+        if latest_user is not None:
+            latest_user_text = cls._truncate_text(
+                cls._message_content_to_text(getattr(latest_user, "content", "")),
+                cls.COMPACTED_LATEST_USER_MAX_CHARS,
+            )
+
+        transcript = cls._build_compacted_transcript(
+            body,
+            max_chars=cls.COMPACTED_TRANSCRIPT_MAX_CHARS,
+        )
+        summary_sections = [
+            "# Compacted Conversation State",
+            "The previous in-turn context was compacted automatically after the LLM reported a context-window error.",
+            "Continue the same task from this state; do not restart or ask the user to repeat details already summarized here.",
+        ]
+        if latest_user_text:
+            summary_sections.extend(["", "## Latest User Instruction", latest_user_text])
+        summary_sections.extend(["", "## Compacted Transcript", transcript or "(no transcript details)"])
+        if tool_results_history:
+            summary_sections.extend([
+                "",
+                "## Recent Tool Results",
+                "\n".join(f"- {item}" for item in tool_results_history[-8:]),
+            ])
+
+        return [
+            *leading_system,
+            ChatMessage(role="system", content="\n".join(summary_sections)),
+            ChatMessage(role="user", content=cls.CONTINUATION_AFTER_COMPACTION_MESSAGE),
+        ]
+
 
     async def execute_messages(
         self,
@@ -242,6 +416,7 @@ class ExecutionEngine:
         executed_tool_calls = 0
         used_configure_skill = False
         had_tool_error = False
+        context_compactions = 0
         iteration_limit = (
             max_tool_iterations if max_tool_iterations is not None else self.tools_config.max_tool_iterations
         )
@@ -251,31 +426,58 @@ class ExecutionEngine:
                 f"[{log_id}] llm.request | iter={iteration + 1} messages={len(chat_messages)} "
                 f"tools={'on' if tools else 'off'} tail={self.summarize_messages(chat_messages)}"
             )
-            try:
-                if self.pass_decoding_params:
-                    dec_temp = self.chat_temperature
-                    dec_max = self.chat_max_tokens
-                    dec_top_p = self.chat_top_p
-                    dec_freq = self.chat_frequency_penalty
-                    dec_pres = self.chat_presence_penalty
-                else:
-                    dec_temp = dec_max = dec_top_p = dec_freq = dec_pres = None
-                response = await self.provider.chat(
-                    messages=chat_messages,
-                    tools=tools,
-                    temperature=dec_temp,
-                    max_tokens=dec_max,
-                    top_p=dec_top_p,
-                    frequency_penalty=dec_freq,
-                    presence_penalty=dec_pres,
-                    status_callback=on_llm_status,
-                )
-            except Exception:
-                logger.exception(
-                    f"[{log_id}] llm.error | iter={iteration + 1} messages={len(chat_messages)} "
-                    f"tools={'on' if tools else 'off'} tail={self.summarize_messages(chat_messages)}"
-                )
-                raise
+            while True:
+                try:
+                    if self.pass_decoding_params:
+                        dec_temp = self.chat_temperature
+                        dec_max = self.chat_max_tokens
+                        dec_top_p = self.chat_top_p
+                        dec_freq = self.chat_frequency_penalty
+                        dec_pres = self.chat_presence_penalty
+                    else:
+                        dec_temp = dec_max = dec_top_p = dec_freq = dec_pres = None
+                    response = await self.provider.chat(
+                        messages=chat_messages,
+                        tools=tools,
+                        temperature=dec_temp,
+                        max_tokens=dec_max,
+                        top_p=dec_top_p,
+                        frequency_penalty=dec_freq,
+                        presence_penalty=dec_pres,
+                        status_callback=on_llm_status,
+                    )
+                    break
+                except Exception as exc:
+                    if (
+                        context_compactions < self.CONTEXT_COMPACTION_RETRY_LIMIT
+                        and self._looks_like_context_overflow(exc)
+                    ):
+                        compacted_messages = self._compact_messages_for_continuation(
+                            chat_messages,
+                            tool_results_history=tool_results_history,
+                        )
+                        if compacted_messages is not None:
+                            context_compactions += 1
+                            before_count = len(chat_messages)
+                            chat_messages[:] = compacted_messages
+                            logger.warning(
+                                f"[{log_id}] llm.context-overflow | iter={iteration + 1} "
+                                f"compaction={context_compactions}/{self.CONTEXT_COMPACTION_RETRY_LIMIT} "
+                                f"messages_before={before_count} messages_after={len(chat_messages)} retrying=true "
+                                f"error={self.format_log_preview(str(exc), max_chars=240)}"
+                            )
+                            if on_llm_status is not None:
+                                try:
+                                    await on_llm_status("上下文已接近上限，正在壓縮目前任務並繼續…")
+                                except Exception:
+                                    logger.exception(f"[{log_id}] llm.context-overflow.status-hook.error")
+                            continue
+
+                    logger.exception(
+                        f"[{log_id}] llm.error | iter={iteration + 1} messages={len(chat_messages)} "
+                        f"tools={'on' if tools else 'off'} tail={self.summarize_messages(chat_messages)}"
+                    )
+                    raise
 
             raw_content = response.content or ""
             response.content = self.sanitize_response_content(raw_content)
@@ -318,6 +520,7 @@ class ExecutionEngine:
                             executed_tool_calls=executed_tool_calls,
                             used_configure_skill=used_configure_skill,
                             had_tool_error=had_tool_error,
+                            context_compactions=context_compactions,
                         )
 
                     return ExecutionResult(
@@ -325,6 +528,7 @@ class ExecutionEngine:
                         executed_tool_calls=executed_tool_calls,
                         used_configure_skill=used_configure_skill,
                         had_tool_error=had_tool_error,
+                        context_compactions=context_compactions,
                     )
 
                 logger.info(
@@ -395,6 +599,7 @@ class ExecutionEngine:
                                 executed_tool_calls=executed_tool_calls,
                                 used_configure_skill=used_configure_skill,
                                 had_tool_error=had_tool_error,
+                                context_compactions=context_compactions,
                             )
                     else:
                         repeated_tool_error_key = None
@@ -464,6 +669,7 @@ class ExecutionEngine:
                     executed_tool_calls=executed_tool_calls,
                     used_configure_skill=used_configure_skill,
                     had_tool_error=had_tool_error,
+                    context_compactions=context_compactions,
                 )
 
             return ExecutionResult(
@@ -471,6 +677,7 @@ class ExecutionEngine:
                 executed_tool_calls=executed_tool_calls,
                 used_configure_skill=used_configure_skill,
                 had_tool_error=had_tool_error,
+                context_compactions=context_compactions,
             )
 
         logger.warning(f"[{log_id}] llm.max-iterations | limit={iteration_limit}")
@@ -489,4 +696,5 @@ class ExecutionEngine:
             executed_tool_calls=executed_tool_calls,
             used_configure_skill=used_configure_skill,
             had_tool_error=had_tool_error,
+            context_compactions=context_compactions,
         )

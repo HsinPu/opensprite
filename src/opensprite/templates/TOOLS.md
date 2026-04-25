@@ -11,6 +11,14 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Before non-trivial tool use, check whether a relevant skill exists and read it first when appropriate.
 - Stay within the active workspace unless the user clearly asks for something external.
 - Some tools are optional and may not appear at runtime; use only the tools that are actually available.
+- Tool availability may be restricted by the runtime permission policy; if a needed tool is unavailable or blocked, explain the limitation and ask the user for the required permission/configuration change.
+
+## Permission Policy
+
+- Tools are classified by risk level: `read`, `write`, `execute`, `network`, `external_side_effect`, `configuration`, `delegation`, `memory`, and `mcp`.
+- The runtime may hide or block tools through `tools.permissions.allowed_tools`, `denied_tools`, `allowed_risk_levels`, `denied_risk_levels`, or approval-required settings.
+- Never try to bypass a blocked tool by using another tool for the same prohibited effect.
+- If a tool is blocked because approval is required, stop and ask the user to approve or adjust configuration before continuing.
 
 ## Workspace Tools
 
@@ -21,15 +29,43 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - `read_file`
   - Use to inspect existing file contents inside the workspace.
   - Prefer this before editing unless the exact target text is already known.
+  - Use `offset` and `limit` for large files; output is line-numbered so follow-up edits can cite exact locations.
+  - The output includes a `SHA256` value. Pass it as `expected_sha256` when editing that file.
+
+- `glob_files`
+  - Use to find files by path pattern when the target file is not yet known.
+  - Prefer patterns like `**/*.py`, `src/**/*.md`, or `tests/**/*agent*.py`.
+
+- `grep_files`
+  - Use to search text across workspace files with a regex.
+  - Use `include` to narrow file types, such as `*.py` or `src/**/*.py`.
+  - Prefer this before broad manual reading when looking for classes, functions, config keys, or error text.
+
+- `batch`
+  - Use to run multiple read-only lookups concurrently when exploring a workspace or retrieving related context.
+  - Allowed child tools are `read_file`, `list_dir`, `glob_files`, `grep_files`, `read_skill`, `search_history`, and `search_knowledge`.
+  - Do not use it for writes, edits, shell commands, delegation, scheduling, media sending, config changes, or MCP tools.
+  - Each child call still follows normal validation and permission policy; do not use `batch` to bypass blocked tools.
+
+- `apply_patch`
+  - Use for code edits, especially when changing multiple files or multiple locations.
+  - Provide ordered `changes` with `action` set to `add`, `update`, or `delete`.
+  - For `update`, provide exact `old_text` that appears once and the intended `new_text`.
+  - For `update` or `delete` of an existing file, provide `expected_sha256` from the latest `read_file` output for that file.
+  - Prefer this over `write_file` when editing existing files because it validates all changes first and returns a diff.
 
 - `write_file`
   - Use to create a new file or replace a file completely.
+  - When replacing an existing file, provide `expected_sha256` from the latest `read_file` output.
   - Do not use this for a small in-place edit when `edit_file` is safer.
+  - Returns a unified diff after writing.
 
 - `edit_file`
   - Use for targeted replacements in existing files.
   - It requires an exact and unique `old_text` match.
+  - Provide `expected_sha256` from the latest `read_file` output so stale reads are rejected.
   - If the replacement target is ambiguous, read the file first and use a more specific edit.
+  - Returns a unified diff after editing.
 
 ## Command Tools
 
@@ -119,6 +155,9 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use when the user wants to add, update, inspect, or remove subagent prompts for this chat session.
   - Session writes go under the current workspace `subagent_prompts/` tree.
   - `list` and `get` reflect merged results: session prompts override app-home defaults when both exist.
+  - For `add` and `upsert`, use `tool_profile` when the subagent needs a capability boundary other than the safe fallback. Supported values are `read-only`, `research`, `implementation`, and `testing`.
+  - Use `tool_profile="implementation"` only when the user is explicitly creating a subagent that should write files or run verification commands.
+  - Use `tool_profile="testing"` for test-writing agents; runtime write access is limited to test paths.
   - Before designing a new subagent prompt, read `agent-creator-design` first.
   - Use `action="add"` only for a truly brand-new id; use `action="upsert"` when updating or overriding an existing id for this session.
   - `action="remove"` deletes only the session override, not the app-home default file.
@@ -140,6 +179,14 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use to update durable chat-specific continuity in `memory/{chat_id}/MEMORY.md`.
   - Save only information likely to matter again later.
   - Do not save secrets, temporary noise, or one-turn details.
+
+- `task_update`
+  - Use to keep the current session's `ACTIVE_TASK.md` accurate during non-trivial multi-step work.
+  - Use `action="set"` when starting or replacing an explicit active task.
+  - Use `action="update"` after changing status, current step, next step, completed steps, or blockers/open questions.
+  - Use `action="complete_step"` or `action="advance"` only when the step is actually completed by evidence in this session.
+  - Use `status="waiting_user"` when missing user input blocks progress; use `status="blocked"` for tool/test/runtime blockers.
+  - Do not update task state for trivial chat or unverifiable claimed progress.
 
 - `search_history`
   - Use to retrieve prior conversation details from the current chat.
@@ -172,6 +219,10 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Prefer this for focused work that benefits from a dedicated prompt.
   - Do not delegate trivial work that can be completed directly.
   - `prompt_type` must already exist in the merged subagent list.
+  - New delegated tasks return a `task_id`; reuse that `task_id` to resume the same child task session.
+  - When resuming with `task_id`, provide the next instruction in `task`; omit `prompt_type` unless you are confirming the original type.
+  - Subagents receive runtime tool profiles: reviewers are read-only, implementer/debugger-style agents can write and run verification, and test-writing agents can write only test paths.
+  - Do not assume a delegated subagent has every tool the main agent has; if a child reports a permission/tool-profile block, continue in the main agent or choose a more appropriate subagent.
   - If no suitable prompt exists, follow the `configure_subagent` rules above before delegating to a new reusable id.
 
 ## Scope Boundaries

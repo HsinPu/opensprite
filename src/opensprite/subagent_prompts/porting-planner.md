@@ -3,6 +3,7 @@ name: porting-planner
 description: Plan how to adapt a feature or design from another project into the current codebase, including scope, dependencies, risks, and staging.
 version: "1.0"
 scope: porting
+tool_profile: read-only
 language: zh-TW
 ---
 

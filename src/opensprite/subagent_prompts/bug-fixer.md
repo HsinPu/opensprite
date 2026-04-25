@@ -3,6 +3,7 @@ name: bug-fixer
 description: Turn a known bug or confirmed root cause into the smallest safe fix, with attention to regressions and edge cases.
 version: "1.0"
 scope: bug-fixing
+tool_profile: implementation
 language: zh-TW
 ---
 

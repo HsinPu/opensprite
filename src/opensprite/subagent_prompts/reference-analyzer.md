@@ -3,6 +3,7 @@ name: reference-analyzer
 description: Analyze another project, module, or example implementation to extract useful patterns, design choices, and lessons that can be reused here.
 version: "1.0"
 scope: reference-analysis
+tool_profile: research
 language: zh-TW
 ---
 
