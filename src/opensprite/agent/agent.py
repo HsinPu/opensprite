@@ -652,6 +652,8 @@ class AgentLoop:
             context_compaction_token_budget=self._effective_context_token_budget(),
             context_compaction_threshold_ratio=self.config.context_compaction_threshold_ratio,
             context_compaction_min_messages=self.config.context_compaction_min_messages,
+            context_compaction_strategy=self.config.context_compaction_strategy,
+            context_compaction_llm=self.config.context_compaction_llm,
         )
 
     def _setup_user_profile_update(self) -> UserProfileUpdateService:

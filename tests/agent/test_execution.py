@@ -49,6 +49,24 @@ class OverflowThenSuccessProvider:
         return LLMResponse(content=self.final_response, model="fake-model")
 
 
+class LlmCompactionProvider:
+    def __init__(self, compaction_response: str, final_response: str = "done"):
+        self.compaction_response = compaction_response
+        self.final_response = final_response
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({
+            "messages": [ChatMessage(role=m.role, content=m.content, tool_call_id=m.tool_call_id, tool_calls=m.tool_calls) for m in messages],
+            "tools": tools,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        })
+        if len(self.calls) == 1:
+            return LLMResponse(content=self.compaction_response, model="fake-model")
+        return LLMResponse(content=self.final_response, model="fake-model")
+
+
 async def _save_message_collector(calls, chat_id, role, content, tool_name=None, metadata=None):
     calls.append((chat_id, role, content, tool_name, dict(metadata or {})))
 
@@ -516,6 +534,79 @@ def test_execution_skips_proactive_compaction_below_budget():
     assert result.context_compactions == 0
     assert len(provider.calls) == 1
     assert provider.calls[0]["messages"] == messages
+
+
+def test_execution_uses_llm_compactor_when_configured():
+    provider = LlmCompactionProvider(
+        "# Compacted Task State\n## Current Goal\nContinue the latest instruction with the important old detail.",
+        "after llm compact",
+    )
+    engine = _make_engine(
+        provider,
+        ToolRegistry(),
+        [],
+        context_compaction_enabled=True,
+        context_compaction_token_budget=120,
+        context_compaction_threshold_ratio=0.5,
+        context_compaction_min_messages=3,
+        context_compaction_strategy="llm",
+        context_compaction_llm=Config.load_agent_template_config().context_compaction_llm,
+    )
+    messages = [
+        ChatMessage(role="system", content="SYSTEM"),
+        ChatMessage(role="user", content="old detail " + "A" * 12000),
+        ChatMessage(role="assistant", content="intermediate answer"),
+        ChatMessage(role="user", content="latest instruction"),
+    ]
+
+    result = asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=False))
+
+    assert result.content == "after llm compact"
+    assert result.context_compactions == 1
+    assert len(provider.calls) == 2
+    compactor_call = provider.calls[0]
+    assert compactor_call["tools"] is None
+    assert compactor_call["temperature"] == 0
+    assert compactor_call["max_tokens"] == 4096
+    assert compactor_call["messages"][0].role == "system"
+    assert "context compaction engine" in compactor_call["messages"][0].content
+    sent_messages = provider.calls[1]["messages"]
+    assert [message.role for message in sent_messages] == ["system", "system", "user"]
+    assert sent_messages[0].content == "SYSTEM"
+    assert "compacted by an LLM" in sent_messages[1].content
+    assert "## Current Goal" in sent_messages[1].content
+    assert "A" * 2000 not in sent_messages[1].content
+    assert sent_messages[2].content == ExecutionEngine.CONTINUATION_AFTER_COMPACTION_MESSAGE
+
+
+def test_execution_falls_back_when_llm_compactor_returns_empty():
+    provider = LlmCompactionProvider("   ", "after fallback compact")
+    engine = _make_engine(
+        provider,
+        ToolRegistry(),
+        [],
+        context_compaction_enabled=True,
+        context_compaction_token_budget=120,
+        context_compaction_threshold_ratio=0.5,
+        context_compaction_min_messages=3,
+        context_compaction_strategy="llm",
+        context_compaction_llm=Config.load_agent_template_config().context_compaction_llm,
+    )
+    messages = [
+        ChatMessage(role="system", content="SYSTEM"),
+        ChatMessage(role="user", content="old detail " + "A" * 12000),
+        ChatMessage(role="assistant", content="intermediate answer"),
+        ChatMessage(role="user", content="latest instruction"),
+    ]
+
+    result = asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=False))
+
+    assert result.content == "after fallback compact"
+    assert result.context_compactions == 1
+    assert len(provider.calls) == 2
+    sent_messages = provider.calls[1]["messages"]
+    assert "approaching the configured context budget" in sent_messages[1].content
+    assert "compacted by an LLM" not in sent_messages[1].content
 
 
 def test_proactive_compaction_does_not_consume_overflow_retry():

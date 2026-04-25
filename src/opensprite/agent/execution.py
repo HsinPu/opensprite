@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
-from ..config import ToolsConfig
+from ..config import DocumentLlmConfig, ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
@@ -85,6 +85,8 @@ class ExecutionEngine:
     COMPACTED_MESSAGE_MAX_CHARS = 900
     COMPACTED_LATEST_USER_MAX_CHARS = 1600
     COMPACTED_TRANSCRIPT_MAX_CHARS = 10_000
+    LLM_COMPACTION_TRANSCRIPT_MAX_CHARS = 30_000
+    LLM_COMPACTION_MESSAGE_MAX_CHARS = 1800
     CONTEXT_OVERFLOW_MARKERS = (
         "context length",
         "context_length_exceeded",
@@ -106,6 +108,22 @@ class ExecutionEngine:
     )
     CONTEXT_OVERFLOW_STATUS_MESSAGE = "上下文已接近上限，正在壓縮目前任務並繼續…"
     PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE = "上下文接近上限，正在壓縮目前任務並繼續…"
+    LLM_COMPACTION_SYSTEM_PROMPT = """You are a context compaction engine for an autonomous assistant.
+Compress the provided conversation state into a concise, factual Markdown state snapshot.
+Do not solve the user's task. Do not ask questions. Do not invent facts.
+Preserve all information needed to continue work without asking the user to repeat details.
+
+Output exactly these sections when applicable:
+# Compacted Task State
+## Current Goal
+## Latest User Instruction
+## Important Context And Constraints
+## Completed Work
+## Pending Work
+## Relevant Files, Tools, Or IDs
+## Recent Tool Results
+## Open Questions Or Blockers
+"""
 
     def __init__(
         self,
@@ -129,6 +147,8 @@ class ExecutionEngine:
         context_compaction_token_budget: int = 0,
         context_compaction_threshold_ratio: float = 0.9,
         context_compaction_min_messages: int = 8,
+        context_compaction_strategy: str = "deterministic",
+        context_compaction_llm: DocumentLlmConfig | None = None,
     ):
         self.provider = provider
         self.tools = tools
@@ -142,6 +162,8 @@ class ExecutionEngine:
         self.context_compaction_token_budget = max(0, context_compaction_token_budget)
         self.context_compaction_threshold_ratio = context_compaction_threshold_ratio
         self.context_compaction_min_messages = max(1, context_compaction_min_messages)
+        self.context_compaction_strategy = context_compaction_strategy
+        self.context_compaction_llm = context_compaction_llm
         self.tools_config = tools_config or ToolsConfig()
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
@@ -286,8 +308,9 @@ class ExecutionEngine:
         tool_schema_tokens = self._estimate_tool_schema_tokens(tools, model=model)
         return message_tokens + tool_schema_tokens, message_tokens, tool_schema_tokens
 
-    def _build_proactive_compaction(
+    async def _build_proactive_compaction(
         self,
+        log_id: str,
         chat_messages: list[ChatMessage],
         *,
         tools: list[dict[str, Any]] | None,
@@ -305,6 +328,29 @@ class ExecutionEngine:
         estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(chat_messages, tools)
         if estimated_tokens < threshold_tokens:
             return None
+
+        compacted_messages: list[ChatMessage] | None = None
+        if self.context_compaction_strategy == "llm":
+            compacted_messages = await self._compact_messages_with_llm(
+                log_id,
+                chat_messages,
+                tool_results_history=tool_results_history,
+            )
+            if compacted_messages is not None:
+                compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
+                if compacted_tokens < estimated_tokens:
+                    return (
+                        compacted_messages,
+                        estimated_tokens,
+                        compacted_tokens,
+                        threshold_tokens,
+                        message_tokens,
+                        tool_schema_tokens,
+                    )
+                logger.warning(
+                    f"[{log_id}] llm.context-compact.llm-too-large | "
+                    f"estimated_tokens={estimated_tokens} compacted_tokens={compacted_tokens} fallback=deterministic"
+                )
 
         compacted_messages = self._compact_messages_for_continuation(
             chat_messages,
@@ -329,6 +375,118 @@ class ExecutionEngine:
             message_tokens,
             tool_schema_tokens,
         )
+
+    @classmethod
+    def _split_leading_system_messages(
+        cls,
+        chat_messages: list[ChatMessage],
+    ) -> tuple[list[ChatMessage], list[ChatMessage]]:
+        leading_system: list[ChatMessage] = []
+        body_start = 0
+        for message in chat_messages:
+            if getattr(message, "role", None) != "system":
+                break
+            leading_system.append(ChatMessage(role="system", content=getattr(message, "content", "")))
+            body_start += 1
+        return leading_system, chat_messages[body_start:]
+
+    @classmethod
+    def _latest_user_text(cls, messages: list[ChatMessage], *, max_chars: int) -> str:
+        latest_user = next((message for message in reversed(messages) if getattr(message, "role", None) == "user"), None)
+        if latest_user is None:
+            return ""
+        return cls._truncate_text(
+            cls._message_content_to_text(getattr(latest_user, "content", "")),
+            max_chars,
+        )
+
+    def _build_llm_compaction_prompt(
+        self,
+        chat_messages: list[ChatMessage],
+        *,
+        tool_results_history: list[str],
+    ) -> list[ChatMessage] | None:
+        _, body = self._split_leading_system_messages(chat_messages)
+        if not body:
+            return None
+
+        latest_user_text = self._latest_user_text(body, max_chars=self.COMPACTED_LATEST_USER_MAX_CHARS)
+        transcript = self._build_compacted_transcript(
+            body,
+            max_chars=self.LLM_COMPACTION_TRANSCRIPT_MAX_CHARS,
+            message_max_chars=self.LLM_COMPACTION_MESSAGE_MAX_CHARS,
+        )
+        sections = [
+            "# Conversation State To Compact",
+            "Use this state to produce a continuation snapshot for the assistant.",
+        ]
+        if latest_user_text:
+            sections.extend(["", "## Latest User Instruction", latest_user_text])
+        sections.extend(["", "## Transcript", transcript or "(no transcript details)"])
+        if tool_results_history:
+            sections.extend([
+                "",
+                "## Recent Tool Results",
+                "\n".join(f"- {item}" for item in tool_results_history[-12:]),
+            ])
+        return [
+            ChatMessage(role="system", content=self.LLM_COMPACTION_SYSTEM_PROMPT),
+            ChatMessage(role="user", content="\n".join(sections)),
+        ]
+
+    async def _compact_messages_with_llm(
+        self,
+        log_id: str,
+        chat_messages: list[ChatMessage],
+        *,
+        tool_results_history: list[str],
+    ) -> list[ChatMessage] | None:
+        compaction_llm = self.context_compaction_llm
+        if compaction_llm is None:
+            return None
+
+        leading_system, body = self._split_leading_system_messages(chat_messages)
+        if not body:
+            return None
+
+        compaction_messages = self._build_llm_compaction_prompt(
+            chat_messages,
+            tool_results_history=tool_results_history,
+        )
+        if compaction_messages is None:
+            return None
+
+        try:
+            response = await self.provider.chat(
+                messages=compaction_messages,
+                tools=None,
+                status_callback=None,
+                **compaction_llm.decoding_kwargs(),
+            )
+        except Exception as exc:
+            logger.warning(
+                f"[{log_id}] llm.context-compact.llm-error | fallback=deterministic "
+                f"error={self.format_log_preview(str(exc), max_chars=240)}"
+            )
+            return None
+
+        summary = self.sanitize_response_content(response.content or "").strip()
+        if not summary:
+            logger.warning(f"[{log_id}] llm.context-compact.llm-empty | fallback=deterministic")
+            return None
+
+        summary_sections = [
+            "# Compacted Conversation State",
+            "The in-turn context was compacted by an LLM before the next request because it was approaching the configured context budget.",
+            "Continue the same task from this state; do not restart or ask the user to repeat details already summarized here.",
+            "",
+            summary,
+        ]
+        return [
+            *leading_system,
+            ChatMessage(role="system", content="\n".join(summary_sections)),
+            ChatMessage(role="user", content=self.CONTINUATION_AFTER_COMPACTION_MESSAGE),
+        ]
 
     @staticmethod
     def _message_content_to_text(content: Any) -> str:
@@ -390,14 +548,16 @@ class ExecutionEngine:
         messages: list[ChatMessage],
         *,
         max_chars: int,
+        message_max_chars: int | None = None,
     ) -> str:
         lines: list[str] = []
         used_chars = 0
+        current_message_max_chars = message_max_chars or cls.COMPACTED_MESSAGE_MAX_CHARS
         for index, message in enumerate(messages, start=1):
             role = getattr(message, "role", "?")
             content = cls._truncate_text(
                 cls._message_content_to_text(getattr(message, "content", "")),
-                cls.COMPACTED_MESSAGE_MAX_CHARS,
+                current_message_max_chars,
             )
             tool_call_summary = cls._format_tool_calls_for_compaction(getattr(message, "tool_calls", None))
             tool_call_id = getattr(message, "tool_call_id", None)
@@ -513,7 +673,8 @@ class ExecutionEngine:
 
         for iteration in range(iteration_limit):
             if proactive_context_compactions < self.PROACTIVE_CONTEXT_COMPACTION_LIMIT:
-                proactive_compaction = self._build_proactive_compaction(
+                proactive_compaction = await self._build_proactive_compaction(
+                    log_id,
                     chat_messages,
                     tools=tools,
                     tool_results_history=tool_results_history,

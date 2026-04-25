@@ -54,6 +54,39 @@ class LLMsConfig(BaseModel):
         )
 
 
+class DocumentLlmConfig(BaseModel):
+    """LLM 解碼參數：背景文件合併（MEMORY / RECENT_SUMMARY / USER profile）的 API 呼叫。"""
+
+    pass_decoding_params: bool
+    temperature: float
+    max_tokens: int
+    top_p: float | None
+    frequency_penalty: float | None
+    presence_penalty: float | None
+
+    def decoding_kwargs(self) -> dict[str, Any]:
+        """供 provider.chat(..., **kwargs) 使用；關閉時五個參數皆為 None。"""
+        if self.pass_decoding_params:
+            return {
+                "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+                "presence_penalty": self.presence_penalty,
+            }
+        return {
+            "temperature": None,
+            "max_tokens": None,
+            "top_p": None,
+            "frequency_penalty": None,
+            "presence_penalty": None,
+        }
+
+
+# 舊名稱保留，與 memory.llm 設定語意相同
+MemoryLlmConfig = DocumentLlmConfig
+
+
 class AgentConfig(BaseModel):
     """Agent configuration."""
     
@@ -62,6 +95,8 @@ class AgentConfig(BaseModel):
     context_compaction_enabled: bool
     context_compaction_threshold_ratio: float = Field(gt=0.0, le=1.0)
     context_compaction_min_messages: int = Field(ge=2)
+    context_compaction_strategy: Literal["deterministic", "llm"]
+    context_compaction_llm: DocumentLlmConfig
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
     skill_review_enabled: bool
     skill_review_min_tool_calls: int = Field(ge=1)
@@ -372,39 +407,6 @@ class ToolsConfig(BaseModel):
     permissions: ToolPermissionsConfig = Field(default_factory=ToolPermissionsConfig)
     mcp_servers_file: str = "mcp_servers.json"
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
-
-
-class DocumentLlmConfig(BaseModel):
-    """LLM 解碼參數：背景文件合併（MEMORY / RECENT_SUMMARY / USER profile）的 API 呼叫。"""
-
-    pass_decoding_params: bool
-    temperature: float
-    max_tokens: int
-    top_p: float | None
-    frequency_penalty: float | None
-    presence_penalty: float | None
-
-    def decoding_kwargs(self) -> dict[str, Any]:
-        """供 provider.chat(..., **kwargs) 使用；關閉時五個參數皆為 None。"""
-        if self.pass_decoding_params:
-            return {
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-        return {
-            "temperature": None,
-            "max_tokens": None,
-            "top_p": None,
-            "frequency_penalty": None,
-            "presence_penalty": None,
-        }
-
-
-# 舊名稱保留，與 memory.llm 設定語意相同
-MemoryLlmConfig = DocumentLlmConfig
 
 
 class MemoryConfig(BaseModel):
@@ -1319,6 +1321,8 @@ class Config:
                 "context_compaction_enabled": self.agent.context_compaction_enabled,
                 "context_compaction_threshold_ratio": self.agent.context_compaction_threshold_ratio,
                 "context_compaction_min_messages": self.agent.context_compaction_min_messages,
+                "context_compaction_strategy": self.agent.context_compaction_strategy,
+                "context_compaction_llm": self.agent.context_compaction_llm.model_dump(),
                 "skill_review_enabled": self.agent.skill_review_enabled,
                 "skill_review_min_tool_calls": self.agent.skill_review_min_tool_calls,
                 "skill_review_max_tool_iterations": self.agent.skill_review_max_tool_iterations,
