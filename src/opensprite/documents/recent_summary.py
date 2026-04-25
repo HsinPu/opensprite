@@ -204,11 +204,11 @@ class RecentSummaryConsolidator(ConversationConsolidator):
         provider,
         model: str,
         summary_store: RecentSummaryStore,
-        threshold: int = 20,
-        token_threshold: int = 30000,
-        lookback_messages: int = 120,
-        keep_last_messages: int = 40,
-        enabled: bool = True,
+        threshold: int,
+        token_threshold: int,
+        lookback_messages: int,
+        keep_last_messages: int,
+        enabled: bool,
         llm: DocumentLlmConfig,
     ):
         self.storage = storage

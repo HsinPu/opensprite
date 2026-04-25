@@ -879,7 +879,8 @@ class TelegramAdapter(MessageAdapter):
 
 ```python
 import asyncio
-from ..agent import AgentLoop, AgentConfig
+from ..agent import AgentLoop
+from ..config import Config
 from ..llms import OpenAILLM
 from ..storage import MemoryStorage
 from ..bus.dispatcher import MessageQueue
@@ -890,7 +891,7 @@ async def main():
     llm = OpenAILLM(api_key="your-openai-key")
     
     # 2. 建立 Agent 設定
-    config = AgentConfig(system_prompt="你是個有用的助理。")
+    config = Config.load_agent_template_config()
     
     # 3. 建立 Storage
     storage = MemoryStorage()

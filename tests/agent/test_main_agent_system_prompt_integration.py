@@ -113,7 +113,7 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
 
     provider = CapturingProvider()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=_EmptyStorage(),
         context_builder=context_builder,
@@ -176,7 +176,7 @@ def test_main_agent_system_prompt_lists_connected_mcp_tools(tmp_path: Path) -> N
 
     provider = CapturingProvider()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=_EmptyStorage(),
         context_builder=context_builder,
@@ -226,7 +226,7 @@ def test_main_agent_call_llm_seeds_active_task_on_first_turn(tmp_path: Path) -> 
 
     provider = CapturingProvider()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=_EmptyStorage(),
         context_builder=context_builder,
@@ -276,7 +276,7 @@ def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(
 
     provider = CapturingProvider()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=_EmptyStorage(),
         context_builder=context_builder,
@@ -342,7 +342,7 @@ def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_pa
 
     provider = CapturingProvider()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=_EmptyStorage(),
         context_builder=context_builder,

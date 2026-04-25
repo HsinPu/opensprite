@@ -2,9 +2,9 @@
   "llm": {
     "providers_file": "llm.providers.json",
     "default": null,
-    "context_window_tokens": null,
+    "context_window_tokens": 1047576,
     "temperature": 0.25,
-    "max_tokens": 8192,
+    "max_tokens": 32768,
     "top_p": 0.95,
     "frequency_penalty": 0,
     "presence_penalty": 0,
@@ -53,8 +53,8 @@
     "mcp_servers_file": "mcp_servers.json"
   },
   "agent": {
-    "max_history": 120,
-    "history_token_budget": 64000,
+    "max_history": 300,
+    "history_token_budget": 200000,
     "context_compaction_enabled": true,
     "context_compaction_threshold_ratio": 0.9,
     "context_compaction_min_messages": 8,
@@ -64,8 +64,8 @@
     "skill_review_transcript_messages": 50
   },
   "memory": {
-    "threshold": 50,
-    "token_threshold": 120000,
+    "threshold": 80,
+    "token_threshold": 240000,
     "llm": {
       "pass_decoding_params": true,
       "temperature": 0,
@@ -103,10 +103,10 @@
   },
   "recent_summary": {
     "enabled": true,
-    "threshold": 20,
-    "token_threshold": 30000,
-    "lookback_messages": 120,
-    "keep_last_messages": 40,
+    "threshold": 40,
+    "token_threshold": 120000,
+    "lookback_messages": 240,
+    "keep_last_messages": 80,
     "llm": {
       "pass_decoding_params": true,
       "temperature": 0,

@@ -57,16 +57,16 @@ class LLMsConfig(BaseModel):
 class AgentConfig(BaseModel):
     """Agent configuration."""
     
-    max_history: int = 120
-    history_token_budget: int = 64000
-    context_compaction_enabled: bool = True
-    context_compaction_threshold_ratio: float = Field(default=0.9, gt=0.0, le=1.0)
-    context_compaction_min_messages: int = Field(default=8, ge=2)
+    max_history: int
+    history_token_budget: int
+    context_compaction_enabled: bool
+    context_compaction_threshold_ratio: float = Field(gt=0.0, le=1.0)
+    context_compaction_min_messages: int = Field(ge=2)
     # After the main reply, optionally run a quiet LLM pass to upsert skills (extra API cost).
-    skill_review_enabled: bool = True
-    skill_review_min_tool_calls: int = Field(default=5, ge=1)
-    skill_review_max_tool_iterations: int = Field(default=6, ge=1, le=100)
-    skill_review_transcript_messages: int = Field(default=50, ge=5, le=500)
+    skill_review_enabled: bool
+    skill_review_min_tool_calls: int = Field(ge=1)
+    skill_review_max_tool_iterations: int = Field(ge=1, le=100)
+    skill_review_transcript_messages: int = Field(ge=5, le=500)
 
 
 class StorageConfig(BaseModel):
@@ -409,37 +409,37 @@ MemoryLlmConfig = DocumentLlmConfig
 
 class MemoryConfig(BaseModel):
     """Memory configurations."""
-    threshold: int = 50  # Trigger consolidation after this many messages
-    token_threshold: int = 120000
+    threshold: int  # Trigger consolidation after this many messages
+    token_threshold: int
     llm: DocumentLlmConfig
 
 
 class UserProfileConfig(BaseModel):
     """Auto-update settings for each chat's USER.md (session workspace root)."""
 
-    enabled: bool = True
-    threshold: int = 40
-    lookback_messages: int = 80
+    enabled: bool
+    threshold: int
+    lookback_messages: int
     llm: DocumentLlmConfig
 
 
 class RecentSummaryConfig(BaseModel):
     """Per-chat RECENT_SUMMARY.md update configuration."""
 
-    enabled: bool = True
-    threshold: int = 20
-    token_threshold: int = 30000
-    lookback_messages: int = 120
-    keep_last_messages: int = 40
+    enabled: bool
+    threshold: int
+    token_threshold: int
+    lookback_messages: int
+    keep_last_messages: int
     llm: DocumentLlmConfig
 
 
 class ActiveTaskConfig(BaseModel):
     """Per-chat ACTIVE_TASK.md update configuration."""
 
-    enabled: bool = True
-    threshold: int = 2
-    lookback_messages: int = 40
+    enabled: bool
+    threshold: int
+    lookback_messages: int
     llm: DocumentLlmConfig
 
 
@@ -515,7 +515,7 @@ class Config:
         self.messages_file = messages_file
 
         if self.agent is None:
-            self.agent = AgentConfig()
+            self.agent = Config.load_agent_template_config()
 
     @staticmethod
     def _resolve_mcp_servers_file(config_path: Path, mcp_servers_file: str | None) -> Path | None:
@@ -1075,9 +1075,13 @@ class Config:
         messages_path = cls._resolve_messages_file(path, data.get("messages_file"))
         external_messages = cls._load_messages_data(messages_path) if messages_path is not None else {}
         merged_messages = cls._deep_merge_dicts(inline_messages, external_messages)
+        agent_data = cls._deep_merge_dicts(
+            dict(template_data.get("agent", {})),
+            dict(data.get("agent", {})) if isinstance(data.get("agent", {}), dict) else {},
+        )
         return cls(
             llm=LLMsConfig(**llm_data),
-            agent=AgentConfig(**data["agent"]) if "agent" in data else None,
+            agent=AgentConfig(**agent_data),
             storage=StorageConfig(**data["storage"]),
             channels=ChannelsConfig(**merged_channels),
             log=LogConfig(**data["log"]) if "log" in data else None,
@@ -1148,6 +1152,13 @@ class Config:
         with open(template_path, "r", encoding="utf-8") as f:
             data: dict[str, Any] = json.load(f)
         return data
+
+    @classmethod
+    def load_agent_template_config(cls, **overrides: Any) -> AgentConfig:
+        """Create agent config from the packaged JSON template plus explicit overrides."""
+        data = dict(cls.load_template_data().get("agent", {}))
+        data.update(overrides)
+        return AgentConfig(**data)
 
     @staticmethod
     def _merge_document_section(user: dict[str, Any], template_section: dict[str, Any]) -> dict[str, Any]:

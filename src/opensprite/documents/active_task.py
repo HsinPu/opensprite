@@ -865,9 +865,9 @@ class ActiveTaskConsolidator(ConversationConsolidator):
         provider,
         model: str,
         active_task_store_factory: Callable[[str], ActiveTaskStore],
-        threshold: int = 2,
-        lookback_messages: int = 40,
-        enabled: bool = True,
+        threshold: int,
+        lookback_messages: int,
+        enabled: bool,
         llm: DocumentLlmConfig,
     ):
         self.storage = storage

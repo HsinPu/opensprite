@@ -74,7 +74,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
         registry = ToolRegistry()
         registry.register(DummyTool())
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=FakeContextBuilder(tmp_path),

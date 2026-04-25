@@ -82,7 +82,7 @@ def _make_agent(tmp_path: Path, tools_config: ToolsConfig | None = None) -> Agen
     registry = ToolRegistry()
     registry.register(DummyTool())
     return AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path),

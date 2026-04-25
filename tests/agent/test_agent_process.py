@@ -143,7 +143,7 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
         registry.register(DummyTool())
         storage = FakeStorage()
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=FakeContextBuilder(tmp_path),
@@ -233,7 +233,7 @@ def test_agent_process_persists_media_only_message_without_llm(tmp_path):
         storage = FakeStorage()
         context_builder = FakeContextBuilder(tmp_path / "workspace")
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=context_builder,
@@ -309,7 +309,7 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
         storage = FakeStorage()
         context_builder = FakeContextBuilder(tmp_path / "workspace")
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=context_builder,
@@ -379,7 +379,7 @@ def test_agent_process_returns_queued_outbound_media(tmp_path):
         registry.register(DummyTool())
         storage = FakeStorage()
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=FakeContextBuilder(tmp_path),
@@ -445,7 +445,7 @@ def test_mark_active_task_status_updates_processed_index_for_terminal_states(tmp
         context_builder.tool_workspace = tmp_path / "workspace"
 
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=context_builder,
@@ -499,7 +499,7 @@ def test_process_moves_active_task_to_waiting_user_when_reply_requests_missing_i
         context_builder.tool_workspace = tmp_path / "workspace"
 
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=context_builder,
@@ -563,7 +563,7 @@ def test_process_moves_active_task_to_blocked_when_reply_reports_blocking_error(
         context_builder.tool_workspace = tmp_path / "workspace"
 
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=FakeProvider(),
             storage=storage,
             context_builder=context_builder,
@@ -623,7 +623,7 @@ def test_background_session_exit_notifier_publishes_outbound_and_persists_messag
     registry.register(DummyTool())
     storage = FakeStorage()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path),
@@ -694,7 +694,7 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
         ]
     )
     agent = AgentLoop(
-        config=AgentConfig(history_token_budget=120),
+        config=Config.load_agent_template_config(history_token_budget=120),
         provider=FakeProvider(),
         storage=storage,
         context_builder=context_builder,
@@ -743,7 +743,7 @@ def test_load_history_uses_agent_max_history(tmp_path):
         ]
     )
     agent = AgentLoop(
-        config=AgentConfig(max_history=2),
+        config=Config.load_agent_template_config(max_history=2),
         provider=FakeProvider(),
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path),
@@ -764,7 +764,7 @@ def test_load_history_uses_agent_max_history(tmp_path):
 
 def test_trim_history_reports_base_tokens_without_history(tmp_path):
     agent = AgentLoop(
-        config=AgentConfig(history_token_budget=500),
+        config=Config.load_agent_template_config(history_token_budget=500),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path),
@@ -795,7 +795,7 @@ def test_effective_context_budget_uses_model_window_and_manual_cap(tmp_path):
     chat_kwargs = Config.packaged_agent_llm_chat_kwargs()
     chat_kwargs["llm_chat_max_tokens"] = 200
     agent = AgentLoop(
-        config=AgentConfig(history_token_budget=1000),
+        config=Config.load_agent_template_config(history_token_budget=1000),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path),
@@ -822,7 +822,7 @@ def test_tool_schema_tokens_reduce_history_budget(tmp_path):
     registry = ToolRegistry()
     registry.register(LargeSchemaTool())
     agent = AgentLoop(
-        config=AgentConfig(history_token_budget=150),
+        config=Config.load_agent_template_config(history_token_budget=150),
         provider=FakeProvider(),
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path),
@@ -862,7 +862,7 @@ def test_agent_process_returns_setup_hint_when_llm_not_configured(tmp_path):
     storage = FakeStorage()
     messages = MessagesConfig(**{"agent": {"llm_not_configured": "請先設定 LLM"}})
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path),

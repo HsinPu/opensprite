@@ -74,7 +74,7 @@ def test_system_prompt_logging_writes_one_file_per_prompt(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -104,7 +104,7 @@ def test_subagent_system_prompt_logging_uses_separate_directory(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -132,7 +132,7 @@ def test_main_prompt_logging_includes_available_subagent_summary(tmp_path, monke
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=FakeStorage(),
         context_builder=FakeContextBuilder(tmp_path / "workspace"),

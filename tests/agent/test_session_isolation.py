@@ -55,7 +55,7 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
         registry = ToolRegistry()
         registry.register(DummyTool())
         agent = AgentLoop(
-            config=AgentConfig(),
+            config=Config.load_agent_template_config(),
             provider=provider,
             storage=storage,
             context_builder=builder,

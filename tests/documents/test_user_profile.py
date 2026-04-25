@@ -80,6 +80,7 @@ def test_user_profile_consolidator_writes_separate_profiles_per_session(tmp_path
         profile_store_factory=lambda chat_id: create_user_profile_store(app_home, chat_id),
         threshold=1,
         lookback_messages=10,
+        enabled=True,
         llm=DocumentLlmConfig(**Config.load_template_data()["user_profile"]["llm"]),
     )
 

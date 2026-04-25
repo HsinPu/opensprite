@@ -25,7 +25,7 @@ class MemoryConsolidationService:
         memory_store: MemoryStore,
         provider: LLMProvider,
         threshold: int,
-        token_threshold: int = 0,
+        token_threshold: int,
         memory_llm: DocumentLlmConfig,
     ):
         self.storage = storage

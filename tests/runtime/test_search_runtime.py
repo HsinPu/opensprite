@@ -37,7 +37,7 @@ class FakeSearchStore:
 def test_create_search_store_requires_sqlite_storage_when_enabled():
     config = Config(
         llm=LLMsConfig(**{**Config.packaged_llm_flat_dict(), "api_key": "key", "model": "gpt"}),
-        agent=AgentConfig(),
+        agent=Config.load_agent_template_config(),
         storage=StorageConfig(type="memory", path="memory.db"),
         channels=ChannelsConfig(),
         search=SearchConfig(enabled=True),
@@ -65,7 +65,7 @@ def test_create_search_embedding_provider_uses_search_or_llm_credentials():
                 "model": "",
             }
         ),
-        agent=AgentConfig(),
+        agent=Config.load_agent_template_config(),
         storage=StorageConfig(type="sqlite", path="sessions.db"),
         channels=ChannelsConfig(),
         search=SearchConfig(
@@ -100,7 +100,7 @@ def test_create_search_store_passes_retry_failed_embedding_setting(tmp_path):
                 "model": "",
             }
         ),
-        agent=AgentConfig(),
+        agent=Config.load_agent_template_config(),
         storage=StorageConfig(type="sqlite", path=str(tmp_path / "sessions.db")),
         channels=ChannelsConfig(),
         search=SearchConfig(
@@ -138,7 +138,7 @@ def test_create_search_store_passes_embedding_candidate_strategy(tmp_path):
                 "model": "",
             }
         ),
-        agent=AgentConfig(),
+        agent=Config.load_agent_template_config(),
         storage=StorageConfig(type="sqlite", path=str(tmp_path / "sessions.db")),
         channels=ChannelsConfig(),
         search=SearchConfig(

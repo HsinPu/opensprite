@@ -284,9 +284,9 @@ class UserProfileConsolidator(ConversationConsolidator):
         provider,
         model: str,
         profile_store_factory: Callable[[str], UserProfileStore],
-        threshold: int = 30,
-        lookback_messages: int = 50,
-        enabled: bool = True,
+        threshold: int,
+        lookback_messages: int,
+        enabled: bool,
         llm: DocumentLlmConfig,
     ):
         self.storage = storage

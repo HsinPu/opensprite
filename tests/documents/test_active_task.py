@@ -94,6 +94,7 @@ def test_active_task_consolidator_updates_per_session_files(tmp_path):
         active_task_store_factory=lambda chat_id: create_active_task_store(tmp_path / "home", chat_id),
         threshold=2,
         lookback_messages=10,
+        enabled=True,
         llm=DocumentLlmConfig(**Config.load_template_data()["active_task"]["llm"]),
     )
 
@@ -160,6 +161,7 @@ def test_active_task_consolidator_prompt_includes_tool_evidence(tmp_path):
         active_task_store_factory=lambda chat_id: create_active_task_store(tmp_path / "home", chat_id),
         threshold=2,
         lookback_messages=10,
+        enabled=True,
         llm=DocumentLlmConfig(**Config.load_template_data()["active_task"]["llm"]),
     )
 
@@ -478,6 +480,7 @@ def test_active_task_consolidator_records_auto_update_event(tmp_path):
         active_task_store_factory=lambda chat_id: create_active_task_store(tmp_path / "home", chat_id),
         threshold=2,
         lookback_messages=10,
+        enabled=True,
         llm=DocumentLlmConfig(**Config.load_template_data()["active_task"]["llm"]),
     )
 

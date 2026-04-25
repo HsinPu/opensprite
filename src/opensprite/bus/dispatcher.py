@@ -944,7 +944,8 @@ class MessageQueue:
 # 建立 Queue 版本（Bus 版）
 
 import asyncio
-from ..agent import AgentLoop, AgentConfig
+from ..agent import AgentLoop
+from ..config import Config
 from ..llms import OpenAILLM
 from ..storage import MemoryStorage
 from .dispatcher import MessageQueue
@@ -961,7 +962,7 @@ async def main():
     )
     
     # 3. 建立 Agent（傳入 storage）
-    config = AgentConfig(system_prompt="你是個簡潔的助理。")
+    config = Config.load_agent_template_config()
     agent = AgentLoop(config, llm, storage)
     
     # 4. 建立 Queue（Bus 版本）

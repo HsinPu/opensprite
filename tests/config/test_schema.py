@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from opensprite.config.schema import (
+    AgentConfig,
     ChannelsConfig,
     Config,
     LLMsConfig,
@@ -32,6 +33,11 @@ def test_storage_config_accepts_supported_types():
 def test_storage_config_rejects_unsupported_file_type():
     with pytest.raises(ValidationError):
         StorageConfig(type="file", path="sessions.db")
+
+
+def test_agent_config_requires_template_backed_values():
+    with pytest.raises(ValidationError):
+        AgentConfig()
 
 
 def test_config_load_reads_llm_providers_from_external_file(tmp_path):
@@ -361,9 +367,10 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
 
     config = Config.from_json(path)
 
+    assert config.llm.context_window_tokens == 1047576
     assert config.agent is not None
-    assert config.agent.max_history == 120
-    assert config.agent.history_token_budget == 64000
+    assert config.agent.max_history == 300
+    assert config.agent.history_token_budget == 200000
     assert config.agent.context_compaction_enabled is True
     assert config.agent.context_compaction_threshold_ratio == 0.9
     assert config.agent.context_compaction_min_messages == 8
@@ -727,7 +734,7 @@ def test_copy_template_creates_external_llm_providers_file(tmp_path):
     providers_path = tmp_path / "llm.providers.json"
 
     assert template_data["llm"]["providers_file"] == "llm.providers.json"
-    assert template_data["llm"]["context_window_tokens"] is None
+    assert template_data["llm"]["context_window_tokens"] == 1047576
     assert providers_path.exists()
     assert json.loads(providers_path.read_text(encoding="utf-8")) == Config.load_external_template_data("llm.providers")
 

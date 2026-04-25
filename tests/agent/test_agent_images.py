@@ -55,7 +55,7 @@ def test_call_llm_replaces_direct_image_payload_with_tool_hint(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=None,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -107,7 +107,7 @@ def test_call_llm_adds_audio_tool_hint_to_prompt(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=None,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -159,7 +159,7 @@ def test_call_llm_adds_video_tool_hint_to_prompt(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=FakeProvider(),
         storage=None,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),

@@ -111,7 +111,7 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     registry.register(DummyTool("configure_subagent"))
     registry.register(DummyTool("task_update"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -159,7 +159,7 @@ def test_code_reviewer_subagent_is_read_only(tmp_path):
     for name in ["read_file", "grep_files", "batch", "apply_patch", "write_file", "exec", "web_search"]:
         registry.register(DummyTool(name))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -207,7 +207,7 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
     for name in ["read_file", "apply_patch", "exec", "process", "delegate", "web_search"]:
         registry.register(DummyTool(name))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(workspace),
@@ -253,7 +253,7 @@ def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):
     for name in ["read_file", "apply_patch", "exec", "web_search"]:
         registry.register(DummyTool(name))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(workspace),
@@ -297,7 +297,7 @@ def test_invalid_subagent_tool_profile_blocks_delegation(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool("read_file"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(workspace),
@@ -329,7 +329,7 @@ def test_code_reviewer_forbidden_write_call_is_not_executed(tmp_path):
     registry.register(DummyTool("read_file"))
     registry.register(DummyTool("apply_patch"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -368,7 +368,7 @@ def test_test_writer_write_tools_are_limited_to_test_paths(tmp_path):
     registry.register(DummyTool("apply_patch"))
     registry.register(DummyTool("exec"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -407,7 +407,7 @@ def test_test_writer_can_use_write_tools_for_test_paths(tmp_path):
     registry.register(DummyTool("read_file"))
     registry.register(DummyTool("apply_patch"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -449,7 +449,7 @@ def test_test_writer_allows_common_js_tests_directory(tmp_path):
     registry.register(DummyTool("read_file"))
     registry.register(DummyTool("apply_patch"))
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -493,7 +493,7 @@ def test_subagent_resume_uses_child_session_history(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
@@ -527,7 +527,7 @@ def test_subagent_resume_rejects_prompt_type_switch(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
     agent = AgentLoop(
-        config=AgentConfig(),
+        config=Config.load_agent_template_config(),
         provider=provider,
         storage=storage,
         context_builder=FakeContextBuilder(tmp_path / "workspace"),
