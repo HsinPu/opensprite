@@ -9,6 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import shutil
+import subprocess
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -29,6 +32,8 @@ class WebAdapter(MessageAdapter):
         "path": "/ws",
         "health_path": "/healthz",
         "max_message_size": 1024 * 1024,
+        "frontend_auto_build": True,
+        "frontend_build_timeout": 120,
     }
 
     def __init__(self, mq=None, config: dict[str, Any] | None = None):
@@ -42,6 +47,7 @@ class WebAdapter(MessageAdapter):
         self._started_event = asyncio.Event()
         self._session_connections: dict[str, web.WebSocketResponse] = {}
         self._socket_sessions: dict[web.WebSocketResponse, set[str]] = {}
+        self._maybe_build_frontend()
         self._frontend_dir = self._resolve_frontend_dir()
 
     def _get_host(self) -> str:
@@ -53,9 +59,94 @@ class WebAdapter(MessageAdapter):
     def _get_max_message_size(self) -> int:
         return int(self.config.get("max_message_size", self.DEFAULT_CONFIG["max_message_size"]))
 
+    def _get_frontend_build_timeout(self) -> int:
+        return int(self.config.get("frontend_build_timeout", self.DEFAULT_CONFIG["frontend_build_timeout"]))
+
     def _get_path(self, key: str) -> str:
         raw = str(self.config.get(key, self.DEFAULT_CONFIG[key]) or self.DEFAULT_CONFIG[key]).strip() or "/"
         return raw if raw.startswith("/") else f"/{raw}"
+
+    def _resolve_frontend_source_dir(self) -> Path | None:
+        configured = str(self.config.get("frontend_source_dir", "") or "").strip()
+        candidates: list[Path] = []
+        if configured:
+            candidates.append(Path(configured).expanduser())
+
+        module_path = Path(__file__).resolve()
+        candidates.extend(
+            [
+                module_path.parents[3] / "apps" / "web",
+                Path.cwd() / "apps" / "web",
+            ]
+        )
+
+        for candidate in candidates:
+            resolved = candidate.expanduser().resolve(strict=False)
+            if (resolved / "package.json").is_file():
+                return resolved
+        return None
+
+    @staticmethod
+    def _trim_process_output(value: str | None, limit: int = 2000) -> str:
+        if not value:
+            return ""
+        stripped = value.strip()
+        if len(stripped) <= limit:
+            return stripped
+        return f"...{stripped[-limit:]}"
+
+    def _resolve_npm_executable(self) -> str | None:
+        preferred = "npm.cmd" if os.name == "nt" else "npm"
+        return shutil.which(preferred) or shutil.which("npm")
+
+    def _is_frontend_auto_build_enabled(self) -> bool:
+        value = self.config.get("frontend_auto_build", self.DEFAULT_CONFIG["frontend_auto_build"])
+        if isinstance(value, str):
+            return value.strip().lower() not in {"0", "false", "no", "off"}
+        return bool(value)
+
+    def _maybe_build_frontend(self) -> None:
+        if self.config.get("static_dir"):
+            return
+        if not self._is_frontend_auto_build_enabled():
+            return
+
+        source_dir = self._resolve_frontend_source_dir()
+        if source_dir is None:
+            return
+
+        npm = self._resolve_npm_executable()
+        if npm is None:
+            logger.warning("Skipping web frontend build because npm was not found")
+            return
+
+        logger.info("Building web frontend before gateway startup: {}", source_dir)
+        try:
+            result = subprocess.run(
+                [npm, "run", "build"],
+                cwd=source_dir,
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=self._get_frontend_build_timeout(),
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning("Web frontend build timed out after {} seconds", self._get_frontend_build_timeout())
+            return
+        except OSError as exc:
+            logger.warning("Web frontend build could not start: {}", exc)
+            return
+
+        if result.returncode != 0:
+            logger.warning(
+                "Web frontend build failed with exit code {} | stdout={} | stderr={}",
+                result.returncode,
+                self._trim_process_output(result.stdout),
+                self._trim_process_output(result.stderr),
+            )
+            return
+
+        logger.info("Web frontend build completed")
 
     def _resolve_frontend_dir(self) -> Path | None:
         configured = str(self.config.get("static_dir", "") or "").strip()

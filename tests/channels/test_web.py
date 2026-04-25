@@ -33,6 +33,7 @@ async def _run_web_roundtrip():
             "port": 0,
             "path": "/ws",
             "health_path": "/healthz",
+            "frontend_auto_build": False,
         },
     )
 
@@ -108,6 +109,7 @@ async def _run_web_static_serving(tmp_path: Path):
             "path": "/ws",
             "health_path": "/healthz",
             "static_dir": str(frontend_dir),
+            "frontend_auto_build": False,
         },
     )
 
