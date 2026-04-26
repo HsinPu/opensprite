@@ -66,6 +66,7 @@ from .subagents import SubagentRunService
 from .tool_registration import register_default_tools, register_memory_tool
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
+from .turn_runner import AgentTurnRunner
 
 class AgentLoop:
     """
@@ -452,6 +453,22 @@ class AgentLoop:
             run_trace=self.run_trace,
             save_message=self._save_message,
             format_log_preview=self._format_log_preview,
+        )
+        self.turn_runner = AgentTurnRunner(
+            run_trace=self.run_trace,
+            response_finalizer=self.response_finalizer,
+            connect_mcp=lambda: self.connect_mcp(),
+            save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
+            emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
+            call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
+            get_queued_outbound_media=self._get_queued_outbound_media,
+            apply_immediate_task_transition=lambda chat_id, response, result: self._maybe_apply_immediate_task_transition(
+                chat_id,
+                response,
+                result,
+            ),
+            schedule_post_response_maintenance=lambda chat_id: self._schedule_post_response_maintenance(chat_id),
+            maybe_schedule_skill_review=lambda chat_id, result: self._maybe_schedule_skill_review(chat_id, result),
         )
         self.permission_events = PermissionEventRecorder(
             emit_run_event=self._emit_run_event,
@@ -1330,74 +1347,17 @@ class AgentLoop:
                         log_before_record=True,
                     )
 
-                await self.connect_mcp()
-
-                # 1. 把使用者訊息存入 storage
-                await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
-
-                # 2. 呼叫 LLM（傳入 channel 和圖片）
-                logger.info(f"[{session_chat_id}] agent.run | status=processing")
-                await self._emit_run_event(
-                    session_chat_id,
-                    run_id,
-                    "llm_status",
-                    {"message": "processing"},
-                    channel=channel,
-                    transport_chat_id=transport_chat_id,
-                )
-                exec_result = await self.call_llm(
-                    session_chat_id,
-                    current_message=user_message.text,
-                    channel=channel,
-                    user_images=user_message.images,
-                    user_image_files=image_files,
-                    user_audio_files=audio_files,
-                    user_video_files=video_files,
-                    transport_chat_id=transport_chat_id,
-                    emit_tool_progress=True,
-                )
-                response = exec_result.content
-                outbound_media = self._get_queued_outbound_media()
-
-                await self.run_trace.record_context_compaction_parts(
-                    session_chat_id,
-                    run_id,
-                    exec_result.context_compaction_events,
-                )
-
-                response_metadata = {
-                    "response_len": len(response or ""),
-                    "executed_tool_calls": exec_result.executed_tool_calls,
-                    "had_tool_error": exec_result.had_tool_error,
-                    "context_compactions": exec_result.context_compactions,
-                }
-                status_metadata = {
-                    "executed_tool_calls": exec_result.executed_tool_calls,
-                    "had_tool_error": exec_result.had_tool_error,
-                    "context_compactions": exec_result.context_compactions,
-                }
-
-                async def after_response_saved() -> None:
-                    await self._maybe_apply_immediate_task_transition(session_chat_id, response, exec_result)
-                    self._schedule_post_response_maintenance(session_chat_id)
-                    self._maybe_schedule_skill_review(session_chat_id, exec_result)
-
-                return await self.response_finalizer.finalize(
+                return await self.turn_runner.run_normal_turn(
+                    user_message=user_message,
                     session_chat_id=session_chat_id,
-                    run_id=run_id,
-                    response=response,
                     channel=channel,
-                    chat_id=user_message.chat_id,
                     transport_chat_id=transport_chat_id,
+                    run_id=run_id,
+                    image_files=image_files,
+                    audio_files=audio_files,
+                    video_files=video_files,
+                    user_metadata=user_metadata,
                     assistant_metadata=assistant_metadata,
-                    run_part_metadata=response_metadata,
-                    run_event_payload={"status": "completed", **response_metadata},
-                    status_metadata=status_metadata,
-                    images=outbound_media["images"] or None,
-                    voices=outbound_media["voices"] or None,
-                    audios=outbound_media["audios"] or None,
-                    videos=outbound_media["videos"] or None,
-                    after_save=after_response_saved,
                 )
             except asyncio.CancelledError:
                 await self.run_trace.fail_run(
