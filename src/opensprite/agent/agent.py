@@ -21,8 +21,6 @@ opensprite/agent.py - Agent Loop
 """
 
 import asyncio
-import base64
-import binascii
 from contextvars import ContextVar
 from contextlib import AsyncExitStack
 import json
@@ -63,6 +61,7 @@ from .background_tasks import CoalescingTaskScheduler
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
+from .media import AgentMediaService
 from .run_trace import RunTraceRecorder
 from .skill_review import (
     SKILL_REVIEW_SYSTEM,
@@ -101,34 +100,6 @@ class AgentLoop:
     MAX_TOOL_ITERATIONS = 10
     MCP_INITIAL_RETRY_BACKOFF_SECONDS = 15.0
     MCP_MAX_RETRY_BACKOFF_SECONDS = 300.0
-    OUTBOUND_MEDIA_KEYS = {
-        "image": "images",
-        "voice": "voices",
-        "audio": "audios",
-        "video": "videos",
-    }
-    INBOUND_IMAGE_EXTENSIONS = {
-        "image/jpeg": "jpg",
-        "image/jpg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "image/webp": "webp",
-    }
-    INBOUND_AUDIO_EXTENSIONS = {
-        "audio/ogg": "ogg",
-        "audio/mpeg": "mp3",
-        "audio/mp3": "mp3",
-        "audio/wav": "wav",
-        "audio/x-wav": "wav",
-        "audio/webm": "webm",
-        "audio/mp4": "m4a",
-    }
-    INBOUND_VIDEO_EXTENSIONS = {
-        "video/mp4": "mp4",
-        "video/webm": "webm",
-        "video/quicktime": "mov",
-        "video/x-matroska": "mkv",
-    }
 
     @staticmethod
     def _sanitize_log_filename(value: str) -> str:
@@ -782,6 +753,11 @@ class AgentLoop:
             emit_run_event=self._emit_run_event,
             format_log_preview=self._format_log_preview,
         )
+        self.media_service = AgentMediaService(
+            workspace_root_getter=lambda: self.tool_workspace
+            or getattr(self._context_builder, "workspace", Path.cwd()),
+            app_home_getter=lambda: self.app_home,
+        )
         self.tools = self._setup_tools(tools)
         self.tools.set_permission_request_handler(self._handle_tool_permission_request)
         self.memory = self._setup_memory_store()
@@ -1282,22 +1258,7 @@ class AgentLoop:
     @staticmethod
     def _decode_media_data_url(payload: str, media_prefix: str) -> tuple[str, bytes] | None:
         """Decode a media data URL into a MIME type and bytes."""
-        value = str(payload or "").strip()
-        if not value.startswith("data:"):
-            return None
-
-        header, separator, encoded = value.partition(",")
-        if not separator or ";base64" not in header.lower():
-            return None
-
-        mime_type = header[5:].split(";", 1)[0].strip().lower()
-        if not mime_type.startswith(f"{media_prefix}/"):
-            return None
-
-        try:
-            return mime_type, base64.b64decode(encoded, validate=True)
-        except (binascii.Error, ValueError):
-            return None
+        return AgentMediaService.decode_data_url(payload, media_prefix)
 
     def _persist_inbound_media(
         self,
@@ -1309,75 +1270,35 @@ class AgentLoop:
         extensions: dict[str, str],
     ) -> list[str]:
         """Persist inbound media data URLs under a chat workspace directory."""
-        if not media_items:
-            return []
-
-        workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
-        workspace = get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=self.app_home)
-        media_dir = workspace / directory_name
-        saved_files: list[str] = []
-
-        for index, item in enumerate(media_items, start=1):
-            decoded = self._decode_media_data_url(item, media_prefix)
-            if decoded is None:
-                logger.warning(
-                    "[{}] inbound.{}.persist.skip | index={} reason=unsupported-payload",
-                    chat_id,
-                    media_prefix,
-                    index,
-                )
-                continue
-
-            mime_type, media_bytes = decoded
-            extension = extensions.get(mime_type, "bin")
-            try:
-                media_dir.mkdir(parents=True, exist_ok=True)
-                timestamp = time.strftime("%Y%m%d-%H%M%S")
-                filename = f"inbound-{timestamp}-{time.time_ns()}-{index}.{extension}"
-                target = media_dir / filename
-                target.write_bytes(media_bytes)
-                saved_files.append(target.relative_to(workspace).as_posix())
-                logger.info("[{}] inbound.{}.persisted | file={}", chat_id, media_prefix, target)
-            except Exception as exc:
-                logger.warning("[{}] inbound.{}.persist.failed | index={} error={}", chat_id, media_prefix, index, exc)
-
-        return saved_files
+        return self.media_service.persist_inbound_media(
+            chat_id,
+            media_items,
+            media_prefix=media_prefix,
+            directory_name=directory_name,
+            extensions=extensions,
+        )
 
     def _persist_inbound_images(self, chat_id: str, images: list[str] | None) -> list[str]:
         """Persist inbound image data URLs under the chat workspace images directory."""
-        return self._persist_inbound_media(
-            chat_id,
-            images,
-            media_prefix="image",
-            directory_name="images",
-            extensions=self.INBOUND_IMAGE_EXTENSIONS,
-        )
+        return self.media_service.persist_inbound_images(chat_id, images)
 
     def _persist_inbound_audios(self, chat_id: str, audios: list[str] | None) -> list[str]:
         """Persist inbound audio data URLs under the chat workspace audios directory."""
-        return self._persist_inbound_media(
-            chat_id,
-            audios,
-            media_prefix="audio",
-            directory_name="audios",
-            extensions=self.INBOUND_AUDIO_EXTENSIONS,
-        )
+        return self.media_service.persist_inbound_audios(chat_id, audios)
 
     def _persist_inbound_videos(self, chat_id: str, videos: list[str] | None) -> list[str]:
         """Persist inbound video data URLs under the chat workspace videos directory."""
-        return self._persist_inbound_media(
-            chat_id,
-            videos,
-            media_prefix="video",
-            directory_name="videos",
-            extensions=self.INBOUND_VIDEO_EXTENSIONS,
-        )
+        return self.media_service.persist_inbound_videos(chat_id, videos)
 
     @staticmethod
     def _is_media_only_message(user_message: UserMessage) -> bool:
         """Return whether a turn only carries media without user instructions."""
-        has_media = bool(user_message.images or user_message.audios or user_message.videos)
-        return has_media and not (user_message.text or "").strip()
+        return AgentMediaService.is_media_only_message(
+            text=user_message.text,
+            images=user_message.images,
+            audios=user_message.audios,
+            videos=user_message.videos,
+        )
 
     @staticmethod
     def _format_saved_media_history_content(
@@ -1387,14 +1308,11 @@ class AgentLoop:
         video_files: list[str],
     ) -> str:
         """Format saved media paths as readable user-message history content."""
-        lines = ["[Media-only message saved to workspace]"]
-        if image_files:
-            lines.append("Images: " + ", ".join(image_files))
-        if audio_files:
-            lines.append("Audios: " + ", ".join(audio_files))
-        if video_files:
-            lines.append("Videos: " + ", ".join(video_files))
-        return "\n".join(lines)
+        return AgentMediaService.format_saved_media_history_content(
+            image_files=image_files,
+            audio_files=audio_files,
+            video_files=video_files,
+        )
 
     def _register_default_tools(self) -> None:
         """
@@ -1591,25 +1509,11 @@ class AgentLoop:
 
     def _queue_outbound_media(self, kind: str, payload: str) -> str | None:
         """Queue one media payload to be attached to the current assistant reply."""
-        media = self._current_outbound_media.get()
-        if media is None:
-            return "Error: outbound media can only be queued while processing a user message."
-
-        key = self.OUTBOUND_MEDIA_KEYS.get(kind)
-        if key is None:
-            return f"Error: unsupported outbound media kind: {kind}"
-
-        value = str(payload or "").strip()
-        if not value:
-            return "Error: outbound media payload cannot be empty."
-
-        media.setdefault(key, []).append(value)
-        return None
+        return AgentMediaService.queue_outbound_media(self._current_outbound_media.get(), kind, payload)
 
     def _get_queued_outbound_media(self) -> dict[str, list[str]]:
         """Return queued outbound media for the current turn."""
-        media = self._current_outbound_media.get() or {}
-        return {key: list(media.get(key) or []) for key in ("images", "voices", "audios", "videos")}
+        return AgentMediaService.queued_outbound_media(self._current_outbound_media.get())
 
     @staticmethod
     def _augment_message_for_media(
@@ -1622,28 +1526,15 @@ class AgentLoop:
         user_video_files: list[str] | None = None,
     ) -> str:
         """Add lightweight prompt hints when the current turn includes media."""
-        hints: list[str] = []
-        if user_images:
-            hints.append(
-                f"User attached {len(user_images)} image(s). Use analyze_image or ocr_image only if the user's text asks for visual understanding or text extraction."
-            )
-            if user_image_files:
-                hints.append(f"Saved inbound image file(s) under the chat workspace: {', '.join(user_image_files)}.")
-        if user_audios:
-            hints.append(
-                f"User attached {len(user_audios)} audio clip(s). Use transcribe_audio only if the user's text asks for spoken content."
-            )
-            if user_audio_files:
-                hints.append(f"Saved inbound audio file(s) under the chat workspace: {', '.join(user_audio_files)}.")
-        if user_videos:
-            hints.append(
-                f"User attached {len(user_videos)} video clip(s). Use analyze_video only if the user's text asks for video understanding."
-            )
-            if user_video_files:
-                hints.append(f"Saved inbound video file(s) under the chat workspace: {', '.join(user_video_files)}.")
-        if not hints:
-            return current_message
-        return f"{current_message}\n\n[{ ' '.join(hints) }]"
+        return AgentMediaService.augment_message_for_media(
+            current_message,
+            user_images,
+            user_audios,
+            user_videos,
+            user_image_files=user_image_files,
+            user_audio_files=user_audio_files,
+            user_video_files=user_video_files,
+        )
 
     async def call_llm(
         self,
