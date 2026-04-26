@@ -3,7 +3,7 @@ import base64
 import hashlib
 from pathlib import Path
 
-from opensprite.agent.agent import RUN_PART_CONTENT_MAX_CHARS, AgentLoop
+from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.bus import MessageBus
 from opensprite.bus.events import OutboundMessage
@@ -372,45 +372,6 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     assert stored_parts[1].content == "Verification passed: python_compile"
 
 
-def test_agent_run_part_content_is_bounded(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            tools=ToolRegistry(),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        await storage.create_run("web:browser-1", "run-1")
-        long_content = "a" * (RUN_PART_CONTENT_MAX_CHARS + 1000) + "THE-END"
-
-        await agent._add_run_part(
-            "web:browser-1",
-            "run-1",
-            "tool_result",
-            content=long_content,
-            tool_name="dummy",
-        )
-        return await storage.get_run_parts("web:browser-1", "run-1")
-
-    parts = asyncio.run(scenario())
-
-    assert len(parts) == 1
-    assert len(parts[0].content) <= RUN_PART_CONTENT_MAX_CHARS
-    assert "run part content truncated" in parts[0].content
-    assert parts[0].content.endswith("THE-END")
-    assert parts[0].metadata["content_truncated"] is True
-    assert parts[0].metadata["content_original_len"] == RUN_PART_CONTENT_MAX_CHARS + 1007
-
-
 def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):
     async def scenario():
         storage = MemoryStorage()
@@ -464,157 +425,6 @@ def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):
     assert changes[0].metadata["after_content_available"] is True
     assert [event.event_type for event in events] == ["file_changed"]
     assert events[0].payload["path"] == "notes.txt"
-
-
-def test_agent_can_preview_and_apply_safe_file_change_revert(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        chat_id = "web:browser-1"
-        run_id = "run-1"
-        workspace = agent._get_workspace_for_chat(chat_id)
-        target = workspace / "notes.txt"
-        target.write_text("after\n", encoding="utf-8")
-        await storage.create_run(chat_id, run_id)
-        change = await storage.add_run_file_change(
-            chat_id,
-            run_id,
-            "edit_file",
-            "notes.txt",
-            "update",
-            before_sha256=_sha256("before\n"),
-            after_sha256=_sha256("after\n"),
-            before_content="before\n",
-            after_content="after\n",
-            diff="--- a/notes.txt\n+++ b/notes.txt",
-        )
-
-        preview = await agent.preview_run_file_change_revert(chat_id, run_id, change.change_id)
-        dry_run = await agent.revert_run_file_change(chat_id, run_id, change.change_id)
-        after_dry_run = target.read_text(encoding="utf-8")
-        applied = await agent.revert_run_file_change(chat_id, run_id, change.change_id, dry_run=False)
-        return preview, dry_run, after_dry_run, applied, target.read_text(encoding="utf-8")
-
-    preview, dry_run, after_dry_run, applied, final_content = asyncio.run(scenario())
-
-    assert preview["status"] == "ready"
-    assert preview["ok"] is True
-    assert preview["revert_action"] == "write"
-    assert "-after" in preview["diff"]
-    assert "+before" in preview["diff"]
-    assert dry_run["dry_run"] is True
-    assert dry_run["applied"] is False
-    assert after_dry_run == "after\n"
-    assert applied["status"] == "applied"
-    assert applied["ok"] is True
-    assert applied["applied"] is True
-    assert applied["post_sha256"] == _sha256("before\n")
-    assert final_content == "before\n"
-
-
-def test_agent_revert_file_change_refuses_current_hash_conflict(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        chat_id = "web:browser-1"
-        run_id = "run-1"
-        workspace = agent._get_workspace_for_chat(chat_id)
-        target = workspace / "notes.txt"
-        target.write_text("user change\n", encoding="utf-8")
-        await storage.create_run(chat_id, run_id)
-        change = await storage.add_run_file_change(
-            chat_id,
-            run_id,
-            "edit_file",
-            "notes.txt",
-            "update",
-            before_sha256=_sha256("before\n"),
-            after_sha256=_sha256("after\n"),
-            before_content="before\n",
-            after_content="after\n",
-        )
-
-        preview = await agent.preview_run_file_change_revert(chat_id, run_id, change.change_id)
-        applied = await agent.revert_run_file_change(chat_id, run_id, change.change_id, dry_run=False)
-        return preview, applied, target.read_text(encoding="utf-8")
-
-    preview, applied, final_content = asyncio.run(scenario())
-
-    assert preview["status"] == "conflict"
-    assert preview["ok"] is False
-    assert "current file hash" in preview["reason"]
-    assert applied["applied"] is False
-    assert final_content == "user change\n"
-
-
-def test_agent_revert_file_change_requires_before_snapshot(tmp_path):
-    async def scenario():
-        storage = MemoryStorage()
-        agent = AgentLoop(
-            config=Config.load_agent_template_config(),
-            provider=FakeProvider(),
-            storage=storage,
-            context_builder=FakeContextBuilder(tmp_path / "workspace"),
-            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
-            tools_config=ToolsConfig(),
-            log_config=LogConfig(),
-            search_config=SearchConfig(),
-            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
-            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
-            **Config.packaged_agent_llm_chat_kwargs(),
-        )
-        chat_id = "web:browser-1"
-        run_id = "run-1"
-        workspace = agent._get_workspace_for_chat(chat_id)
-        target = workspace / "notes.txt"
-        target.write_text("after\n", encoding="utf-8")
-        await storage.create_run(chat_id, run_id)
-        change = await storage.add_run_file_change(
-            chat_id,
-            run_id,
-            "edit_file",
-            "notes.txt",
-            "update",
-            before_sha256=_sha256("before\n"),
-            after_sha256=_sha256("after\n"),
-            before_content=None,
-            after_content="after\n",
-        )
-
-        preview = await agent.preview_run_file_change_revert(chat_id, run_id, change.change_id)
-        applied = await agent.revert_run_file_change(chat_id, run_id, change.change_id, dry_run=False)
-        return preview, applied, target.read_text(encoding="utf-8")
-
-    preview, applied, final_content = asyncio.run(scenario())
-
-    assert preview["status"] == "unavailable"
-    assert "before_content snapshot" in preview["reason"]
-    assert applied["applied"] is False
-    assert final_content == "after\n"
 
 
 def test_agent_tool_permission_requests_emit_run_events(tmp_path):
