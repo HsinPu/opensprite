@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+import opensprite.tools.filesystem as filesystem
 from opensprite.tools.filesystem import GlobFilesTool, GrepFilesTool, ReadFileTool
 
 
@@ -41,6 +42,27 @@ def test_glob_files_finds_workspace_files_by_pattern(tmp_path):
     assert "src/app.md" not in result
 
 
+def test_glob_files_uses_ripgrep_when_available(tmp_path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("print('hi')", encoding="utf-8")
+    (tmp_path / "README.md").write_text("notes", encoding="utf-8")
+    calls = []
+
+    async def fake_run_ripgrep(args, cwd):
+        calls.append((args, cwd))
+        return 0, "src/app.py\nREADME.md\n", ""
+
+    monkeypatch.setattr(filesystem, "_find_ripgrep", lambda: "rg")
+    monkeypatch.setattr(filesystem, "_run_ripgrep", fake_run_ripgrep)
+    tool = GlobFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="**/*.py"))
+
+    assert calls == [(["rg", "--files", "--no-messages", "--", "."], tmp_path.resolve())]
+    assert "src/app.py" in result
+    assert "README.md" not in result
+
+
 def test_grep_files_searches_with_include_filter(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "app.py").write_text("class Sprite:\n    pass\n", encoding="utf-8")
@@ -52,6 +74,44 @@ def test_grep_files_searches_with_include_filter(tmp_path):
     assert "Found 1 matches" in result
     assert "src/app.py:" in result
     assert "Line 1: class Sprite:" in result
+    assert "README.md" not in result
+
+
+def test_grep_files_uses_ripgrep_and_post_filters_include(tmp_path, monkeypatch):
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("class Sprite:\n    pass\n", encoding="utf-8")
+    (tmp_path / "README.md").write_text("class Sprite docs\n", encoding="utf-8")
+    calls = []
+
+    async def fake_run_ripgrep(args, cwd):
+        calls.append((args, cwd))
+        return 0, "src/app.py:1:class Sprite:\nREADME.md:1:class Sprite docs\n", ""
+
+    monkeypatch.setattr(filesystem, "_find_ripgrep", lambda: "rg")
+    monkeypatch.setattr(filesystem, "_run_ripgrep", fake_run_ripgrep)
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="class Sprite", include="src/**/*.py"))
+
+    assert calls == [(
+        [
+            "rg",
+            "--line-number",
+            "--no-heading",
+            "--color",
+            "never",
+            "--no-messages",
+            "-e",
+            "class Sprite",
+            "--glob",
+            "src/**/*.py",
+            "--",
+            ".",
+        ],
+        tmp_path.resolve(),
+    )]
+    assert "Found 1 matches" in result
+    assert "src/app.py:" in result
     assert "README.md" not in result
 
 

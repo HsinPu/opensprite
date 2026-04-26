@@ -123,6 +123,10 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
         """Resolve the ACTIVE_TASK.md path for the current session scope."""
         return get_active_task_file(self.app_home, chat_id=chat_id, workspace_root=self.tool_workspace)
 
+    def get_workspace_agents_path(self, chat_id: str = "default") -> Path:
+        """Resolve the current workspace's AGENTS.md instructions path."""
+        return self.get_chat_workspace(chat_id) / "AGENTS.md"
+
     def _read_user_profile(self, chat_id: str) -> str:
         """Load the current user/session profile text, creating it from the template when needed."""
         return create_user_profile_store(
@@ -146,6 +150,16 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
             return ""
         return f"{task_context}\n\n---\n\n{build_active_task_execution_guidance(store.read_managed_block())}"
 
+    def _read_workspace_agents(self, chat_id: str) -> str:
+        """Load AGENTS.md from the active workspace when present."""
+        agents_path = self.get_workspace_agents_path(chat_id)
+        if not agents_path.is_file():
+            return ""
+        content = agents_path.read_text(encoding="utf-8").strip()
+        if not content:
+            return ""
+        return f"# Workspace AGENTS.md\n\nLoaded from: `{agents_path.expanduser().resolve()}`\n\n{content}"
+
     def build_system_prompt(self, chat_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
         parts = [self._build_session_context(chat_id)]
@@ -159,6 +173,10 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
                     parts.append(section)
                 else:
                     parts.append(f"## {key}\n\n{section}")
+
+        workspace_agents = self._read_workspace_agents(chat_id)
+        if workspace_agents:
+            parts.append(workspace_agents)
 
         active_task = self._read_active_task(chat_id)
         if active_task:

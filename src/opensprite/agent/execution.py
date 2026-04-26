@@ -939,15 +939,21 @@ Output exactly these sections when applicable:
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
 
-                    if on_tool_before_execute is not None:
+                    async def _notify_tool_before_execute(name: str, args: dict[str, Any]) -> None:
+                        if on_tool_before_execute is None:
+                            return
                         try:
-                            await on_tool_before_execute(tool_name, tool_args)
+                            await on_tool_before_execute(name, args)
                         except Exception:
                             logger.exception(
-                                f"[{log_id}] tool.progress-hook.error | name={tool_name}"
+                                f"[{log_id}] tool.progress-hook.error | name={name}"
                             )
 
-                    result = await active_tools.execute(tool_name, tool_args)
+                    result = await active_tools.execute(
+                        tool_name,
+                        tool_args,
+                        on_before_execute=_notify_tool_before_execute,
+                    )
                     executed_tool_calls += 1
                     if self._tool_result_looks_like_failure(result):
                         had_tool_error = True

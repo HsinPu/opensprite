@@ -142,6 +142,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.cron.default_timezone == "UTC"
     assert config.permissions.enabled is True
     assert config.permissions.approval_mode is None
+    assert config.permissions.approval_timeout_seconds == 300.0
     assert config.permissions.allowed_tools == ["*"]
     assert config.permissions.denied_tools == []
     assert config.mcp_servers_file == "mcp_servers.json"
@@ -163,7 +164,12 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "prefer_trafilatura": False,
             },
             "cron": {"default_timezone": "Asia/Taipei"},
-            "permissions": {"approval_mode": "ask", "denied_tools": ["exec"], "denied_risk_levels": ["network"]},
+            "permissions": {
+                "approval_mode": "ask",
+                "approval_timeout_seconds": 12,
+                "denied_tools": ["exec"],
+                "denied_risk_levels": ["network"],
+            },
         }
     )
 
@@ -179,6 +185,7 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.web_fetch.prefer_trafilatura is False
     assert config.cron.default_timezone == "Asia/Taipei"
     assert config.permissions.approval_mode == "ask"
+    assert config.permissions.approval_timeout_seconds == 12
     assert config.permissions.denied_tools == ["exec"]
     assert config.permissions.denied_risk_levels == ["network"]
 

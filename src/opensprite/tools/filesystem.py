@@ -1,9 +1,11 @@
 """Filesystem tools for reading and writing files."""
 
+import asyncio
 import difflib
 import fnmatch
 import hashlib
 import re
+import shutil
 from pathlib import Path
 from typing import Any, Callable
 
@@ -26,6 +28,7 @@ _MAX_READ_LIMIT = 2000
 _MAX_READ_CHARS = 50_000
 _MAX_LINE_LENGTH = 2000
 _SEARCH_RESULT_LIMIT = 100
+_SEARCH_TIMEOUT_SECONDS = 30
 _MAX_DIFF_CHARS = 12_000
 _MAX_PATCH_CHANGES = 20
 _SHA256_PATTERN = r"^[a-fA-F0-9]{64}$"
@@ -210,6 +213,36 @@ def _matches_glob(path: str, pattern: str) -> bool:
     return False
 
 
+def _find_ripgrep() -> str | None:
+    """Return the ripgrep executable path when it is available."""
+    return shutil.which("rg")
+
+
+async def _run_ripgrep(args: list[str], cwd: Path) -> tuple[int, str, str]:
+    """Run ripgrep without a shell and return decoded process output."""
+    process = await asyncio.create_subprocess_exec(
+        *args,
+        cwd=str(cwd),
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout_bytes, stderr_bytes = await asyncio.wait_for(
+            process.communicate(),
+            timeout=_SEARCH_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        process.kill()
+        stdout_bytes, stderr_bytes = await process.communicate()
+        stderr_text = stderr_bytes.decode("utf-8", errors="replace")
+        return 124, stdout_bytes.decode("utf-8", errors="replace"), stderr_text or "ripgrep timed out"
+    return (
+        int(process.returncode or 0),
+        stdout_bytes.decode("utf-8", errors="replace"),
+        stderr_bytes.decode("utf-8", errors="replace"),
+    )
+
+
 def _iter_workspace_files(workspace: Path, base: Path, include: str | None = None):
     """Yield files under base without following symlinks outside the workspace."""
     for file_path in base.rglob("*"):
@@ -229,6 +262,111 @@ def _iter_workspace_files(workspace: Path, base: Path, include: str | None = Non
             ):
                 continue
         yield resolved
+
+
+def _file_matches_include(workspace: Path, base: Path, file_path: Path, include: str | None) -> bool:
+    """Return whether one file matches the optional include glob in supported path forms."""
+    if not include:
+        return True
+    try:
+        relative_to_base = file_path.relative_to(base).as_posix()
+        relative_to_workspace = file_path.relative_to(workspace).as_posix()
+    except ValueError:
+        return False
+    return (
+        _matches_glob(file_path.name, include)
+        or _matches_glob(relative_to_base, include)
+        or _matches_glob(relative_to_workspace, include)
+    )
+
+
+async def _ripgrep_files(workspace: Path, search_path: Path, pattern: str) -> list[Path] | None:
+    """Return rg-backed file matches, or None when rg is unavailable or fails unexpectedly."""
+    rg = _find_ripgrep()
+    if rg is None:
+        return None
+
+    search_arg = _display_path(workspace, search_path) or "."
+    returncode, stdout, _stderr = await _run_ripgrep(
+        [rg, "--files", "--no-messages", "--", search_arg],
+        workspace,
+    )
+    if returncode not in (0, 1):
+        return None
+
+    matches: list[Path] = []
+    for raw_line in stdout.splitlines():
+        relative_path = raw_line.strip()
+        if not relative_path:
+            continue
+        file_path = _resolve_workspace_path(workspace, relative_path)
+        if file_path is None or not file_path.is_file():
+            continue
+        if _file_matches_include(workspace, search_path, file_path, pattern):
+            matches.append(file_path)
+    return matches
+
+
+async def _ripgrep_search(
+    workspace: Path,
+    search_path: Path,
+    pattern: str,
+    include: str | None,
+) -> tuple[list[tuple[float, str, int, str]] | None, str | None]:
+    """Return rg-backed grep matches plus an optional user-facing error."""
+    rg = _find_ripgrep()
+    if rg is None:
+        return None, None
+
+    args = [
+        rg,
+        "--line-number",
+        "--no-heading",
+        "--color",
+        "never",
+        "--no-messages",
+        "-e",
+        pattern,
+    ]
+    if include:
+        args.extend(["--glob", include])
+    search_arg = _display_path(workspace, search_path) or "."
+    args.extend(["--", search_arg])
+
+    returncode, stdout, stderr = await _run_ripgrep(args, workspace)
+    if returncode == 1:
+        return [], None
+    if returncode != 0:
+        message = stderr.strip().splitlines()[0] if stderr.strip() else "ripgrep failed"
+        return [], f"Error: Invalid regex: {message}"
+
+    matches: list[tuple[float, str, int, str]] = []
+    for raw_line in stdout.splitlines():
+        path_part, separator, rest = raw_line.partition(":")
+        if not separator:
+            continue
+        line_no_part, separator, line = rest.partition(":")
+        if not separator:
+            continue
+        try:
+            line_no = int(line_no_part)
+        except ValueError:
+            continue
+
+        file_path = _resolve_workspace_path(workspace, path_part)
+        if file_path is None or not file_path.is_file():
+            continue
+        if not _file_matches_include(workspace, search_path, file_path, include):
+            continue
+        matches.append(
+            (
+                file_path.stat().st_mtime,
+                _display_path(workspace, file_path),
+                line_no,
+                _truncate_line(line),
+            )
+        )
+    return matches, None
 
 
 class ReadFileTool(Tool):
@@ -376,7 +514,7 @@ class GlobFilesTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Find files inside the current workspace using a glob pattern such as '**/*.py' or 'src/**/*.md'. "
+            "Find files inside the current workspace using ripgrep-backed glob matching such as '**/*.py' or 'src/**/*.md'. "
             "Use this before reading when you are unsure of exact file paths."
         )
 
@@ -411,15 +549,17 @@ class GlobFilesTool(Tool):
             if not search_path.is_dir():
                 return f"Error: Not a directory: {path}"
 
-            matches = []
-            for item in search_path.glob(pattern):
-                item = item.resolve(strict=False)
-                try:
-                    item.relative_to(workspace)
-                except ValueError:
-                    continue
-                if item.is_file():
-                    matches.append(item)
+            matches = await _ripgrep_files(workspace, search_path, pattern)
+            if matches is None:
+                matches = []
+                for item in search_path.glob(pattern):
+                    item = item.resolve(strict=False)
+                    try:
+                        item.relative_to(workspace)
+                    except ValueError:
+                        continue
+                    if item.is_file():
+                        matches.append(item)
             matches.sort(key=lambda item: item.stat().st_mtime, reverse=True)
             truncated = len(matches) > _SEARCH_RESULT_LIMIT
             matches = matches[:_SEARCH_RESULT_LIMIT]
@@ -458,7 +598,7 @@ class GrepFilesTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Search text files inside the current workspace using a regular expression. "
+            "Search text files inside the current workspace using ripgrep-backed regular expressions. "
             "Supports optional 'path' and 'include' glob filters such as '*.py' or 'src/**/*.py'."
         )
 
@@ -487,11 +627,6 @@ class GrepFilesTool(Tool):
     async def _execute(self, **kwargs: Any) -> str:
         try:
             pattern = str(kwargs["pattern"])
-            try:
-                regex = re.compile(pattern)
-            except re.error as e:
-                return f"Error: Invalid regex: {e}"
-
             path = str(kwargs.get("path", "."))
             include = kwargs.get("include")
             include = str(include) if include else None
@@ -504,27 +639,34 @@ class GrepFilesTool(Tool):
             if not search_path.is_dir():
                 return f"Error: Not a directory: {path}"
 
-            matches: list[tuple[float, str, int, str]] = []
-            total = 0
-            for file_path in _iter_workspace_files(workspace, search_path, include):
+            matches, rg_error = await _ripgrep_search(workspace, search_path, pattern, include)
+            if rg_error is not None:
+                return rg_error
+            if matches is None:
                 try:
-                    text = file_path.read_text(encoding="utf-8")
-                except UnicodeDecodeError:
-                    continue
-                except OSError:
-                    continue
-                for line_no, line in enumerate(text.splitlines(), start=1):
-                    if not regex.search(line):
+                    regex = re.compile(pattern)
+                except re.error as e:
+                    return f"Error: Invalid regex: {e}"
+                matches = []
+                for file_path in _iter_workspace_files(workspace, search_path, include):
+                    try:
+                        text = file_path.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
                         continue
-                    total += 1
-                    matches.append(
-                        (
-                            file_path.stat().st_mtime,
-                            _display_path(workspace, file_path),
-                            line_no,
-                            _truncate_line(line),
+                    except OSError:
+                        continue
+                    for line_no, line in enumerate(text.splitlines(), start=1):
+                        if not regex.search(line):
+                            continue
+                        matches.append(
+                            (
+                                file_path.stat().st_mtime,
+                                _display_path(workspace, file_path),
+                                line_no,
+                                _truncate_line(line),
+                            )
                         )
-                    )
+            total = len(matches)
 
             if total == 0:
                 return "No files found"

@@ -59,6 +59,15 @@ DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
 class PermissionDecision:
     allowed: bool
     reason: str = ""
+    requires_approval: bool = False
+
+
+@dataclass(frozen=True)
+class PermissionApprovalResult:
+    approved: bool
+    request_id: str | None = None
+    reason: str = ""
+    status: str = ""
 
 
 class ToolPermissionPolicy:
@@ -125,9 +134,21 @@ class ToolPermissionPolicy:
         return decision.allowed
 
     def check(self, tool_name: str, params: Any) -> PermissionDecision:
-        return self._check(tool_name, params, include_approval=self.approval_mode != "auto")
+        return self._check(
+            tool_name,
+            params,
+            include_approval=self.approval_mode != "auto",
+            approval_requires_callback=self.approval_mode == "ask",
+        )
 
-    def _check(self, tool_name: str, params: Any, *, include_approval: bool) -> PermissionDecision:
+    def _check(
+        self,
+        tool_name: str,
+        params: Any,
+        *,
+        include_approval: bool,
+        approval_requires_callback: bool = False,
+    ) -> PermissionDecision:
         if not self.enabled:
             return PermissionDecision(True)
 
@@ -144,10 +165,18 @@ class ToolPermissionPolicy:
             return PermissionDecision(False, f"risk level(s) not allowed: {', '.join(disallowed_risks)}")
         if include_approval:
             if self._matches_any(tool_name, self.approval_required_tools):
-                return PermissionDecision(False, f"tool '{tool_name}' requires user approval")
+                return PermissionDecision(
+                    False,
+                    f"tool '{tool_name}' requires user approval",
+                    requires_approval=approval_requires_callback,
+                )
             approval_risks = sorted(risks & self.approval_required_risk_levels)
             if approval_risks:
-                return PermissionDecision(False, f"risk level(s) require user approval: {', '.join(approval_risks)}")
+                return PermissionDecision(
+                    False,
+                    f"risk level(s) require user approval: {', '.join(approval_risks)}",
+                    requires_approval=approval_requires_callback,
+                )
 
         return PermissionDecision(True)
 

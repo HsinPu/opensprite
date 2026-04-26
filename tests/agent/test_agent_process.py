@@ -12,6 +12,7 @@ from opensprite.documents.active_task import create_active_task_store
 from opensprite.storage import MemoryStorage
 from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
+from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.process_runtime import BackgroundSession
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.shell_runtime import CapturedOutputChunk
@@ -337,6 +338,77 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
     assert stored_events[1].payload == {"action": "python_compile", "path": "src"}
     assert stored_events[-1].payload["ok"] is True
+
+
+def test_agent_tool_permission_requests_emit_run_events(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        registry = ToolRegistry(
+            permission_policy=ToolPermissionPolicy(approval_mode="ask", approval_required_tools=["dummy"])
+        )
+        registry.register(DummyTool())
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(**{"permissions": {"approval_timeout_seconds": 1}}),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        bus = MessageBus()
+        agent._message_bus = bus
+        await storage.create_run("web:browser-1", "run-1")
+
+        chat_token = agent._current_chat_id.set("web:browser-1")
+        channel_token = agent._current_channel.set("web")
+        transport_token = agent._current_transport_chat_id.set("browser-1")
+        run_token = agent._current_run_id.set("run-1")
+        try:
+            task = asyncio.create_task(agent.tools.execute("dummy", {}))
+            for _ in range(100):
+                pending = agent.pending_permission_requests()
+                if pending:
+                    break
+                await asyncio.sleep(0.001)
+            else:
+                raise AssertionError("permission request was not created")
+
+            request = pending[0]
+            assert request.tool_name == "dummy"
+            assert not task.done()
+
+            await agent.approve_permission_request(request.request_id)
+            result = await task
+        finally:
+            agent._current_run_id.reset(run_token)
+            agent._current_transport_chat_id.reset(transport_token)
+            agent._current_channel.reset(channel_token)
+            agent._current_chat_id.reset(chat_token)
+
+        stored_events = await storage.get_run_events("web:browser-1", "run-1")
+        bus_events = []
+        while bus.run_events_size:
+            bus_events.append(await bus.consume_run_event())
+        return result, stored_events, bus_events
+
+    result, stored_events, bus_events = asyncio.run(scenario())
+
+    assert result == "ok"
+    assert [event.event_type for event in stored_events] == [
+        "permission_requested",
+        "permission_granted",
+    ]
+    assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
+    assert stored_events[0].payload["tool_name"] == "dummy"
+    assert stored_events[0].payload["status"] == "pending"
+    assert stored_events[1].payload["status"] == "approved"
+    assert stored_events[1].payload["resolution_reason"] == "approved once"
 
 
 def test_agent_process_persists_media_only_message_without_llm(tmp_path):

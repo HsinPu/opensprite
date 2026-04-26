@@ -375,6 +375,7 @@ class ToolPermissionsConfig(BaseModel):
 
     enabled: bool = True
     approval_mode: Literal["auto", "ask", "block"] | None = None
+    approval_timeout_seconds: float = Field(default=300.0, gt=0)
     allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
     denied_tools: list[str] = Field(default_factory=list)
     allowed_risk_levels: list[str] = Field(

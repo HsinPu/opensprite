@@ -52,6 +52,8 @@ from ..subagent_session import (
     validate_subagent_task_id,
 )
 from ..tools import ToolRegistry
+from ..tools.approval import PermissionRequest, PermissionRequestManager
+from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundSession
 from ..tools.shell_runtime import format_captured_output
 from ..utils import count_messages_tokens, count_text_tokens, sanitize_assistant_visible_text, strip_assistant_internal_scaffolding
@@ -507,6 +509,81 @@ class AgentLoop:
         except Exception as e:
             logger.warning("[{}] run.event.publish.failed | run_id={} type={} error={}", chat_id, run_id, event_type, e)
 
+    def pending_permission_requests(self) -> list[PermissionRequest]:
+        """Return permission requests waiting for an external decision."""
+        return self.permission_requests.pending_requests()
+
+    async def approve_permission_request(self, request_id: str) -> PermissionRequest | None:
+        """Approve one pending tool permission request."""
+        return await self.permission_requests.approve_once(request_id)
+
+    async def deny_permission_request(
+        self,
+        request_id: str,
+        reason: str = "user denied approval",
+    ) -> PermissionRequest | None:
+        """Deny one pending tool permission request."""
+        return await self.permission_requests.deny(request_id, reason=reason)
+
+    async def _handle_tool_permission_request(
+        self,
+        tool_name: str,
+        params: Any,
+        decision: PermissionDecision,
+    ) -> PermissionApprovalResult:
+        """Create an ask-mode approval request for the current run context."""
+        return await self.permission_requests.request(
+            tool_name=tool_name,
+            params=params,
+            reason=decision.reason,
+            chat_id=self._current_chat_id.get(),
+            run_id=self._current_run_id.get(),
+            channel=self._current_channel.get(),
+            transport_chat_id=self._current_transport_chat_id.get(),
+        )
+
+    async def _emit_permission_request_event(
+        self,
+        event_type: str,
+        request: PermissionRequest,
+    ) -> None:
+        """Persist and publish permission approval lifecycle events for a run."""
+        if not request.chat_id or not request.run_id:
+            return
+        try:
+            params_preview = json.dumps(
+                self._json_safe_event_value(request.params),
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        except Exception:
+            params_preview = str(request.params)
+        payload = {
+            "request_id": request.request_id,
+            "tool_name": request.tool_name,
+            "reason": request.reason,
+            "status": request.status,
+            "args_preview": self._format_log_preview(params_preview, max_chars=240),
+            "created_at": request.created_at,
+            "expires_at": request.expires_at,
+        }
+        if request.resolved_at is not None:
+            payload.update(
+                {
+                    "resolved_at": request.resolved_at,
+                    "resolution_reason": request.resolution_reason,
+                    "timed_out": request.timed_out,
+                }
+            )
+        await self._emit_run_event(
+            request.chat_id,
+            request.run_id,
+            event_type,
+            payload,
+            channel=request.channel,
+            transport_chat_id=request.transport_chat_id,
+        )
+
     @staticmethod
     def _format_background_session_exit_message(session: BackgroundSession) -> str:
         """Render a concise outbound notice when a managed background session exits."""
@@ -660,10 +737,15 @@ class AgentLoop:
         self._maintenance_rerun: set[tuple[str, str]] = set()
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
+        self.permission_requests = PermissionRequestManager(
+            timeout_seconds=self.tools_config.permissions.approval_timeout_seconds,
+            on_event=self._emit_permission_request_event,
+        )
 
         self.storage = self._setup_storage(storage)
         self._context_builder = self._setup_context_builder(context_builder)
         self.tools = self._setup_tools(tools)
+        self.tools.set_permission_request_handler(self._handle_tool_permission_request)
         self.memory = self._setup_memory_store()
         self.memory_consolidation = self._setup_memory_consolidation()
         self._register_memory_tool()

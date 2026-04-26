@@ -1,5 +1,6 @@
 import asyncio
 
+from opensprite.tools.approval import PermissionRequestManager
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
@@ -23,6 +24,15 @@ class EchoTool(Tool):
 
     async def _execute(self, **kwargs):
         return f"ran:{self.name}"
+
+
+async def _wait_for_pending(manager: PermissionRequestManager):
+    for _ in range(100):
+        pending = manager.pending_requests()
+        if pending:
+            return pending[0]
+        await asyncio.sleep(0.001)
+    raise AssertionError("permission request was not created")
 
 
 def test_registry_hides_and_blocks_denied_tools():
@@ -112,3 +122,101 @@ def test_approval_required_policy_exposes_but_blocks_execution_in_ask_mode():
 
     assert registry.tool_names == ["apply_patch"]
     assert result == "Error: Tool 'apply_patch' blocked by permission policy: tool 'apply_patch' requires user approval."
+
+
+def test_approval_required_policy_waits_for_approval_in_ask_mode():
+    async def scenario():
+        events = []
+
+        async def on_event(event_type, request):
+            events.append((event_type, request.request_id, request.status))
+
+        manager = PermissionRequestManager(timeout_seconds=1, on_event=on_event)
+        registry = ToolRegistry(
+            permission_policy=ToolPermissionPolicy(approval_mode="ask", approval_required_tools=["apply_patch"])
+        )
+        registry.register(EchoTool("apply_patch"))
+        registry.set_permission_request_handler(
+            lambda name, params, decision: manager.request(
+                tool_name=name,
+                params=params,
+                reason=decision.reason,
+            )
+        )
+
+        task = asyncio.create_task(registry.execute("apply_patch", {}))
+        request = await _wait_for_pending(manager)
+        assert not task.done()
+
+        await manager.approve_once(request.request_id)
+        result = await task
+        return result, events, manager.pending_requests()
+
+    result, events, pending = asyncio.run(scenario())
+
+    assert result == "ran:apply_patch"
+    assert [event[0] for event in events] == ["permission_requested", "permission_granted"]
+    assert events[0][2] == "pending"
+    assert events[1][2] == "approved"
+    assert pending == []
+
+
+def test_approval_required_policy_denies_pending_request_in_ask_mode():
+    async def scenario():
+        manager = PermissionRequestManager(timeout_seconds=1)
+        registry = ToolRegistry(
+            permission_policy=ToolPermissionPolicy(approval_mode="ask", approval_required_tools=["apply_patch"])
+        )
+        registry.register(EchoTool("apply_patch"))
+        registry.set_permission_request_handler(
+            lambda name, params, decision: manager.request(
+                tool_name=name,
+                params=params,
+                reason=decision.reason,
+            )
+        )
+
+        task = asyncio.create_task(registry.execute("apply_patch", {}))
+        request = await _wait_for_pending(manager)
+
+        await manager.deny(request.request_id)
+        result = await task
+        return result, manager.pending_requests()
+
+    result, pending = asyncio.run(scenario())
+
+    assert result == "Error: Tool 'apply_patch' blocked by permission policy: user denied approval."
+    assert pending == []
+
+
+def test_approval_required_policy_times_out_pending_request_in_ask_mode():
+    async def scenario():
+        events = []
+
+        async def on_event(event_type, request):
+            events.append((event_type, request.status, request.timed_out))
+
+        manager = PermissionRequestManager(timeout_seconds=0.01, on_event=on_event)
+        registry = ToolRegistry(
+            permission_policy=ToolPermissionPolicy(approval_mode="ask", approval_required_tools=["apply_patch"])
+        )
+        registry.register(EchoTool("apply_patch"))
+        registry.set_permission_request_handler(
+            lambda name, params, decision: manager.request(
+                tool_name=name,
+                params=params,
+                reason=decision.reason,
+            )
+        )
+
+        result = await registry.execute("apply_patch", {})
+        return result, events, manager.pending_requests()
+
+    result, events, pending = asyncio.run(scenario())
+
+    assert result == "Error: Tool 'apply_patch' blocked by permission policy: permission request timed out."
+    assert events == [
+        ("permission_requested", "pending", False),
+        ("permission_denied", "denied", True),
+    ]
+    assert pending == []
