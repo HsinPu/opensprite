@@ -462,6 +462,8 @@ class AgentLoop:
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
             get_queued_outbound_media=self._get_queued_outbound_media,
+            media_saved_ack=lambda: self.messages.agent.media_saved_ack,
+            llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             apply_immediate_task_transition=lambda chat_id, response, result: self._maybe_apply_immediate_task_transition(
                 chat_id,
                 response,
@@ -880,30 +882,6 @@ class AgentLoop:
         """Persist inbound video data URLs under the chat workspace videos directory."""
         return self.media_service.persist_inbound_videos(chat_id, videos)
 
-    @staticmethod
-    def _is_media_only_message(user_message: UserMessage) -> bool:
-        """Return whether a turn only carries media without user instructions."""
-        return AgentMediaService.is_media_only_message(
-            text=user_message.text,
-            images=user_message.images,
-            audios=user_message.audios,
-            videos=user_message.videos,
-        )
-
-    @staticmethod
-    def _format_saved_media_history_content(
-        *,
-        image_files: list[str],
-        audio_files: list[str],
-        video_files: list[str],
-    ) -> str:
-        """Format saved media paths as readable user-message history content."""
-        return AgentMediaService.format_saved_media_history_content(
-            image_files=image_files,
-            audio_files=audio_files,
-            video_files=video_files,
-        )
-
     def _register_default_tools(self) -> None:
         """
         註冊代理人的預設工具。
@@ -1271,11 +1249,6 @@ class AgentLoop:
         session_chat_id = turn.session_chat_id
         channel = turn.channel
         transport_chat_id = turn.transport_chat_id
-        image_files = turn.image_files
-        audio_files = turn.audio_files
-        video_files = turn.video_files
-        user_metadata = turn.user_metadata
-        assistant_metadata = turn.assistant_metadata
         run_id = f"run_{uuid4().hex}"
         await self.run_trace.start_turn_run(
             session_chat_id,
@@ -1290,30 +1263,11 @@ class AgentLoop:
             videos=user_message.videos,
         )
 
-        if self._is_media_only_message(user_message):
-            media_history_content = self._format_saved_media_history_content(
-                image_files=image_files,
-                audio_files=audio_files,
-                video_files=video_files,
-            )
-            await self._save_message(session_chat_id, "user", media_history_content, metadata=user_metadata)
-            response = self.messages.agent.media_saved_ack
-            return await self.response_finalizer.finalize(
-                session_chat_id=session_chat_id,
+        if self.turn_runner.is_media_only_message(user_message):
+            return await self.turn_runner.run_media_only_turn(
+                user_message=user_message,
+                turn=turn,
                 run_id=run_id,
-                response=response,
-                channel=channel,
-                chat_id=user_message.chat_id,
-                transport_chat_id=transport_chat_id,
-                assistant_metadata=assistant_metadata,
-                run_part_metadata={"reason": "media_only", "response_len": len(response or "")},
-                run_event_payload={
-                    "status": "completed",
-                    "reason": "media_only",
-                    "response_len": len(response or ""),
-                },
-                log_prefix="media_only=true ",
-                log_before_record=True,
             )
 
         with self.turn_context.activate(
@@ -1327,37 +1281,16 @@ class AgentLoop:
         ):
             try:
                 if not self.llm_configured:
-                    logger.warning("[{}] agent.skip | reason=llm-not-configured", session_chat_id)
-                    await self._save_message(session_chat_id, "user", user_message.text, metadata=user_metadata)
-                    response = self.messages.agent.llm_not_configured
-                    return await self.response_finalizer.finalize(
-                        session_chat_id=session_chat_id,
+                    return await self.turn_runner.run_llm_not_configured_turn(
+                        user_message=user_message,
+                        turn=turn,
                         run_id=run_id,
-                        response=response,
-                        channel=channel,
-                        chat_id=user_message.chat_id,
-                        transport_chat_id=transport_chat_id,
-                        assistant_metadata=assistant_metadata,
-                        run_part_metadata={"reason": "llm_not_configured", "response_len": len(response or "")},
-                        run_event_payload={
-                            "status": "completed",
-                            "reason": "llm_not_configured",
-                            "response_len": len(response or ""),
-                        },
-                        log_before_record=True,
                     )
 
                 return await self.turn_runner.run_normal_turn(
                     user_message=user_message,
-                    session_chat_id=session_chat_id,
-                    channel=channel,
-                    transport_chat_id=transport_chat_id,
+                    turn=turn,
                     run_id=run_id,
-                    image_files=image_files,
-                    audio_files=audio_files,
-                    video_files=video_files,
-                    user_metadata=user_metadata,
-                    assistant_metadata=assistant_metadata,
                 )
             except asyncio.CancelledError:
                 await self.run_trace.fail_run(
