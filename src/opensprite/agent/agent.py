@@ -243,10 +243,10 @@ class AgentLoop:
         await self.file_changes.record_changes(
             tool_name,
             changes,
-            chat_id=self._current_chat_id.get(),
-            run_id=self._current_run_id.get(),
-            channel=self._current_channel.get(),
-            transport_chat_id=self._current_transport_chat_id.get(),
+            chat_id=self.turn_context.current_chat_id(),
+            run_id=self.turn_context.current_run_id(),
+            channel=self.turn_context.current_channel(),
+            transport_chat_id=self.turn_context.current_transport_chat_id(),
         )
 
     async def _emit_run_event(
@@ -310,8 +310,8 @@ class AgentLoop:
     def _make_background_session_exit_notifier(self) -> Callable[[BackgroundSession], Awaitable[None]] | None:
         """Build an outbound notifier for managed background session completion."""
         return self.background_notifications.make_exit_notifier(
-            channel=self._current_channel.get(),
-            transport_chat_id=self._current_transport_chat_id.get(),
+            channel=self.turn_context.current_channel(),
+            transport_chat_id=self.turn_context.current_transport_chat_id(),
             session_chat_id=self._get_current_chat_id(),
         )
 
@@ -473,10 +473,10 @@ class AgentLoop:
         self.permissions = AgentPermissionService(
             requests=self.permission_requests,
             events=self.permission_events,
-            current_chat_id=lambda: self._current_chat_id.get(),
-            current_run_id=lambda: self._current_run_id.get(),
-            current_channel=lambda: self._current_channel.get(),
-            current_transport_chat_id=lambda: self._current_transport_chat_id.get(),
+            current_chat_id=self.turn_context.current_chat_id,
+            current_run_id=self.turn_context.current_run_id,
+            current_channel=self.turn_context.current_channel,
+            current_transport_chat_id=self.turn_context.current_transport_chat_id,
         )
         self.run_hooks = RunHookService(
             message_bus_getter=lambda: self._message_bus,
@@ -568,7 +568,7 @@ class AgentLoop:
             build_messages=lambda **kwargs: self._context_builder.build_messages(**kwargs),
             build_system_prompt=lambda chat_id: self._context_builder.build_system_prompt(chat_id),
             log_prepared_messages=self._log_prepared_messages,
-            get_current_run_id=lambda: self._current_run_id.get(),
+            get_current_run_id=self.turn_context.current_run_id,
             make_tool_progress_hook=lambda *args, **kwargs: self._make_tool_progress_hook(*args, **kwargs),
             make_tool_result_hook=lambda *args, **kwargs: self._make_tool_result_hook(*args, **kwargs),
             make_llm_status_hook=lambda *args, **kwargs: self._make_llm_status_hook(*args, **kwargs),
@@ -838,7 +838,7 @@ class AgentLoop:
 
     def _get_current_chat_id(self) -> str | None:
         """Return the current task-local chat id."""
-        return self._current_chat_id.get()
+        return self.turn_context.current_chat_id()
 
     def _get_current_workspace(self) -> Path:
         """Resolve the current task-local workspace."""
@@ -1026,23 +1026,23 @@ class AgentLoop:
 
     def _get_current_images(self) -> list[str] | None:
         """Return images attached to the current active turn."""
-        return self._current_images.get()
+        return self.turn_context.current_images()
 
     def _get_current_audios(self) -> list[str] | None:
         """Return audios attached to the current active turn."""
-        return self._current_audios.get()
+        return self.turn_context.current_audios()
 
     def _get_current_videos(self) -> list[str] | None:
         """Return videos attached to the current active turn."""
-        return self._current_videos.get()
+        return self.turn_context.current_videos()
 
     def _queue_outbound_media(self, kind: str, payload: str) -> str | None:
         """Queue one media payload to be attached to the current assistant reply."""
-        return AgentMediaService.queue_outbound_media(self._current_outbound_media.get(), kind, payload)
+        return self.turn_context.queue_outbound_media(kind, payload)
 
     def _get_queued_outbound_media(self) -> dict[str, list[str]]:
         """Return queued outbound media for the current turn."""
-        return AgentMediaService.queued_outbound_media(self._current_outbound_media.get())
+        return self.turn_context.queued_outbound_media()
 
     @staticmethod
     def _augment_message_for_media(

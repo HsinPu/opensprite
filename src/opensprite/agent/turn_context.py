@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Iterator
 
+from .media import AgentMediaService
+
 
 class TurnContextService:
     """Activates task-local context for one user message turn."""
@@ -30,6 +32,42 @@ class TurnContextService:
         self._current_videos = current_videos
         self._current_outbound_media = current_outbound_media
         self._current_run_id = current_run_id
+
+    def current_chat_id(self) -> str | None:
+        """Return the current task-local chat id."""
+        return self._current_chat_id.get()
+
+    def current_channel(self) -> str | None:
+        """Return the current task-local channel."""
+        return self._current_channel.get()
+
+    def current_transport_chat_id(self) -> str | None:
+        """Return the current transport-level chat id."""
+        return self._current_transport_chat_id.get()
+
+    def current_images(self) -> list[str] | None:
+        """Return images attached to the current active turn."""
+        return self._current_images.get()
+
+    def current_audios(self) -> list[str] | None:
+        """Return audios attached to the current active turn."""
+        return self._current_audios.get()
+
+    def current_videos(self) -> list[str] | None:
+        """Return videos attached to the current active turn."""
+        return self._current_videos.get()
+
+    def current_run_id(self) -> str | None:
+        """Return the current task-local run id."""
+        return self._current_run_id.get()
+
+    def queue_outbound_media(self, kind: str, payload: str) -> str | None:
+        """Queue one media payload to be attached to the current assistant reply."""
+        return AgentMediaService.queue_outbound_media(self._current_outbound_media.get(), kind, payload)
+
+    def queued_outbound_media(self) -> dict[str, list[str]]:
+        """Return queued outbound media for the current turn."""
+        return AgentMediaService.queued_outbound_media(self._current_outbound_media.get())
 
     @contextmanager
     def activate(
