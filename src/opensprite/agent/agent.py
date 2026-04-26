@@ -22,7 +22,6 @@ opensprite/agent.py - Agent Loop
 
 import asyncio
 from contextvars import ContextVar
-from contextlib import AsyncExitStack
 import json
 import re
 import time
@@ -63,6 +62,7 @@ from .consolidation import MemoryConsolidationService, RecentSummaryUpdateServic
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
 from .media import AgentMediaService
+from .mcp_lifecycle import McpLifecycleService
 from .run_trace import RunTraceRecorder
 from .skill_review import (
     SKILL_REVIEW_SYSTEM,
@@ -99,8 +99,6 @@ class AgentLoop:
     """
 
     MAX_TOOL_ITERATIONS = 10
-    MCP_INITIAL_RETRY_BACKOFF_SECONDS = 15.0
-    MCP_MAX_RETRY_BACKOFF_SECONDS = 300.0
 
     @staticmethod
     def _sanitize_log_filename(value: str) -> str:
@@ -712,14 +710,6 @@ class AgentLoop:
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
         self.config_path: Path | None = Path(config_path).expanduser().resolve() if config_path is not None else None
-        self._mcp_servers = dict(self.tools_config.mcp_servers)
-        self._mcp_tool_names: set[str] = set()
-        self._mcp_stack: AsyncExitStack | None = None
-        self._mcp_connected = False
-        self._mcp_connecting = False
-        self._mcp_connect_lock = asyncio.Lock()
-        self._mcp_connect_failures = 0
-        self._mcp_retry_after = 0.0
         self._skill_review_scheduler = CoalescingTaskScheduler[str](
             on_exception=lambda chat_id, _exc: logger.exception("[%s] skill.review.failed", chat_id),
             on_rerun=lambda chat_id: logger.info("[%s] skill.review.rerun", chat_id),
@@ -761,6 +751,12 @@ class AgentLoop:
         )
         self.tools = self._setup_tools(tools)
         self.tools.set_permission_request_handler(self._handle_tool_permission_request)
+        self.mcp_lifecycle = McpLifecycleService(
+            tools=self.tools,
+            tools_config=self.tools_config,
+            context_builder=self._context_builder,
+            config_path_getter=self._get_config_path,
+        )
         self.memory = self._setup_memory_store()
         self.memory_consolidation = self._setup_memory_consolidation()
         self._register_memory_tool()
@@ -1013,19 +1009,7 @@ class AgentLoop:
 
     def _sync_runtime_mcp_tools_context(self) -> None:
         """Expose connected MCP tools to context builders that support prompt summaries."""
-        if not hasattr(self._context_builder, "set_runtime_mcp_tools"):
-            return
-
-        mcp_tools = sorted(
-            [
-                (tool.name, tool.description)
-                for tool_name in self.tools.tool_names
-                for tool in [self.tools.get(tool_name)]
-                if tool is not None and tool.name.startswith("mcp_")
-            ],
-            key=lambda item: item[0],
-        )
-        self._context_builder.set_runtime_mcp_tools(mcp_tools)
+        self.mcp_lifecycle.sync_runtime_tools_context()
 
     def _get_config_path(self) -> Path | None:
         if self.config_path is not None:
@@ -1036,80 +1020,11 @@ class AgentLoop:
 
     async def connect_mcp(self) -> None:
         """Connect configured MCP servers once and register their tools."""
-        now = time.monotonic()
-        if self._mcp_connected or self._mcp_connecting or not self._mcp_servers or now < self._mcp_retry_after:
-            return
-
-        async with self._mcp_connect_lock:
-            now = time.monotonic()
-            if self._mcp_connected or self._mcp_connecting or not self._mcp_servers or now < self._mcp_retry_after:
-                return
-
-            self._mcp_connecting = True
-            stack: AsyncExitStack | None = None
-            preexisting_tool_names = set(self.tools.tool_names)
-            try:
-                from ..tools.mcp import connect_mcp_servers
-
-                stack = AsyncExitStack()
-                await stack.__aenter__()
-                await connect_mcp_servers(self._mcp_servers, self.tools, stack)
-                self._mcp_stack = stack
-                self._mcp_connected = True
-                self._mcp_connect_failures = 0
-                self._mcp_retry_after = 0.0
-                self._mcp_tool_names = {
-                    name for name in self.tools.tool_names
-                    if name.startswith("mcp_") and name not in preexisting_tool_names
-                }
-                self._sync_runtime_mcp_tools_context()
-                logger.info("agent.mcp.connected | tools={}", ", ".join(self.tools.tool_names))
-            except BaseException as exc:
-                for name in list(self.tools.tool_names):
-                    if name.startswith("mcp_") and name not in preexisting_tool_names:
-                        self.tools.unregister(name)
-                self._mcp_connected = False
-                self._mcp_tool_names.clear()
-                self._mcp_connect_failures += 1
-                retry_delay = min(
-                    self.MCP_INITIAL_RETRY_BACKOFF_SECONDS * (2 ** (self._mcp_connect_failures - 1)),
-                    self.MCP_MAX_RETRY_BACKOFF_SECONDS,
-                )
-                self._mcp_retry_after = time.monotonic() + retry_delay
-                logger.error(
-                    "agent.mcp.connect.error | error={} retry_in_s={} failures={}",
-                    exc,
-                    retry_delay,
-                    self._mcp_connect_failures,
-                )
-                if stack is not None:
-                    try:
-                        await stack.aclose()
-                    except Exception:
-                        pass
-                self._mcp_stack = None
-            finally:
-                self._mcp_connecting = False
+        await self.mcp_lifecycle.connect()
 
     async def close_mcp(self) -> None:
         """Close any active MCP sessions and reset lifecycle flags."""
-        async with self._mcp_connect_lock:
-            stack = self._mcp_stack
-            self._mcp_stack = None
-            self._mcp_connected = False
-            self._mcp_connecting = False
-            for tool_name in list(self._mcp_tool_names):
-                self.tools.unregister(tool_name)
-            self._mcp_tool_names.clear()
-            self._sync_runtime_mcp_tools_context()
-
-        if stack is None:
-            return
-
-        try:
-            await stack.aclose()
-        except Exception as exc:
-            logger.warning("agent.mcp.close.error | error={}", exc)
+        await self.mcp_lifecycle.close()
 
     def _schedule_background_maintenance(
         self,
@@ -1204,27 +1119,7 @@ class AgentLoop:
 
     async def reload_mcp_from_config(self) -> str:
         """Reload MCP settings from disk and reconnect MCP tools for this agent."""
-        config_path = self._get_config_path()
-        if config_path is None:
-            return "Error: MCP config path is unavailable."
-
-        loaded = Config.load(config_path)
-        self.tools_config.mcp_servers_file = loaded.tools.mcp_servers_file
-        self.tools_config.mcp_servers = dict(loaded.tools.mcp_servers)
-        self._mcp_servers = dict(loaded.tools.mcp_servers)
-        self._mcp_connect_failures = 0
-        self._mcp_retry_after = 0.0
-
-        await self.close_mcp()
-        if not self._mcp_servers:
-            return "MCP configuration reloaded. No MCP servers are configured now."
-
-        await self.connect_mcp()
-        if not self._mcp_connected:
-            return "MCP configuration reloaded, but no MCP servers connected successfully."
-
-        connected_tools = ", ".join(sorted(self._mcp_tool_names)) or "(none)"
-        return f"MCP configuration reloaded. Connected tools: {connected_tools}"
+        return await self.mcp_lifecycle.reload_from_config()
 
     def _get_current_chat_id(self) -> str | None:
         """Return the current task-local chat id."""
