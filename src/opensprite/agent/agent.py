@@ -45,6 +45,7 @@ from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchCo
 from .active_task_commands import ActiveTaskCommandService
 from .background_notifications import BackgroundSessionNotificationService
 from .background_tasks import CoalescingTaskScheduler
+from .completion_gate import CompletionGateResult, CompletionGateService
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
@@ -448,11 +449,13 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
         )
         self.task_intents = TaskIntentService()
+        self.completion_gate = CompletionGateService()
         self.turn_runner = AgentTurnRunner(
             run_trace=self.run_trace,
             response_finalizer=self.response_finalizer,
             turn_context=self.turn_context,
             task_intents=self.task_intents,
+            completion_gate=self.completion_gate,
             connect_mcp=lambda: self.connect_mcp(),
             save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
@@ -461,9 +464,8 @@ class AgentLoop:
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             format_log_preview=self._format_log_preview,
-            apply_immediate_task_transition=lambda chat_id, response, result: self._maybe_apply_immediate_task_transition(
+            apply_completion_gate_result=lambda chat_id, result: self._maybe_apply_completion_gate_result(
                 chat_id,
-                response,
                 result,
             ),
             schedule_post_response_maintenance=lambda chat_id: self._schedule_post_response_maintenance(chat_id),
@@ -1223,6 +1225,14 @@ class AgentLoop:
             response_text,
             had_tool_error=exec_result.had_tool_error,
         )
+
+    async def _maybe_apply_completion_gate_result(
+        self,
+        chat_id: str,
+        result: CompletionGateResult,
+    ) -> None:
+        """Apply completion-gate task-state updates when safe."""
+        await self.active_task_commands.apply_completion_gate_result(chat_id, result)
 
     async def _maybe_update_recent_summary(self, chat_id: str) -> None:
         """Check whether RECENT_SUMMARY.md should be refreshed."""

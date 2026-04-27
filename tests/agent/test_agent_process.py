@@ -301,11 +301,13 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
         "run_started",
         "task_intent.detected",
         "llm_status",
+        "completion_gate.evaluated",
         "run_finished",
     ]
     assert events[0].payload["status"] == "running"
     assert events[1].payload["kind"] == "conversation"
     assert events[1].payload["objective"] == "hello"
+    assert events[3].payload["status"] == "complete"
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == ["context_compaction", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
@@ -700,6 +702,114 @@ def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
     assert "Keep the public API stable." in task_block
     assert events[-1]["event_type"] == "seed"
     assert events[-1]["details"]["intent_kind"] == "refactor"
+
+
+def test_agent_process_emits_completion_gate_needs_verification(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_call_llm(*args, **kwargs):
+            return ExecutionResult(content="Completed the refactor.", executed_tool_calls=0)
+
+        agent.call_llm = fake_call_llm
+        agent._schedule_post_response_maintenance = lambda chat_id: None
+        agent._maybe_schedule_skill_review = lambda chat_id, result: None
+
+        await agent.process(
+            UserMessage(
+                text="Please refactor the agent and run tests.",
+                channel="web",
+                chat_id="browser-1",
+                session_chat_id="web:browser-1",
+            )
+        )
+
+        run = next(iter(storage._runs.values()))
+        return await storage.get_run_events("web:browser-1", run.run_id)
+
+    events = asyncio.run(scenario())
+
+    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
+    assert completion_event.payload["status"] == "needs_verification"
+    assert completion_event.payload["reason"] == "required verification was not recorded"
+
+
+def test_agent_process_marks_active_task_done_when_completion_gate_completes(tmp_path):
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        context_builder = FakeContextBuilder(tmp_path)
+        context_builder.app_home = tmp_path / "home"
+        context_builder.tool_workspace = tmp_path / "workspace"
+
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=context_builder,
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        store = create_active_task_store(agent.app_home, "telegram:room-1", workspace_root=agent.tool_workspace)
+        store.write_managed_block(
+            "- Status: active\n"
+            "- Goal: Finish cleanup\n"
+            "- Deliverable: cleanup\n"
+            "- Definition of done:\n"
+            "  - done\n"
+            "- Constraints:\n"
+            "  - none\n"
+            "- Assumptions:\n"
+            "  - none\n"
+            "- Plan:\n"
+            "  1. cleanup\n"
+            "- Current step: 1. cleanup\n"
+            "- Next step: not set\n"
+            "- Completed steps:\n"
+            "  - none\n"
+            "- Open questions:\n"
+            "  - none"
+        )
+
+        async def fake_call_llm(*args, **kwargs):
+            return ExecutionResult(content="Implemented the final cleanup successfully.", executed_tool_calls=0)
+
+        agent.call_llm = fake_call_llm
+        await agent.process(
+            UserMessage(
+                text="Please implement the final cleanup.",
+                channel="telegram",
+                chat_id="room-1",
+                session_chat_id="telegram:room-1",
+            )
+        )
+        return store.read_managed_block(), store.read_events()
+
+    task_block, events = asyncio.run(scenario())
+
+    assert "- Status: done" in task_block
+    assert events[-1]["event_type"] == "completion_gate"
+    assert events[-1]["details"]["status"] == "complete"
 
 
 def test_agent_process_returns_queued_outbound_media(tmp_path):

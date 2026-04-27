@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
 from ..utils.log import logger
+from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
@@ -27,6 +28,7 @@ class AgentTurnRunner:
         response_finalizer: AgentResponseFinalizer,
         turn_context: TurnContextService,
         task_intents: TaskIntentService,
+        completion_gate: CompletionGateService,
         connect_mcp: Callable[[], Awaitable[None]],
         save_message: Callable[..., Awaitable[None]],
         emit_run_event: Callable[..., Awaitable[None]],
@@ -35,7 +37,7 @@ class AgentTurnRunner:
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
         format_log_preview: Callable[..., str],
-        apply_immediate_task_transition: Callable[[str, str, ExecutionResult], Awaitable[None]],
+        apply_completion_gate_result: Callable[[str, CompletionGateResult], Awaitable[None]],
         schedule_post_response_maintenance: Callable[[str], None],
         maybe_schedule_skill_review: Callable[[str, ExecutionResult], None],
     ):
@@ -43,6 +45,7 @@ class AgentTurnRunner:
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
         self.task_intents = task_intents
+        self.completion_gate = completion_gate
         self._connect_mcp = connect_mcp
         self._save_message = save_message
         self._emit_run_event = emit_run_event
@@ -51,7 +54,7 @@ class AgentTurnRunner:
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
         self._format_log_preview = format_log_preview
-        self._apply_immediate_task_transition = apply_immediate_task_transition
+        self._apply_completion_gate_result = apply_completion_gate_result
         self._schedule_post_response_maintenance = schedule_post_response_maintenance
         self._maybe_schedule_skill_review = maybe_schedule_skill_review
 
@@ -269,16 +272,36 @@ class AgentTurnRunner:
             "response_len": len(response or ""),
             "executed_tool_calls": exec_result.executed_tool_calls,
             "had_tool_error": exec_result.had_tool_error,
+            "verification_attempted": exec_result.verification_attempted,
+            "verification_passed": exec_result.verification_passed,
             "context_compactions": exec_result.context_compactions,
         }
         status_metadata = {
             "executed_tool_calls": exec_result.executed_tool_calls,
             "had_tool_error": exec_result.had_tool_error,
+            "verification_attempted": exec_result.verification_attempted,
+            "verification_passed": exec_result.verification_passed,
             "context_compactions": exec_result.context_compactions,
         }
+        completion_result = self.completion_gate.evaluate(
+            task_intent=task_intent,
+            response_text=response,
+            execution_result=exec_result,
+        )
+        completion_metadata = completion_result.to_metadata()
+        response_metadata["completion_gate"] = completion_metadata
+        status_metadata["completion_status"] = completion_result.status
+        await self._emit_run_event(
+            turn.session_chat_id,
+            run_id,
+            "completion_gate.evaluated",
+            completion_metadata,
+            channel=turn.channel,
+            transport_chat_id=turn.transport_chat_id,
+        )
 
         async def after_response_saved() -> None:
-            await self._apply_immediate_task_transition(turn.session_chat_id, response, exec_result)
+            await self._apply_completion_gate_result(turn.session_chat_id, completion_result)
             self._schedule_post_response_maintenance(turn.session_chat_id)
             self._maybe_schedule_skill_review(turn.session_chat_id, exec_result)
 

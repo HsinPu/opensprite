@@ -18,6 +18,7 @@ from ..documents.active_task import (
 from ..storage import StorageProvider
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
+from .completion_gate import CompletionGateResult
 from .task_intent import TaskIntent
 
 
@@ -86,6 +87,38 @@ class ActiveTaskCommandService:
 
         await self._mark_processed(chat_id, store)
         store.append_event("auto_direct_transition", "immediate", details={"status": status, "reason": detail or ""})
+
+    async def apply_completion_gate_result(
+        self,
+        chat_id: str,
+        result: CompletionGateResult,
+    ) -> None:
+        """Apply conservative task-state updates from completion-gate verdicts."""
+        if not result.should_update_active_task or result.active_task_status is None:
+            return
+        store = self.get_store(chat_id)
+        if store is None:
+            return
+        if store.read_status() not in {"active", "blocked", "waiting_user"}:
+            return
+
+        status = result.active_task_status
+        detail = result.active_task_detail or result.reason
+        if status == "waiting_user":
+            store.update_fields(status="waiting_user", open_questions=[detail or "need user input"], force=True)
+        elif status == "blocked":
+            store.update_fields(status="blocked", open_questions=[detail or "blocked"], force=True)
+        elif status == "done":
+            store.update_fields(status="done", open_questions=["none"], force=True)
+        else:
+            return
+
+        await self._mark_processed(chat_id, store)
+        store.append_event(
+            "completion_gate",
+            "immediate",
+            details={"status": result.status, "reason": result.reason},
+        )
 
     async def maybe_seed(
         self,

@@ -42,6 +42,8 @@ class ExecutionResult:
     executed_tool_calls: int = 0
     used_configure_skill: bool = False
     had_tool_error: bool = False
+    verification_attempted: bool = False
+    verification_passed: bool = False
     context_compactions: int = 0
     context_compaction_events: list[ContextCompactionEvent] = field(default_factory=list)
 
@@ -723,6 +725,8 @@ Output exactly these sections when applicable:
         executed_tool_calls = 0
         used_configure_skill = False
         had_tool_error = False
+        verification_attempted = False
+        verification_passed = False
         context_compactions = 0
         context_compaction_events: list[ContextCompactionEvent] = []
         proactive_context_compactions = 0
@@ -898,6 +902,8 @@ Output exactly these sections when applicable:
                             executed_tool_calls=executed_tool_calls,
                             used_configure_skill=used_configure_skill,
                             had_tool_error=had_tool_error,
+                            verification_attempted=verification_attempted,
+                            verification_passed=verification_passed,
                             context_compactions=context_compactions,
                             context_compaction_events=context_compaction_events,
                         )
@@ -907,6 +913,8 @@ Output exactly these sections when applicable:
                         executed_tool_calls=executed_tool_calls,
                         used_configure_skill=used_configure_skill,
                         had_tool_error=had_tool_error,
+                        verification_attempted=verification_attempted,
+                        verification_passed=verification_passed,
                         context_compactions=context_compactions,
                         context_compaction_events=context_compaction_events,
                     )
@@ -957,6 +965,10 @@ Output exactly these sections when applicable:
                     executed_tool_calls += 1
                     if self._tool_result_looks_like_failure(result):
                         had_tool_error = True
+                    if tool_name == "verify":
+                        verification_attempted = True
+                        if str(result).startswith("Verification passed:"):
+                            verification_passed = True
                     if tool_name == "configure_skill" and tool_args.get("action") in ("add", "upsert"):
                         used_configure_skill = True
                     logger.info(
@@ -992,6 +1004,8 @@ Output exactly these sections when applicable:
                                 executed_tool_calls=executed_tool_calls,
                                 used_configure_skill=used_configure_skill,
                                 had_tool_error=had_tool_error,
+                                verification_attempted=verification_attempted,
+                                verification_passed=verification_passed,
                                 context_compactions=context_compactions,
                                 context_compaction_events=context_compaction_events,
                             )
@@ -1063,6 +1077,8 @@ Output exactly these sections when applicable:
                     executed_tool_calls=executed_tool_calls,
                     used_configure_skill=used_configure_skill,
                     had_tool_error=had_tool_error,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
                     context_compactions=context_compactions,
                     context_compaction_events=context_compaction_events,
                 )
@@ -1072,6 +1088,8 @@ Output exactly these sections when applicable:
                 executed_tool_calls=executed_tool_calls,
                 used_configure_skill=used_configure_skill,
                 had_tool_error=had_tool_error,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
                 context_compactions=context_compactions,
                 context_compaction_events=context_compaction_events,
             )
@@ -1092,6 +1110,8 @@ Output exactly these sections when applicable:
             executed_tool_calls=executed_tool_calls,
             used_configure_skill=used_configure_skill,
             had_tool_error=had_tool_error,
+            verification_attempted=verification_attempted,
+            verification_passed=verification_passed,
             context_compactions=context_compactions,
             context_compaction_events=context_compaction_events,
         )
