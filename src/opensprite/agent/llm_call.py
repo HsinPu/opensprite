@@ -8,6 +8,7 @@ from ..config import AgentConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
 from .execution import ExecutionResult
+from .task_intent import TaskIntent
 
 
 class LlmCallService:
@@ -17,7 +18,7 @@ class LlmCallService:
         self,
         *,
         config: AgentConfig,
-        maybe_seed_active_task: Callable[[str, str], Awaitable[None]],
+        maybe_seed_active_task: Callable[..., Awaitable[None]],
         load_history: Callable[[str], Awaitable[list[Any]]],
         get_current_audios: Callable[[], list[str] | None],
         get_current_videos: Callable[[], list[str] | None],
@@ -71,9 +72,10 @@ class LlmCallService:
         *,
         transport_chat_id: str | None = None,
         emit_tool_progress: bool = False,
+        task_intent: TaskIntent | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
-        await self._maybe_seed_active_task(chat_id, current_message)
+        await self._maybe_seed_active_task(chat_id, current_message, task_intent=task_intent)
 
         logger.info(f"[{chat_id}] history.load | requested=true")
         history_messages = await self._load_history(chat_id)

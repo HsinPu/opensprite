@@ -449,6 +449,58 @@ def build_initial_active_task_block(message_text: str) -> str | None:
     return build_task_block_from_text(message_text)
 
 
+def build_task_block_from_intent_fields(
+    *,
+    goal: str,
+    definition_of_done: list[str] | tuple[str, ...] | None = None,
+    constraints: list[str] | tuple[str, ...] | None = None,
+    assumptions: list[str] | tuple[str, ...] | None = None,
+) -> str | None:
+    """Create an ACTIVE_TASK block from deterministic intent fields."""
+    normalized_goal = _normalize_goal_text(goal)
+    if not normalized_goal or normalized_goal.lower() in _NON_TASK_MESSAGES:
+        return None
+
+    deliverable = _infer_deliverable(normalized_goal)
+    done_items = _normalize_task_list(
+        definition_of_done,
+        default=["the user request is addressed directly", "the result or blocker is explicit"],
+    )
+    constraint_items = _normalize_task_list(
+        constraints,
+        default=["preserve user intent", "prefer the smallest correct next step"],
+    )
+    assumption_items = _normalize_task_list(
+        assumptions,
+        default=["This task brief was generated from deterministic intent detection and may be refined after more context."],
+    )
+    plan_items = [
+        "inspect the relevant context and refine the task if needed",
+        "execute the highest-value next step toward the goal",
+        "verify the result or state the blocking gap",
+    ]
+
+    return (
+        "- Status: active\n"
+        f"- Goal: {normalized_goal}\n"
+        f"- Deliverable: {deliverable}\n"
+        "- Definition of done:\n"
+        f"{_format_bulleted_task_list(done_items)}\n"
+        "- Constraints:\n"
+        f"{_format_bulleted_task_list(constraint_items)}\n"
+        "- Assumptions:\n"
+        f"{_format_bulleted_task_list(assumption_items)}\n"
+        "- Plan:\n"
+        f"{_format_numbered_task_list(plan_items)}\n"
+        f"- Current step: 1. {plan_items[0]}\n"
+        f"- Next step: 2. {plan_items[1]}\n"
+        "- Completed steps:\n"
+        "  - none\n"
+        "- Open questions:\n"
+        "  - none"
+    )
+
+
 def build_task_block_from_text(message_text: str, *, force: bool = False) -> str | None:
     """Create a minimal task brief from free-form text."""
     stripped = (message_text or "").strip()
@@ -492,6 +544,31 @@ def build_task_block_from_text(message_text: str, *, force: bool = False) -> str
         "- Open questions:\n"
         "  - none"
     )
+
+
+def _normalize_task_list(
+    values: list[str] | tuple[str, ...] | None,
+    *,
+    default: list[str],
+    max_items: int = 5,
+) -> list[str]:
+    items: list[str] = []
+    for value in values or []:
+        compact = _normalize_goal_text(str(value or ""), max_chars=160)
+        if not compact:
+            continue
+        if compact.lower() in {"none", "not set"}:
+            continue
+        items.append(compact)
+    return list(dict.fromkeys(items[:max_items])) or list(default)
+
+
+def _format_bulleted_task_list(items: list[str]) -> str:
+    return "\n".join(f"  - {item}" for item in items)
+
+
+def _format_numbered_task_list(items: list[str]) -> str:
+    return "\n".join(f"  {index}. {item}" for index, item in enumerate(items, start=1))
 
 
 def is_task_worthy_message(message_text: str) -> bool:

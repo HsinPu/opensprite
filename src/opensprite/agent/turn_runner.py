@@ -12,6 +12,7 @@ from .execution import ExecutionResult
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_trace import RunTraceRecorder
+from .task_intent import TaskIntent, TaskIntentService
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
 
@@ -25,6 +26,7 @@ class AgentTurnRunner:
         run_trace: RunTraceRecorder,
         response_finalizer: AgentResponseFinalizer,
         turn_context: TurnContextService,
+        task_intents: TaskIntentService,
         connect_mcp: Callable[[], Awaitable[None]],
         save_message: Callable[..., Awaitable[None]],
         emit_run_event: Callable[..., Awaitable[None]],
@@ -40,6 +42,7 @@ class AgentTurnRunner:
         self.run_trace = run_trace
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
+        self.task_intents = task_intents
         self._connect_mcp = connect_mcp
         self._save_message = save_message
         self._emit_run_event = emit_run_event
@@ -83,6 +86,21 @@ class AgentTurnRunner:
             audios=user_message.audios,
             videos=user_message.videos,
         )
+        task_intent = self.task_intents.classify(
+            user_message.text,
+            images=user_message.images,
+            audios=user_message.audios,
+            videos=user_message.videos,
+            metadata=user_message.metadata,
+        )
+        await self._emit_run_event(
+            turn.session_chat_id,
+            run_id,
+            "task_intent.detected",
+            task_intent.to_metadata(),
+            channel=turn.channel,
+            transport_chat_id=turn.transport_chat_id,
+        )
 
         if self.is_media_only_message(user_message):
             return await self.run_media_only_turn(
@@ -112,6 +130,7 @@ class AgentTurnRunner:
                     user_message=user_message,
                     turn=turn,
                     run_id=run_id,
+                    task_intent=task_intent,
                 )
             except asyncio.CancelledError:
                 await self.run_trace.fail_run(
@@ -208,6 +227,7 @@ class AgentTurnRunner:
         user_message: UserMessage,
         turn: PreparedTurnInput,
         run_id: str,
+        task_intent: TaskIntent,
     ) -> AssistantMessage:
         """Execute the normal turn path after special-case early exits are ruled out."""
         await self._connect_mcp()
@@ -234,6 +254,7 @@ class AgentTurnRunner:
             user_video_files=turn.video_files,
             transport_chat_id=turn.transport_chat_id,
             emit_tool_progress=True,
+            task_intent=task_intent,
         )
         response = exec_result.content
         outbound_media = self._get_queued_outbound_media()

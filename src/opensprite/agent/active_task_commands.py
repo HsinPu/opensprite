@@ -9,6 +9,7 @@ from typing import Any, Callable
 from ..documents.active_task import (
     _extract_task_field,
     build_initial_active_task_block,
+    build_task_block_from_intent_fields,
     build_task_block_from_text,
     create_active_task_store,
     infer_immediate_task_transition,
@@ -17,6 +18,7 @@ from ..documents.active_task import (
 from ..storage import StorageProvider
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
+from .task_intent import TaskIntent
 
 
 class ActiveTaskCommandService:
@@ -85,7 +87,14 @@ class ActiveTaskCommandService:
         await self._mark_processed(chat_id, store)
         store.append_event("auto_direct_transition", "immediate", details={"status": status, "reason": detail or ""})
 
-    async def maybe_seed(self, chat_id: str, current_message: str, *, enabled: bool) -> None:
+    async def maybe_seed(
+        self,
+        chat_id: str,
+        current_message: str,
+        *,
+        enabled: bool,
+        task_intent: TaskIntent | None = None,
+    ) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when appropriate."""
         if not enabled:
             return
@@ -100,7 +109,16 @@ class ActiveTaskCommandService:
                 return
             replacing = True
 
-        initial_task = build_initial_active_task_block(current_message)
+        initial_task = None
+        if task_intent is not None:
+            if task_intent.should_seed_active_task:
+                initial_task = build_task_block_from_intent_fields(
+                    goal=task_intent.objective,
+                    definition_of_done=task_intent.done_criteria,
+                    constraints=task_intent.constraints,
+                )
+        else:
+            initial_task = build_initial_active_task_block(current_message)
         if not initial_task:
             return
 
@@ -110,11 +128,15 @@ class ActiveTaskCommandService:
         compact_message = re.sub(r"\s+", " ", current_message).strip()
         if len(compact_message) > 120:
             compact_message = compact_message[:117].rstrip() + "..."
-        store.append_event(
-            "seed",
-            "immediate",
-            details={"replace": replacing, "message": compact_message},
-        )
+        event_details = {"replace": replacing, "message": compact_message}
+        if task_intent is not None:
+            event_details.update(
+                {
+                    "intent_kind": task_intent.kind,
+                    "intent_long_running": task_intent.long_running,
+                }
+            )
+        store.append_event("seed", "immediate", details=event_details)
         logger.info("[{}] active_task.seeded | replace={}", chat_id, replacing)
 
     async def show(self, chat_id: str) -> str | None:

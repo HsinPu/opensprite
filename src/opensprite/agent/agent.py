@@ -63,6 +63,7 @@ from .run_trace import RunTraceRecorder
 from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
+from .task_intent import TaskIntent, TaskIntentService
 from .tool_registration import register_default_tools, register_memory_tool
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
@@ -446,10 +447,12 @@ class AgentLoop:
             save_message=self._save_message,
             format_log_preview=self._format_log_preview,
         )
+        self.task_intents = TaskIntentService()
         self.turn_runner = AgentTurnRunner(
             run_trace=self.run_trace,
             response_finalizer=self.response_finalizer,
             turn_context=self.turn_context,
+            task_intents=self.task_intents,
             connect_mcp=lambda: self.connect_mcp(),
             save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
@@ -554,7 +557,11 @@ class AgentLoop:
         self.recent_summary_update = self._setup_recent_summary_update()
         self.llm_calls = LlmCallService(
             config=self.config,
-            maybe_seed_active_task=lambda chat_id, message: self._maybe_seed_active_task(chat_id, message),
+            maybe_seed_active_task=lambda chat_id, message, task_intent=None: self._maybe_seed_active_task(
+                chat_id,
+                message,
+                task_intent=task_intent,
+            ),
             load_history=lambda chat_id: self._load_history(chat_id),
             get_current_audios=self._get_current_audios,
             get_current_videos=self._get_current_videos,
@@ -824,12 +831,21 @@ class AgentLoop:
         if close is not None:
             await close()
 
-    async def _maybe_seed_active_task(self, chat_id: str, current_message: str) -> None:
+    async def _maybe_seed_active_task(
+        self,
+        chat_id: str,
+        current_message: str,
+        *,
+        task_intent: TaskIntent | None = None,
+    ) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
+        if task_intent is None:
+            task_intent = self.task_intents.classify(current_message)
         await self.active_task_commands.maybe_seed(
             chat_id,
             current_message,
             enabled=self.active_task_config.enabled,
+            task_intent=task_intent,
         )
 
     async def reload_mcp_from_config(self) -> str:
@@ -1078,6 +1094,7 @@ class AgentLoop:
         *,
         transport_chat_id: str | None = None,
         emit_tool_progress: bool = False,
+        task_intent: TaskIntent | None = None,
     ) -> ExecutionResult:
         """
         呼叫 LLM 生成對話回應。
@@ -1115,6 +1132,7 @@ class AgentLoop:
             user_video_files=user_video_files,
             transport_chat_id=transport_chat_id,
             emit_tool_progress=emit_tool_progress,
+            task_intent=task_intent,
         )
 
     def _skill_review_tool_registry(self) -> ToolRegistry | None:
