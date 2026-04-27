@@ -44,6 +44,10 @@ class BackgroundSession:
     notify_on_exit: bool = True
     notify_on_exit_empty_success: bool = False
     suppress_exit_notification: bool = False
+    owner_session_chat_id: str | None = None
+    owner_run_id: str | None = None
+    owner_channel: str | None = None
+    owner_transport_chat_id: str | None = None
 
     @property
     def pid(self) -> int:
@@ -84,6 +88,10 @@ class BackgroundProcessManager:
         exit_notifier: SessionExitNotifier | None = None,
         notify_on_exit: bool = True,
         notify_on_exit_empty_success: bool = False,
+        owner_session_chat_id: str | None = None,
+        owner_run_id: str | None = None,
+        owner_channel: str | None = None,
+        owner_transport_chat_id: str | None = None,
     ) -> BackgroundSession:
         session = BackgroundSession(
             session_id=uuid.uuid4().hex[:12],
@@ -99,10 +107,27 @@ class BackgroundProcessManager:
             exit_notifier=exit_notifier,
             notify_on_exit=notify_on_exit,
             notify_on_exit_empty_success=notify_on_exit_empty_success,
+            owner_session_chat_id=owner_session_chat_id,
+            owner_run_id=owner_run_id,
+            owner_channel=owner_channel,
+            owner_transport_chat_id=owner_transport_chat_id,
         )
         session.watch_task = asyncio.create_task(self._watch_session(session))
         self._sessions[session.session_id] = session
         return session
+
+    @staticmethod
+    def _session_owned_by(
+        session: BackgroundSession,
+        *,
+        session_chat_id: str,
+        run_id: str | None = None,
+    ) -> bool:
+        if session.owner_session_chat_id != session_chat_id:
+            return False
+        if run_id is not None and session.owner_run_id != run_id:
+            return False
+        return True
 
     @staticmethod
     def _session_output_text(session: BackgroundSession) -> str:
@@ -178,6 +203,19 @@ class BackgroundProcessManager:
             await self._settle_session(session)
         return sessions
 
+    async def list_owned_sessions(
+        self,
+        session_chat_id: str,
+        *,
+        run_id: str | None = None,
+    ) -> list[BackgroundSession]:
+        sessions = await self.list_sessions()
+        return [
+            session
+            for session in sessions
+            if self._session_owned_by(session, session_chat_id=session_chat_id, run_id=run_id)
+        ]
+
     async def get_session(self, session_id: str) -> BackgroundSession | None:
         session = self._sessions.get(session_id)
         if session is None:
@@ -222,6 +260,21 @@ class BackgroundProcessManager:
                     await session.watch_task
 
         return session
+
+    async def kill_owned_sessions(
+        self,
+        session_chat_id: str,
+        *,
+        run_id: str | None = None,
+    ) -> list[BackgroundSession]:
+        killed: list[BackgroundSession] = []
+        for session in await self.list_owned_sessions(session_chat_id, run_id=run_id):
+            if session.state != "running":
+                continue
+            killed_session = await self.kill_session(session.session_id)
+            if killed_session is not None:
+                killed.append(killed_session)
+        return killed
 
     async def clear_session(self, session_id: str) -> BackgroundSession | None:
         session = await self.get_session(session_id)

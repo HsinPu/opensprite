@@ -21,7 +21,7 @@ from ..storage.base import get_storage_message_count
 from ..utils.log import logger
 from .completion_gate import CompletionGateResult
 from .task_intent import TaskIntent
-from .work_progress import WorkProgressUpdate
+from .work_progress import WorkProgressService, WorkProgressUpdate
 
 
 class ActiveTaskCommandService:
@@ -149,10 +149,20 @@ class ActiveTaskCommandService:
         if current_step is None or next_step is None:
             return
 
+        workboard = WorkProgressService.extract_workboard(state)
+        open_questions: list[str] | None = None
+        if workboard["blockers"]:
+            open_questions = list(workboard["blockers"])
+        elif state is not None and state.status in {"active", "done"}:
+            open_questions = ["none"]
+        elif progress.status in {"blocked", "waiting_user"}:
+            open_questions = [progress.completion_reason]
+
         store.update_fields(
             status=state.status if state is not None and state.status in {"active", "blocked", "waiting_user", "done"} else "active",
             current_step=current_step,
             next_step=next_step,
+            open_questions=open_questions,
             force=True,
         )
         store.append_event(

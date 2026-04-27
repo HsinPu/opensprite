@@ -19,6 +19,7 @@ from ..utils.processes import terminate_process_tree
 
 WorkspaceResolver = Callable[[], Path]
 BackgroundNotificationFactory = Callable[[], SessionExitNotifier | None]
+BackgroundSessionOwnerFactory = Callable[[], dict[str, str | None] | None]
 
 
 def _resolve_workspace_root(workspace: Path) -> Path:
@@ -211,6 +212,11 @@ def _build_background_session_result(
             f"Session ID: {session.session_id}",
             f"Status: {session.state}",
             f"PID: {session.pid}",
+            *(
+                [f"Owner: {session.owner_session_chat_id or '-'} / {session.owner_run_id or '-'}"]
+                if session.owner_session_chat_id or session.owner_run_id
+                else []
+            ),
             "Use process with action=\"poll\" to inspect it or action=\"kill\" to stop it.",
             "Current output:",
             output,
@@ -275,6 +281,7 @@ class ExecTool(Tool):
         deny_patterns: list[str] | None = None,
         process_manager: BackgroundProcessManager | None = None,
         background_notification_factory: BackgroundNotificationFactory | None = None,
+        background_session_owner_factory: BackgroundSessionOwnerFactory | None = None,
         notify_on_exit: bool = True,
         notify_on_exit_empty_success: bool = False,
     ):
@@ -283,6 +290,7 @@ class ExecTool(Tool):
         self.deny_patterns = deny_patterns or self.DENY_PATTERNS
         self.process_manager = process_manager or BackgroundProcessManager()
         self._background_notification_factory = background_notification_factory
+        self._background_session_owner_factory = background_session_owner_factory
         self.notify_on_exit = notify_on_exit
         self.notify_on_exit_empty_success = notify_on_exit_empty_success
 
@@ -362,6 +370,9 @@ class ExecTool(Tool):
         notify_on_exit: bool,
         notify_on_exit_empty_success: bool,
     ) -> str:
+        owner = self._background_session_owner_factory() if self._background_session_owner_factory is not None else None
+        if not isinstance(owner, dict):
+            owner = {}
         session = self.process_manager.register_session(
             command=command,
             cwd=str(workspace),
@@ -377,6 +388,18 @@ class ExecTool(Tool):
             ),
             notify_on_exit=notify_on_exit,
             notify_on_exit_empty_success=notify_on_exit_empty_success,
+            owner_session_chat_id=(
+                str(owner.get("session_chat_id"))
+                if owner.get("session_chat_id") is not None
+                else None
+            ),
+            owner_run_id=(str(owner.get("run_id")) if owner.get("run_id") is not None else None),
+            owner_channel=(str(owner.get("channel")) if owner.get("channel") is not None else None),
+            owner_transport_chat_id=(
+                str(owner.get("transport_chat_id"))
+                if owner.get("transport_chat_id") is not None
+                else None
+            ),
         )
         output = self.process_manager.render_output(session, max_chars=1200)
         return _build_background_session_result(session, output, yield_ms=yield_ms)

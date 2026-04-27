@@ -179,16 +179,21 @@ def register_shell_tools(
     workspace_resolver: Callable[[], Path],
     tools_config: ToolsConfig | None = None,
     background_notification_factory: Callable[[], Any | None] | None = None,
+    background_session_owner_factory: Callable[[], dict[str, str | None] | None] | None = None,
+    process_manager_callback: Callable[[Any], None] | None = None,
 ) -> None:
     """Register shell execution tools."""
     current_tools_config = tools_config or ToolsConfig()
     process_tool = ProcessTool()
+    if process_manager_callback is not None:
+        process_manager_callback(process_tool.manager)
     registry.register(
         ExecTool(
             workspace_resolver=workspace_resolver,
             timeout=current_tools_config.exec_tool.timeout,
             process_manager=process_tool.manager,
             background_notification_factory=background_notification_factory,
+            background_session_owner_factory=background_session_owner_factory,
             notify_on_exit=current_tools_config.exec_tool.notify_on_exit,
             notify_on_exit_empty_success=current_tools_config.exec_tool.notify_on_exit_empty_success,
         )
@@ -385,6 +390,8 @@ def register_default_tools(
     get_current_videos: Callable[[], list[str] | None] | None = None,
     queue_outbound_media: Callable[[str, str], str | None] | None = None,
     background_notification_factory: Callable[[], Any | None] | None = None,
+    background_session_owner_factory: Callable[[], dict[str, str | None] | None] | None = None,
+    process_manager_callback: Callable[[Any], None] | None = None,
     active_task_store_factory: Callable[[str], Any | None] | None = None,
     get_message_count: Callable[[str], Awaitable[int]] | None = None,
     file_change_recorder: Callable[[str, list[dict[str, Any]]], Awaitable[None]] | None = None,
@@ -431,6 +438,8 @@ def register_default_tools(
         workspace_resolver=workspace_resolver,
         tools_config=current_tools_config,
         background_notification_factory=background_notification_factory,
+        background_session_owner_factory=background_session_owner_factory,
+        process_manager_callback=process_manager_callback,
     )
     register_verify_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=current_tools_config)

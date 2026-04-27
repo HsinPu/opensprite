@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Awaitable, Callable
 
+from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
 
@@ -151,6 +152,8 @@ class RunHookService:
             iteration: int | None = None,
             delegate_task_id: str | None = None,
             delegate_prompt_type: str | None = None,
+            state: str | None = None,
+            interrupted: bool = False,
         ) -> None:
             safe_args = json_safe_payload(tool_args or {})
             result_text = str(result or "")
@@ -161,8 +164,10 @@ class RunHookService:
                 "ok": ok,
                 "result_len": len(result_text),
                 "result_preview": result_preview,
-                "state": "completed" if ok else "error",
+                "state": state or ("completed" if ok else "error"),
             }
+            if interrupted:
+                metadata["interrupted"] = True
             if tool_call_id:
                 metadata["tool_call_id"] = tool_call_id
             if iteration is not None:
@@ -192,11 +197,14 @@ class RunHookService:
                     "iteration": iteration,
                     "delegate_task_id": delegate_task_id,
                     "delegate_prompt_type": delegate_prompt_type,
+                    "state": metadata["state"],
+                    "interrupted": interrupted,
                 },
                 channel=channel,
                 transport_chat_id=tid,
             )
             if tool_name == "verify":
+                verification = classify_verification_result(result_text)
                 await self._emit_run_event(
                     session_chat_id,
                     rid,
@@ -205,6 +213,8 @@ class RunHookService:
                         "action": (tool_args or {}).get("action", "auto"),
                         "path": (tool_args or {}).get("path", "."),
                         "ok": ok,
+                        "verification_status": verification["status"],
+                        "verification_name": verification["name"],
                         "result_preview": result_preview,
                     },
                     channel=channel,

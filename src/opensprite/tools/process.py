@@ -34,6 +34,10 @@ def _format_runtime(session: BackgroundSession) -> str:
 
 def _format_session_summary(session: BackgroundSession) -> str:
     parts = [session.session_id, session.state, f"pid={session.pid}", f"runtime={_format_runtime(session)}"]
+    if session.owner_session_chat_id or session.owner_run_id:
+        parts.append(
+            f"owner={session.owner_session_chat_id or '-'} / {session.owner_run_id or '-'}"
+        )
     if session.state == "exited":
         parts.append(f"termination={session.termination_reason or 'exit'}")
         parts.append(f"exit_code={session.exit_code}")
@@ -52,6 +56,14 @@ def _format_session_details(session: BackgroundSession) -> list[str]:
         f"Output drained: {'yes' if session.output_drained else 'no'}",
         f"Command: {session.command}",
     ]
+    if session.owner_session_chat_id:
+        details.append(f"Owner session chat: {session.owner_session_chat_id}")
+    if session.owner_run_id:
+        details.append(f"Owner run: {session.owner_run_id}")
+    if session.owner_channel:
+        details.append(f"Owner channel: {session.owner_channel}")
+    if session.owner_transport_chat_id:
+        details.append(f"Owner transport chat: {session.owner_transport_chat_id}")
     if session.state == "exited":
         details.append(f"Finished: {_format_timestamp(session.finished_at_wall)}")
         details.append(f"Termination: {session.termination_reason or 'exit'}")

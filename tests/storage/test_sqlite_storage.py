@@ -301,5 +301,6 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert loaded_work_state.constraints == ("Keep the API stable",)
     assert loaded_work_state.touched_paths == ("src/app.py",)
     assert loaded_work_state.active_delegate_prompt_type == "implementer"
+    assert loaded_work_state.metadata == {"source": "test"}
     assert cleared_work_state is None
     assert chats == ["chat-1"]

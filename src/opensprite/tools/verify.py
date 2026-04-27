@@ -53,6 +53,28 @@ class VerifyCommandResult:
     timed_out: bool = False
 
 
+def classify_verification_result(result: str) -> dict[str, Any]:
+    """Classify one verify tool result string into structured outcome fields."""
+    text = str(result or "").strip()
+    first_line = text.splitlines()[0].strip() if text else ""
+    for prefix, status, ok in (
+        ("Verification passed: ", "passed", True),
+        ("Verification skipped: ", "skipped", False),
+        ("Error: Verification timed out: ", "timed_out", False),
+        ("Error: Verification failed: ", "failed", False),
+    ):
+        if first_line.startswith(prefix):
+            return {
+                "status": status,
+                "ok": ok,
+                "attempted": True,
+                "name": first_line[len(prefix):].strip() or None,
+            }
+    if first_line.startswith("Error:"):
+        return {"status": "error", "ok": False, "attempted": True, "name": None}
+    return {"status": "unknown", "ok": False, "attempted": bool(text), "name": None}
+
+
 def _resolve_workspace_root(workspace: Path) -> Path:
     root = Path(workspace).expanduser().resolve(strict=False)
     root.mkdir(parents=True, exist_ok=True)

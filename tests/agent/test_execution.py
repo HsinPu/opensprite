@@ -250,6 +250,69 @@ def test_execution_engine_stops_when_cancel_checker_requests_stop():
         raise AssertionError("CancelledError was not raised")
 
 
+def test_execution_engine_records_aborted_tool_result_when_cancelled_after_tool_start():
+    class CancellingTool(Tool):
+        @property
+        def name(self) -> str:
+            return "cancel_tool"
+
+        @property
+        def description(self) -> str:
+            return "Cancel after this tool runs"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def _execute(self, **kwargs) -> str:
+            cancel_requested["value"] = True
+            return "finished"
+
+    registry = ToolRegistry()
+    registry.register(CancellingTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need tool",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="cancel_tool", arguments={})],
+            ),
+        ]
+    )
+    save_calls = []
+    engine = _make_engine(provider, registry, save_calls)
+    cancel_requested = {"value": False}
+    after_calls = []
+
+    async def after(*args):
+        after_calls.append(args)
+
+    try:
+        asyncio.run(
+            engine.execute_messages(
+                "chat-1",
+                [ChatMessage(role="user", content="hi")],
+                allow_tools=True,
+                should_cancel=lambda: cancel_requested["value"],
+                on_tool_after_execute=after,
+            )
+        )
+    except asyncio.CancelledError:
+        pass
+    else:
+        raise AssertionError("CancelledError was not raised")
+
+    assert len(after_calls) == 1
+    assert after_calls[0][:5] == (
+        "cancel_tool",
+        {},
+        "Error: Tool execution aborted",
+        "tc1",
+        1,
+    )
+    assert after_calls[0][-2:] == ("error", True)
+
+
 def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
     class MissingArgsTool(Tool):
         @property
@@ -524,7 +587,7 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert event.outcome == "compacted"
     assert event.iteration == 1
     assert event.messages_before == 4
-    assert event.messages_after == 3
+    assert event.messages_after == 4
     assert event.budget_tokens == 120
     assert event.threshold_tokens == 60
     assert event.estimated_tokens is not None and event.estimated_tokens > event.threshold_tokens
@@ -532,13 +595,15 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert event.tool_schema_tokens == 0
     assert len(provider.calls) == 1
     sent_messages = provider.calls[0]["messages"]
-    assert [message.role for message in sent_messages] == ["system", "system", "user"]
+    assert [message.role for message in sent_messages] == ["system", "system", "assistant", "user"]
     assert sent_messages[0].content == "SYSTEM"
     assert "# Compacted Conversation State" in sent_messages[1].content
     assert "approaching the configured context budget" in sent_messages[1].content
+    assert "## Preserved Recent Tail" in sent_messages[1].content
     assert "latest instruction" in sent_messages[1].content
     assert "A" * 2000 not in sent_messages[1].content
-    assert sent_messages[2].content == ExecutionEngine.CONTINUATION_AFTER_COMPACTION_MESSAGE
+    assert sent_messages[2].content == "intermediate answer"
+    assert sent_messages[3].content == "latest instruction"
     assert statuses == [ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE]
 
 
@@ -603,7 +668,7 @@ def test_execution_uses_llm_compactor_when_configured():
     assert event.outcome == "compacted"
     assert event.fallback_reason is None
     assert event.messages_before == 4
-    assert event.messages_after == 3
+    assert event.messages_after == 4
     assert len(provider.calls) == 2
     compactor_call = provider.calls[0]
     assert compactor_call["tools"] is None
@@ -612,12 +677,13 @@ def test_execution_uses_llm_compactor_when_configured():
     assert compactor_call["messages"][0].role == "system"
     assert "context compaction engine" in compactor_call["messages"][0].content
     sent_messages = provider.calls[1]["messages"]
-    assert [message.role for message in sent_messages] == ["system", "system", "user"]
+    assert [message.role for message in sent_messages] == ["system", "system", "assistant", "user"]
     assert sent_messages[0].content == "SYSTEM"
     assert "compacted by an LLM" in sent_messages[1].content
     assert "## Current Goal" in sent_messages[1].content
     assert "A" * 2000 not in sent_messages[1].content
-    assert sent_messages[2].content == ExecutionEngine.CONTINUATION_AFTER_COMPACTION_MESSAGE
+    assert sent_messages[2].content == "intermediate answer"
+    assert sent_messages[3].content == "latest instruction"
 
 
 def test_execution_falls_back_when_llm_compactor_returns_empty():
@@ -731,18 +797,20 @@ def test_execution_compacts_and_retries_after_context_overflow():
     assert event.outcome == "compacted"
     assert event.iteration == 1
     assert event.messages_before == 5
-    assert event.messages_after == 3
+    assert event.messages_after == 4
     assert event.estimated_tokens is not None
     assert event.compacted_tokens is not None and event.compacted_tokens < event.estimated_tokens
     assert "maximum context length" in (event.error or "")
     assert len(provider.calls) == 2
     retried_messages = provider.calls[1]["messages"]
-    assert [message.role for message in retried_messages] == ["system", "system", "user"]
+    assert [message.role for message in retried_messages] == ["system", "system", "tool", "user"]
     assert retried_messages[0].content == "SYSTEM"
     assert "# Compacted Conversation State" in retried_messages[1].content
+    assert "## Preserved Recent Tail" in retried_messages[1].content
     assert "latest instruction" in retried_messages[1].content
     assert "A" * 5000 not in retried_messages[1].content
-    assert retried_messages[2].content == ExecutionEngine.CONTINUATION_AFTER_COMPACTION_MESSAGE
+    assert retried_messages[2].tool_call_id == "tc1"
+    assert retried_messages[3].content == "latest instruction"
     assert statuses == ["上下文已接近上限，正在壓縮目前任務並繼續…"]
 
 

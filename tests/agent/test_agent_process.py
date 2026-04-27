@@ -1,7 +1,11 @@
 import asyncio
 import base64
 import hashlib
+import os
 from pathlib import Path
+import shlex
+import subprocess
+import sys
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
@@ -38,6 +42,20 @@ class FakeContextBuilder:
 
     def add_assistant_message(self, messages, content, tool_calls=None):
         return messages
+
+
+def _python_shell_command(code: str) -> str:
+    argv = [sys.executable, "-u", "-c", code]
+    if os.name == "nt":
+        return subprocess.list2cmdline(argv)
+    return shlex.join(argv)
+
+
+def _extract_session_id(result: str) -> str:
+    for line in result.splitlines():
+        if line.startswith("Session ID: "):
+            return line.removeprefix("Session ID: ").strip()
+    raise AssertionError(f"Session ID missing from result: {result}")
 
 
 class FakeProvider:
@@ -377,6 +395,8 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
     assert stored_events[1].payload == {"action": "python_compile", "path": "src"}
     assert stored_events[-1].payload["ok"] is True
+    assert stored_events[-1].payload["verification_status"] == "passed"
+    assert stored_events[-1].payload["verification_name"] == "python_compile"
     assert [part.part_type for part in stored_parts] == ["tool_call", "tool_result"]
     assert [part.tool_name for part in stored_parts] == ["verify", "verify"]
     assert stored_parts[0].metadata["args"] == {"action": "python_compile", "path": "src"}
@@ -1084,6 +1104,7 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
     assert work_state.objective == "Finish the refactor"
     assert work_state.active_delegate_task_id == "task_abc12345"
     assert work_state.active_delegate_prompt_type == "implementer"
+    assert work_state.metadata["workboard"]["resume_hint"] == "Resume at current step: 2. change"
 
 
 def test_agent_process_rejects_overlapping_runs_for_same_session(tmp_path):
@@ -1216,6 +1237,94 @@ def test_agent_process_cancel_request_marks_run_cancelled_and_clears_active_run(
     assert run.status == "cancelled"
     assert [event.event_type for event in events][-2:] == ["run_cancel_requested", "run_cancelled"]
     assert active is None
+
+
+def test_agent_process_cancel_request_kills_owned_background_sessions(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        session_ids: list[str] = []
+
+        async def fake_execute_messages(*args, **kwargs):
+            exec_tool = agent.tools.get("exec")
+            assert exec_tool is not None
+            started = await exec_tool.execute(
+                command=_python_shell_command(
+                    "import time; print('owned background', flush=True); time.sleep(5)"
+                ),
+                background=True,
+                timeout_seconds=5,
+                notify_on_exit=False,
+            )
+            session_ids.append(_extract_session_id(started))
+            should_cancel = kwargs.get("should_cancel")
+            for _ in range(200):
+                if callable(should_cancel) and should_cancel():
+                    raise asyncio.CancelledError()
+                await asyncio.sleep(0.01)
+            return ExecutionResult(content="done", executed_tool_calls=1)
+
+        agent._execute_messages = fake_execute_messages
+        task = asyncio.create_task(
+            agent.process(
+                UserMessage(
+                    text="Please implement the change.",
+                    channel="web",
+                    chat_id="browser-1",
+                    session_chat_id="web:browser-1",
+                )
+            )
+        )
+        for _ in range(100):
+            active = agent.get_active_run("web:browser-1")
+            if active is not None and session_ids:
+                break
+            await asyncio.sleep(0.01)
+        else:
+            raise AssertionError("active run or background session was not registered")
+
+        accepted = await agent.request_run_cancel(
+            "web:browser-1",
+            active.run_id,
+            channel="web",
+            transport_chat_id="browser-1",
+        )
+        assert accepted is True
+
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError("process task was not cancelled")
+
+        assert agent.background_process_manager is not None
+        session = await agent.background_process_manager.get_session(session_ids[0])
+        events = await storage.get_run_events("web:browser-1", active.run_id)
+        return session, events
+
+    session, events = asyncio.run(scenario())
+
+    assert session is not None
+    assert session.state == "exited"
+    assert session.termination_reason == "killed"
+    assert session.owner_session_chat_id == "web:browser-1"
+    assert session.owner_run_id is not None
+    cancel_event = next(event for event in events if event.event_type == "run_cancel_requested")
+    assert cancel_event.payload["owned_background_sessions_cancelled"] == 1
+    assert len(cancel_event.payload["owned_background_session_ids"]) == 1
 
 
 def test_agent_process_returns_queued_outbound_media(tmp_path):

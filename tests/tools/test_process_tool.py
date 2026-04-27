@@ -174,6 +174,42 @@ def test_process_inspect_returns_metadata_without_output_sections(tmp_path):
     asyncio.run(run())
 
 
+def test_process_tool_shows_run_ownership_metadata(tmp_path):
+    async def run() -> None:
+        manager = BackgroundProcessManager()
+        exec_tool = ExecTool(
+            workspace=Path(tmp_path),
+            process_manager=manager,
+            timeout=5,
+            background_session_owner_factory=lambda: {
+                "session_chat_id": "web:browser-1",
+                "run_id": "run-123",
+                "channel": "web",
+                "transport_chat_id": "browser-1",
+            },
+        )
+        process_tool = ProcessTool(manager)
+
+        started = await exec_tool.execute(
+            command=_python_shell_command("print('owned output', flush=True)"),
+            background=True,
+            timeout_seconds=5,
+        )
+        session_id = _extract_session_id(started)
+        await asyncio.sleep(0.2)
+
+        listed = await process_tool.execute(action="list")
+        inspected = await process_tool.execute(action="inspect", session_id=session_id)
+
+        assert "owner=web:browser-1 / run-123" in listed
+        assert "Owner session chat: web:browser-1" in inspected
+        assert "Owner run: run-123" in inspected
+        assert "Owner channel: web" in inspected
+        assert "Owner transport chat: browser-1" in inspected
+
+    asyncio.run(run())
+
+
 def test_process_log_and_clear_handle_exited_session(tmp_path):
     async def run() -> None:
         manager = BackgroundProcessManager()

@@ -30,6 +30,16 @@ def test_write_file_returns_unified_diff(tmp_path):
     assert "+hello" in result
 
 
+def test_write_file_reports_post_edit_python_diagnostics(tmp_path):
+    tool = WriteFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="app.py", content="VALUE = 1\n"))
+
+    assert "Successfully wrote to app.py" in result
+    assert "Diagnostics:" in result
+    assert "app.py [python_syntax] OK" in result
+
+
 def test_edit_file_returns_unified_diff(tmp_path):
     target = tmp_path / "notes.txt"
     target.write_text("old\n", encoding="utf-8")
@@ -51,6 +61,25 @@ def test_edit_file_returns_unified_diff(tmp_path):
     assert "+++ b/notes.txt" in result
     assert "-old" in result
     assert "+new" in result
+
+
+def test_edit_file_surfaces_post_edit_python_syntax_failures(tmp_path):
+    target = tmp_path / "broken.py"
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    tool = EditFileTool(workspace=tmp_path)
+
+    result = asyncio.run(
+        tool.execute(
+            path="broken.py",
+            old_text="VALUE = 1",
+            new_text="def broken(:",
+            expected_sha256=_sha256("VALUE = 1\n"),
+        )
+    )
+
+    assert result.startswith("Error: Changes were written successfully but post-edit diagnostics failed.")
+    assert "broken.py [python_syntax]: invalid syntax" in result
+    assert target.read_text(encoding="utf-8") == "def broken(:\n"
 
 
 def test_apply_patch_updates_adds_and_deletes_files(tmp_path):

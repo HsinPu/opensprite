@@ -2,8 +2,10 @@
 
 import asyncio
 import fnmatch
+import json
 import re
 import shutil
+import tomllib
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
@@ -13,6 +15,11 @@ from ..utils.log import logger
 from .base import Tool
 from .skill_config import path_touches_read_only_app_skills_dir
 from .validation import NON_EMPTY_STRING_PATTERN
+
+try:
+    import yaml as _yaml  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - optional dependency
+    _yaml = None
 
 
 WorkspaceResolver = Callable[[], Path]
@@ -200,6 +207,69 @@ async def _record_file_changes(
 
 def _format_file_metadata(display_path: str, before: str | None, after: str | None) -> str:
     return f"- {display_path}: before={_hash_label(before)}, after={_hash_label(after)}"
+
+
+def _run_post_edit_diagnostics(
+    changed_files: list[tuple[Path, str, str]],
+) -> tuple[list[str], list[str]]:
+    """Return `(passes, failures)` for lightweight syntax/parse checks after edits."""
+    passes: list[str] = []
+    failures: list[str] = []
+    for file_path, display_path, content in changed_files:
+        suffix = file_path.suffix.lower()
+        if suffix == ".py":
+            try:
+                compile(content, display_path, "exec")
+                passes.append(f"{display_path} [python_syntax]")
+            except SyntaxError as exc:
+                failures.append(
+                    f"{display_path} [python_syntax]: {exc.msg} at line {exc.lineno or 0}:{exc.offset or 0}"
+                )
+            continue
+        if suffix == ".json":
+            try:
+                json.loads(content)
+                passes.append(f"{display_path} [json_parse]")
+            except Exception as exc:
+                failures.append(f"{display_path} [json_parse]: {exc}")
+            continue
+        if suffix == ".toml":
+            try:
+                tomllib.loads(content)
+                passes.append(f"{display_path} [toml_parse]")
+            except Exception as exc:
+                failures.append(f"{display_path} [toml_parse]: {exc}")
+            continue
+        if suffix in {".yaml", ".yml"} and _yaml is not None:
+            try:
+                _yaml.safe_load(content)
+                passes.append(f"{display_path} [yaml_parse]")
+            except Exception as exc:
+                failures.append(f"{display_path} [yaml_parse]: {exc}")
+    return passes, failures
+
+
+def _format_post_edit_diagnostics(
+    changed_files: list[tuple[Path, str, str]],
+) -> tuple[str, bool]:
+    """Render concise post-edit diagnostics for parser-checked file types."""
+    passes, failures = _run_post_edit_diagnostics(changed_files)
+    if failures:
+        return (
+            "\n\n".join(
+                [
+                    f"Error: Post-edit diagnostics failed for {len(failures)} file(s).",
+                    "\n".join(f"- {item}" for item in failures[:12]),
+                ]
+            ),
+            True,
+        )
+    if passes:
+        return (
+            "Diagnostics:\n" + "\n".join(f"- {item} OK" for item in passes[:12]),
+            False,
+        )
+    return "", False
 
 
 def _validate_expected_sha256(path: str, content: str, expected_sha256: Any) -> str | None:
@@ -878,6 +948,7 @@ class ApplyPatchTool(Tool):
             metadata: list[str] = []
             file_change_records: list[dict[str, Any]] = []
             changed_paths: list[Path] = []
+            diagnostic_inputs: list[tuple[Path, str, str]] = []
             for file_path, after in current.items():
                 before = original[file_path]
                 if before == after:
@@ -895,6 +966,8 @@ class ApplyPatchTool(Tool):
                 record = _build_file_change_record(display_paths[file_path], before, after)
                 if record is not None:
                     file_change_records.append(record)
+                if after is not None:
+                    diagnostic_inputs.append((file_path, display_paths[file_path], after))
 
             if not changed_paths:
                 return "No changes to apply."
@@ -909,13 +982,21 @@ class ApplyPatchTool(Tool):
 
             await _record_file_changes(self._file_change_recorder, self.name, file_change_records)
 
-            return (
+            diagnostics_text, diagnostics_failed = _format_post_edit_diagnostics(diagnostic_inputs)
+
+            result = (
                 f"Successfully applied patch ({len(changed_paths)} file(s) changed)\n\n"
                 "File Versions:\n"
                 + "\n".join(metadata)
                 + "\n\nDiff:\n"
                 + "\n\n".join(diffs)
             )
+            if diagnostics_text:
+                result += "\n\n" + diagnostics_text
+            if diagnostics_failed:
+                return "Error: Changes were written successfully but post-edit diagnostics failed.\n\n" + result
+
+            return result
         except ValueError as e:
             return f"Error: {str(e)}"
         except Exception as e:
@@ -1013,7 +1094,13 @@ class WriteFileTool(Tool):
                 self.name,
                 [record] if record is not None else [],
             )
-            return f"Successfully wrote to {path} ({len(content)} chars)\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
+            diagnostics_text, diagnostics_failed = _format_post_edit_diagnostics([(file_path, display_path, content)])
+            result = f"Successfully wrote to {path} ({len(content)} chars)\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
+            if diagnostics_text:
+                result += f"\n\n{diagnostics_text}"
+            if diagnostics_failed:
+                return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
+            return result
         except Exception as e:
             return f"Error writing file: {str(e)}"
 
@@ -1168,7 +1255,12 @@ class EditFileTool(Tool):
                 self.name,
                 [record] if record is not None else [],
             )
-
-            return f"Successfully edited {path}\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
+            diagnostics_text, diagnostics_failed = _format_post_edit_diagnostics([(file_path, display_path, new_content)])
+            result = f"Successfully edited {path}\n\nFile Versions:\n{metadata}\n\nDiff:\n{diff}"
+            if diagnostics_text:
+                result += f"\n\n{diagnostics_text}"
+            if diagnostics_failed:
+                return f"Error: Changes were written successfully but post-edit diagnostics failed.\n\n{result}"
+            return result
         except Exception as e:
             return f"Error editing file: {str(e)}"

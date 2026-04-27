@@ -39,7 +39,7 @@ from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
-from ..tools.process_runtime import BackgroundSession
+from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
@@ -397,6 +397,7 @@ class AgentLoop:
             "current_work_progress",
             default=None,
         )
+        self.background_process_manager: BackgroundProcessManager | None = None
         self.turn_context = TurnContextService(
             current_chat_id=self._current_chat_id,
             current_channel=self._current_channel,
@@ -879,6 +880,35 @@ class AgentLoop:
         """Return the current task-local chat id."""
         return self.turn_context.current_chat_id()
 
+    def _current_background_session_owner(self) -> dict[str, str | None] | None:
+        """Return active turn ownership metadata for managed background sessions."""
+        chat_id = self.turn_context.current_chat_id()
+        run_id = self.turn_context.current_run_id()
+        channel = self.turn_context.current_channel()
+        transport_chat_id = self.turn_context.current_transport_chat_id()
+        if chat_id is None and run_id is None:
+            return None
+        return {
+            "session_chat_id": chat_id,
+            "run_id": run_id,
+            "channel": channel,
+            "transport_chat_id": transport_chat_id,
+        }
+
+    def _set_background_process_manager(self, manager: BackgroundProcessManager) -> None:
+        """Store the shared manager used by exec/process background sessions."""
+        self.background_process_manager = manager
+
+    async def _cancel_owned_background_sessions(
+        self,
+        chat_id: str,
+        run_id: str,
+    ) -> list[BackgroundSession]:
+        """Kill managed background sessions started by the specified run."""
+        if self.background_process_manager is None:
+            return []
+        return await self.background_process_manager.kill_owned_sessions(chat_id, run_id=run_id)
+
     def _get_current_workspace(self) -> Path:
         """Resolve the current task-local workspace."""
         workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
@@ -974,6 +1004,8 @@ class AgentLoop:
             get_current_videos=self._get_current_videos,
             queue_outbound_media=self._queue_outbound_media,
             background_notification_factory=self._make_background_session_exit_notifier,
+            background_session_owner_factory=self._current_background_session_owner,
+            process_manager_callback=self._set_background_process_manager,
             active_task_store_factory=self._get_active_task_store,
             get_message_count=lambda chat_id: get_storage_message_count(self.storage, chat_id),
             file_change_recorder=self._record_file_changes,
@@ -1304,11 +1336,16 @@ class AgentLoop:
         active = self.run_state.request_cancel(chat_id, run_id)
         if active is None:
             return False
+        killed_sessions = await self._cancel_owned_background_sessions(chat_id, run_id)
         await self._emit_run_event(
             chat_id,
             run_id,
             "run_cancel_requested",
-            {"status": "cancelling"},
+            {
+                "status": "cancelling",
+                "owned_background_sessions_cancelled": len(killed_sessions),
+                "owned_background_session_ids": [session.session_id for session in killed_sessions],
+            },
             channel=channel,
             transport_chat_id=transport_chat_id,
         )

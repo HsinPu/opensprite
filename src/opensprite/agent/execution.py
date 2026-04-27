@@ -10,6 +10,7 @@ from ..config import DocumentLlmConfig, ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
+from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_state import RunCancelledError
@@ -137,6 +138,8 @@ class ExecutionEngine:
     COMPACTED_MESSAGE_MAX_CHARS = 900
     COMPACTED_LATEST_USER_MAX_CHARS = 1600
     COMPACTED_TRANSCRIPT_MAX_CHARS = 10_000
+    COMPACTED_TAIL_MESSAGE_LIMIT = 2
+    COMPACTED_TAIL_MESSAGE_MAX_CHARS = 1200
     LLM_COMPACTION_TRANSCRIPT_MAX_CHARS = 30_000
     LLM_COMPACTION_MESSAGE_MAX_CHARS = 1800
     CONTEXT_OVERFLOW_MARKERS = (
@@ -474,6 +477,62 @@ Output exactly these sections when applicable:
         return leading_system, chat_messages[body_start:]
 
     @classmethod
+    def _clone_tail_message(cls, message: ChatMessage) -> ChatMessage:
+        """Clone one recent message while bounding content size for compacted retries."""
+        content = getattr(message, "content", "")
+        if not isinstance(content, str):
+            content = cls._message_content_to_text(content)
+        clone = ChatMessage(
+            role=getattr(message, "role", "?"),
+            content=cls._truncate_text(content, cls.COMPACTED_TAIL_MESSAGE_MAX_CHARS),
+        )
+        if getattr(message, "tool_call_id", None):
+            clone.tool_call_id = getattr(message, "tool_call_id", None)
+        tool_calls = getattr(message, "tool_calls", None)
+        if tool_calls:
+            clone.tool_calls = [dict(item) if isinstance(item, dict) else item for item in tool_calls]
+        return clone
+
+    @classmethod
+    def _split_compaction_head_and_tail(
+        cls,
+        messages: list[ChatMessage],
+    ) -> tuple[list[ChatMessage], list[ChatMessage]]:
+        """Keep a tiny recent tail verbatim and compact only the older head."""
+        if len(messages) <= 2:
+            return messages, []
+
+        tail_start = max(0, len(messages) - cls.COMPACTED_TAIL_MESSAGE_LIMIT)
+        latest_user_index = next(
+            (index for index in range(len(messages) - 1, -1, -1) if getattr(messages[index], "role", None) == "user"),
+            None,
+        )
+        if latest_user_index is not None and latest_user_index >= max(0, tail_start - 1):
+            tail_start = min(tail_start, latest_user_index)
+        if tail_start <= 0:
+            return messages, []
+
+        return messages[:tail_start], [cls._clone_tail_message(message) for message in messages[tail_start:]]
+
+    @classmethod
+    def _build_compacted_message_list(
+        cls,
+        *,
+        leading_system: list[ChatMessage],
+        summary_sections: list[str],
+        tail_messages: list[ChatMessage],
+    ) -> list[ChatMessage]:
+        compacted = [
+            *leading_system,
+            ChatMessage(role="system", content="\n".join(summary_sections)),
+        ]
+        if tail_messages:
+            compacted.extend(tail_messages)
+            return compacted
+        compacted.append(ChatMessage(role="user", content=cls.CONTINUATION_AFTER_COMPACTION_MESSAGE))
+        return compacted
+
+    @classmethod
     def _latest_user_text(cls, messages: list[ChatMessage], *, max_chars: int) -> str:
         latest_user = next((message for message in reversed(messages) if getattr(message, "role", None) == "user"), None)
         if latest_user is None:
@@ -494,9 +553,10 @@ Output exactly these sections when applicable:
         if not body:
             return None
 
+        head, tail = self._split_compaction_head_and_tail(body)
         latest_user_text = self._latest_user_text(body, max_chars=self.COMPACTED_LATEST_USER_MAX_CHARS)
         transcript = self._build_compacted_transcript(
-            body,
+            head,
             max_chars=self.LLM_COMPACTION_TRANSCRIPT_MAX_CHARS,
             message_max_chars=self.LLM_COMPACTION_MESSAGE_MAX_CHARS,
         )
@@ -509,6 +569,17 @@ Output exactly these sections when applicable:
         if work_state_summary.strip():
             sections.extend(["", work_state_summary.strip()])
         sections.extend(["", "## Transcript", transcript or "(no transcript details)"])
+        if tail:
+            sections.extend([
+                "",
+                "## Preserved Recent Tail",
+                "These exact recent messages will remain verbatim after compaction. Use them as the freshest ground truth.",
+                self._build_compacted_transcript(
+                    tail,
+                    max_chars=self.LLM_COMPACTION_MESSAGE_MAX_CHARS * max(1, len(tail)),
+                    message_max_chars=self.LLM_COMPACTION_MESSAGE_MAX_CHARS,
+                ),
+            ])
         if tool_results_history:
             sections.extend([
                 "",
@@ -544,6 +615,8 @@ Output exactly these sections when applicable:
         if compaction_messages is None:
             return _LlmCompactionAttempt(fallback_reason="no_prompt")
 
+        _, tail = self._split_compaction_head_and_tail(body)
+
         try:
             response = await self.provider.chat(
                 messages=compaction_messages,
@@ -572,11 +645,11 @@ Output exactly these sections when applicable:
             summary,
         ]
         return _LlmCompactionAttempt(
-            messages=[
-                *leading_system,
-                ChatMessage(role="system", content="\n".join(summary_sections)),
-                ChatMessage(role="user", content=self.CONTINUATION_AFTER_COMPACTION_MESSAGE),
-            ]
+            messages=self._build_compacted_message_list(
+                leading_system=leading_system,
+                summary_sections=summary_sections,
+                tail_messages=tail,
+            )
         )
 
     @staticmethod
@@ -694,6 +767,8 @@ Output exactly these sections when applicable:
         if not body:
             return None
 
+        head, tail = cls._split_compaction_head_and_tail(body)
+
         latest_user = next((message for message in reversed(body) if getattr(message, "role", None) == "user"), None)
         latest_user_text = ""
         if latest_user is not None:
@@ -703,7 +778,7 @@ Output exactly these sections when applicable:
             )
 
         transcript = cls._build_compacted_transcript(
-            body,
+            head,
             max_chars=cls.COMPACTED_TRANSCRIPT_MAX_CHARS,
         )
         summary_sections = [
@@ -717,6 +792,12 @@ Output exactly these sections when applicable:
         if work_state_summary.strip():
             summary_sections.extend(["", work_state_summary.strip()])
         summary_sections.extend(["", "## Compacted Transcript", transcript or "(no transcript details)"])
+        if tail:
+            summary_sections.extend([
+                "",
+                "## Preserved Recent Tail",
+                "Recent live context is preserved verbatim below. Prefer it over any summarized older context if they differ.",
+            ])
         if tool_results_history:
             summary_sections.extend([
                 "",
@@ -724,11 +805,11 @@ Output exactly these sections when applicable:
                 "\n".join(f"- {item}" for item in tool_results_history[-8:]),
             ])
 
-        return [
-            *leading_system,
-            ChatMessage(role="system", content="\n".join(summary_sections)),
-            ChatMessage(role="user", content=cls.CONTINUATION_AFTER_COMPACTION_MESSAGE),
-        ]
+        return cls._build_compacted_message_list(
+            leading_system=leading_system,
+            summary_sections=summary_sections,
+            tail_messages=tail,
+        )
 
 
     async def execute_messages(
@@ -993,8 +1074,11 @@ Output exactly these sections when applicable:
                     tool_args = tc.arguments if isinstance(tc.arguments, dict) else {}
                     args_preview = self.format_log_preview(json.dumps(tool_args, ensure_ascii=False), max_chars=200)
                     logger.info(f"[{log_id}] tool.run | id={tc.id} name={tool_name} args={args_preview}")
+                    tool_started = False
 
                     async def _notify_tool_before_execute(name: str, args: dict[str, Any]) -> None:
+                        nonlocal tool_started
+                        tool_started = True
                         if on_tool_before_execute is None:
                             return
                         try:
@@ -1007,19 +1091,52 @@ Output exactly these sections when applicable:
                                 f"[{log_id}] tool.progress-hook.error | name={name}"
                             )
 
-                    result = await active_tools.execute(
-                        tool_name,
-                        tool_args,
-                        on_before_execute=_notify_tool_before_execute,
-                    )
-                    self._raise_if_cancel_requested(should_cancel)
+                    async def _notify_tool_cancelled() -> None:
+                        if not tool_started or on_tool_after_execute is None:
+                            return
+                        try:
+                            try:
+                                await on_tool_after_execute(
+                                    tool_name,
+                                    tool_args,
+                                    "Error: Tool execution aborted",
+                                    tc.id,
+                                    iteration + 1,
+                                    None,
+                                    None,
+                                    "error",
+                                    True,
+                                )
+                            except TypeError:
+                                await on_tool_after_execute(
+                                    tool_name,
+                                    tool_args,
+                                    "Error: Tool execution aborted",
+                                    tc.id,
+                                    iteration + 1,
+                                )
+                        except Exception:
+                            logger.exception(
+                                f"[{log_id}] tool.cancel-hook.error | name={tool_name}"
+                            )
+
+                    try:
+                        result = await active_tools.execute(
+                            tool_name,
+                            tool_args,
+                            on_before_execute=_notify_tool_before_execute,
+                        )
+                        self._raise_if_cancel_requested(should_cancel)
+                    except RunCancelledError:
+                        await _notify_tool_cancelled()
+                        raise
                     executed_tool_calls += 1
                     if self._tool_result_looks_like_failure(result):
                         had_tool_error = True
                     if tool_name == "verify":
-                        verification_attempted = True
-                        if str(result).startswith("Verification passed:"):
-                            verification_passed = True
+                        verification_outcome = classify_verification_result(result)
+                        verification_attempted = verification_attempted or bool(verification_outcome["attempted"])
+                        verification_passed = verification_passed or bool(verification_outcome["ok"])
                     if tool_name == "delegate":
                         delegate_task_id, delegate_prompt_type = self._extract_delegate_task_info(result)
                         if delegate_task_id:
