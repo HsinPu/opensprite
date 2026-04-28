@@ -658,17 +658,32 @@ export function useChatClient() {
     return (channels || []).filter((channel) => channel.id !== "web" && channel.id !== "console");
   }
 
+  function normalizeChannelSettings(payload) {
+    const channels = visibleChannels(payload.channels);
+    const hasGroupedChannels = Array.isArray(payload.connected) || Array.isArray(payload.available);
+    if (hasGroupedChannels) {
+      return {
+        ...payload,
+        connected: visibleChannels(payload.connected),
+        available: visibleChannels(payload.available),
+        channels,
+      };
+    }
+
+    return {
+      ...payload,
+      connected: channels.filter((channel) => channel.token_configured),
+      available: channels.filter((channel) => !channel.token_configured),
+      channels,
+    };
+  }
+
   async function loadChannelSettings() {
     settingsState.channelsLoading = true;
     settingsState.channelsError = "";
     try {
       const payload = await requestSettingsJson("/api/settings/channels");
-      settingsState.channels = {
-        ...payload,
-        connected: visibleChannels(payload.connected),
-        available: visibleChannels(payload.available),
-        channels: visibleChannels(payload.channels),
-      };
+      settingsState.channels = normalizeChannelSettings(payload);
     } catch (error) {
       settingsState.channelsError = error?.message || "無法載入頻道設定。";
     } finally {
