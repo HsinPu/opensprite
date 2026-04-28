@@ -24,6 +24,7 @@ from ..config.provider_settings import (
     prune_llm_providers,
     select_model_in_config,
 )
+from ..channels.registry import default_instance_config, list_connectable_channel_types
 from ..context.paths import (
     BOOTSTRAP_DIRNAME,
     MEMORY_DIRNAME,
@@ -284,18 +285,23 @@ def _prune_llm_providers(llm: dict[str, Any]) -> None:
 def _get_selected_channel(config_data: dict[str, Any]) -> str | None:
     """Return the currently enabled external channel, if any."""
     channels = config_data.get("channels", {})
-    for channel_name, channel_data in channels.items():
-        if channel_name == "console":
+    instances = channels.get("instances", {}) if isinstance(channels, dict) else {}
+    for instance_id, channel_data in instances.items():
+        if instance_id == "console":
             continue
         if isinstance(channel_data, dict) and channel_data.get("enabled"):
-            return channel_name
+            return instance_id
     return None
 
 
 def _get_channel_choices(config_data: dict[str, Any]) -> list[str]:
     """Build the channel selection list with console excluded."""
     channels = config_data.get("channels", {})
-    ordered = [name for name in channels if name != "console"]
+    instances = channels.get("instances", {}) if isinstance(channels, dict) else {}
+    ordered = [name for name in instances if name != "console"]
+    for spec in list_connectable_channel_types():
+        if spec.type_id not in ordered:
+            ordered.append(spec.type_id)
     return ordered
 
 
@@ -306,8 +312,9 @@ def _show_summary(config_data: dict[str, Any], *, provider_order: tuple[str, ...
     provider_name = _get_selected_provider(config_data, provider_order=provider_order)
     provider = providers.get(provider_name, {}) if provider_name else {}
     channels = config_data.get("channels", {})
+    instances = channels.get("instances", {}) if isinstance(channels, dict) else {}
     channel_name = _get_selected_channel(config_data)
-    channel = channels.get(channel_name, {}) if channel_name else {}
+    channel = instances.get(channel_name, {}) if channel_name else {}
 
     print("\nOpenSprite configuration summary")
     print(f"- LLM provider: {provider_name or '<unset>'}")
@@ -364,6 +371,7 @@ def _run_interactive_setup(config_data: dict[str, Any]) -> dict[str, Any]:
         select_model_in_config(updated, provider_name, selected["model"], require_api_key=False)
 
     channels = updated.setdefault("channels", {})
+    instances = channels.setdefault("instances", {})
     channel_default = _get_selected_channel(updated)
     channel_choice = _prompt_choice(
         "Choose the chat channel to configure:",
@@ -371,11 +379,13 @@ def _run_interactive_setup(config_data: dict[str, Any]) -> dict[str, Any]:
         default=channel_default,
     )
     if channel_choice != SKIP_CHOICE:
-        selected_channel = channels.get(channel_choice, {})
+        if channel_choice not in instances:
+            instances[channel_choice] = default_instance_config(channel_choice)
+        selected_channel = instances.get(channel_choice, {})
         if isinstance(selected_channel, dict):
             selected_channel["enabled"] = True
 
-        for name, channel in channels.items():
+        for name, channel in instances.items():
             if name in {"console", "web", channel_choice} or not isinstance(channel, dict):
                 continue
             channel["enabled"] = False
@@ -407,6 +417,7 @@ def _apply_result_snapshot(result: OnboardResult, config_data: dict[str, Any], i
     provider_name = _get_selected_provider(config_data, provider_order=presets.provider_order)
     provider = providers.get(provider_name, {}) if provider_name else {}
     channels = config_data.get("channels", {})
+    instances = channels.get("instances", {}) if isinstance(channels, dict) else {}
 
     result.interactive = interactive
     result.llm_provider = provider_name
@@ -417,7 +428,7 @@ def _apply_result_snapshot(result: OnboardResult, config_data: dict[str, Any], i
     result.llm_api_key_configured = bool(provider.get("api_key")) if isinstance(provider, dict) else False
     selected_channel = _get_selected_channel(config_data)
     result.channel_name = selected_channel
-    selected_channel_data = channels.get(selected_channel, {}) if selected_channel else {}
+    selected_channel_data = instances.get(selected_channel, {}) if selected_channel else {}
     if isinstance(selected_channel_data, dict):
         result.channel_token_configured = bool(selected_channel_data.get("token"))
     else:

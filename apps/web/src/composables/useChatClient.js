@@ -326,7 +326,8 @@ export function useChatClient() {
       channels: [],
     },
     channelConnectForm: {
-      channelId: "",
+      type: "",
+      name: "",
       token: "",
     },
     providersLoading: false,
@@ -726,27 +727,31 @@ export function useChatClient() {
     settingsState.channelsNotice = "";
     settingsState.channelsError = "";
     cancelProviderConnect();
-    settingsState.channelConnectForm.channelId = channel.id;
+    settingsState.channelConnectForm.type = channel.type || channel.id;
+    settingsState.channelConnectForm.name = channel.name || "";
     settingsState.channelConnectForm.token = "";
   }
 
   function cancelChannelConnect() {
-    settingsState.channelConnectForm.channelId = "";
+    settingsState.channelConnectForm.type = "";
+    settingsState.channelConnectForm.name = "";
     settingsState.channelConnectForm.token = "";
   }
 
   async function saveChannelConnection() {
-    const channelId = settingsState.channelConnectForm.channelId;
-    if (!channelId) {
+    const channelType = settingsState.channelConnectForm.type;
+    if (!channelType) {
       return;
     }
     settingsState.channelsLoading = true;
     settingsState.channelsError = "";
     settingsState.channelsNotice = "";
     try {
-      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channelId)}/connect`, {
-        method: "PUT",
+      const payload = await requestSettingsJson("/api/settings/channels", {
+        method: "POST",
         body: JSON.stringify({
+          type: channelType,
+          name: settingsState.channelConnectForm.name,
           token: settingsState.channelConnectForm.token,
         }),
       });

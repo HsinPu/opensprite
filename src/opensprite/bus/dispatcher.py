@@ -44,6 +44,7 @@ class Conversation:
 
 ResponseHandler = Callable[[AssistantMessage, str, str | None], Awaitable[None]]
 RunEventHandler = Callable[[RunEvent], Awaitable[None]]
+ErrorHandler = Callable[[str, str], Awaitable[None]]
 
 
 class MessageQueue:
@@ -86,6 +87,7 @@ class MessageQueue:
         self._session_tails: dict[str, asyncio.Task] = {}
         self._response_handlers: dict[str, ResponseHandler] = {}
         self._run_event_handlers: dict[str, RunEventHandler] = {}
+        self._error_handlers: dict[str, ErrorHandler] = {}
         # Outbound 消費者任務
         self._outbound_task: asyncio.Task | None = None
         self._run_event_task: asyncio.Task | None = None
@@ -132,6 +134,11 @@ class MessageQueue:
         """Register the structured run event handler for a channel."""
         normalized_channel = self.normalize_channel(channel)
         self._run_event_handlers[normalized_channel] = handler
+
+    def register_error_handler(self, channel: str, handler: ErrorHandler) -> None:
+        """Register the processing error handler for a channel instance."""
+        normalized_channel = self.normalize_channel(channel)
+        self._error_handlers[normalized_channel] = handler
 
     @staticmethod
     def _first_command(text: str | None) -> str:
@@ -607,6 +614,11 @@ class MessageQueue:
         """Remove the run event handler for a channel."""
         normalized_channel = self.normalize_channel(channel)
         self._run_event_handlers.pop(normalized_channel, None)
+
+    def unregister_error_handler(self, channel: str) -> None:
+        """Remove the processing error handler for a channel instance."""
+        normalized_channel = self.normalize_channel(channel)
+        self._error_handlers.pop(normalized_channel, None)
     
     async def enqueue(self, user_message: UserMessage) -> None:
         """
@@ -777,7 +789,10 @@ class MessageQueue:
                 content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}"
             )
             await self.bus.publish_outbound(outbound)
-            if hasattr(self, 'on_error'):
+            error_handler = self._error_handlers.get(self.normalize_channel(inbound.channel))
+            if error_handler is not None:
+                await error_handler(session_chat_id, str(e))
+            elif hasattr(self, 'on_error'):
                 await self.on_error(session_chat_id, str(e))
 
     async def _run_session_message(

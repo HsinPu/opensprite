@@ -19,8 +19,8 @@ def test_start_channels_only_runs_enabled_registered_channels(monkeypatch):
         channels_module,
         "CHANNEL_FACTORIES",
         {
-            "telegram": lambda mq, cfg: FakeAdapter("telegram", started),
-            "discord": lambda mq, cfg: FakeAdapter("discord", started),
+            "telegram": lambda mq, instance_id, cfg: FakeAdapter(instance_id, started),
+            "discord": lambda mq, instance_id, cfg: FakeAdapter(instance_id, started),
         },
     )
 
@@ -28,11 +28,13 @@ def test_start_channels_only_runs_enabled_registered_channels(monkeypatch):
         channels_module.start_channels(
             object(),
             {
-                "telegram": {"enabled": True},
-                "discord": {"enabled": False},
-                "console": {"enabled": True},
+                "instances": {
+                    "telegram_work": {"type": "telegram", "enabled": True},
+                    "discord_team": {"type": "discord", "enabled": False},
+                    "console": {"type": "console", "enabled": True},
+                },
             },
         )
     )
 
-    assert started == ["telegram"]
+    assert started == ["telegram_work"]

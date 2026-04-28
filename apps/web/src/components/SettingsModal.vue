@@ -495,6 +495,16 @@
           <p>輸入你的 {{ selectedConnectChannel.name }} token 以連線這個頻道。</p>
 
           <label class="provider-connect-field">
+            <span>頻道名稱</span>
+            <input
+              v-model="settingsState.channelConnectForm.name"
+              type="text"
+              placeholder="例如：工作 Telegram"
+              autocomplete="off"
+            />
+          </label>
+
+          <label class="provider-connect-field">
             <span>{{ selectedConnectChannel.name }} token</span>
             <input
               v-model="settingsState.channelConnectForm.token"
@@ -556,13 +566,13 @@ const selectedConnectProvider = computed(() => {
 });
 
 const selectedConnectChannel = computed(() => {
-  const channelId = props.settingsState.channelConnectForm.channelId;
-  if (!channelId) {
+  const channelType = props.settingsState.channelConnectForm.type;
+  if (!channelType) {
     return null;
   }
   return (
-    props.settingsState.channels.available.find((channel) => channel.id === channelId) ||
-    props.settingsState.channels.connected.find((channel) => channel.id === channelId) ||
+    props.settingsState.channels.available.find((channel) => (channel.type || channel.id) === channelType) ||
+    props.settingsState.channels.connected.find((channel) => (channel.type || channel.id) === channelType) ||
     null
   );
 });

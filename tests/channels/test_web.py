@@ -52,12 +52,13 @@ async def _run_web_roundtrip():
             async with session.get(f"http://127.0.0.1:{port}/healthz") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload == {"ok": True, "channel": "web"}
+                assert payload == {"ok": True, "channel": "web", "channel_type": "web"}
 
             async with session.ws_connect(f"ws://127.0.0.1:{port}/ws") as ws:
                 session_frame = await ws.receive_json(timeout=2)
                 assert session_frame["type"] == "session"
                 assert session_frame["channel"] == "web"
+                assert session_frame["channel_type"] == "web"
                 assert session_frame["session_chat_id"].startswith("web:")
 
                 await queue.bus.publish_run_event(
@@ -75,6 +76,7 @@ async def _run_web_roundtrip():
                 assert run_frame == {
                     "type": "run_event",
                     "channel": "web",
+                    "channel_type": "web",
                     "chat_id": session_frame["chat_id"],
                     "session_chat_id": session_frame["session_chat_id"],
                     "run_id": "run-test",
@@ -88,6 +90,7 @@ async def _run_web_roundtrip():
                 assert reply == {
                     "type": "message",
                     "channel": "web",
+                    "channel_type": "web",
                     "chat_id": session_frame["chat_id"],
                     "session_chat_id": session_frame["session_chat_id"],
                     "text": "echo:hello from browser",
@@ -558,9 +561,7 @@ async def _run_web_settings_provider_api(tmp_path: Path):
                 channels_payload = await resp.json()
 
             channel_ids = {channel["id"] for channel in channels_payload["channels"]}
-            assert "web" not in channel_ids
-            assert "console" not in channel_ids
-            assert channel_ids == {"telegram"}
+            assert channel_ids == set()
             assert channels_payload["connected"] == []
             assert [channel["id"] for channel in channels_payload["available"]] == ["telegram"]
 
@@ -576,42 +577,53 @@ async def _run_web_settings_provider_api(tmp_path: Path):
             ) as resp:
                 assert resp.status == 400
 
-            telegram = next(channel for channel in channels_payload["channels"] if channel["id"] == "telegram")
-            assert telegram["token_configured"] is False
-            assert telegram["settings"] == {}
+            telegram = channels_payload["available"][0]
+            assert telegram["type"] == "telegram"
+            assert telegram["requires_token"] is True
 
-            async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/channels/telegram/connect",
-                json={"token": "telegram-secret"},
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/channels",
+                json={"type": "telegram", "name": "Work Telegram", "token": "telegram-secret"},
             ) as resp:
                 assert resp.status == 200
                 channel_update_payload = await resp.json()
 
             assert channel_update_payload["restart_required"] is True
+            assert channel_update_payload["channel"]["id"] == "telegram_work_telegram"
+            assert channel_update_payload["channel"]["type"] == "telegram"
+            assert channel_update_payload["channel"]["name"] == "Work Telegram"
             assert channel_update_payload["channel"]["enabled"] is True
             assert channel_update_payload["channel"]["token_configured"] is True
             assert channel_update_payload["channel"]["settings"] == {}
             channels = json.loads((tmp_path / "channels.json").read_text(encoding="utf-8"))
-            assert channels["telegram"]["enabled"] is True
-            assert channels["telegram"]["token"] == "telegram-secret"
-            assert channels["telegram"]["drop_pending_updates"] is False
-            assert channels["telegram"]["poll_timeout"] == 10
+            telegram_config = channels["instances"]["telegram_work_telegram"]
+            assert telegram_config["type"] == "telegram"
+            assert telegram_config["enabled"] is True
+            assert telegram_config["token"] == "telegram-secret"
+            assert telegram_config["drop_pending_updates"] is False
+            assert telegram_config["poll_timeout"] == 10
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/channels") as resp:
                 assert resp.status == 200
                 connected_payload = await resp.json()
 
-            assert [channel["id"] for channel in connected_payload["connected"]] == ["telegram"]
-            assert connected_payload["available"] == []
+            assert [channel["id"] for channel in connected_payload["connected"]] == ["telegram_work_telegram"]
+            assert [channel["id"] for channel in connected_payload["available"]] == ["telegram"]
 
-            async with session.post(f"http://127.0.0.1:{port}/api/settings/channels/telegram/disconnect") as resp:
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/channels/telegram_work_telegram/disconnect"
+            ) as resp:
                 assert resp.status == 200
                 channel_disconnect_payload = await resp.json()
 
-            assert channel_disconnect_payload == {"ok": True, "channel_id": "telegram", "restart_required": True}
+            assert channel_disconnect_payload == {
+                "ok": True,
+                "channel_id": "telegram_work_telegram",
+                "instance_id": "telegram_work_telegram",
+                "restart_required": True,
+            }
             channels = json.loads((tmp_path / "channels.json").read_text(encoding="utf-8"))
-            assert channels["telegram"]["enabled"] is False
-            assert channels["telegram"]["token"] == ""
+            assert "telegram_work_telegram" not in channels["instances"]
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/providers") as resp:
                 assert resp.status == 200

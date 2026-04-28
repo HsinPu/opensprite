@@ -1,28 +1,18 @@
 {
-  "telegram": {
-    "enabled": false,
-    "token": "",
-    "connect_timeout": 10,
-    "read_timeout": 30,
-    "write_timeout": 30,
-    "pool_timeout": 30,
-    "get_updates_connect_timeout": 10,
-    "get_updates_read_timeout": 30,
-    "get_updates_write_timeout": 30,
-    "get_updates_pool_timeout": 30,
-    "poll_timeout": 10,
-    "bootstrap_retries": 3,
-    "drop_pending_updates": false
-  },
-  "web": {
-    "enabled": true,
-    "host": "127.0.0.1",
-    "port": 8765,
-    "path": "/ws",
-    "health_path": "/healthz",
-    "max_message_size": 1048576
-  },
-  "console": {
-    "enabled": true
+  "instances": {
+    "web": {
+      "type": "web",
+      "name": "Web",
+      "enabled": true,
+      "host": "127.0.0.1",
+      "port": 8765,
+      "path": "/ws",
+      "health_path": "/healthz",
+      "max_message_size": 1048576,
+      "frontend_auto_build": true,
+      "frontend_auto_install": true,
+      "frontend_build_timeout": 120,
+      "frontend_install_timeout": 300
+    }
   }
 }

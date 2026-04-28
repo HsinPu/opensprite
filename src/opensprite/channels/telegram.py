@@ -24,6 +24,7 @@ from telegram.constants import ChatAction
 from telegram.error import NetworkError, TimedOut
 from telegram.ext import Application, filters
 
+from .identity import build_session_id, normalize_identifier
 from ..config import MessagesConfig
 from ..bus.message import MessageAdapter, UserMessage, AssistantMessage
 from ..utils.log import logger
@@ -64,7 +65,13 @@ class TelegramAdapter(MessageAdapter):
         "video/webm": "webm",
     }
 
-    def __init__(self, bot_token: str, mq=None, config: dict[str, Any] | None = None):
+    def __init__(
+        self,
+        bot_token: str,
+        mq=None,
+        config: dict[str, Any] | None = None,
+        channel_instance_id: str = "telegram",
+    ):
         """
         初始化 Telegram Adapter
         
@@ -77,6 +84,8 @@ class TelegramAdapter(MessageAdapter):
         self.mq = mq
         self.messages = getattr(mq, "messages", None) or MessagesConfig()
         self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self.channel_type = "telegram"
+        self.channel_instance_id = normalize_identifier(channel_instance_id, fallback="telegram")
         self._typing_tasks: dict[str, asyncio.Task] = {}
 
     def _get_int(self, key: str) -> int:
@@ -98,6 +107,7 @@ class TelegramAdapter(MessageAdapter):
     def _describe_startup_config(self) -> str:
         """Build a concise Telegram startup config summary for logs."""
         parts = [
+            f"instance={self.channel_instance_id}",
             f"token={self._mask_token()}",
             f"token_length={len(self.bot_token)}",
             f"has_mq={self.mq is not None}",
@@ -275,8 +285,8 @@ class TelegramAdapter(MessageAdapter):
         if message is None:
             return UserMessage(
                 text="",
-                channel="telegram",
-                metadata={"update_id": raw_update.update_id},
+                channel=self.channel_instance_id,
+                metadata={"update_id": raw_update.update_id, "channel_type": self.channel_type},
                 raw=raw_update,
             )
         
@@ -295,7 +305,7 @@ class TelegramAdapter(MessageAdapter):
         
         # 取出聊天室 ID
         chat_id = str(message.chat.id) if message.chat else None
-        session_chat_id = f"telegram:{chat_id}" if chat_id else None
+        session_chat_id = build_session_id(self.channel_instance_id, chat_id) if chat_id else None
         
         telegram_bot = self._resolve_update_bot(raw_update, bot)
 
@@ -339,6 +349,8 @@ class TelegramAdapter(MessageAdapter):
             logger.warning("Telegram media update has no bot available; skipping media download")
 
         metadata = {
+            "channel_type": self.channel_type,
+            "channel_instance_id": self.channel_instance_id,
             "update_id": raw_update.update_id,
             "message_id": message.message_id,
             "chat_type": getattr(message.chat, "type", None),
@@ -348,7 +360,7 @@ class TelegramAdapter(MessageAdapter):
 
         return UserMessage(
             text=text,
-            channel="telegram",
+            channel=self.channel_instance_id,
             chat_id=chat_id,
             session_chat_id=session_chat_id,
             sender_id=sender_id,
@@ -813,8 +825,12 @@ class TelegramAdapter(MessageAdapter):
 
         if self.mq is None:
             raise RuntimeError("請传入 mq (MessageQueue) 來啟動")
-        self.mq.register_response_handler("telegram", self._on_response)
-        self.mq.on_error = self._on_error
+        self.mq.register_response_handler(self.channel_instance_id, self._on_response)
+        register_error_handler = getattr(self.mq, "register_error_handler", None)
+        if callable(register_error_handler):
+            register_error_handler(self.channel_instance_id, self._on_error)
+        else:
+            self.mq.on_error = self._on_error
         
         # 初始化並啟動
         stage = "initialize"

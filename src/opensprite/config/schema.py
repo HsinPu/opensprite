@@ -4,6 +4,8 @@ from pathlib import Path
 from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ..channels.registry import coerce_channel_instances, default_channel_instances
+
 
 class ProviderConfig(BaseModel):
     """LLM provider configuration."""
@@ -112,34 +114,9 @@ class StorageConfig(BaseModel):
 
 
 class ChannelsConfig(BaseModel):
-    telegram: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": False,
-        "token": "",
-        "connect_timeout": 10,
-        "read_timeout": 30,
-        "write_timeout": 30,
-        "pool_timeout": 30,
-        "get_updates_connect_timeout": 10,
-        "get_updates_read_timeout": 30,
-        "get_updates_write_timeout": 30,
-        "get_updates_pool_timeout": 30,
-        "poll_timeout": 10,
-        "bootstrap_retries": 3,
-        "drop_pending_updates": False,
-    })
-    web: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": True,
-        "host": "127.0.0.1",
-        "port": 8765,
-        "path": "/ws",
-        "health_path": "/healthz",
-        "max_message_size": 1024 * 1024,
-        "frontend_auto_build": True,
-        "frontend_auto_install": True,
-        "frontend_build_timeout": 120,
-        "frontend_install_timeout": 300,
-    })
-    console: dict[str, Any] = Field(default_factory=lambda: {"enabled": True})
+    """Channel instances keyed by channel_instance_id."""
+
+    instances: dict[str, dict[str, Any]] = Field(default_factory=default_channel_instances)
 
 
 class AgentMessagesConfig(BaseModel):
@@ -1087,7 +1064,7 @@ class Config:
             llm=LLMsConfig(**llm_data),
             agent=AgentConfig(**agent_data),
             storage=StorageConfig(**data["storage"]),
-            channels=ChannelsConfig(**merged_channels),
+            channels=ChannelsConfig(instances=coerce_channel_instances(merged_channels)),
             log=LogConfig(**data["log"]) if "log" in data else None,
             tools=ToolsConfig(**tools_data) if "tools" in data else None,
             memory=MemoryConfig(
@@ -1254,11 +1231,7 @@ class Config:
             raise ValueError(f"不支援的格式：{path.suffix}")
         self.write_channels_file(
             path,
-            {
-                "telegram": dict(self.channels.telegram),
-                "web": dict(self.channels.web),
-                "console": dict(self.channels.console),
-            },
+            {"instances": {key: dict(value) for key, value in self.channels.instances.items()}},
             channels_file=self.channels_file,
         )
         self.write_search_file(

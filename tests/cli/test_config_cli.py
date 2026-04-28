@@ -157,7 +157,7 @@ def test_config_validate_reports_valid_split_config(tmp_path):
     assert result.exit_code == 0
     assert "OpenSprite Config Validation" in result.stdout
     assert "Valid: yes" in result.stdout
-    assert "Enabled channels: web, console" in result.stdout
+    assert "Enabled channels: web" in result.stdout
     assert "MCP servers: none" in result.stdout
 
 

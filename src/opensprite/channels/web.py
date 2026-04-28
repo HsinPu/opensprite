@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from aiohttp import WSMsgType, web
 
+from .identity import build_session_id, normalize_identifier
 from ..bus.events import RunEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import Config, MessagesConfig
@@ -56,6 +57,8 @@ class WebAdapter(MessageAdapter):
         self.mq = mq
         self.messages = getattr(mq, "messages", None) or MessagesConfig()
         self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        self.channel_type = "web"
+        self.channel_instance_id = normalize_identifier(str(self.config.get("id") or "web"), fallback="web")
         self.app: web.Application | None = None
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
@@ -250,9 +253,7 @@ class WebAdapter(MessageAdapter):
 
     def _build_session_chat_id(self, chat_id: str | None) -> str:
         normalized_chat_id = self._coerce_optional_text(chat_id, default="default") or "default"
-        if self.mq is not None:
-            return self.mq.build_session_chat_id("web", normalized_chat_id)
-        return f"web:{normalized_chat_id}"
+        return build_session_id(self.channel_instance_id, normalized_chat_id)
 
     @property
     def bound_port(self) -> int | None:
@@ -476,7 +477,7 @@ class WebAdapter(MessageAdapter):
 
         return UserMessage(
             text=self._coerce_optional_text(payload.get("text"), default="") or "",
-            channel="web",
+            channel=self.channel_instance_id,
             chat_id=chat_id,
             session_chat_id=session_chat_id,
             sender_id=self._coerce_optional_text(payload.get("sender_id"), default="web-user"),
@@ -484,7 +485,11 @@ class WebAdapter(MessageAdapter):
             images=self._coerce_media_list(payload.get("images")),
             audios=self._coerce_media_list(payload.get("audios")),
             videos=self._coerce_media_list(payload.get("videos")),
-            metadata=self._coerce_metadata(payload.get("metadata")),
+            metadata={
+                "channel_type": self.channel_type,
+                "channel_instance_id": self.channel_instance_id,
+                **self._coerce_metadata(payload.get("metadata")),
+            },
             raw=payload,
         )
 
@@ -498,7 +503,8 @@ class WebAdapter(MessageAdapter):
         await ws.send_json(
             {
                 "type": "message",
-                "channel": "web",
+                "channel": self.channel_instance_id,
+                "channel_type": self.channel_type,
                 "chat_id": message.chat_id,
                 "session_chat_id": session_chat_id,
                 "text": message.text,
@@ -515,7 +521,8 @@ class WebAdapter(MessageAdapter):
         await ws.send_json(
             {
                 "type": "run_event",
-                "channel": "web",
+                "channel": self.channel_instance_id,
+                "channel_type": self.channel_type,
                 "chat_id": event.chat_id,
                 "session_chat_id": event.session_chat_id,
                 "run_id": event.run_id,
@@ -526,7 +533,7 @@ class WebAdapter(MessageAdapter):
         )
 
     async def _handle_health(self, request: web.Request) -> web.Response:
-        return web.json_response({"ok": True, "channel": "web"})
+        return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
 
     async def _handle_run_events(self, request: web.Request) -> web.Response:
         storage = self._require_storage()
@@ -627,6 +634,21 @@ class WebAdapter(MessageAdapter):
             self._raise_channel_settings_error(exc)
         return web.json_response(payload)
 
+    async def _handle_settings_channel_create(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        channel_type = self._coerce_optional_text(body.get("type"))
+        if channel_type is None:
+            raise web.HTTPBadRequest(text="type is required")
+        try:
+            payload = self._get_channel_settings().create_channel(
+                channel_type,
+                name=self._coerce_optional_text(body.get("name")),
+                token=self._coerce_optional_text(body.get("token")),
+            )
+        except ChannelSettingsError as exc:
+            self._raise_channel_settings_error(exc)
+        return web.json_response(payload)
+
     async def _handle_settings_channel_update(self, request: web.Request) -> web.Response:
         channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
         if channel_id is None:
@@ -651,6 +673,7 @@ class WebAdapter(MessageAdapter):
             payload = self._get_channel_settings().connect_channel(
                 channel_id,
                 token=self._coerce_optional_text(body.get("token")),
+                name=self._coerce_optional_text(body.get("name")),
             )
         except ChannelSettingsError as exc:
             self._raise_channel_settings_error(exc)
@@ -740,7 +763,8 @@ class WebAdapter(MessageAdapter):
         await ws.send_json(
             {
                 "type": "session",
-                "channel": "web",
+                "channel": self.channel_instance_id,
+                "channel_type": self.channel_type,
                 "chat_id": default_chat_id,
                 "session_chat_id": default_session_chat_id,
             }
@@ -783,8 +807,8 @@ class WebAdapter(MessageAdapter):
                 await ws.close()
 
         if self.mq is not None:
-            self.mq.unregister_response_handler("web")
-            self.mq.unregister_run_event_handler("web")
+            self.mq.unregister_response_handler(self.channel_instance_id)
+            self.mq.unregister_run_event_handler(self.channel_instance_id)
 
         if self.runner is not None:
             await self.runner.cleanup()
@@ -810,6 +834,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/runs/{run_id}/events", self._handle_run_events)
         self.app.router.add_post("/api/runs/{run_id}/cancel", self._handle_run_cancel)
         self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
+        self.app.router.add_post("/api/settings/channels", self._handle_settings_channel_create)
         self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
         self.app.router.add_put("/api/settings/channels/{channel_id}/connect", self._handle_settings_channel_connect)
         self.app.router.add_post("/api/settings/channels/{channel_id}/disconnect", self._handle_settings_channel_disconnect)
@@ -825,8 +850,8 @@ class WebAdapter(MessageAdapter):
         else:
             logger.info("Web adapter did not find a frontend directory; serving API endpoints only")
 
-        self.mq.register_response_handler("web", self._on_response)
-        self.mq.register_run_event_handler("web", self._on_run_event)
+        self.mq.register_response_handler(self.channel_instance_id, self._on_response)
+        self.mq.register_run_event_handler(self.channel_instance_id, self._on_run_event)
         self.runner = web.AppRunner(self.app)
         await self.runner.setup()
         self.site = web.TCPSite(self.runner, host=host, port=port)

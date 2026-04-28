@@ -27,7 +27,7 @@ def test_run_onboard_creates_external_config_files(monkeypatch, tmp_path):
     assert (app_home / "messages.json").exists()
     assert (app_home / "mcp_servers.json").exists()
     assert (app_home / "llm.providers.json").exists()
-    assert channels["web"]["enabled"] is True
+    assert channels["instances"]["web"]["enabled"] is True
 
 
 def test_run_onboard_interactive_persists_external_config_updates(monkeypatch, tmp_path):
@@ -46,9 +46,13 @@ def test_run_onboard_interactive_persists_external_config_updates(monkeypatch, t
         updated["llm"]["providers"]["openai"]["enabled"] = True
         updated["llm"]["providers"]["openai"]["model"] = "gpt-4.1-mini"
         updated["llm"]["providers"]["openai"]["api_key"] = "secret-key"
-        updated["channels"]["web"]["enabled"] = False
-        updated["channels"]["telegram"]["enabled"] = True
-        updated["channels"]["telegram"]["token"] = "telegram-secret"
+        updated["channels"]["instances"]["web"]["enabled"] = False
+        updated["channels"]["instances"]["telegram"] = {
+            "type": "telegram",
+            "name": "Telegram",
+            "enabled": True,
+            "token": "telegram-secret",
+        }
         return updated
 
     monkeypatch.setattr(onboard, "_run_interactive_setup", fake_interactive)
@@ -70,17 +74,18 @@ def test_run_onboard_interactive_persists_external_config_updates(monkeypatch, t
     assert "providers" not in main_config["llm"]
     assert providers["openai"]["api_key"] == "secret-key"
     assert providers["openai"]["model"] == "gpt-4.1-mini"
-    assert channels["telegram"]["enabled"] is True
-    assert channels["telegram"]["token"] == "telegram-secret"
+    assert channels["instances"]["telegram"]["enabled"] is True
+    assert channels["instances"]["telegram"]["token"] == "telegram-secret"
 
 
 def test_interactive_channel_selection_keeps_web_enabled(monkeypatch):
     config_data = {
         "llm": {"providers": {}, "default": ""},
         "channels": {
-            "telegram": {"enabled": False, "token": ""},
-            "web": {"enabled": True, "path": "/ws"},
-            "console": {"enabled": True},
+            "instances": {
+                "telegram": {"type": "telegram", "enabled": False, "token": ""},
+                "web": {"type": "web", "enabled": True, "path": "/ws"},
+            },
         },
     }
 
@@ -97,9 +102,9 @@ def test_interactive_channel_selection_keeps_web_enabled(monkeypatch):
 
     updated = onboard._run_interactive_setup(config_data)
 
-    assert updated["channels"]["telegram"]["enabled"] is True
-    assert updated["channels"]["telegram"]["token"] == "telegram-secret"
-    assert updated["channels"]["web"]["enabled"] is True
+    assert updated["channels"]["instances"]["telegram"]["enabled"] is True
+    assert updated["channels"]["instances"]["telegram"]["token"] == "telegram-secret"
+    assert updated["channels"]["instances"]["web"]["enabled"] is True
 
 
 def test_run_onboard_refresh_preserves_existing_external_config(monkeypatch, tmp_path):

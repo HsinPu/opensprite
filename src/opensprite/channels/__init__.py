@@ -7,32 +7,27 @@ opensprite/channels/__init__.py - 訊息頻道適配器
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Callable
+from typing import Any
 
-from .telegram import TelegramAdapter
-from .web import WebAdapter
+from .registry import CHANNEL_ADAPTER_FACTORIES, coerce_channel_instances
+from .identity import normalize_identifier
 from ..utils.log import logger
 
 
-ChannelFactory = Callable[[Any, dict[str, Any]], Any]
+CHANNEL_FACTORIES = CHANNEL_ADAPTER_FACTORIES
 
 
-def _build_telegram_adapter(mq, channel_config: dict[str, Any]) -> TelegramAdapter:
-    return TelegramAdapter(
-        bot_token=channel_config.get("token", ""),
-        mq=mq,
-        config=channel_config,
-    )
+def __getattr__(name: str) -> Any:
+    """Lazily expose adapter classes without creating config import cycles."""
+    if name == "TelegramAdapter":
+        from .telegram import TelegramAdapter
 
+        return TelegramAdapter
+    if name == "WebAdapter":
+        from .web import WebAdapter
 
-def _build_web_adapter(mq, channel_config: dict[str, Any]) -> WebAdapter:
-    return WebAdapter(mq=mq, config=channel_config)
-
-
-CHANNEL_FACTORIES: dict[str, ChannelFactory] = {
-    "telegram": _build_telegram_adapter,
-    "web": _build_web_adapter,
-}
+        return WebAdapter
+    raise AttributeError(name)
 
 
 def _dump_channel_config(channels_config: Any) -> dict[str, Any]:
@@ -49,20 +44,21 @@ def _dump_channel_config(channels_config: Any) -> dict[str, Any]:
 async def start_channels(mq, channels_config) -> None:
     """Start all enabled channels through the adapter registry."""
     tasks: list[asyncio.Task] = []
-    sections = _dump_channel_config(channels_config)
+    sections = coerce_channel_instances(_dump_channel_config(channels_config))
 
-    for channel_name, channel_config in sections.items():
+    for instance_id, channel_config in sections.items():
         if not isinstance(channel_config, dict) or not channel_config.get("enabled"):
             continue
 
-        factory = CHANNEL_FACTORIES.get(channel_name)
+        channel_type = normalize_identifier(str(channel_config.get("type") or instance_id), fallback="")
+        factory = CHANNEL_FACTORIES.get(channel_type)
         if factory is None:
-            logger.warning("Enabled channel '{}' has no registered adapter", channel_name)
+            logger.warning("Enabled channel instance '{}' has no registered adapter", instance_id)
             continue
 
-        adapter = factory(mq, channel_config)
+        adapter = factory(mq, instance_id, channel_config)
         tasks.append(asyncio.create_task(adapter.run()))
-        logger.info("{} 啟動中...", channel_name)
+        logger.info("{} ({}) 啟動中...", channel_config.get("name") or instance_id, instance_id)
 
     if tasks:
         await asyncio.gather(*tasks)

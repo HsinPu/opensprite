@@ -85,6 +85,9 @@ def _format_presence(value: bool) -> str:
 def _iter_channel_status(config_obj) -> list[tuple[str, bool]]:
     """Collect enabled/disabled channel flags from the loaded config."""
     channels = config_obj.channels.model_dump()
+    instances = channels.get("instances") if isinstance(channels, dict) else None
+    if isinstance(instances, dict):
+        channels = instances
     results: list[tuple[str, bool]] = []
     for name, section in channels.items():
         enabled = False

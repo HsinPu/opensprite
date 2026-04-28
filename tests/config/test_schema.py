@@ -421,10 +421,9 @@ def test_config_load_reads_channels_from_external_file(tmp_path):
 
     config = Config.from_json(config_path)
 
-    assert config.channels.telegram["enabled"] is True
-    assert config.channels.telegram["token"] == "abc"
-    assert config.channels.web["enabled"] is True
-    assert config.channels.console["enabled"] is False
+    assert config.channels.instances["telegram"]["enabled"] is True
+    assert config.channels.instances["telegram"]["token"] == "abc"
+    assert config.channels.instances["web"]["enabled"] is True
     assert config.channels_file == "channels.json"
 
 
@@ -442,8 +441,8 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
     )
 
     config = Config.from_json(config_path)
-    config.channels.telegram["enabled"] = True
-    config.channels.telegram["token"] = "secret"
+    config.channels.instances["telegram"]["enabled"] = True
+    config.channels.instances["telegram"]["token"] = "secret"
     config.save(config_path)
 
     saved_main = json.loads(config_path.read_text(encoding="utf-8"))
@@ -451,9 +450,9 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
 
     assert saved_main["channels_file"] == "channels.json"
     assert "channels" not in saved_main
-    assert saved_channels["telegram"]["enabled"] is True
-    assert saved_channels["telegram"]["token"] == "secret"
-    assert saved_channels["web"]["enabled"] is True
+    assert saved_channels["instances"]["telegram"]["enabled"] is True
+    assert saved_channels["instances"]["telegram"]["token"] == "secret"
+    assert saved_channels["instances"]["web"]["enabled"] is True
 
 
 def test_config_save_writes_search_to_external_file(tmp_path):
