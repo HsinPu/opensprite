@@ -80,6 +80,21 @@
               </select>
             </div>
 
+            <label class="settings-row">
+              <div>
+                <strong>顯示 Run 進度</strong>
+                <span>在對話下方顯示目前執行狀態摘要。</span>
+              </div>
+              <input v-model="form.showRunTimeline" class="switch" type="checkbox" />
+            </label>
+
+            <label class="settings-row">
+              <div>
+                <strong>顯示 Trace</strong>
+                <span>顯示工具、LLM、驗證事件等詳細追蹤資訊。</span>
+              </div>
+              <input v-model="form.showRunTrace" class="switch" type="checkbox" />
+            </label>
           </div>
 
           <h3>連線</h3>

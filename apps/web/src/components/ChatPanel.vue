@@ -40,12 +40,12 @@
         <MessageList :messages="messages" :display-name="displayName" />
 
         <RunTimeline
-          v-if="runSummary"
+          v-if="showRunTimeline && runSummary"
           :summary="runSummary"
           :events="runTimeline"
         />
 
-        <RunTraceViewer v-if="currentRun" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
+        <RunTraceViewer v-if="showRunTrace && currentRun" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
       </div>
     </section>
 
@@ -89,6 +89,14 @@ defineProps({
   runSummary: {
     type: Object,
     default: null,
+  },
+  showRunTimeline: {
+    type: Boolean,
+    required: true,
+  },
+  showRunTrace: {
+    type: Boolean,
+    required: true,
   },
   notice: {
     type: Object,

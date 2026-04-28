@@ -24,6 +24,8 @@
       :current-run="currentRun"
       :run-timeline="currentRunTimeline"
       :run-summary="currentRunSummary"
+      :show-run-timeline="state.showRunTimeline"
+      :show-run-trace="state.showRunTrace"
       :notice="state.notice"
       :session-meta="sessionMeta"
       :runtime-hint="runtimeHint"

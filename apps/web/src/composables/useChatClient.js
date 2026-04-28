@@ -4,6 +4,8 @@ const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
   displayName: "opensprite:web:displayName",
   activeChatId: "opensprite:web:activeChatId",
+  showRunTimeline: "opensprite:web:showRunTimeline",
+  showRunTrace: "opensprite:web:showRunTrace",
 };
 
 const SETTINGS_TITLES = {
@@ -71,6 +73,18 @@ function writeStoredValue(key, value) {
     localStorage.setItem(key, value);
   } catch {
     return;
+  }
+}
+
+function readStoredBoolean(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    if (value === null) {
+      return fallback;
+    }
+    return value === "true";
+  } catch {
+    return fallback;
   }
 }
 
@@ -277,6 +291,8 @@ export function useChatClient() {
   const state = reactive({
     wsUrl: readStoredValue(STORAGE_KEYS.wsUrl, DEFAULT_WS_URL),
     displayName: readStoredValue(STORAGE_KEYS.displayName, "Local browser"),
+    showRunTimeline: readStoredBoolean(STORAGE_KEYS.showRunTimeline, true),
+    showRunTrace: readStoredBoolean(STORAGE_KEYS.showRunTrace, true),
     activeChatId: initialSession.chatId,
     sessions: [initialSession],
     connectionState: "disconnected",
@@ -296,6 +312,8 @@ export function useChatClient() {
     wsUrl: state.wsUrl,
     displayName: state.displayName,
     chatId: state.activeChatId,
+    showRunTimeline: state.showRunTimeline,
+    showRunTrace: state.showRunTrace,
   });
   const settingsState = reactive({
     providersLoading: false,
@@ -536,6 +554,8 @@ export function useChatClient() {
     settingsForm.wsUrl = state.wsUrl;
     settingsForm.displayName = state.displayName;
     settingsForm.chatId = currentSession.value?.chatId || "";
+    settingsForm.showRunTimeline = state.showRunTimeline;
+    settingsForm.showRunTrace = state.showRunTrace;
   }
 
   function openSettings(sectionName = "general") {
@@ -853,6 +873,8 @@ export function useChatClient() {
   function saveSettingsAndConnect() {
     state.wsUrl = settingsForm.wsUrl.trim() || DEFAULT_WS_URL;
     state.displayName = settingsForm.displayName.trim() || "Local browser";
+    state.showRunTimeline = Boolean(settingsForm.showRunTimeline);
+    state.showRunTrace = Boolean(settingsForm.showRunTrace);
 
     const requestedChatId = settingsForm.chatId.trim();
     if (requestedChatId) {
@@ -863,6 +885,8 @@ export function useChatClient() {
     writeStoredValue(STORAGE_KEYS.wsUrl, state.wsUrl);
     writeStoredValue(STORAGE_KEYS.displayName, state.displayName);
     writeStoredValue(STORAGE_KEYS.activeChatId, state.activeChatId);
+    writeStoredValue(STORAGE_KEYS.showRunTimeline, String(state.showRunTimeline));
+    writeStoredValue(STORAGE_KEYS.showRunTrace, String(state.showRunTrace));
 
     closeSettings();
     connectSocket();
