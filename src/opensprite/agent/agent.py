@@ -34,11 +34,12 @@ from ..documents.memory import MemoryStore
 from ..context.paths import get_chat_workspace, get_recent_summary_state_file
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import MediaRouter
+from ..planning_mode import PLANNING_ALLOWED_TOOLS
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..search.base import SearchStore
-from ..tools import ToolRegistry
+from ..tools import BatchTool, ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
-from ..tools.permissions import PermissionApprovalResult, PermissionDecision
+from ..tools.permissions import CompositeToolPermissionPolicy, PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
@@ -598,6 +599,7 @@ class AgentLoop:
             build_system_prompt=lambda chat_id: self._context_builder.build_system_prompt(chat_id),
             log_prepared_messages=self._log_prepared_messages,
             get_work_state_summary=lambda chat_id: self._get_work_state_summary(chat_id),
+            get_planning_tool_registry=self._planning_mode_tool_registry,
             get_current_run_id=self.turn_context.current_run_id,
             should_cancel_run=lambda chat_id, run_id: self._is_run_cancel_requested(chat_id, run_id),
             make_tool_progress_hook=lambda *args, **kwargs: self._make_tool_progress_hook(*args, **kwargs),
@@ -879,6 +881,29 @@ class AgentLoop:
     def _get_current_chat_id(self) -> str | None:
         """Return the current task-local chat id."""
         return self.turn_context.current_chat_id()
+
+    def _planning_mode_tool_registry(self) -> ToolRegistry:
+        """Return a read-only registry used for explicit plan-only turns."""
+        planning_policy = ToolPermissionPolicy(
+            allowed_tools=list(PLANNING_ALLOWED_TOOLS),
+            allowed_risk_levels=["read", "network"],
+            denied_risk_levels=[
+                "write",
+                "execute",
+                "external_side_effect",
+                "configuration",
+                "delegation",
+                "memory",
+                "mcp",
+            ],
+        )
+        registry = self.tools.filtered(
+            include_names=PLANNING_ALLOWED_TOOLS,
+            permission_policy=CompositeToolPermissionPolicy(self.tools.permission_policy, planning_policy),
+        )
+        if "batch" in registry.tool_names:
+            registry.register(BatchTool(registry_resolver=lambda: registry))
+        return registry
 
     def _current_background_session_owner(self) -> dict[str, str | None] | None:
         """Return active turn ownership metadata for managed background sessions."""

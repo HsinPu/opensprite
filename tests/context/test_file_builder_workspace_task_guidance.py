@@ -53,3 +53,20 @@ def test_build_messages_skips_workspace_task_guidance_for_plain_chat(tmp_path):
 
     assert [message["role"] for message in messages] == ["system", "user", "user"]
     assert "# Workspace Task Guidance" not in messages[0]["content"]
+
+
+def test_build_messages_adds_planning_mode_overlay_for_explicit_plan_only_request(tmp_path):
+    builder = _builder(tmp_path)
+
+    messages = builder.build_messages(
+        history=[],
+        current_message="先規劃不要動手，幫我整理 tests/test_app.py 這個修復方案",
+        channel="web",
+        chat_id="web:browser-1",
+    )
+
+    assert [message["role"] for message in messages] == ["system", "system", "system", "user", "user"]
+    assert messages[1]["content"].startswith("# Workspace Task Guidance")
+    assert messages[2]["content"].startswith("# Planning Mode")
+    assert "MUST NOT edit files" in messages[2]["content"]
+    assert "read-only planning mode" in messages[2]["content"]
