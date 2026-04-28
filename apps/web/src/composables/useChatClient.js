@@ -11,7 +11,7 @@ const STORAGE_KEYS = {
 const SETTINGS_TITLES = {
   general: "一般",
   shortcuts: "快速鍵",
-  channels: "Channels",
+  channels: "頻道",
   providers: "提供者",
   models: "模型",
 };
@@ -321,9 +321,14 @@ export function useChatClient() {
     channelsError: "",
     channelsNotice: "",
     channels: {
+      connected: [],
+      available: [],
       channels: [],
     },
-    channelDrafts: {},
+    channelConnectForm: {
+      channelId: "",
+      token: "",
+    },
     providersLoading: false,
     providersError: "",
     providersNotice: "",
@@ -649,32 +654,23 @@ export function useChatClient() {
     }
   }
 
-  function syncChannelDrafts() {
-    for (const channel of settingsState.channels.channels || []) {
-      const settings = channel.settings || {};
-      settingsState.channelDrafts[channel.id] = {
-        enabled: Boolean(channel.enabled),
-        token: "",
-        host: settings.host || "",
-        port: settings.port ?? "",
-        path: settings.path || "",
-        healthPath: settings.health_path || "",
-        maxMessageSize: settings.max_message_size ?? "",
-        dropPendingUpdates: Boolean(settings.drop_pending_updates),
-        pollTimeout: settings.poll_timeout ?? "",
-        bootstrapRetries: settings.bootstrap_retries ?? "",
-      };
-    }
+  function visibleChannels(channels) {
+    return (channels || []).filter((channel) => channel.id !== "web" && channel.id !== "console");
   }
 
   async function loadChannelSettings() {
     settingsState.channelsLoading = true;
     settingsState.channelsError = "";
     try {
-      settingsState.channels = await requestSettingsJson("/api/settings/channels");
-      syncChannelDrafts();
+      const payload = await requestSettingsJson("/api/settings/channels");
+      settingsState.channels = {
+        ...payload,
+        connected: visibleChannels(payload.connected),
+        available: visibleChannels(payload.available),
+        channels: visibleChannels(payload.channels),
+      };
     } catch (error) {
-      settingsState.channelsError = error?.message || "Could not load channel settings.";
+      settingsState.channelsError = error?.message || "無法載入頻道設定。";
     } finally {
       settingsState.channelsLoading = false;
     }
@@ -711,51 +707,60 @@ export function useChatClient() {
     }
   }
 
-  function buildChannelSettingsPayload(channel, draft) {
-    if (channel.id === "web") {
-      return {
-        host: draft.host,
-        port: draft.port,
-        path: draft.path,
-        health_path: draft.healthPath,
-      };
-    }
-    if (channel.id === "telegram") {
-      const settings = {
-        drop_pending_updates: Boolean(draft.dropPendingUpdates),
-        poll_timeout: draft.pollTimeout,
-        bootstrap_retries: draft.bootstrapRetries,
-      };
-      if (String(draft.token || "").trim()) {
-        settings.token = draft.token;
-      }
-      return settings;
-    }
-    return {};
+  function beginChannelConnect(channel) {
+    settingsState.channelsNotice = "";
+    settingsState.channelsError = "";
+    cancelProviderConnect();
+    settingsState.channelConnectForm.channelId = channel.id;
+    settingsState.channelConnectForm.token = "";
   }
 
-  async function updateChannelSettings(channel) {
-    const draft = settingsState.channelDrafts[channel.id];
-    if (!draft) {
+  function cancelChannelConnect() {
+    settingsState.channelConnectForm.channelId = "";
+    settingsState.channelConnectForm.token = "";
+  }
+
+  async function saveChannelConnection() {
+    const channelId = settingsState.channelConnectForm.channelId;
+    if (!channelId) {
       return;
     }
     settingsState.channelsLoading = true;
     settingsState.channelsError = "";
     settingsState.channelsNotice = "";
     try {
-      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channel.id)}`, {
+      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channelId)}/connect`, {
         method: "PUT",
         body: JSON.stringify({
-          enabled: Boolean(draft.enabled),
-          settings: buildChannelSettingsPayload(channel, draft),
+          token: settingsState.channelConnectForm.token,
         }),
       });
       settingsState.channelsNotice = payload.restart_required
-        ? `${channel.name} 已儲存，重啟 opensprite gateway 後生效。`
-        : `${channel.name} 已套用。`;
+        ? `${payload.channel.name} 已連線，重啟 opensprite gateway 後生效。`
+        : `${payload.channel.name} 已連線。`;
+      cancelChannelConnect();
       await loadChannelSettings();
     } catch (error) {
-      settingsState.channelsError = error?.message || "Could not update channel settings.";
+      settingsState.channelsError = error?.message || "無法連線頻道。";
+    } finally {
+      settingsState.channelsLoading = false;
+    }
+  }
+
+  async function disconnectChannel(channel) {
+    settingsState.channelsLoading = true;
+    settingsState.channelsError = "";
+    settingsState.channelsNotice = "";
+    try {
+      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channel.id)}/disconnect`, {
+        method: "POST",
+      });
+      settingsState.channelsNotice = payload.restart_required
+        ? `${channel.name} 已中斷連線，重啟 opensprite gateway 後生效。`
+        : `${channel.name} 已中斷連線。`;
+      await loadChannelSettings();
+    } catch (error) {
+      settingsState.channelsError = error?.message || "無法中斷頻道連線。";
     } finally {
       settingsState.channelsLoading = false;
     }
@@ -764,6 +769,7 @@ export function useChatClient() {
   function beginProviderConnect(provider) {
     settingsState.providersNotice = "";
     settingsState.providersError = "";
+    cancelChannelConnect();
     settingsState.connectForm.providerId = provider.id;
     settingsState.connectForm.apiKey = "";
     settingsState.connectForm.baseUrl = provider.default_base_url || provider.base_url || "";
@@ -1128,7 +1134,10 @@ export function useChatClient() {
     loadProviderSettings,
     loadModelSettings,
     loadChannelSettings,
-    updateChannelSettings,
+    beginChannelConnect,
+    cancelChannelConnect,
+    saveChannelConnection,
+    disconnectChannel,
     beginProviderConnect,
     cancelProviderConnect,
     saveProviderConnection,

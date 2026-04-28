@@ -35,15 +35,6 @@
           <p>伺服器</p>
           <button
             class="settings-nav__item"
-            :class="{ 'settings-nav__item--active': section === 'channels' }"
-            type="button"
-            @click="$emit('select-section', 'channels')"
-          >
-            <span aria-hidden="true">☷</span>
-            Channels
-          </button>
-          <button
-            class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'providers' }"
             type="button"
             @click="$emit('select-section', 'providers')"
@@ -59,6 +50,15 @@
           >
             <span aria-hidden="true">✦</span>
             模型
+          </button>
+          <button
+            class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'channels' }"
+            type="button"
+            @click="$emit('select-section', 'channels')"
+          >
+            <span aria-hidden="true">☷</span>
+            頻道
           </button>
         </div>
 
@@ -183,7 +183,7 @@
         </section>
 
         <section v-show="section === 'channels'" class="settings-page">
-          <p v-if="settingsState.channelsLoading" class="settings-inline-status">讀取 channel 設定中...</p>
+          <p v-if="settingsState.channelsLoading" class="settings-inline-status">讀取頻道設定中...</p>
           <p v-if="settingsState.channelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.channelsError }}
           </p>
@@ -191,94 +191,70 @@
             {{ settingsState.channelsNotice }}
           </p>
 
-          <h3>Channels</h3>
-          <template v-for="channel in settingsState.channels.channels" :key="channel.id">
-            <div v-if="settingsState.channelDrafts[channel.id]" class="settings-card channel-card">
-              <div class="channel-card__header">
+          <h3>已連線的頻道</h3>
+          <div class="settings-card provider-card">
+            <div v-if="settingsState.channels.connected.length === 0" class="provider-row provider-row--empty">
+              <div>
+                <strong>尚未連線頻道</strong>
+                <span>從下方可新增頻道開始連線。</span>
+              </div>
+            </div>
+
+            <div v-for="channel in settingsState.channels.connected" :key="channel.id" class="provider-row">
+              <div class="provider-row__main">
+                <span class="provider-row__mark" aria-hidden="true">{{ channel.name.slice(0, 2) }}</span>
+                <div>
+                  <div class="provider-row__title">
+                    <strong>{{ channel.name }}</strong>
+                    <span class="provider-row__badge">已連線</span>
+                    <span v-if="channel.enabled" class="provider-row__badge">啟用</span>
+                  </div>
+                  <span>{{ channel.description }}</span>
+                </div>
+              </div>
+              <button
+                class="provider-row__action"
+                type="button"
+                :disabled="settingsState.channelsLoading"
+                @click="$emit('disconnect-channel', channel)"
+              >
+                中斷連線
+              </button>
+            </div>
+          </div>
+
+          <h3>可新增頻道</h3>
+          <div class="settings-card provider-card">
+            <div v-if="settingsState.channels.available.length === 0" class="provider-row provider-row--empty">
+              <div>
+                <strong>所有內建頻道都已連線</strong>
+                <span>需要停用時可在上方中斷連線。</span>
+              </div>
+            </div>
+
+            <div v-for="channel in settingsState.channels.available" :key="channel.id" class="provider-row provider-row--stacked">
+              <div class="provider-row__content">
                 <div class="provider-row__main">
                   <span class="provider-row__mark" aria-hidden="true">{{ channel.name.slice(0, 2) }}</span>
                   <div>
                     <div class="provider-row__title">
                       <strong>{{ channel.name }}</strong>
-                      <span class="provider-row__badge">{{ channel.enabled ? "啟用" : "停用" }}</span>
-                      <span v-if="!channel.registered" class="provider-row__badge">未註冊 adapter</span>
+                      <span class="provider-row__badge">內建</span>
                     </div>
                     <span>{{ channel.description }}</span>
                   </div>
                 </div>
-                <input
-                  v-model="settingsState.channelDrafts[channel.id].enabled"
-                  class="switch"
-                  type="checkbox"
-                  :disabled="settingsState.channelsLoading"
-                />
-              </div>
-
-              <div v-if="channel.id === 'web'" class="channel-fields">
-                <label class="channel-field">
-                  <span>Host</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].host" type="text" spellcheck="false" />
-                </label>
-                <label class="channel-field">
-                  <span>Port</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].port" type="number" min="1" max="65535" />
-                </label>
-                <label class="channel-field">
-                  <span>WebSocket path</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].path" type="text" spellcheck="false" />
-                </label>
-                <label class="channel-field">
-                  <span>Health path</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].healthPath" type="text" spellcheck="false" />
-                </label>
-              </div>
-
-              <div v-else-if="channel.id === 'telegram'" class="channel-fields">
-                <label class="channel-field channel-field--wide">
-                  <span>Bot token</span>
-                  <input
-                    v-model="settingsState.channelDrafts[channel.id].token"
-                    type="password"
-                    :placeholder="channel.token_configured ? 'Token already configured' : 'Telegram bot token'"
-                    autocomplete="off"
-                  />
-                </label>
-                <label class="channel-field">
-                  <span>Poll timeout</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].pollTimeout" type="number" min="1" />
-                </label>
-                <label class="channel-field">
-                  <span>Bootstrap retries</span>
-                  <input v-model="settingsState.channelDrafts[channel.id].bootstrapRetries" type="number" min="0" />
-                </label>
-                <label class="settings-row channel-card__switch-row">
-                  <div>
-                    <strong>Drop pending updates</strong>
-                    <span>啟動 Telegram bot 時丟棄尚未處理的舊訊息。</span>
-                  </div>
-                  <input
-                    v-model="settingsState.channelDrafts[channel.id].dropPendingUpdates"
-                    class="switch"
-                    type="checkbox"
-                  />
-                </label>
-              </div>
-
-              <p v-else class="settings-muted">這個 channel 目前沒有可編輯欄位。</p>
-
-              <div class="channel-card__footer">
-                <span class="settings-muted">儲存後需重啟 gateway 才會啟停 channel adapter。</span>
                 <button
-                  class="secondary-button"
+                  class="provider-row__action"
                   type="button"
                   :disabled="settingsState.channelsLoading"
-                  @click="$emit('update-channel', channel)"
+                  @click="$emit('begin-channel-connect', channel)"
                 >
-                  儲存 Channel
+                  + 新增
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </section>
 
         <section v-show="section === 'providers'" class="settings-page">
@@ -489,6 +465,50 @@
           </button>
         </form>
       </div>
+
+      <div v-if="selectedConnectChannel" class="provider-connect-dialog" role="dialog" aria-modal="true">
+        <header class="provider-connect-dialog__top">
+          <button
+            class="provider-connect-dialog__icon-button"
+            type="button"
+            aria-label="Back to channels"
+            @click="$emit('cancel-channel-connect')"
+          >
+            ←
+          </button>
+          <button
+            class="provider-connect-dialog__icon-button"
+            type="button"
+            aria-label="Close channel connection"
+            @click="$emit('cancel-channel-connect')"
+          >
+            ×
+          </button>
+        </header>
+
+        <form class="provider-connect-dialog__body" @submit.prevent="$emit('save-channel-connection')">
+          <div class="provider-connect-dialog__title">
+            <span class="provider-row__mark" aria-hidden="true">{{ selectedConnectChannel.name.slice(0, 2) }}</span>
+            <h3>新增 {{ selectedConnectChannel.name }}</h3>
+          </div>
+
+          <p>輸入你的 {{ selectedConnectChannel.name }} token 以連線這個頻道。</p>
+
+          <label class="provider-connect-field">
+            <span>{{ selectedConnectChannel.name }} token</span>
+            <input
+              v-model="settingsState.channelConnectForm.token"
+              type="password"
+              placeholder="Token"
+              autocomplete="off"
+            />
+          </label>
+
+          <button class="primary-button provider-connect-dialog__submit" type="submit">
+            提交
+          </button>
+        </form>
+      </div>
     </section>
   </div>
 </template>
@@ -535,6 +555,18 @@ const selectedConnectProvider = computed(() => {
   );
 });
 
+const selectedConnectChannel = computed(() => {
+  const channelId = props.settingsState.channelConnectForm.channelId;
+  if (!channelId) {
+    return null;
+  }
+  return (
+    props.settingsState.channels.available.find((channel) => channel.id === channelId) ||
+    props.settingsState.channels.connected.find((channel) => channel.id === channelId) ||
+    null
+  );
+});
+
 const connectionSwitchChecked = computed(
   () => props.connectionState === "connected" || props.connectionState === "connecting",
 );
@@ -553,7 +585,10 @@ defineEmits([
   "close",
   "select-section",
   "toggle-connection",
-  "update-channel",
+  "begin-channel-connect",
+  "cancel-channel-connect",
+  "save-channel-connection",
+  "disconnect-channel",
   "begin-provider-connect",
   "cancel-provider-connect",
   "save-provider-connection",

@@ -58,7 +58,10 @@
     @close="closeSettings"
     @select-section="selectSettingsSection"
     @toggle-connection="toggleSettingsConnection"
-    @update-channel="updateChannelSettings"
+    @begin-channel-connect="beginChannelConnect"
+    @cancel-channel-connect="cancelChannelConnect"
+    @save-channel-connection="saveChannelConnection"
+    @disconnect-channel="disconnectChannel"
     @begin-provider-connect="beginProviderConnect"
     @cancel-provider-connect="cancelProviderConnect"
     @save-provider-connection="saveProviderConnection"
@@ -101,7 +104,10 @@ const {
   selectSettingsSection,
   openSettings,
   closeSettings,
-  updateChannelSettings,
+  beginChannelConnect,
+  cancelChannelConnect,
+  saveChannelConnection,
+  disconnectChannel,
   beginProviderConnect,
   cancelProviderConnect,
   saveProviderConnection,

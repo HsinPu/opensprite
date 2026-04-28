@@ -22,31 +22,29 @@ class ChannelSettingsNotFound(ChannelSettingsError):
 
 
 REGISTERED_CHANNELS = frozenset({"telegram", "web"})
-CHANNEL_ORDER = ("web", "telegram", "console")
+FIXED_CHANNELS = frozenset({"web", "console"})
+CHANNEL_ORDER = ("telegram",)
+CONNECTABLE_CHANNELS = frozenset({"telegram"})
 CHANNEL_NAMES = {
     "web": "Web",
     "telegram": "Telegram",
     "console": "Console",
 }
 CHANNEL_DESCRIPTIONS = {
-    "web": "Browser WebSocket channel and settings UI.",
-    "telegram": "Telegram bot channel for chat messages.",
-    "console": "Legacy console config; no runtime adapter is registered.",
+    "web": "瀏覽器 WebSocket 頻道與設定介面。",
+    "telegram": "透過 Telegram bot 收發聊天訊息。",
+    "console": "舊版 console 設定；目前沒有註冊 runtime adapter。",
 }
 SECRET_FIELDS = frozenset({"token"})
-
-
-def _ordered_channel_ids(channels: dict[str, Any]) -> list[str]:
-    ordered = [name for name in CHANNEL_ORDER if name in channels]
-    ordered.extend(sorted(name for name in channels if name not in CHANNEL_ORDER))
-    return ordered
 
 
 def _channel_name(channel_id: str) -> str:
     return CHANNEL_NAMES.get(channel_id, channel_id.replace("_", " ").replace("-", " ").title())
 
 
-def _sanitize_settings(channel: dict[str, Any]) -> dict[str, Any]:
+def _sanitize_settings(channel_id: str, channel: dict[str, Any]) -> dict[str, Any]:
+    if channel_id == "telegram":
+        return {}
     return {
         key: value
         for key, value in channel.items()
@@ -63,8 +61,12 @@ def _serialize_channel(channel_id: str, channel: dict[str, Any]) -> dict[str, An
         "enabled": bool(channel.get("enabled")),
         "registered": channel_id in REGISTERED_CHANNELS,
         "token_configured": bool(token.strip()),
-        "settings": _sanitize_settings(channel),
+        "settings": _sanitize_settings(channel_id, channel),
     }
+
+
+def _empty_channel(channel_id: str) -> dict[str, Any]:
+    return {"enabled": False, "token": ""} if channel_id == "telegram" else {"enabled": False}
 
 
 def _coerce_bool(value: Any, *, field: str) -> bool:
@@ -73,28 +75,11 @@ def _coerce_bool(value: Any, *, field: str) -> bool:
     raise ChannelSettingsValidationError(f"{field} must be a boolean")
 
 
-def _coerce_int(value: Any, *, field: str, minimum: int | None = None, maximum: int | None = None) -> int:
-    try:
-        number = int(value)
-    except (TypeError, ValueError) as exc:
-        raise ChannelSettingsValidationError(f"{field} must be an integer") from exc
-    if minimum is not None and number < minimum:
-        raise ChannelSettingsValidationError(f"{field} must be at least {minimum}")
-    if maximum is not None and number > maximum:
-        raise ChannelSettingsValidationError(f"{field} must be at most {maximum}")
-    return number
-
-
 def _coerce_text(value: Any, *, field: str, allow_empty: bool = True) -> str:
     text = str(value or "").strip()
     if not allow_empty and not text:
         raise ChannelSettingsValidationError(f"{field} cannot be empty")
     return text
-
-
-def _coerce_path(value: Any, *, field: str) -> str:
-    text = _coerce_text(value, field=field, allow_empty=False)
-    return text if text.startswith("/") else f"/{text}"
 
 
 class ChannelSettingsService:
@@ -121,21 +106,74 @@ class ChannelSettingsService:
         Config.write_channels_file(self.config_path, channels, main_data)
 
     def list_channels(self) -> dict[str, Any]:
-        """Return configured channels without leaking secrets."""
+        """Return connected and available channels without leaking secrets."""
         main_data, channels = self._load_state()
+        connected: list[dict[str, Any]] = []
+        available: list[dict[str, Any]] = []
+        for channel_id in CHANNEL_ORDER:
+            channel = channels.get(channel_id)
+            if not isinstance(channel, dict):
+                channel = _empty_channel(channel_id)
+            serialized = _serialize_channel(channel_id, channel)
+            if serialized["token_configured"]:
+                connected.append(serialized)
+            else:
+                available.append(serialized)
+
         return {
-            "channels": [
-                _serialize_channel(channel_id, channels[channel_id])
-                for channel_id in _ordered_channel_ids(channels)
-                if isinstance(channels.get(channel_id), dict)
-            ],
+            "connected": connected,
+            "available": available,
+            "channels": connected + available,
             "restart_required": False,
             "config_path": str(self.config_path),
             "channels_file": str(Config.get_channels_file_path(self.config_path, main_data)),
         }
 
+    def connect_channel(self, channel_id: str, *, token: str | None) -> dict[str, Any]:
+        """Connect or update one channel credential."""
+        if channel_id not in CONNECTABLE_CHANNELS:
+            raise ChannelSettingsNotFound(f"Unknown connectable channel: {channel_id}")
+
+        main_data, channels = self._load_state()
+        channel = channels.get(channel_id)
+        if not isinstance(channel, dict):
+            channel = _empty_channel(channel_id)
+            channels[channel_id] = channel
+
+        normalized_token = _coerce_text(token, field="token")
+        if normalized_token:
+            channel["token"] = normalized_token
+        elif not str(channel.get("token", "") or "").strip():
+            raise ChannelSettingsValidationError("token is required when connecting a new channel")
+        channel["enabled"] = True
+
+        self._persist_channels_state(main_data, channels)
+        return {
+            "ok": True,
+            "channel": _serialize_channel(channel_id, channel),
+            "restart_required": True,
+        }
+
+    def disconnect_channel(self, channel_id: str) -> dict[str, Any]:
+        """Disconnect one channel by disabling it and clearing its credential."""
+        if channel_id not in CONNECTABLE_CHANNELS:
+            raise ChannelSettingsNotFound(f"Unknown connectable channel: {channel_id}")
+
+        main_data, channels = self._load_state()
+        channel = channels.get(channel_id)
+        if not isinstance(channel, dict) or not str(channel.get("token", "") or "").strip():
+            raise ChannelSettingsNotFound(f"Channel is not connected: {channel_id}")
+
+        channel["enabled"] = False
+        channel["token"] = ""
+        self._persist_channels_state(main_data, channels)
+        return {"ok": True, "channel_id": channel_id, "restart_required": True}
+
     def update_channel(self, channel_id: str, *, enabled: bool | None, settings: dict[str, Any]) -> dict[str, Any]:
         """Update one channel and persist it."""
+        if channel_id in FIXED_CHANNELS:
+            raise ChannelSettingsValidationError(f"{_channel_name(channel_id)} channel cannot be edited from settings")
+
         main_data, channels = self._load_state()
         channel = channels.get(channel_id)
         if not isinstance(channel, dict):
@@ -146,9 +184,7 @@ class ChannelSettingsService:
         if not isinstance(settings, dict):
             raise ChannelSettingsValidationError("settings must be an object")
 
-        if channel_id == "web":
-            self._update_web_settings(channel, settings)
-        elif channel_id == "telegram":
+        if channel_id == "telegram":
             self._update_telegram_settings(channel, settings)
         elif channel_id == "console":
             pass
@@ -162,35 +198,9 @@ class ChannelSettingsService:
             "restart_required": True,
         }
 
-    def _update_web_settings(self, channel: dict[str, Any], settings: dict[str, Any]) -> None:
-        if "host" in settings:
-            channel["host"] = _coerce_text(settings["host"], field="host", allow_empty=False)
-        if "port" in settings:
-            channel["port"] = _coerce_int(settings["port"], field="port", minimum=1, maximum=65535)
-        if "path" in settings:
-            channel["path"] = _coerce_path(settings["path"], field="path")
-        if "health_path" in settings:
-            channel["health_path"] = _coerce_path(settings["health_path"], field="health_path")
-        if "max_message_size" in settings:
-            channel["max_message_size"] = _coerce_int(
-                settings["max_message_size"],
-                field="max_message_size",
-                minimum=1024,
-            )
-
     def _update_telegram_settings(self, channel: dict[str, Any], settings: dict[str, Any]) -> None:
+        unsupported = set(settings) - {"token"}
+        if unsupported:
+            raise ChannelSettingsValidationError("Only token can be edited for Telegram")
         if "token" in settings:
             channel["token"] = _coerce_text(settings["token"], field="token")
-        if "drop_pending_updates" in settings:
-            channel["drop_pending_updates"] = _coerce_bool(
-                settings["drop_pending_updates"],
-                field="drop_pending_updates",
-            )
-        if "poll_timeout" in settings:
-            channel["poll_timeout"] = _coerce_int(settings["poll_timeout"], field="poll_timeout", minimum=1)
-        if "bootstrap_retries" in settings:
-            channel["bootstrap_retries"] = _coerce_int(
-                settings["bootstrap_retries"],
-                field="bootstrap_retries",
-                minimum=0,
-            )

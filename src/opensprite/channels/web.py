@@ -642,6 +642,30 @@ class WebAdapter(MessageAdapter):
             self._raise_channel_settings_error(exc)
         return web.json_response(payload)
 
+    async def _handle_settings_channel_connect(self, request: web.Request) -> web.Response:
+        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
+        if channel_id is None:
+            raise web.HTTPBadRequest(text="channel_id is required")
+        body = await self._read_json_body(request)
+        try:
+            payload = self._get_channel_settings().connect_channel(
+                channel_id,
+                token=self._coerce_optional_text(body.get("token")),
+            )
+        except ChannelSettingsError as exc:
+            self._raise_channel_settings_error(exc)
+        return web.json_response(payload)
+
+    async def _handle_settings_channel_disconnect(self, request: web.Request) -> web.Response:
+        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
+        if channel_id is None:
+            raise web.HTTPBadRequest(text="channel_id is required")
+        try:
+            payload = self._get_channel_settings().disconnect_channel(channel_id)
+        except ChannelSettingsError as exc:
+            self._raise_channel_settings_error(exc)
+        return web.json_response(payload)
+
     async def _handle_settings_provider_connect(self, request: web.Request) -> web.Response:
         provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
         if provider_id is None:
@@ -787,6 +811,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_post("/api/runs/{run_id}/cancel", self._handle_run_cancel)
         self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
         self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
+        self.app.router.add_put("/api/settings/channels/{channel_id}/connect", self._handle_settings_channel_connect)
+        self.app.router.add_post("/api/settings/channels/{channel_id}/disconnect", self._handle_settings_channel_disconnect)
         self.app.router.add_get("/api/settings/providers", self._handle_settings_providers)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
