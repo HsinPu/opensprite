@@ -299,9 +299,9 @@ class WebAdapter(MessageAdapter):
     def _get_provider_settings(self) -> ProviderSettingsService:
         return ProviderSettingsService(self._get_config_path())
 
-    def _reload_agent_llm_from_config(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
-        if not payload.get("restart_required"):
+        if not force and not payload.get("restart_required"):
             return payload
 
         updated = dict(payload)
@@ -626,7 +626,7 @@ class WebAdapter(MessageAdapter):
             payload = self._get_provider_settings().disconnect_provider(provider_id)
         except ProviderSettingsError as exc:
             self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload)
+        payload = self._reload_agent_llm_from_config(payload, force=True)
         return web.json_response(payload)
 
     async def _handle_settings_models(self, request: web.Request) -> web.Response:

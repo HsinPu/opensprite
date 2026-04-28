@@ -597,6 +597,27 @@ async def _run_web_settings_provider_api(tmp_path: Path):
             assert providers["openai"]["enabled"] is True
             assert providers["openai"]["model"] == "gpt-4.1-mini"
 
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/providers/openrouter/connect",
+                json={"api_key": "router-key"},
+            ) as resp:
+                assert resp.status == 200
+
+            async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/openrouter/disconnect") as resp:
+                assert resp.status == 200
+                inactive_disconnect_payload = await resp.json()
+
+            assert inactive_disconnect_payload == {
+                "ok": True,
+                "provider_id": "openrouter",
+                "restart_required": False,
+                "runtime_reloaded": True,
+                "runtime": {"provider_id": "openai", "model": "gpt-4.1-mini", "configured": True},
+            }
+            assert agent.reloads[-1] == ("openai", "gpt-4.1-mini")
+            providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+            assert set(providers) == {"openai"}
+
             async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/openai/disconnect") as resp:
                 assert resp.status == 200
                 disconnect_payload = await resp.json()
