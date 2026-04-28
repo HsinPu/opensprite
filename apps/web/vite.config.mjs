@@ -11,6 +11,7 @@ export default defineConfig({
         ws: true,
       },
       "/healthz": "http://127.0.0.1:8765",
+      "/api": "http://127.0.0.1:8765",
     },
   },
   build: {
