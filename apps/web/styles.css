@@ -539,10 +539,17 @@ button:disabled {
   gap: 14px;
 }
 
-.run-timeline__header > div {
+.run-timeline__title {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.run-timeline__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .run-timeline__eyebrow {
@@ -568,6 +575,22 @@ button:disabled {
   background: rgba(255, 255, 255, 0.74);
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.run-block-toggle {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.82);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.run-block-toggle:hover {
+  border-color: var(--border);
+  color: var(--text);
 }
 
 .run-timeline__list {
@@ -658,7 +681,7 @@ button:disabled {
   gap: 12px;
 }
 
-.run-trace__header > div {
+.run-trace__title {
   display: grid;
   min-width: 0;
   gap: 3px;
@@ -712,6 +735,11 @@ button:disabled {
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+.run-trace__body {
+  display: grid;
+  gap: 10px;
 }
 
 .run-trace__cancel {

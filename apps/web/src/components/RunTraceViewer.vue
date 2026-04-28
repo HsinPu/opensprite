@@ -1,12 +1,15 @@
 <template>
-  <section v-if="run" class="run-trace" aria-label="Run trace viewer">
+  <section v-if="run" class="run-trace" :data-collapsed="!expanded" aria-label="Run trace viewer">
     <header class="run-trace__header">
-      <div>
+      <div class="run-trace__title">
         <span class="run-trace__eyebrow">Trace</span>
         <strong>{{ run.runId }}</strong>
       </div>
       <div class="run-trace__actions">
         <span class="run-trace__status" :data-status="run.status">{{ run.status }}</span>
+        <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? "收起" : "展開" }}
+        </button>
         <button
           v-if="run.status === 'running'"
           class="run-trace__cancel"
@@ -19,41 +22,43 @@
       </div>
     </header>
 
-    <div class="run-trace__summary" aria-label="Run event summary">
-      <span>{{ events.length }} events</span>
-      <span>{{ toolEventCount }} tool</span>
-      <span>{{ verificationEventCount }} verification</span>
-    </div>
+    <div v-show="expanded" class="run-trace__body">
+      <div class="run-trace__summary" aria-label="Run event summary">
+        <span>{{ events.length }} events</span>
+        <span>{{ toolEventCount }} tool</span>
+        <span>{{ verificationEventCount }} verification</span>
+      </div>
 
-    <div class="run-trace__filters" aria-label="Trace event filters">
-      <button
-        v-for="option in filterOptions"
-        :key="option.value"
-        type="button"
-        :class="{ 'run-trace__filter--active': selectedFilter === option.value }"
-        @click="selectedFilter = option.value"
-      >
-        {{ option.label }}
-        <span>{{ option.count }}</span>
-      </button>
-    </div>
+      <div class="run-trace__filters" aria-label="Trace event filters">
+        <button
+          v-for="option in filterOptions"
+          :key="option.value"
+          type="button"
+          :class="{ 'run-trace__filter--active': selectedFilter === option.value }"
+          @click="selectedFilter = option.value"
+        >
+          {{ option.label }}
+          <span>{{ option.count }}</span>
+        </button>
+      </div>
 
-    <div class="run-trace__events">
-      <details
-        v-for="event in filteredEvents"
-        :key="event.id"
-        class="run-trace__event"
-        :data-category="eventCategory(event.eventType)"
-      >
-        <summary>
-          <span class="run-trace__event-type">{{ event.eventType }}</span>
-          <span v-if="eventSummary(event)" class="run-trace__event-summary">{{ eventSummary(event) }}</span>
-          <time>{{ formatEventTime(event.createdAt) }}</time>
-        </summary>
-        <pre>{{ formatPayload(event.payload) }}</pre>
-      </details>
+      <div class="run-trace__events">
+        <details
+          v-for="event in filteredEvents"
+          :key="event.id"
+          class="run-trace__event"
+          :data-category="eventCategory(event.eventType)"
+        >
+          <summary>
+            <span class="run-trace__event-type">{{ event.eventType }}</span>
+            <span v-if="eventSummary(event)" class="run-trace__event-summary">{{ eventSummary(event) }}</span>
+            <time>{{ formatEventTime(event.createdAt) }}</time>
+          </summary>
+          <pre>{{ formatPayload(event.payload) }}</pre>
+        </details>
 
-      <p v-if="filteredEvents.length === 0" class="run-trace__empty">No events match this filter.</p>
+        <p v-if="filteredEvents.length === 0" class="run-trace__empty">No events match this filter.</p>
+      </div>
     </div>
   </section>
 </template>
@@ -73,6 +78,7 @@ const props = defineProps({
 defineEmits(["cancel-run"]);
 
 const selectedFilter = ref("all");
+const expanded = ref(false);
 
 const events = computed(() => props.run?.rawEvents || props.run?.events || []);
 

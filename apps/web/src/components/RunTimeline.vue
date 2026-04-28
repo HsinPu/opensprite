@@ -1,14 +1,19 @@
 <template>
-  <section class="run-timeline" :data-tone="summary.tone" aria-live="polite">
+  <section class="run-timeline" :data-tone="summary.tone" :data-collapsed="!expanded" aria-live="polite">
     <div class="run-timeline__header">
-      <div>
+      <div class="run-timeline__title">
         <span class="run-timeline__eyebrow">Run {{ summary.shortId }}</span>
         <strong>{{ summary.title }}</strong>
       </div>
-      <span class="run-timeline__status">{{ summary.statusLabel }}</span>
+      <div class="run-timeline__actions">
+        <span class="run-timeline__status">{{ summary.statusLabel }}</span>
+        <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? "收起" : "展開" }}
+        </button>
+      </div>
     </div>
 
-    <ol class="run-timeline__list">
+    <ol v-show="expanded" class="run-timeline__list">
       <li
         v-for="event in events"
         :key="event.id"
@@ -27,7 +32,11 @@
 </template>
 
 <script setup>
+import { ref } from "vue";
+
 import { formatEventTime } from "../composables/useChatClient";
+
+const expanded = ref(false);
 
 defineProps({
   summary: {
