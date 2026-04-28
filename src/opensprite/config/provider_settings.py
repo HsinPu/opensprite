@@ -288,16 +288,22 @@ class ProviderSettingsService:
         }
 
     def disconnect_provider(self, provider_id: str) -> dict[str, Any]:
-        """Disconnect one non-active provider."""
+        """Disconnect one provider, clearing the active model when needed."""
         main_data, providers, loaded = self._load_state()
-        if provider_id == loaded.llm.default:
-            raise ProviderSettingsConflict("Cannot disconnect the active provider; select another model first")
         provider = providers.get(provider_id)
         if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
             raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+
+        was_default = provider_id == loaded.llm.default
         providers.pop(provider_id, None)
+        if was_default:
+            llm_data = main_data.setdefault("llm", {})
+            llm_data["default"] = None
+            for item in providers.values():
+                if isinstance(item, dict):
+                    item["enabled"] = False
         self._persist_llm_state(main_data, providers)
-        return {"ok": True, "provider_id": provider_id, "restart_required": False}
+        return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
 
     def list_models(self) -> dict[str, Any]:
         """Return selectable models for connected providers."""

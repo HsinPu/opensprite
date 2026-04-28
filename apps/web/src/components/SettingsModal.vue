@@ -181,10 +181,10 @@
               <button
                 class="provider-row__action"
                 type="button"
-                :disabled="provider.is_default || settingsState.providersLoading"
+                :disabled="settingsState.providersLoading"
                 @click="$emit('disconnect-provider', provider)"
               >
-                {{ provider.is_default ? "目前使用中" : "中斷連線" }}
+                中斷連線
               </button>
             </div>
           </div>

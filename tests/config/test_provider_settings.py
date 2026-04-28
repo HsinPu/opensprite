@@ -65,11 +65,23 @@ def test_provider_settings_rejects_unconnected_model_selection(tmp_path):
         service.select_model("openai", "gpt-4.1-mini")
 
 
-def test_provider_settings_rejects_disconnect_of_active_provider(tmp_path):
-    service = ProviderSettingsService(_copy_config(tmp_path))
+def test_provider_settings_disconnects_active_provider_and_clears_default(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
 
     service.connect_provider("openai", api_key="secret-key")
     service.select_model("openai", "gpt-4.1-mini")
+    result = service.disconnect_provider("openai")
 
-    with pytest.raises(ProviderSettingsConflict):
-        service.disconnect_provider("openai")
+    main_config = json.loads(config_path.read_text(encoding="utf-8"))
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+
+    assert result == {"ok": True, "provider_id": "openai", "restart_required": True}
+    assert main_config["llm"]["default"] is None
+    assert providers == {}
+    assert listing["connected"] == []
+    assert {provider["id"] for provider in listing["available"]} >= {"openai", "openrouter", "minimax"}
+    assert models["default_provider"] is None
+    assert models["active_model"] == ""

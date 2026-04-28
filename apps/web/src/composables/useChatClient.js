@@ -682,10 +682,12 @@ export function useChatClient() {
     settingsState.providersError = "";
     settingsState.providersNotice = "";
     try {
-      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/disconnect`, {
+      const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/disconnect`, {
         method: "POST",
       });
-      settingsState.providersNotice = `${provider.name} 已中斷連線。`;
+      settingsState.providersNotice = payload.restart_required
+        ? `${provider.name} 已中斷連線，重啟 opensprite gateway 後生效。`
+        : `${provider.name} 已中斷連線。`;
       await loadProviderSettings();
       await loadModelSettings();
     } catch (error) {

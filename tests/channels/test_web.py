@@ -581,7 +581,14 @@ async def _run_web_settings_provider_api(tmp_path: Path):
             assert providers["openai"]["model"] == "gpt-4.1-mini"
 
             async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/openai/disconnect") as resp:
-                assert resp.status == 409
+                assert resp.status == 200
+                disconnect_payload = await resp.json()
+
+            assert disconnect_payload == {"ok": True, "provider_id": "openai", "restart_required": True}
+            main_config = json.loads(config_path.read_text(encoding="utf-8"))
+            providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+            assert main_config["llm"]["default"] is None
+            assert providers == {}
     finally:
         adapter_task.cancel()
         try:
