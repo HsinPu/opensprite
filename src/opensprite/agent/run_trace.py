@@ -134,7 +134,7 @@ class RunTraceRecorder:
             await message_bus.publish_run_event(
                 RunEvent(
                     channel=channel,
-                    chat_id=str(external_chat_id),
+                    external_chat_id=str(external_chat_id),
                     session_id=chat_id,
                     run_id=run_id,
                     event_type=event_type,

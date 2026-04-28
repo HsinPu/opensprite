@@ -126,10 +126,10 @@
 
             <label class="settings-row settings-row--field">
               <div>
-                <strong>Chat ID</strong>
-                <span>用固定 ID 將瀏覽器分頁綁定到同一個 session</span>
+                <strong>External chat ID</strong>
+                <span>用固定外部 ID 將瀏覽器分頁綁定到同一個 session</span>
               </div>
-              <input v-model="form.chatId" type="text" spellcheck="false" />
+              <input v-model="form.externalChatId" type="text" spellcheck="false" />
             </label>
 
             <label class="settings-row">

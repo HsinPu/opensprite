@@ -25,7 +25,7 @@ def test_list_run_file_changes_tool_lists_specific_run():
 
     payload = json.loads(asyncio.run(scenario()))
 
-    assert payload["chat_id"] == "chat-1"
+    assert payload["session_id"] == "chat-1"
     assert payload["run_id"] == "run-1"
     assert payload["count"] == 1
     assert payload["file_changes"][0]["change_id"] == 1
@@ -67,11 +67,11 @@ def test_list_run_file_changes_tool_scans_recent_runs():
     assert [entry["path"] for entry in payload["file_changes"]] == ["new.txt", "old.txt"]
 
 
-def test_preview_run_file_change_revert_tool_delegates_with_current_chat():
+def test_preview_run_file_change_revert_tool_delegates_with_current_session():
     calls = []
 
-    async def preview(chat_id, run_id, change_id):
-        calls.append((chat_id, run_id, change_id))
+    async def preview(session_id, run_id, change_id):
+        calls.append((session_id, run_id, change_id))
         return {"ok": True, "status": "ready", "path": "notes.txt"}
 
     async def scenario():
@@ -84,9 +84,9 @@ def test_preview_run_file_change_revert_tool_delegates_with_current_chat():
     assert payload == {"ok": True, "path": "notes.txt", "status": "ready"}
 
 
-def test_run_trace_tools_require_current_chat():
-    async def preview(chat_id, run_id, change_id):
-        raise AssertionError("preview should not be called without chat context")
+def test_run_trace_tools_require_current_session():
+    async def preview(session_id, run_id, change_id):
+        raise AssertionError("preview should not be called without session context")
 
     async def scenario():
         storage = MemoryStorage()
@@ -99,5 +99,5 @@ def test_run_trace_tools_require_current_chat():
 
     list_result, preview_result = asyncio.run(scenario())
 
-    assert list_result.startswith("Error: current chat_id is unavailable")
-    assert preview_result.startswith("Error: current chat_id is unavailable")
+    assert list_result.startswith("Error: current session_id is unavailable")
+    assert preview_result.startswith("Error: current session_id is unavailable")

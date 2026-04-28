@@ -41,7 +41,6 @@ class AgentResponseFinalizer:
         run_id: str,
         response: str,
         channel: str | None,
-        chat_id: str | None,
         external_chat_id: str | None,
         assistant_metadata: dict[str, Any],
         run_part_metadata: dict[str, Any],
@@ -85,7 +84,7 @@ class AgentResponseFinalizer:
         return AssistantMessage(
             text=response,
             channel=channel or "unknown",
-            chat_id=chat_id,
+            external_chat_id=external_chat_id,
             session_id=session_id,
             images=images,
             voices=voices,

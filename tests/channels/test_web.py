@@ -21,7 +21,7 @@ class EchoAgent:
         return AssistantMessage(
             text=f"echo:{user_message.text}",
             channel="web",
-            chat_id=user_message.chat_id,
+            external_chat_id=user_message.external_chat_id,
             session_id=user_message.session_id,
             metadata={"source": "test"},
         )
@@ -64,7 +64,7 @@ async def _run_web_roundtrip():
                 await queue.bus.publish_run_event(
                     RunEvent(
                         channel="web",
-                        chat_id=session_frame["chat_id"],
+                        external_chat_id=session_frame["external_chat_id"],
                         session_id=session_frame["session_id"],
                         run_id="run-test",
                         event_type="run_started",
@@ -77,7 +77,7 @@ async def _run_web_roundtrip():
                     "type": "run_event",
                     "channel": "web",
                     "channel_type": "web",
-                    "chat_id": session_frame["chat_id"],
+                    "external_chat_id": session_frame["external_chat_id"],
                     "session_id": session_frame["session_id"],
                     "run_id": "run-test",
                     "event_type": "run_started",
@@ -91,15 +91,15 @@ async def _run_web_roundtrip():
                     "type": "message",
                     "channel": "web",
                     "channel_type": "web",
-                    "chat_id": session_frame["chat_id"],
+                    "external_chat_id": session_frame["external_chat_id"],
                     "session_id": session_frame["session_id"],
                     "text": "echo:hello from browser",
                     "metadata": {"source": "test"},
                 }
 
-                await ws.send_json({"chat_id": "browser-2", "text": "second round"})
+                await ws.send_json({"external_chat_id": "browser-2", "text": "second round"})
                 second_reply = await ws.receive_json(timeout=2)
-                assert second_reply["chat_id"] == "browser-2"
+                assert second_reply["external_chat_id"] == "browser-2"
                 assert second_reply["session_id"] == "web:browser-2"
                 assert second_reply["text"] == "echo:second round"
 
@@ -347,13 +347,13 @@ async def _run_web_run_events_api():
         async with ClientSession() as session:
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/events",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
 
             assert payload["run_id"] == "run-1"
-            assert payload["chat_id"] == "web:browser-1"
+            assert payload["session_id"] == "web:browser-1"
             assert [event["event_type"] for event in payload["events"]] == [
                 "task_intent.detected",
                 "completion_gate.evaluated",
@@ -367,17 +367,17 @@ async def _run_web_run_events_api():
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",
-                params={"chat_id": "web:browser-1", "limit": "1"},
+                params={"session_id": "web:browser-1", "limit": "1"},
             ) as resp:
                 assert resp.status == 200
                 runs_payload = await resp.json()
 
-            assert runs_payload["chat_id"] == "web:browser-1"
+            assert runs_payload["session_id"] == "web:browser-1"
             assert [run["run_id"] for run in runs_payload["runs"]] == ["run-2"]
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 200
                 trace_payload = await resp.json()
@@ -392,7 +392,7 @@ async def _run_web_run_events_api():
                 {
                     "part_id": 1,
                     "run_id": "run-1",
-                    "chat_id": "web:browser-1",
+                    "session_id": "web:browser-1",
                     "part_type": "tool_call",
                     "content": "apply patch",
                     "tool_name": "apply_patch",
@@ -413,19 +413,19 @@ async def _run_web_run_events_api():
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",
-                params={"chat_id": "web:browser-1", "limit": "not-a-number"},
+                params={"session_id": "web:browser-1", "limit": "not-a-number"},
             ) as resp:
                 assert resp.status == 400
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/missing-run/events",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 404
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/missing-run",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 404
     finally:
@@ -484,14 +484,14 @@ async def _run_web_run_cancel_api():
         async with ClientSession() as session:
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/run-1/cancel",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
 
             assert payload == {
                 "ok": True,
-                "chat_id": "web:browser-1",
+                "session_id": "web:browser-1",
                 "run_id": "run-1",
                 "status": "cancelling",
             }
@@ -500,13 +500,13 @@ async def _run_web_run_cancel_api():
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/run-2/cancel",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 409
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/missing-run/cancel",
-                params={"chat_id": "web:browser-1"},
+                params={"session_id": "web:browser-1"},
             ) as resp:
                 assert resp.status == 404
     finally:

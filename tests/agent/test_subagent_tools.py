@@ -52,7 +52,7 @@ class FakeStorage:
     async def set_consolidated_index(self, chat_id, index):
         return None
 
-    async def get_all_chats(self):
+    async def get_all_sessions(self):
         return []
 
 

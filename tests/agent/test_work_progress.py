@@ -72,7 +72,7 @@ def test_work_progress_stops_repeated_continuation_without_progress():
 def test_work_progress_resolves_vague_continue_from_existing_state():
     service = WorkProgressService()
     existing = StoredWorkState(
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
         objective="Finish the refactor",
         kind="refactor",
         status="active",
@@ -101,7 +101,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
     resolved = service.resolve_intent(
         intent,
         StoredWorkState(
-            chat_id="web:browser-1",
+            session_id="web:browser-1",
             objective="Finish the refactor",
             kind="refactor",
             status="active",
@@ -125,7 +125,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
     )
     plan = service.create_plan(resolved)
     existing = StoredWorkState(
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
         objective="Finish the refactor",
         kind="refactor",
         status="active",
@@ -148,7 +148,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
     )
 
     resumed = service.build_initial_state(
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
         task_intent=resolved,
         work_plan=plan,
         existing_state=existing,
@@ -164,7 +164,7 @@ def test_work_progress_resume_existing_state_preserves_progress_for_continue():
 
 def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
     state = StoredWorkState(
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
         objective="Finish the refactor",
         kind="refactor",
         status="active",
@@ -194,7 +194,7 @@ def test_work_progress_updates_state_and_renders_summary():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
     plan = service.create_plan(intent)
-    initial = service.build_initial_state(chat_id="web:browser-1", task_intent=intent, work_plan=plan)
+    initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
     assert initial is not None
     progress = service.evaluate(
         task_intent=intent,
@@ -214,7 +214,7 @@ def test_work_progress_updates_state_and_renders_summary():
     )
 
     updated = service.update_state(
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
         state=initial,
         task_intent=intent,
         work_plan=plan,

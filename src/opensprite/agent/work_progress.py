@@ -190,7 +190,7 @@ class WorkProgressService:
     def build_initial_state(
         self,
         *,
-        chat_id: str,
+        session_id: str,
         task_intent: TaskIntent,
         work_plan: WorkPlan | None,
         existing_state: StoredWorkState | None = None,
@@ -209,7 +209,7 @@ class WorkProgressService:
         now = time.time()
         pending_steps = tuple(step for step in numbered_steps if step != "not set")
         return StoredWorkState(
-            chat_id=chat_id,
+            session_id=session_id,
             objective=work_plan.objective,
             kind=work_plan.kind,
             status="active",
@@ -287,7 +287,7 @@ class WorkProgressService:
     def update_state(
         self,
         *,
-        chat_id: str,
+        session_id: str,
         state: StoredWorkState | None,
         task_intent: TaskIntent,
         work_plan: WorkPlan | None,
@@ -298,7 +298,7 @@ class WorkProgressService:
     ) -> StoredWorkState | None:
         """Apply one turn's progress and completion result to persisted work state."""
         current = state or self.build_initial_state(
-            chat_id=chat_id,
+            session_id=session_id,
             task_intent=task_intent,
             work_plan=work_plan,
         )
@@ -347,7 +347,7 @@ class WorkProgressService:
         )
 
         return StoredWorkState(
-            chat_id=current.chat_id,
+            session_id=current.session_id,
             objective=current.objective,
             kind=current.kind,
             status=status,
@@ -480,7 +480,7 @@ class WorkProgressService:
         metadata.pop("workboard", None)
         existing_workboard = self.extract_workboard(existing_state)
         return StoredWorkState(
-            chat_id=existing_state.chat_id,
+            session_id=existing_state.session_id,
             objective=existing_state.objective or work_plan.objective,
             kind=existing_state.kind or work_plan.kind,
             status=existing_state.status,

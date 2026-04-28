@@ -165,7 +165,7 @@ def test_telegram_adapter_sends_outbound_media_attachments():
             AssistantMessage(
                 text="",
                 channel="telegram",
-                chat_id="123",
+                external_chat_id="123",
                 session_id="telegram:123",
                 images=[_data_url("image/png", b"image-bytes")],
                 voices=[_data_url("audio/ogg", b"voice-bytes")],

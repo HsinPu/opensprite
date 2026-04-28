@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
   displayName: "opensprite:web:displayName",
-  activeChatId: "opensprite:web:activeChatId",
+  activeExternalChatId: "opensprite:web:activeExternalChatId",
   showRunTimeline: "opensprite:web:showRunTimeline",
   showRunTrace: "opensprite:web:showRunTrace",
 };
@@ -93,7 +93,7 @@ function randomToken() {
   return Math.random().toString(36).slice(2, 8);
 }
 
-function generateChatId() {
+function generateExternalChatId() {
   return `browser-${Date.now().toString(36)}-${randomToken()}`;
 }
 
@@ -115,9 +115,9 @@ function makeMessage(role, text, meta) {
   };
 }
 
-function createSession(chatId) {
+function createSession(externalChatId) {
   return {
-    chatId: chatId || generateChatId(),
+    externalChatId: externalChatId || generateExternalChatId(),
     sessionId: null,
     title: "New chat",
     updatedAt: Date.now(),
@@ -175,9 +175,9 @@ function buildHttpApiUrl(wsUrl, pathname) {
   return url;
 }
 
-function buildRunCancelUrl(wsUrl, runId, chatId) {
+function buildRunCancelUrl(wsUrl, runId, sessionId) {
   const url = buildHttpApiUrl(wsUrl, `/api/runs/${encodeURIComponent(runId)}/cancel`);
-  url.searchParams.set("chat_id", chatId);
+  url.searchParams.set("session_id", sessionId);
   return url.toString();
 }
 
@@ -286,15 +286,15 @@ export function formatEventTime(timestamp) {
 }
 
 export function useChatClient() {
-  const storedChatId = readStoredValue(STORAGE_KEYS.activeChatId, "");
-  const initialSession = createSession(storedChatId || generateChatId());
+  const storedExternalChatId = readStoredValue(STORAGE_KEYS.activeExternalChatId, "");
+  const initialSession = createSession(storedExternalChatId || generateExternalChatId());
 
   const state = reactive({
     wsUrl: readStoredValue(STORAGE_KEYS.wsUrl, DEFAULT_WS_URL),
     displayName: readStoredValue(STORAGE_KEYS.displayName, "Local browser"),
     showRunTimeline: readStoredBoolean(STORAGE_KEYS.showRunTimeline, true),
     showRunTrace: readStoredBoolean(STORAGE_KEYS.showRunTrace, true),
-    activeChatId: initialSession.chatId,
+    activeExternalChatId: initialSession.externalChatId,
     sessions: [initialSession],
     connectionState: "disconnected",
     notice: {
@@ -312,7 +312,7 @@ export function useChatClient() {
   const settingsForm = reactive({
     wsUrl: state.wsUrl,
     displayName: state.displayName,
-    chatId: state.activeChatId,
+    externalChatId: state.activeExternalChatId,
     showRunTimeline: state.showRunTimeline,
     showRunTrace: state.showRunTrace,
   });
@@ -358,7 +358,7 @@ export function useChatClient() {
   let activeSocket = null;
 
   const currentSession = computed(() => {
-    return state.sessions.find((session) => session.chatId === state.activeChatId) || null;
+    return state.sessions.find((session) => session.externalChatId === state.activeExternalChatId) || null;
   });
 
   const currentMessages = computed(() => currentSession.value?.messages || []);
@@ -397,7 +397,7 @@ export function useChatClient() {
     return `${session?.title || "New chat"} · ${getSessionDisplayId(session)}`;
   });
 
-  const runtimeHint = computed(() => currentSession.value?.chatId || "No active chat");
+  const runtimeHint = computed(() => currentSession.value?.externalChatId || "No active chat");
 
   const connectionLabel = computed(() => {
     const labels = {
@@ -466,14 +466,14 @@ export function useChatClient() {
     if (!session) {
       return "No active chat";
     }
-    return session.sessionId || `web:${session.chatId}`;
+    return session.sessionId || `web:${session.externalChatId}`;
   }
 
-  function ensureSession(chatId, sessionId) {
-    const resolvedChatId = chatId || generateChatId();
-    let session = state.sessions.find((entry) => entry.chatId === resolvedChatId);
+  function ensureSession(externalChatId, sessionId) {
+    const resolvedExternalChatId = externalChatId || generateExternalChatId();
+    let session = state.sessions.find((entry) => entry.externalChatId === resolvedExternalChatId);
     if (!session) {
-      session = createSession(resolvedChatId);
+      session = createSession(resolvedExternalChatId);
       session.messages = [
         makeMessage(
           "assistant",
@@ -490,8 +490,8 @@ export function useChatClient() {
     return session;
   }
 
-  function addMessage(chatId, message) {
-    const session = ensureSession(chatId);
+  function addMessage(externalChatId, message) {
+    const session = ensureSession(externalChatId);
     session.messages.push(message);
     session.updatedAt = message.createdAt;
     if (message.role === "user" && session.title === "New chat") {
@@ -518,8 +518,8 @@ export function useChatClient() {
   }
 
   function handleRunEvent(payload) {
-    const chatId = payload.chat_id || currentSession.value?.chatId || generateChatId();
-    const session = ensureSession(chatId, payload.session_id);
+    const externalChatId = payload.external_chat_id || currentSession.value?.externalChatId || generateExternalChatId();
+    const session = ensureSession(externalChatId, payload.session_id);
     const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
     const eventType = String(payload.event_type || "run_event");
     const eventPayload = coerceEventPayload(payload.payload);
@@ -567,9 +567,9 @@ export function useChatClient() {
     state.notice.tone = tone;
   }
 
-  function setActiveSession(chatId) {
-    state.activeChatId = chatId;
-    writeStoredValue(STORAGE_KEYS.activeChatId, chatId);
+  function setActiveSession(externalChatId) {
+    state.activeExternalChatId = externalChatId;
+    writeStoredValue(STORAGE_KEYS.activeExternalChatId, externalChatId);
     closeSidebar();
   }
 
@@ -581,7 +581,7 @@ export function useChatClient() {
   function syncSettingsForm() {
     settingsForm.wsUrl = state.wsUrl;
     settingsForm.displayName = state.displayName;
-    settingsForm.chatId = currentSession.value?.chatId || "";
+    settingsForm.externalChatId = currentSession.value?.externalChatId || "";
     settingsForm.showRunTimeline = state.showRunTimeline;
     settingsForm.showRunTrace = state.showRunTrace;
   }
@@ -622,9 +622,9 @@ export function useChatClient() {
     setNotice(reason, tone);
   }
 
-  function buildSocketUrl(baseUrl, chatId) {
+  function buildSocketUrl(baseUrl, externalChatId) {
     const url = new URL(baseUrl);
-    url.searchParams.set("chat_id", chatId);
+    url.searchParams.set("external_chat_id", externalChatId);
     return url.toString();
   }
 
@@ -888,18 +888,18 @@ export function useChatClient() {
     }
 
     if (payload.type === "session") {
-      const session = ensureSession(payload.chat_id, payload.session_id);
-      if (!state.activeChatId) {
-        state.activeChatId = session.chatId;
+      const session = ensureSession(payload.external_chat_id, payload.session_id);
+      if (!state.activeExternalChatId) {
+        state.activeExternalChatId = session.externalChatId;
       }
       setNotice(`Live session ready: ${payload.session_id}`, "success");
       return;
     }
 
     if (payload.type === "message") {
-      const chatId = payload.chat_id || currentSession.value?.chatId || generateChatId();
-      const session = ensureSession(chatId, payload.session_id);
-      addMessage(session.chatId, makeMessage("assistant", payload.text || "", payload.session_id || "OpenSprite"));
+      const externalChatId = payload.external_chat_id || currentSession.value?.externalChatId || generateExternalChatId();
+      const session = ensureSession(externalChatId, payload.session_id);
+      addMessage(session.externalChatId, makeMessage("assistant", payload.text || "", payload.session_id || "OpenSprite"));
       scrollMessagesToBottom();
       return;
     }
@@ -923,7 +923,7 @@ export function useChatClient() {
 
     let socketUrl;
     try {
-      socketUrl = buildSocketUrl(state.wsUrl, session.chatId);
+      socketUrl = buildSocketUrl(state.wsUrl, session.externalChatId);
     } catch {
       setNotice("The WebSocket URL is invalid. Check it in settings first.", "error");
       openSettings("general");
@@ -997,8 +997,8 @@ export function useChatClient() {
   function createNewChat() {
     const session = createSession();
     state.sessions.unshift(session);
-    state.activeChatId = session.chatId;
-    writeStoredValue(STORAGE_KEYS.activeChatId, session.chatId);
+    state.activeExternalChatId = session.externalChatId;
+    writeStoredValue(STORAGE_KEYS.activeExternalChatId, session.externalChatId);
     setNotice("Started a fresh local draft. Your next live message will use a new chat ID.", "info");
     scrollMessagesToBottom();
   }
@@ -1008,15 +1008,15 @@ export function useChatClient() {
     state.displayName = settingsForm.displayName.trim() || "Local browser";
     saveRunPanelVisibilitySettings(settingsForm.showRunTimeline, settingsForm.showRunTrace);
 
-    const requestedChatId = settingsForm.chatId.trim();
-    if (requestedChatId) {
-      ensureSession(requestedChatId);
-      state.activeChatId = requestedChatId;
+    const requestedExternalChatId = settingsForm.externalChatId.trim();
+    if (requestedExternalChatId) {
+      ensureSession(requestedExternalChatId);
+      state.activeExternalChatId = requestedExternalChatId;
     }
 
     writeStoredValue(STORAGE_KEYS.wsUrl, state.wsUrl);
     writeStoredValue(STORAGE_KEYS.displayName, state.displayName);
-    writeStoredValue(STORAGE_KEYS.activeChatId, state.activeChatId);
+    writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
   }
 
   function toggleSettingsConnection(shouldConnect) {
@@ -1036,7 +1036,7 @@ export function useChatClient() {
 
     run.cancelPending = true;
     try {
-      const response = await fetch(buildRunCancelUrl(state.wsUrl, run.runId, session.chatId), { method: "POST" });
+      const response = await fetch(buildRunCancelUrl(state.wsUrl, run.runId, getSessionDisplayId(session)), { method: "POST" });
       if (!response.ok) {
         throw new Error(`Cancel request failed with HTTP ${response.status}`);
       }
@@ -1070,10 +1070,10 @@ export function useChatClient() {
       return;
     }
 
-    addMessage(session.chatId, makeMessage("user", text, state.displayName || "Local browser"));
+    addMessage(session.externalChatId, makeMessage("user", text, state.displayName || "Local browser"));
     activeSocket.send(
       JSON.stringify({
-        chat_id: session.chatId,
+        external_chat_id: session.externalChatId,
         sender_name: state.displayName,
         text,
       }),

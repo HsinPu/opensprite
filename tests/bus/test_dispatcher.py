@@ -17,7 +17,7 @@ class FakeAgent:
         return AssistantMessage(
             text="pong",
             channel=self.response_channel,
-            chat_id=user_message.chat_id,
+            external_chat_id=user_message.external_chat_id,
             session_id=user_message.session_id,
         )
 
@@ -41,7 +41,7 @@ async def _run_queue_once(agent_channel: str, inbound_channel: str):
 
     processor = asyncio.create_task(queue.process_queue())
     try:
-        await queue.enqueue_raw(content="ping", chat_id="chat-1", channel=inbound_channel)
+        await queue.enqueue_raw(content="ping", external_chat_id="chat-1", channel=inbound_channel)
         await asyncio.wait_for(event.wait(), timeout=2)
     finally:
         await queue.stop()
@@ -85,7 +85,7 @@ def test_message_queue_accepts_empty_text_media_message():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="", chat_id="media-chat", channel="telegram", images=["img-a"])
+            await queue.enqueue_raw(content="", external_chat_id="media-chat", channel="telegram", images=["img-a"])
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -116,7 +116,7 @@ def test_message_queue_can_bypass_immediate_commands_for_internal_messages():
         try:
             await queue.enqueue_raw(
                 content="/cron help",
-                chat_id="same-chat",
+                external_chat_id="same-chat",
                 channel="telegram",
                 metadata={"_bypass_commands": True, "source": "cron"},
             )
@@ -158,7 +158,7 @@ def test_message_queue_can_suppress_final_outbound_for_internal_messages():
         try:
             await queue.enqueue_raw(
                 content="quiet cron",
-                chat_id="same-chat",
+                external_chat_id="same-chat",
                 channel="telegram",
                 metadata={"_suppress_outbound": True, "source": "cron"},
             )
@@ -216,7 +216,7 @@ class SequencingAgent:
         return AssistantMessage(
             text=f"done:{user_message.text}",
             channel=user_message.channel,
-            chat_id=user_message.chat_id,
+            external_chat_id=user_message.external_chat_id,
             session_id=user_message.session_id,
         )
 
@@ -249,8 +249,8 @@ def test_message_queue_serializes_processing_within_the_same_session():
     agent, responses = asyncio.run(
         _run_queue_for_serialization(
             [
-                {"content": "first", "chat_id": "same-chat", "channel": "telegram"},
-                {"content": "second", "chat_id": "same-chat", "channel": "telegram"},
+                {"content": "first", "external_chat_id": "same-chat", "channel": "telegram"},
+                {"content": "second", "external_chat_id": "same-chat", "channel": "telegram"},
             ]
         )
     )
@@ -271,8 +271,8 @@ def test_message_queue_keeps_different_sessions_parallel():
     agent, responses = asyncio.run(
         _run_queue_for_serialization(
             [
-                {"content": "first", "chat_id": "chat-a", "channel": "telegram"},
-                {"content": "second", "chat_id": "chat-b", "channel": "telegram"},
+                {"content": "first", "external_chat_id": "chat-a", "channel": "telegram"},
+                {"content": "second", "external_chat_id": "chat-b", "channel": "telegram"},
             ]
         )
     )
@@ -299,7 +299,7 @@ class StoppableAgent:
         return AssistantMessage(
             text="should-not-happen",
             channel=user_message.channel,
-            chat_id=user_message.chat_id,
+            external_chat_id=user_message.external_chat_id,
             session_id=user_message.session_id,
         )
 
@@ -318,9 +318,9 @@ def test_stop_command_cancels_running_session_and_replies_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="long task", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="long task", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(agent.started.wait(), timeout=2)
-            await queue.enqueue_raw(content="/stop", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/stop", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
             await asyncio.wait_for(agent.cancelled.wait(), timeout=2)
         finally:
@@ -347,7 +347,7 @@ def test_stop_command_reports_when_nothing_is_running():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/stop", chat_id="idle-chat", channel="telegram")
+            await queue.enqueue_raw(content="/stop", external_chat_id="idle-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -375,7 +375,7 @@ def test_stop_command_uses_configured_idle_message():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/stop", chat_id="idle-chat", channel="telegram")
+            await queue.enqueue_raw(content="/stop", external_chat_id="idle-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -410,7 +410,7 @@ def test_reset_command_clears_session_history_and_replies_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/reset", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/reset", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -447,9 +447,9 @@ def test_reset_command_cancels_running_session_before_clearing_history():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="long task", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="long task", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(agent.started.wait(), timeout=2)
-            await queue.enqueue_raw(content="/reset", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/reset", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
             await asyncio.wait_for(agent.cancelled.wait(), timeout=2)
         finally:
@@ -497,7 +497,7 @@ def test_cron_command_lists_jobs_for_current_session(tmp_path):
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/cron list", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/cron list", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -529,7 +529,7 @@ def test_cron_help_uses_configured_messages():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/cron help", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/cron help", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -567,7 +567,7 @@ def test_cron_command_adds_interval_job_for_current_session(tmp_path):
         try:
             await queue.enqueue_raw(
                 content='/cron add every 300 "Check weather and report back"',
-                chat_id="same-chat",
+                external_chat_id="same-chat",
                 channel="telegram",
             )
             await asyncio.wait_for(event.wait(), timeout=2)
@@ -615,7 +615,7 @@ def test_cron_command_adds_one_time_job_without_delivery_when_requested(tmp_path
         try:
             await queue.enqueue_raw(
                 content='/cron add at 2026-04-10T09:00:00 --no-deliver "Remind me later"',
-                chat_id="same-chat",
+                external_chat_id="same-chat",
                 channel="telegram",
             )
             await asyncio.wait_for(event.wait(), timeout=2)
@@ -671,7 +671,7 @@ def test_cron_command_removes_job_for_current_session(tmp_path):
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content=f"/cron remove {job.id}", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content=f"/cron remove {job.id}", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
             remaining = service.list_jobs(include_disabled=True)
         finally:
@@ -721,8 +721,8 @@ def test_cron_command_can_pause_and_enable_job_for_current_session(tmp_path):
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content=f"/cron pause {job.id}", chat_id="same-chat", channel="telegram")
-            await queue.enqueue_raw(content=f"/cron enable {job.id}", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content=f"/cron pause {job.id}", external_chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content=f"/cron enable {job.id}", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
             refreshed = service.get_job(job.id)
         finally:
@@ -779,7 +779,7 @@ def test_cron_command_can_run_job_for_current_session(tmp_path):
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content=f"/cron run {job.id}", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content=f"/cron run {job.id}", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -812,7 +812,7 @@ def test_cron_command_help_is_immediate():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/cron help", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/cron help", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -853,7 +853,7 @@ def test_cron_command_reports_invalid_add_usage(tmp_path):
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/cron add every nope broken", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/cron add every nope broken", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -942,7 +942,7 @@ def test_task_set_command_replies_immediately_without_running_agent_loop():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task set Refactor the agent carefully", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task set Refactor the agent carefully", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1030,8 +1030,8 @@ def test_task_show_and_done_commands_use_current_task_state_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task show", chat_id="same-chat", channel="telegram")
-            await queue.enqueue_raw(content="/task done", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task show", external_chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task done", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1108,7 +1108,7 @@ def test_task_show_full_returns_full_task_block():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task show full", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task show full", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1231,7 +1231,7 @@ def test_task_show_reports_no_active_task_when_empty():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task show", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task show", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1302,7 +1302,7 @@ def test_task_history_returns_recent_task_events_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task history", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task history", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1371,7 +1371,7 @@ def test_task_history_respects_optional_limit_argument():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task history 1", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task history 1", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1488,7 +1488,7 @@ def test_task_block_command_marks_task_blocked_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task block waiting for test environment", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task block waiting for test environment", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1566,7 +1566,7 @@ def test_task_next_without_argument_advances_existing_next_step():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task next", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task next", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1643,7 +1643,7 @@ def test_task_complete_marks_current_step_complete_immediately():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task complete", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task complete", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()
@@ -1720,7 +1720,7 @@ def test_task_reopen_reactivates_terminal_task():
         queue.register_response_handler("telegram", handler)
         processor = asyncio.create_task(queue.process_queue())
         try:
-            await queue.enqueue_raw(content="/task reopen", chat_id="same-chat", channel="telegram")
+            await queue.enqueue_raw(content="/task reopen", external_chat_id="same-chat", channel="telegram")
             await asyncio.wait_for(event.wait(), timeout=2)
         finally:
             await queue.stop()

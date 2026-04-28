@@ -24,8 +24,8 @@ class UserMessage:
     屬性：
         text: 訊息文字內容
         channel: 訊息來源（telegram、discord、console...）
-        chat_id: 平台原始聊天室 ID
-        session_id: 內部標準化 session ID（通常是 channel:chat_id）
+        external_chat_id: 平台原始聊天室 ID
+        session_id: 內部標準化 session ID（通常是 channel:external_chat_id）
         sender_id: 平台原始使用者 ID
         sender_name: 顯示名稱或 username
         images: 圖片列表（base64 data URL）
@@ -36,7 +36,7 @@ class UserMessage:
     """
     text: str
     channel: str = "unknown"
-    chat_id: str | None = None
+    external_chat_id: str | None = None
     session_id: str | None = None
     sender_id: str | None = None
     sender_name: str | None = None
@@ -62,7 +62,7 @@ class AssistantMessage:
     屬性：
         text: 回覆文字
         channel: 要送回哪個頻道
-        chat_id: 平台原始聊天室 ID（用於實際發送）
+        external_chat_id: 平台原始聊天室 ID（用於實際發送）
         session_id: 內部標準化 session ID（用於 storage / tracing）
         images: 圖片列表（base64 data URL 或平台可接受的 URL）
         voices: 語音列表（base64 data URL 或平台可接受的 URL）
@@ -73,7 +73,7 @@ class AssistantMessage:
     """
     text: str
     channel: str = "unknown"
-    chat_id: str | None = None
+    external_chat_id: str | None = None
     session_id: str | None = None
     images: list[str] | None = None
     voices: list[str] | None = None

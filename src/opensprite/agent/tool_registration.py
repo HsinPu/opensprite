@@ -62,12 +62,12 @@ class SaveMemoryTool(Tool):
         self.get_chat_id = get_chat_id
 
     async def _execute(self, memory_update: str, **kwargs: Any) -> str:
-        chat_id = self.get_chat_id()
-        if not chat_id:
-            return "Error: current chat_id is unavailable. save_memory requires an active chat context."
-        current = self.memory_store.read(chat_id)
+        session_id = self.get_chat_id()
+        if not session_id:
+            return "Error: current session_id is unavailable. save_memory requires an active session context."
+        current = self.memory_store.read(session_id)
         if memory_update != current:
-            self.memory_store.write(chat_id, memory_update)
+            self.memory_store.write(session_id, memory_update)
             return f"Memory saved ({len(memory_update)} chars)"
         return "Memory unchanged"
 

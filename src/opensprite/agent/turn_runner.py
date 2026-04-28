@@ -125,7 +125,7 @@ class AgentTurnRunner:
         )
         work_plan = self.work_progress.create_plan(task_intent)
         current_work_state = self.work_progress.build_initial_state(
-            chat_id=turn.session_id,
+            session_id=turn.session_id,
             task_intent=task_intent,
             work_plan=work_plan,
             existing_state=existing_work_state,
@@ -224,7 +224,6 @@ class AgentTurnRunner:
             run_id=run_id,
             response=response,
             channel=turn.channel,
-            chat_id=user_message.chat_id,
             external_chat_id=turn.external_chat_id,
             assistant_metadata=turn.assistant_metadata,
             run_part_metadata={"reason": "media_only", "response_len": len(response or "")},
@@ -253,7 +252,6 @@ class AgentTurnRunner:
             run_id=run_id,
             response=response,
             channel=turn.channel,
-            chat_id=user_message.chat_id,
             external_chat_id=turn.external_chat_id,
             assistant_metadata=turn.assistant_metadata,
             run_part_metadata={"reason": "llm_not_configured", "response_len": len(response or "")},
@@ -430,7 +428,7 @@ class AgentTurnRunner:
         response_metadata["active_delegate_prompt_type"] = aggregate_result.active_delegate_prompt_type
 
         updated_work_state = self.work_progress.update_state(
-            chat_id=turn.session_id,
+            session_id=turn.session_id,
             state=current_work_state,
             task_intent=task_intent,
             work_plan=work_plan,
@@ -452,7 +450,6 @@ class AgentTurnRunner:
             run_id=run_id,
             response=response,
             channel=turn.channel,
-            chat_id=user_message.chat_id,
             external_chat_id=turn.external_chat_id,
             assistant_metadata=turn.assistant_metadata,
             run_part_metadata=response_metadata,

@@ -11,8 +11,8 @@ class FakeSearchStore:
     def __init__(self):
         self.cleared = []
 
-    async def clear_chat(self, chat_id: str) -> None:
-        self.cleared.append(chat_id)
+    async def clear_session(self, session_id: str) -> None:
+        self.cleared.append(session_id)
 
 
 def test_reset_history_only_clears_target_session(tmp_path):

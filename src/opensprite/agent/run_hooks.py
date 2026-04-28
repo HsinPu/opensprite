@@ -120,7 +120,7 @@ class RunHookService:
             await bus.publish_outbound(
                 OutboundMessage(
                     channel=ch,
-                    chat_id=tid,
+                    external_chat_id=tid,
                     session_id=sid,
                     content=text,
                     metadata={"interim": True, "kind": "tool_progress", "tool_name": tool_name},
@@ -255,7 +255,7 @@ class RunHookService:
             await bus.publish_outbound(
                 OutboundMessage(
                     channel=ch,
-                    chat_id=tid,
+                    external_chat_id=tid,
                     session_id=sid,
                     content=text,
                     metadata={"interim": True, "kind": "llm_wait"},

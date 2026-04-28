@@ -102,12 +102,12 @@ def test_task_update_reset_clears_active_task(tmp_path):
     assert store.read_events()[-1]["event_type"] == "reset"
 
 
-def test_task_update_requires_active_chat_context():
+def test_task_update_requires_active_session_context():
     tool = TaskUpdateTool(get_chat_id=lambda: None)
 
     result = asyncio.run(tool.execute(action="show"))
 
-    assert result == "Error: current chat_id is unavailable. task_update requires an active chat context."
+    assert result == "Error: current session_id is unavailable. task_update requires an active session context."
 
 
 def test_task_update_rejects_update_without_active_task(tmp_path):

@@ -10,7 +10,7 @@ from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
-ChatIdGetter = Callable[[], str | None]
+SessionIdGetter = Callable[[], str | None]
 RevertPreviewer = Callable[[str, str, int], Awaitable[dict[str, Any]]]
 
 _DEFAULT_RUN_LIMIT = 20
@@ -56,16 +56,16 @@ def _change_payload(change: StoredRunFileChange, *, include_diff: bool) -> dict[
 
 
 class ListRunFileChangesTool(Tool):
-    """List file changes captured for the current chat's recent runs."""
+    """List file changes captured for the current session's recent runs."""
 
     name = "list_run_file_changes"
     description = (
-        "List file changes captured in durable run traces for the current chat. "
+        "List file changes captured in durable run traces for the current session. "
         "Use this to find run_id and change_id before previewing a safe revert. "
         "Read-only; it never modifies files."
     )
 
-    def __init__(self, *, storage: StorageProvider, get_chat_id: ChatIdGetter):
+    def __init__(self, *, storage: StorageProvider, get_chat_id: SessionIdGetter):
         self.storage = storage
         self.get_chat_id = get_chat_id
 
@@ -76,7 +76,7 @@ class ListRunFileChangesTool(Tool):
             "properties": {
                 "run_id": {
                     "type": "string",
-                    "description": "Optional. Specific run id to inspect. If omitted, recent runs for the current chat are scanned.",
+                    "description": "Optional. Specific run id to inspect. If omitted, recent runs for the current session are scanned.",
                     "pattern": NON_EMPTY_STRING_PATTERN,
                 },
                 "run_limit": {
@@ -99,18 +99,18 @@ class ListRunFileChangesTool(Tool):
         }
 
     async def _execute(self, **kwargs: Any) -> str:
-        chat_id = self.get_chat_id()
-        if not chat_id:
-            return "Error: current chat_id is unavailable. list_run_file_changes requires an active chat context."
+        session_id = self.get_chat_id()
+        if not session_id:
+            return "Error: current session_id is unavailable. list_run_file_changes requires an active session context."
 
         include_diffs = bool(kwargs.get("include_diffs", False))
         change_limit = min(max(int(kwargs.get("change_limit") or _DEFAULT_CHANGE_LIMIT), 1), _MAX_CHANGE_LIMIT)
         run_id = str(kwargs.get("run_id") or "").strip()
         if run_id:
-            changes = await self.storage.get_run_file_changes(chat_id, run_id)
+            changes = await self.storage.get_run_file_changes(session_id, run_id)
             return _json_result(
                 {
-                    "chat_id": chat_id,
+                    "session_id": session_id,
                     "run_id": run_id,
                     "count": min(len(changes), change_limit),
                     "total_count": len(changes),
@@ -122,12 +122,12 @@ class ListRunFileChangesTool(Tool):
             )
 
         run_limit = min(max(int(kwargs.get("run_limit") or _DEFAULT_RUN_LIMIT), 1), _MAX_RUN_LIMIT)
-        runs = await self.storage.get_runs(chat_id, limit=run_limit)
+        runs = await self.storage.get_runs(session_id, limit=run_limit)
         collected: list[dict[str, Any]] = []
         scanned_runs = 0
         for run in runs:
             scanned_runs += 1
-            for change in await self.storage.get_run_file_changes(chat_id, run.run_id):
+            for change in await self.storage.get_run_file_changes(session_id, run.run_id):
                 collected.append(_change_payload(change, include_diff=include_diffs))
                 if len(collected) >= change_limit:
                     break
@@ -136,7 +136,7 @@ class ListRunFileChangesTool(Tool):
 
         return _json_result(
             {
-                "chat_id": chat_id,
+                "session_id": session_id,
                 "run_id": None,
                 "scanned_runs": scanned_runs,
                 "count": len(collected),
@@ -150,11 +150,11 @@ class PreviewRunFileChangeRevertTool(Tool):
 
     name = "preview_run_file_change_revert"
     description = (
-        "Preview whether one captured file change can be safely reverted in the current chat workspace. "
+        "Preview whether one captured file change can be safely reverted in the current session workspace. "
         "Requires run_id and change_id from list_run_file_changes. Read-only dry-run; it never modifies files."
     )
 
-    def __init__(self, *, get_chat_id: ChatIdGetter, preview_revert: RevertPreviewer):
+    def __init__(self, *, get_chat_id: SessionIdGetter, preview_revert: RevertPreviewer):
         self.get_chat_id = get_chat_id
         self.preview_revert = preview_revert
 
@@ -178,8 +178,8 @@ class PreviewRunFileChangeRevertTool(Tool):
         }
 
     async def _execute(self, **kwargs: Any) -> str:
-        chat_id = self.get_chat_id()
-        if not chat_id:
-            return "Error: current chat_id is unavailable. preview_run_file_change_revert requires an active chat context."
-        preview = await self.preview_revert(chat_id, str(kwargs["run_id"]), int(kwargs["change_id"]))
+        session_id = self.get_chat_id()
+        if not session_id:
+            return "Error: current session_id is unavailable. preview_run_file_change_revert requires an active session context."
+        preview = await self.preview_revert(session_id, str(kwargs["run_id"]), int(kwargs["change_id"]))
         return _json_result(preview)

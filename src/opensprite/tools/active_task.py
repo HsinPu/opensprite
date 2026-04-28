@@ -88,15 +88,15 @@ class TaskUpdateTool(Tool):
         }
 
     def _resolve_store(self) -> tuple[str, ActiveTaskStore] | str:
-        chat_id = self._get_chat_id()
-        if not chat_id:
-            return "Error: current chat_id is unavailable. task_update requires an active chat context."
+        session_id = self._get_chat_id()
+        if not session_id:
+            return "Error: current session_id is unavailable. task_update requires an active session context."
         if self._active_task_store_factory is None:
             return "Error: ACTIVE_TASK.md store is unavailable in this runtime."
-        store = self._active_task_store_factory(chat_id)
+        store = self._active_task_store_factory(session_id)
         if store is None:
             return "Error: ACTIVE_TASK.md store is unavailable in this runtime."
-        return chat_id, store
+        return session_id, store
 
     async def _mark_processed(self, chat_id: str, store: ActiveTaskStore) -> None:
         if self._get_message_count is None:

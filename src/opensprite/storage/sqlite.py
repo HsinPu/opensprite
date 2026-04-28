@@ -26,19 +26,19 @@ SQLITE_SCHEMA_VERSION = 10
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
-    chat_id TEXT PRIMARY KEY,
+    session_id TEXT PRIMARY KEY,
     created_at REAL NOT NULL,
     updated_at REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS chat_state (
-    chat_id TEXT PRIMARY KEY REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT PRIMARY KEY REFERENCES chats(session_id) ON DELETE CASCADE,
     consolidated_index INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     role TEXT NOT NULL,
     content TEXT NOT NULL,
     tool_name TEXT,
@@ -48,11 +48,11 @@ CREATE TABLE IF NOT EXISTS messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_messages_chat_created
-    ON messages(chat_id, created_at, id);
+    ON messages(session_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     status TEXT NOT NULL,
     metadata_json TEXT NOT NULL DEFAULT '{}',
     created_at REAL NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_chat_created
-    ON runs(chat_id, created_at, run_id);
+    ON runs(session_id, created_at, run_id);
 
 CREATE INDEX IF NOT EXISTS idx_runs_status
     ON runs(status, updated_at);
@@ -69,7 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_runs_status
 CREATE TABLE IF NOT EXISTS run_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     event_type TEXT NOT NULL,
     payload_json TEXT NOT NULL DEFAULT '{}',
     created_at REAL NOT NULL
@@ -79,12 +79,12 @@ CREATE INDEX IF NOT EXISTS idx_run_events_run_created
     ON run_events(run_id, created_at, id);
 
 CREATE INDEX IF NOT EXISTS idx_run_events_chat_created
-    ON run_events(chat_id, created_at, id);
+    ON run_events(session_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS run_parts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     part_type TEXT NOT NULL,
     content TEXT NOT NULL DEFAULT '',
     tool_name TEXT,
@@ -96,12 +96,12 @@ CREATE INDEX IF NOT EXISTS idx_run_parts_run_created
     ON run_parts(run_id, created_at, id);
 
 CREATE INDEX IF NOT EXISTS idx_run_parts_chat_created
-    ON run_parts(chat_id, created_at, id);
+    ON run_parts(session_id, created_at, id);
 
 CREATE TABLE IF NOT EXISTS run_file_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id TEXT NOT NULL REFERENCES runs(run_id) ON DELETE CASCADE,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     tool_name TEXT NOT NULL,
     path TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -118,10 +118,10 @@ CREATE INDEX IF NOT EXISTS idx_run_file_changes_run_created
     ON run_file_changes(run_id, created_at, id);
 
 CREATE INDEX IF NOT EXISTS idx_run_file_changes_chat_path
-    ON run_file_changes(chat_id, path, created_at, id);
+    ON run_file_changes(session_id, path, created_at, id);
 
 CREATE TABLE IF NOT EXISTS work_states (
-    chat_id TEXT PRIMARY KEY REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT PRIMARY KEY REFERENCES chats(session_id) ON DELETE CASCADE,
     objective TEXT NOT NULL,
     kind TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -157,7 +157,7 @@ CREATE INDEX IF NOT EXISTS idx_work_states_status
 
 CREATE TABLE IF NOT EXISTS knowledge_sources (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     source_type TEXT NOT NULL,
     tool_name TEXT NOT NULL,
     query TEXT,
@@ -174,14 +174,14 @@ CREATE TABLE IF NOT EXISTS knowledge_sources (
 );
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_chat_created
-    ON knowledge_sources(chat_id, created_at, id);
+    ON knowledge_sources(session_id, created_at, id);
 
 CREATE INDEX IF NOT EXISTS idx_knowledge_chat_source
-    ON knowledge_sources(chat_id, source_type);
+    ON knowledge_sources(session_id, source_type);
 
 CREATE TABLE IF NOT EXISTS search_chunks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id TEXT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL REFERENCES chats(session_id) ON DELETE CASCADE,
     owner_type TEXT NOT NULL,
     owner_id INTEGER NOT NULL DEFAULT 0,
     source_type TEXT NOT NULL,
@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS search_chunks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunks_chat_source_created
-    ON search_chunks(chat_id, source_type, created_at, id);
+    ON search_chunks(session_id, source_type, created_at, id);
 
 CREATE INDEX IF NOT EXISTS idx_chunks_owner
     ON search_chunks(owner_type, owner_id, chunk_index);
@@ -335,7 +335,7 @@ def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
 
 def ensure_chat_row(
     conn: sqlite3.Connection,
-    chat_id: str,
+    session_id: str,
     *,
     created_at: float,
     updated_at: float | None = None,
@@ -344,25 +344,25 @@ def ensure_chat_row(
     current_updated_at = updated_at if updated_at is not None else created_at
     conn.execute(
         """
-        INSERT INTO chats (chat_id, created_at, updated_at)
+        INSERT INTO chats (session_id, created_at, updated_at)
         VALUES (?, ?, ?)
-        ON CONFLICT(chat_id) DO UPDATE SET updated_at = excluded.updated_at
+        ON CONFLICT(session_id) DO UPDATE SET updated_at = excluded.updated_at
         """,
-        (chat_id, created_at, current_updated_at),
+        (session_id, created_at, current_updated_at),
     )
 
 
-def insert_message_row(conn: sqlite3.Connection, chat_id: str, message: StoredMessage) -> int:
+def insert_message_row(conn: sqlite3.Connection, session_id: str, message: StoredMessage) -> int:
     """Insert one stored message row and return its numeric id."""
     created_at = float(message.timestamp or time.time())
-    ensure_chat_row(conn, chat_id, created_at=created_at, updated_at=created_at)
+    ensure_chat_row(conn, session_id, created_at=created_at, updated_at=created_at)
     cursor = conn.execute(
         """
-        INSERT INTO messages (chat_id, role, content, tool_name, metadata_json, is_consolidated, created_at)
+        INSERT INTO messages (session_id, role, content, tool_name, metadata_json, is_consolidated, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            chat_id,
+            session_id,
             message.role,
             message.content,
             message.tool_name,
@@ -377,7 +377,7 @@ def insert_message_row(conn: sqlite3.Connection, chat_id: str, message: StoredMe
 def insert_search_chunks(
     conn: sqlite3.Connection,
     *,
-    chat_id: str,
+    session_id: str,
     owner_type: str,
     owner_id: int,
     chunks: list[SearchChunkPayload],
@@ -391,7 +391,7 @@ def insert_search_chunks(
         cursor = conn.execute(
             """
             INSERT INTO search_chunks (
-                chat_id,
+                session_id,
                 owner_type,
                 owner_id,
                 source_type,
@@ -407,7 +407,7 @@ def insert_search_chunks(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                chat_id,
+                session_id,
                 owner_type,
                 owner_id,
                 chunk.source_type,
@@ -492,16 +492,16 @@ def upsert_chunk_embedding(
 def insert_knowledge_document(
     conn: sqlite3.Connection,
     *,
-    chat_id: str,
+    session_id: str,
     document: KnowledgeDocument,
     created_at: float,
 ) -> tuple[int, list[int]]:
     """Insert one knowledge source and its searchable chunks."""
-    ensure_chat_row(conn, chat_id, created_at=created_at, updated_at=created_at)
+    ensure_chat_row(conn, session_id, created_at=created_at, updated_at=created_at)
     cursor = conn.execute(
         """
         INSERT INTO knowledge_sources (
-            chat_id,
+            session_id,
             source_type,
             tool_name,
             query,
@@ -519,7 +519,7 @@ def insert_knowledge_document(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            chat_id,
+            session_id,
             document.source_type,
             document.tool_name,
             document.query,
@@ -538,7 +538,7 @@ def insert_knowledge_document(
     source_id = int(cursor.lastrowid)
     chunk_ids = insert_search_chunks(
         conn,
-        chat_id=chat_id,
+        session_id=session_id,
         owner_type="knowledge",
         owner_id=source_id,
         chunks=build_knowledge_chunks(document, created_at=created_at),
@@ -549,7 +549,7 @@ def insert_knowledge_document(
 def find_message_owner_id(
     conn: sqlite3.Connection,
     *,
-    chat_id: str,
+    session_id: str,
     role: str,
     content: str,
     tool_name: str | None,
@@ -560,7 +560,7 @@ def find_message_owner_id(
         """
         SELECT id
         FROM messages
-        WHERE chat_id = ?
+        WHERE session_id = ?
           AND role = ?
           AND content = ?
           AND created_at = ?
@@ -568,7 +568,7 @@ def find_message_owner_id(
         ORDER BY id DESC
         LIMIT 1
         """,
-        (chat_id, role, content, created_at, tool_name, tool_name),
+        (session_id, role, content, created_at, tool_name, tool_name),
     ).fetchone()
     if row is not None:
         return int(row["id"])
@@ -577,14 +577,14 @@ def find_message_owner_id(
         """
         SELECT id
         FROM messages
-        WHERE chat_id = ?
+        WHERE session_id = ?
           AND role = ?
           AND content = ?
           AND ((tool_name IS NULL AND ? IS NULL) OR tool_name = ?)
         ORDER BY id DESC
         LIMIT 1
         """,
-        (chat_id, role, content, tool_name, tool_name),
+        (session_id, role, content, tool_name, tool_name),
     ).fetchone()
     return int(fallback["id"]) if fallback is not None else 0
 
@@ -601,7 +601,7 @@ def table_exists(conn: sqlite3.Connection, name: str) -> bool:
 def migrate_legacy_sessions(conn: sqlite3.Connection) -> None:
     """Migrate the old sessions JSON table into the normalized schema."""
     legacy_rows = conn.execute(
-        "SELECT chat_id, messages, consolidated_index, created_at, updated_at FROM sessions ORDER BY chat_id"
+        "SELECT session_id, messages, consolidated_index, created_at, updated_at FROM sessions ORDER BY session_id"
     ).fetchall()
     logger.info("Migrating legacy SQLite sessions schema ({} chat(s))", len(legacy_rows))
 
@@ -619,14 +619,14 @@ def migrate_legacy_sessions(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_legacy_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
-    chat_id = str(row["chat_id"])
+    session_id = str(row["session_id"])
     now = time.time()
     session_created_at = float(row["created_at"] or 0) or now
     session_updated_at = float(row["updated_at"] or 0) or session_created_at
-    ensure_chat_row(conn, chat_id, created_at=session_created_at, updated_at=session_updated_at)
+    ensure_chat_row(conn, session_id, created_at=session_created_at, updated_at=session_updated_at)
     conn.execute(
-        "INSERT INTO chat_state (chat_id, consolidated_index) VALUES (?, ?) ON CONFLICT(chat_id) DO UPDATE SET consolidated_index = excluded.consolidated_index",
-        (chat_id, int(row["consolidated_index"] or 0)),
+        "INSERT INTO chat_state (session_id, consolidated_index) VALUES (?, ?) ON CONFLICT(session_id) DO UPDATE SET consolidated_index = excluded.consolidated_index",
+        (session_id, int(row["consolidated_index"] or 0)),
     )
 
     messages_blob = row["messages"] or "[]"
@@ -647,10 +647,10 @@ def _migrate_legacy_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
             is_consolidated=bool(raw_message.get("is_consolidated", False)),
             metadata=raw_message.get("metadata", {}) if isinstance(raw_message.get("metadata", {}), dict) else {},
         )
-        message_id = insert_message_row(conn, chat_id, message)
+        message_id = insert_message_row(conn, session_id, message)
         insert_search_chunks(
             conn,
-            chat_id=chat_id,
+            session_id=session_id,
             owner_type="message",
             owner_id=message_id,
             chunks=build_history_chunks(
@@ -661,7 +661,7 @@ def _migrate_legacy_chat(conn: sqlite3.Connection, row: sqlite3.Row) -> None:
             ),
         )
         for document in build_knowledge_documents_from_message(message):
-            insert_knowledge_document(conn, chat_id=chat_id, document=document, created_at=created_at)
+            insert_knowledge_document(conn, session_id=session_id, document=document, created_at=created_at)
 
 
 class SQLiteStorage(StorageProvider):
@@ -716,7 +716,7 @@ class SQLiteStorage(StorageProvider):
             return None
         return StoredRun(
             run_id=str(row["run_id"]),
-            chat_id=str(row["chat_id"]),
+            session_id=str(row["session_id"]),
             status=str(row["status"]),
             created_at=float(row["created_at"] or 0),
             updated_at=float(row["updated_at"] or 0),
@@ -731,7 +731,7 @@ class SQLiteStorage(StorageProvider):
             StoredRunEvent(
                 event_id=int(row["id"]),
                 run_id=str(row["run_id"]),
-                chat_id=str(row["chat_id"]),
+                session_id=str(row["session_id"]),
                 event_type=str(row["event_type"]),
                 payload=_load_metadata(row["payload_json"]),
                 created_at=float(row["created_at"] or 0),
@@ -746,7 +746,7 @@ class SQLiteStorage(StorageProvider):
             StoredRunPart(
                 part_id=int(row["id"]),
                 run_id=str(row["run_id"]),
-                chat_id=str(row["chat_id"]),
+                session_id=str(row["session_id"]),
                 part_type=str(row["part_type"]),
                 content=str(row["content"] or ""),
                 tool_name=row["tool_name"],
@@ -763,7 +763,7 @@ class SQLiteStorage(StorageProvider):
             StoredRunFileChange(
                 change_id=int(row["id"]),
                 run_id=str(row["run_id"]),
-                chat_id=str(row["chat_id"]),
+                session_id=str(row["session_id"]),
                 tool_name=str(row["tool_name"]),
                 path=str(row["path"]),
                 action=str(row["action"]),
@@ -786,7 +786,7 @@ class SQLiteStorage(StorageProvider):
         metadata = _load_metadata(row["metadata_json"])
         legacy_workboard = _load_legacy_workboard(metadata)
         return StoredWorkState(
-            chat_id=str(row["chat_id"]),
+            session_id=str(row["session_id"]),
             objective=str(row["objective"] or ""),
             kind=str(row["kind"] or "task"),
             status=str(row["status"] or "active"),
@@ -821,7 +821,7 @@ class SQLiteStorage(StorageProvider):
             updated_at=float(row["updated_at"] or 0),
         )
 
-    async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
+    async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
         """Return the persisted messages for one chat."""
         async with self._lock:
             conn = self._get_conn()
@@ -831,11 +831,11 @@ class SQLiteStorage(StorageProvider):
                         """
                         SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
                         FROM messages
-                        WHERE chat_id = ?
+                        WHERE session_id = ?
                         ORDER BY id DESC
                         LIMIT ?
                         """,
-                        (chat_id, limit),
+                        (session_id, limit),
                     ).fetchall()
                     rows = list(reversed(rows))
                 else:
@@ -843,24 +843,24 @@ class SQLiteStorage(StorageProvider):
                         """
                         SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
                         FROM messages
-                        WHERE chat_id = ?
+                        WHERE session_id = ?
                         ORDER BY id ASC
                         """,
-                        (chat_id,),
+                        (session_id,),
                     ).fetchall()
 
                 return self._rows_to_messages(rows)
             finally:
                 conn.close()
 
-    async def get_message_count(self, chat_id: str) -> int:
+    async def get_message_count(self, session_id: str) -> int:
         """Return the total persisted message count for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 row = conn.execute(
-                    "SELECT COUNT(*) AS count FROM messages WHERE chat_id = ?",
-                    (chat_id,),
+                    "SELECT COUNT(*) AS count FROM messages WHERE session_id = ?",
+                    (session_id,),
                 ).fetchone()
                 return int(row["count"] if row is not None else 0)
             finally:
@@ -868,7 +868,7 @@ class SQLiteStorage(StorageProvider):
 
     async def get_messages_slice(
         self,
-        chat_id: str,
+        session_id: str,
         *,
         start_index: int = 0,
         end_index: int | None = None,
@@ -887,74 +887,74 @@ class SQLiteStorage(StorageProvider):
                         """
                         SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
                         FROM messages
-                        WHERE chat_id = ?
+                        WHERE session_id = ?
                         ORDER BY id ASC
                         LIMIT -1 OFFSET ?
                         """,
-                        (chat_id, start),
+                        (session_id, start),
                     ).fetchall()
                 else:
                     rows = conn.execute(
                         """
                         SELECT role, content, created_at, tool_name, is_consolidated, metadata_json
                         FROM messages
-                        WHERE chat_id = ?
+                        WHERE session_id = ?
                         ORDER BY id ASC
                         LIMIT ? OFFSET ?
                         """,
-                        (chat_id, stop - start, start),
+                        (session_id, stop - start, start),
                     ).fetchall()
                 return self._rows_to_messages(rows)
             finally:
                 conn.close()
 
-    async def add_message(self, chat_id: str, message: StoredMessage) -> None:
+    async def add_message(self, session_id: str, message: StoredMessage) -> None:
         """Persist one message in the normalized schema."""
         async with self._lock:
             conn = self._get_conn()
             try:
-                insert_message_row(conn, chat_id, message)
+                insert_message_row(conn, session_id, message)
                 conn.commit()
             finally:
                 conn.close()
 
-    async def clear_messages(self, chat_id: str) -> None:
+    async def clear_messages(self, session_id: str) -> None:
         """Delete all persisted data for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
-                conn.execute("DELETE FROM chats WHERE chat_id = ?", (chat_id,))
+                conn.execute("DELETE FROM chats WHERE session_id = ?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()
 
-    async def get_consolidated_index(self, chat_id: str) -> int:
+    async def get_consolidated_index(self, session_id: str) -> int:
         """Return the last consolidated message index for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 row = conn.execute(
-                    "SELECT consolidated_index FROM chat_state WHERE chat_id = ?",
-                    (chat_id,),
+                    "SELECT consolidated_index FROM chat_state WHERE session_id = ?",
+                    (session_id,),
                 ).fetchone()
                 return int(row["consolidated_index"]) if row is not None else 0
             finally:
                 conn.close()
 
-    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+    async def set_consolidated_index(self, session_id: str, index: int) -> None:
         """Persist the latest consolidated index for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 current_time = time.time()
-                ensure_chat_row(conn, chat_id, created_at=current_time, updated_at=current_time)
+                ensure_chat_row(conn, session_id, created_at=current_time, updated_at=current_time)
                 conn.execute(
                     """
-                    INSERT INTO chat_state (chat_id, consolidated_index)
+                    INSERT INTO chat_state (session_id, consolidated_index)
                     VALUES (?, ?)
-                    ON CONFLICT(chat_id) DO UPDATE SET consolidated_index = excluded.consolidated_index
+                    ON CONFLICT(session_id) DO UPDATE SET consolidated_index = excluded.consolidated_index
                     """,
-                    (chat_id, int(index)),
+                    (session_id, int(index)),
                 )
                 conn.commit()
             finally:
@@ -962,7 +962,7 @@ class SQLiteStorage(StorageProvider):
 
     async def create_run(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         *,
         status: str = "running",
@@ -974,10 +974,10 @@ class SQLiteStorage(StorageProvider):
             conn = self._get_conn()
             try:
                 now = float(created_at or time.time())
-                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
                 conn.execute(
                     """
-                    INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                    INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, ?)
                     ON CONFLICT(run_id) DO UPDATE SET
                         status = excluded.status,
@@ -986,7 +986,7 @@ class SQLiteStorage(StorageProvider):
                     """,
                     (
                         run_id,
-                        chat_id,
+                        session_id,
                         status,
                         json.dumps(json_safe(metadata or {}), ensure_ascii=False),
                         now,
@@ -1001,7 +1001,7 @@ class SQLiteStorage(StorageProvider):
 
     async def update_run_status(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         status: str,
         *,
@@ -1023,7 +1023,7 @@ class SQLiteStorage(StorageProvider):
                     """
                     UPDATE runs
                     SET status = ?, metadata_json = ?, updated_at = ?, finished_at = COALESCE(?, finished_at)
-                    WHERE run_id = ? AND chat_id = ?
+                    WHERE run_id = ? AND session_id = ?
                     """,
                     (
                         status,
@@ -1031,7 +1031,7 @@ class SQLiteStorage(StorageProvider):
                         now,
                         finished_at,
                         run_id,
-                        chat_id,
+                        session_id,
                     ),
                 )
                 conn.commit()
@@ -1040,7 +1040,7 @@ class SQLiteStorage(StorageProvider):
             finally:
                 conn.close()
 
-    async def get_runs(self, chat_id: str, limit: int | None = None) -> list[StoredRun]:
+    async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
         """Return persisted runs for one chat from newest to oldest."""
         async with self._lock:
             conn = self._get_conn()
@@ -1049,39 +1049,39 @@ class SQLiteStorage(StorageProvider):
                 query = """
                     SELECT *
                     FROM runs
-                    WHERE chat_id = ?
+                    WHERE session_id = ?
                     ORDER BY created_at DESC, run_id DESC
                 """
-                params = (chat_id,)
+                params = (session_id,)
                 if limit is not None:
                     query += " LIMIT ?"
-                    params = (chat_id, int(limit))
+                    params = (session_id, int(limit))
                 rows = conn.execute(query, params).fetchall()
                 return [run for run in (self._row_to_run(row) for row in rows) if run is not None]
             finally:
                 conn.close()
 
-    async def get_run(self, chat_id: str, run_id: str) -> StoredRun | None:
+    async def get_run(self, session_id: str, run_id: str) -> StoredRun | None:
         """Return one persisted run for a chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 row = conn.execute(
-                    "SELECT * FROM runs WHERE chat_id = ? AND run_id = ?",
-                    (chat_id, run_id),
+                    "SELECT * FROM runs WHERE session_id = ? AND run_id = ?",
+                    (session_id, run_id),
                 ).fetchone()
                 return self._row_to_run(row)
             finally:
                 conn.close()
 
-    async def get_work_state(self, chat_id: str) -> StoredWorkState | None:
+    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
         """Return the persisted structured work state for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 row = conn.execute(
-                    "SELECT * FROM work_states WHERE chat_id = ?",
-                    (chat_id,),
+                    "SELECT * FROM work_states WHERE session_id = ?",
+                    (session_id,),
                 ).fetchone()
                 return self._row_to_work_state(row)
             finally:
@@ -1094,17 +1094,17 @@ class SQLiteStorage(StorageProvider):
             try:
                 created_at = float(state.created_at or time.time())
                 updated_at = float(state.updated_at or time.time())
-                ensure_chat_row(conn, state.chat_id, created_at=created_at, updated_at=updated_at)
+                ensure_chat_row(conn, state.session_id, created_at=created_at, updated_at=updated_at)
                 existing = conn.execute(
-                    "SELECT created_at FROM work_states WHERE chat_id = ?",
-                    (state.chat_id,),
+                    "SELECT created_at FROM work_states WHERE session_id = ?",
+                    (state.session_id,),
                 ).fetchone()
                 if existing is not None and existing["created_at"] is not None:
                     created_at = float(existing["created_at"])
                 conn.execute(
                     """
                     INSERT INTO work_states (
-                        chat_id,
+                        session_id,
                         objective,
                         kind,
                         status,
@@ -1135,7 +1135,7 @@ class SQLiteStorage(StorageProvider):
                         updated_at
                     )
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(chat_id) DO UPDATE SET
+                    ON CONFLICT(session_id) DO UPDATE SET
                         objective = excluded.objective,
                         kind = excluded.kind,
                         status = excluded.status,
@@ -1165,7 +1165,7 @@ class SQLiteStorage(StorageProvider):
                         updated_at = excluded.updated_at
                     """,
                     (
-                        state.chat_id,
+                        state.session_id,
                         state.objective,
                         state.kind,
                         state.status,
@@ -1198,26 +1198,26 @@ class SQLiteStorage(StorageProvider):
                 )
                 conn.commit()
                 row = conn.execute(
-                    "SELECT * FROM work_states WHERE chat_id = ?",
-                    (state.chat_id,),
+                    "SELECT * FROM work_states WHERE session_id = ?",
+                    (state.session_id,),
                 ).fetchone()
                 return self._row_to_work_state(row)
             finally:
                 conn.close()
 
-    async def clear_work_state(self, chat_id: str) -> None:
+    async def clear_work_state(self, session_id: str) -> None:
         """Remove structured work state for one chat."""
         async with self._lock:
             conn = self._get_conn()
             try:
-                conn.execute("DELETE FROM work_states WHERE chat_id = ?", (chat_id,))
+                conn.execute("DELETE FROM work_states WHERE session_id = ?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()
 
     async def add_run_event(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         event_type: str,
         *,
@@ -1229,23 +1229,23 @@ class SQLiteStorage(StorageProvider):
             conn = self._get_conn()
             try:
                 now = float(created_at or time.time())
-                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
                 if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
                     conn.execute(
                         """
-                        INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
                         VALUES (?, ?, 'running', '{}', ?, ?)
                         """,
-                        (run_id, chat_id, now, now),
+                        (run_id, session_id, now, now),
                     )
                 cursor = conn.execute(
                     """
-                    INSERT INTO run_events (run_id, chat_id, event_type, payload_json, created_at)
+                    INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at)
                     VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         run_id,
-                        chat_id,
+                        session_id,
                         event_type,
                         json.dumps(json_safe(payload or {}), ensure_ascii=False),
                         now,
@@ -1258,19 +1258,19 @@ class SQLiteStorage(StorageProvider):
             finally:
                 conn.close()
 
-    async def get_run_events(self, chat_id: str, run_id: str) -> list[StoredRunEvent]:
+    async def get_run_events(self, session_id: str, run_id: str) -> list[StoredRunEvent]:
         """Return all events persisted for one run."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
                     """
-                    SELECT id, run_id, chat_id, event_type, payload_json, created_at
+                    SELECT id, run_id, session_id, event_type, payload_json, created_at
                     FROM run_events
-                    WHERE chat_id = ? AND run_id = ?
+                    WHERE session_id = ? AND run_id = ?
                     ORDER BY id ASC
                     """,
-                    (chat_id, run_id),
+                    (session_id, run_id),
                 ).fetchall()
                 return self._rows_to_run_events(rows)
             finally:
@@ -1278,7 +1278,7 @@ class SQLiteStorage(StorageProvider):
 
     async def add_run_part(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         part_type: str,
         *,
@@ -1292,23 +1292,23 @@ class SQLiteStorage(StorageProvider):
             conn = self._get_conn()
             try:
                 now = float(created_at or time.time())
-                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
                 if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
                     conn.execute(
                         """
-                        INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
                         VALUES (?, ?, 'running', '{}', ?, ?)
                         """,
-                        (run_id, chat_id, now, now),
+                        (run_id, session_id, now, now),
                     )
                 cursor = conn.execute(
                     """
-                    INSERT INTO run_parts (run_id, chat_id, part_type, content, tool_name, metadata_json, created_at)
+                    INSERT INTO run_parts (run_id, session_id, part_type, content, tool_name, metadata_json, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         run_id,
-                        chat_id,
+                        session_id,
                         part_type,
                         str(content or ""),
                         tool_name,
@@ -1323,19 +1323,19 @@ class SQLiteStorage(StorageProvider):
             finally:
                 conn.close()
 
-    async def get_run_parts(self, chat_id: str, run_id: str) -> list[StoredRunPart]:
+    async def get_run_parts(self, session_id: str, run_id: str) -> list[StoredRunPart]:
         """Return all durable parts persisted for one run."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
                     """
-                    SELECT id, run_id, chat_id, part_type, content, tool_name, metadata_json, created_at
+                    SELECT id, run_id, session_id, part_type, content, tool_name, metadata_json, created_at
                     FROM run_parts
-                    WHERE chat_id = ? AND run_id = ?
+                    WHERE session_id = ? AND run_id = ?
                     ORDER BY id ASC
                     """,
-                    (chat_id, run_id),
+                    (session_id, run_id),
                 ).fetchall()
                 return self._rows_to_run_parts(rows)
             finally:
@@ -1343,7 +1343,7 @@ class SQLiteStorage(StorageProvider):
 
     async def add_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         tool_name: str,
         path: str,
@@ -1362,20 +1362,20 @@ class SQLiteStorage(StorageProvider):
             conn = self._get_conn()
             try:
                 now = float(created_at or time.time())
-                ensure_chat_row(conn, chat_id, created_at=now, updated_at=now)
+                ensure_chat_row(conn, session_id, created_at=now, updated_at=now)
                 if conn.execute("SELECT 1 FROM runs WHERE run_id = ?", (run_id,)).fetchone() is None:
                     conn.execute(
                         """
-                        INSERT INTO runs (run_id, chat_id, status, metadata_json, created_at, updated_at)
+                        INSERT INTO runs (run_id, session_id, status, metadata_json, created_at, updated_at)
                         VALUES (?, ?, 'running', '{}', ?, ?)
                         """,
-                        (run_id, chat_id, now, now),
+                        (run_id, session_id, now, now),
                     )
                 cursor = conn.execute(
                     """
                     INSERT INTO run_file_changes (
                         run_id,
-                        chat_id,
+                        session_id,
                         tool_name,
                         path,
                         action,
@@ -1391,7 +1391,7 @@ class SQLiteStorage(StorageProvider):
                     """,
                     (
                         run_id,
-                        chat_id,
+                        session_id,
                         tool_name,
                         path,
                         action,
@@ -1411,19 +1411,19 @@ class SQLiteStorage(StorageProvider):
             finally:
                 conn.close()
 
-    async def get_run_file_changes(self, chat_id: str, run_id: str) -> list[StoredRunFileChange]:
+    async def get_run_file_changes(self, session_id: str, run_id: str) -> list[StoredRunFileChange]:
         """Return file mutations captured for one run."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 rows = conn.execute(
                     """
-                    SELECT id, run_id, chat_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
+                    SELECT id, run_id, session_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
                     FROM run_file_changes
-                    WHERE chat_id = ? AND run_id = ?
+                    WHERE session_id = ? AND run_id = ?
                     ORDER BY id ASC
                     """,
-                    (chat_id, run_id),
+                    (session_id, run_id),
                 ).fetchall()
                 return self._rows_to_run_file_changes(rows)
             finally:
@@ -1431,7 +1431,7 @@ class SQLiteStorage(StorageProvider):
 
     async def get_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         change_id: int,
     ) -> StoredRunFileChange | None:
@@ -1441,24 +1441,24 @@ class SQLiteStorage(StorageProvider):
             try:
                 row = conn.execute(
                     """
-                    SELECT id, run_id, chat_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
+                    SELECT id, run_id, session_id, tool_name, path, action, before_sha256, after_sha256, before_content, after_content, diff, metadata_json, created_at
                     FROM run_file_changes
-                    WHERE chat_id = ? AND run_id = ? AND id = ?
+                    WHERE session_id = ? AND run_id = ? AND id = ?
                     """,
-                    (chat_id, run_id, int(change_id)),
+                    (session_id, run_id, int(change_id)),
                 ).fetchone()
                 changes = self._rows_to_run_file_changes([row]) if row is not None else []
                 return changes[0] if changes else None
             finally:
                 conn.close()
 
-    async def get_all_chats(self) -> list[str]:
-        """Return all known chat ids."""
+    async def get_all_sessions(self) -> list[str]:
+        """Return all known session ids."""
         async with self._lock:
             conn = self._get_conn()
             try:
-                rows = conn.execute("SELECT chat_id FROM chats ORDER BY chat_id ASC").fetchall()
-                return [str(row["chat_id"]) for row in rows]
+                rows = conn.execute("SELECT session_id FROM chats ORDER BY session_id ASC").fetchall()
+                return [str(row["session_id"]) for row in rows]
             finally:
                 conn.close()
 

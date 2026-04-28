@@ -11,7 +11,7 @@ class SearchHit:
     """Single search result."""
 
     id: str
-    chat_id: str
+    session_id: str
     source_type: str
     content: str
     created_at: float
@@ -39,7 +39,7 @@ class SearchStore(ABC):
     @abstractmethod
     async def index_message(
         self,
-        chat_id: str,
+        session_id: str,
         role: str,
         content: str,
         tool_name: str | None = None,
@@ -50,7 +50,7 @@ class SearchStore(ABC):
     @abstractmethod
     async def index_tool_result(
         self,
-        chat_id: str,
+        session_id: str,
         tool_name: str,
         tool_args: dict,
         result: str,
@@ -59,13 +59,13 @@ class SearchStore(ABC):
         """Index structured tool results for knowledge search."""
 
     @abstractmethod
-    async def search_history(self, chat_id: str, query: str, limit: int = 5) -> list[SearchHit]:
+    async def search_history(self, session_id: str, query: str, limit: int = 5) -> list[SearchHit]:
         """Search conversation history within a single chat."""
 
     @abstractmethod
     async def search_knowledge(
         self,
-        chat_id: str,
+        session_id: str,
         query: str,
         limit: int = 5,
         source_type: str | None = None,
@@ -78,7 +78,7 @@ class SearchStore(ABC):
         """Search stored knowledge within a single chat."""
 
     @abstractmethod
-    async def clear_chat(self, chat_id: str) -> None:
+    async def clear_session(self, session_id: str) -> None:
         """Remove all indexed data for a chat."""
 
 

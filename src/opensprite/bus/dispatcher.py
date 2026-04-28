@@ -38,7 +38,7 @@ class Conversation:
     這裡只追蹤「是否正在處理」，
     對話歷史由 Agent + Storage 管理。
     """
-    chat_id: str
+    session_id: str
     pending: asyncio.Event = field(default_factory=asyncio.Event)  # 等待回覆
 
 
@@ -80,9 +80,9 @@ class MessageQueue:
         if hasattr(agent, "_message_bus"):
             agent._message_bus = self.bus
         self.messages = messages_config or getattr(agent, "messages", None) or MessagesConfig()
-        self.conversations: dict[str, Conversation] = {}  # chat_id -> Conversation
+        self.conversations: dict[str, Conversation] = {}  # session_id -> Conversation
         self.running = False
-        # 追蹤所有 active tasks: chat_id -> list of tasks
+        # 追蹤所有 active tasks: session_id -> list of tasks
         self._active_tasks: dict[str, list[asyncio.Task]] = {}
         self._session_tails: dict[str, asyncio.Task] = {}
         self._response_handlers: dict[str, ResponseHandler] = {}
@@ -97,33 +97,33 @@ class MessageQueue:
         """Normalize channel names for routing."""
         return (channel or "unknown").strip() or "unknown"
     
-    def get_or_create_conversation(self, chat_id: str) -> Conversation:
+    def get_or_create_conversation(self, session_id: str) -> Conversation:
         """
         取得或建立對話
         
         參數：
-            chat_id: 聊天室 ID
+            session_id: session ID
         
         回傳：
             Conversation 物件
         """
-        if chat_id not in self.conversations:
-            self.conversations[chat_id] = Conversation(chat_id=chat_id)
-        return self.conversations[chat_id]
+        if session_id not in self.conversations:
+            self.conversations[session_id] = Conversation(session_id=session_id)
+        return self.conversations[session_id]
 
     @staticmethod
-    def build_session_id(channel: str | None, chat_id: str | None) -> str:
+    def build_session_id(channel: str | None, external_chat_id: str | None) -> str:
         """Build an internal session ID namespaced by channel."""
         normalized_channel = MessageQueue.normalize_channel(channel)
-        normalized_chat_id = (chat_id or "default").strip() or "default"
+        normalized_chat_id = (external_chat_id or "default").strip() or "default"
         return f"{normalized_channel}:{normalized_chat_id}"
 
     @classmethod
-    def resolve_session_id(cls, chat_id: str, channel: str | None = None) -> str:
+    def resolve_session_id(cls, session_or_external_chat_id: str, channel: str | None = None) -> str:
         """Resolve external or already-namespaced chat IDs to internal session IDs."""
-        if ":" in chat_id:
-            return chat_id
-        return cls.build_session_id(channel or "cli", chat_id)
+        if ":" in session_or_external_chat_id:
+            return session_or_external_chat_id
+        return cls.build_session_id(channel or "cli", session_or_external_chat_id)
 
     def register_response_handler(self, channel: str, handler: ResponseHandler) -> None:
         """Register the outbound response handler for a channel."""
@@ -540,7 +540,7 @@ class MessageQueue:
         await self.bus.publish_outbound(
             OutboundMessage(
                 channel=channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
             )
@@ -563,7 +563,7 @@ class MessageQueue:
         await self.bus.publish_outbound(
             OutboundMessage(
                 channel=channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
             )
@@ -581,7 +581,7 @@ class MessageQueue:
         await self.bus.publish_outbound(
             OutboundMessage(
                 channel=channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
             )
@@ -599,7 +599,7 @@ class MessageQueue:
         await self.bus.publish_outbound(
             OutboundMessage(
                 channel=channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=content,
             )
@@ -628,7 +628,7 @@ class MessageQueue:
             user_message: 統一格式的訊息
         """
         channel = self.normalize_channel(user_message.channel)
-        external_chat_id = (user_message.chat_id or "default").strip() or "default"
+        external_chat_id = (user_message.external_chat_id or "default").strip() or "default"
         session_id = user_message.session_id or self.build_session_id(channel, external_chat_id)
         metadata = dict(user_message.metadata or {})
         bypass_commands = bool(metadata.pop("_bypass_commands", False))
@@ -678,7 +678,7 @@ class MessageQueue:
             channel=channel,
             sender_id=user_message.sender_id or user_message.sender or "unknown",
             sender_name=user_message.sender_name,
-            chat_id=external_chat_id,
+            external_chat_id=external_chat_id,
             session_id=session_id,
             content=user_message.text,
             images=list(user_message.images or []),
@@ -692,7 +692,7 @@ class MessageQueue:
     async def enqueue_raw(
         self,
         content: str,
-        chat_id: str = "default",
+        external_chat_id: str = "default",
         channel: str = "cli",
         sender_id: str = "user",
         sender_name: str | None = None,
@@ -708,7 +708,7 @@ class MessageQueue:
         
         參數：
             content: 訊息內容
-            chat_id: 聊天室 ID
+            external_chat_id: 平台原始聊天室 ID
             channel: 頻道名稱
             sender_id: 發送者 ID
             metadata: 額外資料
@@ -717,7 +717,7 @@ class MessageQueue:
             UserMessage(
                 text=content,
                 channel=channel,
-                chat_id=chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 sender_id=sender_id,
                 sender_name=sender_name,
@@ -736,7 +736,7 @@ class MessageQueue:
         參數：
             inbound: InboundMessage
         """
-        external_chat_id = inbound.chat_id
+        external_chat_id = inbound.external_chat_id
         session_id = inbound.session_id or self.build_session_id(inbound.channel, external_chat_id)
         metadata = dict(inbound.metadata)
         suppress_outbound = bool(metadata.pop("_suppress_outbound", False))
@@ -749,7 +749,7 @@ class MessageQueue:
             user_message = UserMessage(
                 text=inbound.content,
                 channel=inbound.channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 sender_id=inbound.sender_id,
                 sender_name=inbound.sender_name,
@@ -768,7 +768,7 @@ class MessageQueue:
             if not suppress_outbound:
                 outbound = OutboundMessage(
                     channel=response_channel,
-                    chat_id=response.chat_id or external_chat_id,
+                    external_chat_id=response.external_chat_id or external_chat_id,
                     session_id=response.session_id or session_id,
                     content=response.text,
                     metadata=dict(response.metadata or {}),
@@ -784,7 +784,7 @@ class MessageQueue:
             # 發送錯誤訊息到 outbound
             outbound = OutboundMessage(
                 channel=inbound.channel,
-                chat_id=external_chat_id,
+                external_chat_id=external_chat_id,
                 session_id=session_id,
                 content=f"抱歉，處理您的訊息時發生錯誤: {str(e)[:100]}"
             )
@@ -828,7 +828,7 @@ class MessageQueue:
                 response = AssistantMessage(
                     text=outbound.content,
                     channel=normalized_channel,
-                    chat_id=outbound.chat_id,
+                    external_chat_id=outbound.external_chat_id,
                     session_id=outbound.session_id,
                     metadata=dict(outbound.metadata),
                     raw=outbound.raw,
@@ -836,11 +836,11 @@ class MessageQueue:
 
                 handler = self._response_handlers.get(normalized_channel)
                 if handler is not None:
-                    await handler(response, normalized_channel, outbound.chat_id)
+                    await handler(response, normalized_channel, outbound.external_chat_id)
                     continue
 
                 if hasattr(self, "on_response"):
-                    await self.on_response(response, normalized_channel, outbound.chat_id)
+                    await self.on_response(response, normalized_channel, outbound.external_chat_id)
                     continue
 
                 logger.warning("No outbound handler registered for channel '{}'", normalized_channel)
@@ -892,27 +892,27 @@ class MessageQueue:
                 except asyncio.TimeoutError:
                     continue
                 
-                chat_id = inbound.session_id or self.build_session_id(inbound.channel, inbound.chat_id)
-                
-                previous_task = self._session_tails.get(chat_id)
-                task = asyncio.create_task(self._run_session_message(inbound, chat_id, previous_task))
-                self._session_tails[chat_id] = task
-                
-                # 追蹤這個 chat_id 的 tasks
-                if chat_id not in self._active_tasks:
-                    self._active_tasks[chat_id] = []
-                self._active_tasks[chat_id].append(task)
+                session_id = inbound.session_id or self.build_session_id(inbound.channel, inbound.external_chat_id)
+
+                previous_task = self._session_tails.get(session_id)
+                task = asyncio.create_task(self._run_session_message(inbound, session_id, previous_task))
+                self._session_tails[session_id] = task
+
+                # 追蹤這個 session_id 的 tasks
+                if session_id not in self._active_tasks:
+                    self._active_tasks[session_id] = []
+                self._active_tasks[session_id].append(task)
                 
                 # Task 完成後自動清理
                 task.add_done_callback(
-                    lambda t, cid=chat_id: self._active_tasks.get(cid, []).remove(t) 
+                    lambda t, cid=session_id: self._active_tasks.get(cid, []).remove(t)
                     if t in self._active_tasks.get(cid, []) else None
                 )
                 task.add_done_callback(
-                    lambda t, cid=chat_id: self._session_tails.pop(cid, None)
+                    lambda t, cid=session_id: self._session_tails.pop(cid, None)
                     if self._session_tails.get(cid) is t else None
                 )
-                
+
             except asyncio.CancelledError:
                 self.running = False
                 break
@@ -1065,7 +1065,7 @@ async def main():
             text = line
         
         # 加入佇列（現在用 enqueue_raw 更方便）
-        await mq.enqueue_raw(content=text, chat_id=chat_id, channel="cli")
+        await mq.enqueue_raw(content=text, external_chat_id=chat_id, channel="cli")
 
 asyncio.run(main())
 """

@@ -227,7 +227,7 @@ def create_cron_manager(config: Config, agent: AgentLoop, mq: MessageQueue) -> C
         user_message = UserMessage(
             text=job.payload.message,
             channel=job.payload.channel or channel,
-            chat_id=job.payload.chat_id or raw_chat_id,
+            external_chat_id=job.payload.chat_id or raw_chat_id,
             session_id=session_id,
             sender_id="system:cron",
             sender_name="cron",

@@ -75,7 +75,7 @@ class BackgroundSessionNotificationService:
             await bus.publish_outbound(
                 OutboundMessage(
                     channel=ch,
-                    chat_id=tid,
+                    external_chat_id=tid,
                     session_id=sid,
                     content=content,
                     metadata=metadata,

@@ -10,7 +10,7 @@ from ..utils.log import logger
 
 
 class HistoryResetService:
-    """Clears chat history and related per-chat derived state."""
+    """Clears session history and related per-session derived state."""
 
     def __init__(
         self,
@@ -25,23 +25,23 @@ class HistoryResetService:
         self._clear_active_task = clear_active_task
         self._clear_recent_summary = clear_recent_summary
 
-    async def reset(self, chat_id: str | None = None) -> None:
-        """Clear one chat or all chats from storage and derived indexes."""
-        if chat_id:
-            await self._clear_one(chat_id)
+    async def reset(self, session_id: str | None = None) -> None:
+        """Clear one session or all sessions from storage and derived indexes."""
+        if session_id:
+            await self._clear_one(session_id)
             return
 
-        all_chats = await self.storage.get_all_chats()
-        for current_chat_id in all_chats:
-            await self._clear_one(current_chat_id)
+        all_sessions = await self.storage.get_all_sessions()
+        for current_session_id in all_sessions:
+            await self._clear_one(current_session_id)
 
-    async def _clear_one(self, chat_id: str) -> None:
-        await self.storage.clear_messages(chat_id)
-        self._clear_active_task(chat_id)
-        self._clear_recent_summary(chat_id)
+    async def _clear_one(self, session_id: str) -> None:
+        await self.storage.clear_messages(session_id)
+        self._clear_active_task(session_id)
+        self._clear_recent_summary(session_id)
         if self.search_store is None:
             return
         try:
-            await self.search_store.clear_chat(chat_id)
+            await self.search_store.clear_session(session_id)
         except Exception as e:
-            logger.warning("[{}] Failed to clear search index: {}", chat_id, e)
+            logger.warning("[{}] Failed to clear search index: {}", session_id, e)

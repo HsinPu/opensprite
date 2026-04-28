@@ -72,7 +72,7 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
             UserMessage(
                 text="hello from A",
                 channel="telegram",
-                chat_id="user-a",
+                external_chat_id="user-a",
                 session_id="telegram:user-a",
             )
         )
@@ -80,20 +80,20 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
             UserMessage(
                 text="hello from B",
                 channel="telegram",
-                chat_id="user-b",
+                external_chat_id="user-b",
                 session_id="telegram:user-b",
             )
         )
 
         messages_a = await storage.get_messages("telegram:user-a")
         messages_b = await storage.get_messages("telegram:user-b")
-        all_chats = sorted(await storage.get_all_chats())
+        all_sessions = sorted(await storage.get_all_sessions())
 
         return {
             "prompts": list(provider.system_prompts),
             "messages_a": messages_a,
             "messages_b": messages_b,
-            "all_chats": all_chats,
+            "all_sessions": all_sessions,
             "workspace_a": get_chat_workspace("telegram:user-a", workspace_root=workspace_root),
             "workspace_b": get_chat_workspace("telegram:user-b", workspace_root=workspace_root),
             "response_a": response_a,
@@ -107,6 +107,6 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
     assert result["workspace_a"] != result["workspace_b"]
     assert [message.content for message in result["messages_a"]] == ["hello from A", "reply-1"]
     assert [message.content for message in result["messages_b"]] == ["hello from B", "reply-2"]
-    assert result["all_chats"] == ["telegram:user-a", "telegram:user-b"]
+    assert result["all_sessions"] == ["telegram:user-a", "telegram:user-b"]
     assert result["response_a"].session_id == "telegram:user-a"
     assert result["response_b"].session_id == "telegram:user-b"

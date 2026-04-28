@@ -33,7 +33,7 @@ class _BaseSearchTool(Tool):
         return self.get_chat_id()
 
     def _missing_chat_response(self) -> str:
-        return "Error: current chat_id is unavailable. Search tools require a chat-scoped conversation."
+        return "Error: current session_id is unavailable. Search tools require a session-scoped conversation."
 
 
 class SearchHistoryTool(_BaseSearchTool):
@@ -58,11 +58,11 @@ class SearchHistoryTool(_BaseSearchTool):
 
     async def _execute(self, query: str, limit: int | None = None, **kwargs: Any) -> str:
         query = query.strip()
-        chat_id = self._current_chat_id()
-        if not chat_id:
+        session_id = self._current_chat_id()
+        if not session_id:
             return self._missing_chat_response()
 
-        hits = await self.store.search_history(chat_id=chat_id, query=query, limit=limit or self.default_limit)
+        hits = await self.store.search_history(session_id=session_id, query=query, limit=limit or self.default_limit)
         if not hits:
             return f"No history matches found for '{query}' in this chat."
 
@@ -122,12 +122,12 @@ class SearchKnowledgeTool(_BaseSearchTool):
         **kwargs: Any,
     ) -> str:
         query = query.strip()
-        chat_id = self._current_chat_id()
-        if not chat_id:
+        session_id = self._current_chat_id()
+        if not session_id:
             return self._missing_chat_response()
 
         hits = await self.store.search_knowledge(
-            chat_id=chat_id,
+            session_id=session_id,
             query=query,
             limit=limit or self.default_limit,
             source_type=source_type,

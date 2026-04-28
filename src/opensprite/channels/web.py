@@ -251,9 +251,9 @@ class WebAdapter(MessageAdapter):
             raise web.HTTPNotFound()
         return target
 
-    def _build_session_id(self, chat_id: str | None) -> str:
-        normalized_chat_id = self._coerce_optional_text(chat_id, default="default") or "default"
-        return build_session_id(self.channel_instance_id, normalized_chat_id)
+    def _build_session_id(self, external_chat_id: str | None) -> str:
+        normalized_external_chat_id = self._coerce_optional_text(external_chat_id, default="default") or "default"
+        return build_session_id(self.channel_instance_id, normalized_external_chat_id)
 
     @property
     def bound_port(self) -> int | None:
@@ -365,7 +365,7 @@ class WebAdapter(MessageAdapter):
     def _serialize_run(self, run: Any) -> dict[str, Any]:
         return {
             "run_id": run.run_id,
-            "chat_id": run.chat_id,
+            "session_id": run.session_id,
             "status": run.status,
             "created_at": run.created_at,
             "updated_at": run.updated_at,
@@ -377,7 +377,7 @@ class WebAdapter(MessageAdapter):
         return {
             "event_id": event.event_id,
             "run_id": event.run_id,
-            "chat_id": event.chat_id,
+            "session_id": event.session_id,
             "event_type": event.event_type,
             "payload": self._json_safe(dict(event.payload or {})),
             "created_at": event.created_at,
@@ -387,7 +387,7 @@ class WebAdapter(MessageAdapter):
         return {
             "part_id": part.part_id,
             "run_id": part.run_id,
-            "chat_id": part.chat_id,
+            "session_id": part.session_id,
             "part_type": part.part_type,
             "content": part.content,
             "tool_name": part.tool_name,
@@ -399,7 +399,7 @@ class WebAdapter(MessageAdapter):
         return {
             "change_id": change.change_id,
             "run_id": change.run_id,
-            "chat_id": change.chat_id,
+            "session_id": change.session_id,
             "tool_name": change.tool_name,
             "path": change.path,
             "action": change.action,
@@ -431,11 +431,11 @@ class WebAdapter(MessageAdapter):
         return min(limit, maximum)
 
     @staticmethod
-    def _external_chat_id_from_session(chat_id: str) -> str | None:
-        parts = str(chat_id or "").split(":", 1)
+    def _external_chat_id_from_session(session_id: str) -> str | None:
+        parts = str(session_id or "").split(":", 1)
         if len(parts) == 2 and parts[1].strip():
             return parts[1].strip()
-        compact = str(chat_id or "").strip()
+        compact = str(session_id or "").strip()
         return compact or None
 
     @staticmethod
@@ -470,15 +470,15 @@ class WebAdapter(MessageAdapter):
 
     async def to_user_message(self, raw_message: Any) -> UserMessage:
         payload = dict(raw_message) if isinstance(raw_message, dict) else {}
-        chat_id = self._coerce_optional_text(payload.get("chat_id"))
+        external_chat_id = self._coerce_optional_text(payload.get("external_chat_id"))
         session_id = self._coerce_optional_text(payload.get("session_id"))
         if session_id is None:
-            session_id = self._build_session_id(chat_id)
+            session_id = self._build_session_id(external_chat_id)
 
         return UserMessage(
             text=self._coerce_optional_text(payload.get("text"), default="") or "",
             channel=self.channel_instance_id,
-            chat_id=chat_id,
+            external_chat_id=external_chat_id,
             session_id=session_id,
             sender_id=self._coerce_optional_text(payload.get("sender_id"), default="web-user"),
             sender_name=self._coerce_optional_text(payload.get("sender_name")),
@@ -494,7 +494,7 @@ class WebAdapter(MessageAdapter):
         )
 
     async def send(self, message: AssistantMessage) -> None:
-        session_id = message.session_id or self._build_session_id(message.chat_id)
+        session_id = message.session_id or self._build_session_id(message.external_chat_id)
         ws = self._session_connections.get(session_id)
         if ws is None or ws.closed:
             logger.warning("Web reply dropped because no active socket is bound to session {}", session_id)
@@ -505,7 +505,7 @@ class WebAdapter(MessageAdapter):
                 "type": "message",
                 "channel": self.channel_instance_id,
                 "channel_type": self.channel_type,
-                "chat_id": message.chat_id,
+                "external_chat_id": message.external_chat_id,
                 "session_id": session_id,
                 "text": message.text,
                 "metadata": dict(message.metadata or {}),
@@ -523,7 +523,7 @@ class WebAdapter(MessageAdapter):
                 "type": "run_event",
                 "channel": self.channel_instance_id,
                 "channel_type": self.channel_type,
-                "chat_id": event.chat_id,
+                "external_chat_id": event.external_chat_id,
                 "session_id": event.session_id,
                 "run_id": event.run_id,
                 "event_type": event.event_type,
@@ -539,33 +539,33 @@ class WebAdapter(MessageAdapter):
         storage = self._require_storage()
 
         run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        chat_id = self._coerce_optional_text(request.query.get("chat_id"))
-        if run_id is None or chat_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and chat_id are required")
+        session_id = self._coerce_optional_text(request.query.get("session_id"))
+        if run_id is None or session_id is None:
+            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
 
-        run = await storage.get_run(chat_id, run_id)
+        run = await storage.get_run(session_id, run_id)
         if run is None:
             raise web.HTTPNotFound(text="Run not found")
 
-        events = await storage.get_run_events(chat_id, run_id)
+        events = await storage.get_run_events(session_id, run_id)
         return web.json_response(
             {
                 "run_id": run_id,
-                "chat_id": chat_id,
+                "session_id": session_id,
                 "events": [self._serialize_run_event(event) for event in events],
             }
         )
 
     async def _handle_runs(self, request: web.Request) -> web.Response:
         storage = self._require_storage()
-        chat_id = self._coerce_optional_text(request.query.get("chat_id"))
-        if chat_id is None:
-            raise web.HTTPBadRequest(text="chat_id is required")
+        session_id = self._coerce_optional_text(request.query.get("session_id"))
+        if session_id is None:
+            raise web.HTTPBadRequest(text="session_id is required")
 
-        runs = await storage.get_runs(chat_id, limit=self._coerce_limit(request.query.get("limit")))
+        runs = await storage.get_runs(session_id, limit=self._coerce_limit(request.query.get("limit")))
         return web.json_response(
             {
-                "chat_id": chat_id,
+                "session_id": session_id,
                 "runs": [self._serialize_run(run) for run in runs],
             }
         )
@@ -573,11 +573,11 @@ class WebAdapter(MessageAdapter):
     async def _handle_run_trace(self, request: web.Request) -> web.Response:
         storage = self._require_storage()
         run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        chat_id = self._coerce_optional_text(request.query.get("chat_id"))
-        if run_id is None or chat_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and chat_id are required")
+        session_id = self._coerce_optional_text(request.query.get("session_id"))
+        if run_id is None or session_id is None:
+            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
 
-        trace = await storage.get_run_trace(chat_id, run_id)
+        trace = await storage.get_run_trace(session_id, run_id)
         if trace is None:
             raise web.HTTPNotFound(text="Run not found")
 
@@ -597,28 +597,28 @@ class WebAdapter(MessageAdapter):
             raise web.HTTPServiceUnavailable(text="Run cancellation is not available")
 
         run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        chat_id = self._coerce_optional_text(request.query.get("chat_id"))
-        if run_id is None or chat_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and chat_id are required")
+        session_id = self._coerce_optional_text(request.query.get("session_id"))
+        if run_id is None or session_id is None:
+            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
 
-        run = await storage.get_run(chat_id, run_id)
+        run = await storage.get_run(session_id, run_id)
         if run is None:
             raise web.HTTPNotFound(text="Run not found")
 
         accepted = await agent.request_run_cancel(
-            chat_id,
+            session_id,
             run_id,
             channel="web",
-            external_chat_id=self._external_chat_id_from_session(chat_id),
+            external_chat_id=self._external_chat_id_from_session(session_id),
         )
         if not accepted:
             raise web.HTTPConflict(text="Run is not active")
 
         cancel_chat = getattr(self.mq, "cancel_chat", None)
         if callable(cancel_chat):
-            await cancel_chat(chat_id)
+            await cancel_chat(session_id)
 
-        return web.json_response({"ok": True, "chat_id": chat_id, "run_id": run_id, "status": "cancelling"})
+        return web.json_response({"ok": True, "session_id": session_id, "run_id": run_id, "status": "cancelling"})
 
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
         try:
@@ -756,8 +756,8 @@ class WebAdapter(MessageAdapter):
         ws = web.WebSocketResponse(max_msg_size=self._get_max_message_size())
         await ws.prepare(request)
 
-        default_chat_id = (request.query.get("chat_id") or uuid4().hex).strip() or uuid4().hex
-        default_session_id = self._build_session_id(default_chat_id)
+        default_external_chat_id = (request.query.get("external_chat_id") or uuid4().hex).strip() or uuid4().hex
+        default_session_id = self._build_session_id(default_external_chat_id)
         self._bind_session(default_session_id, ws)
 
         await ws.send_json(
@@ -765,7 +765,7 @@ class WebAdapter(MessageAdapter):
                 "type": "session",
                 "channel": self.channel_instance_id,
                 "channel_type": self.channel_type,
-                "chat_id": default_chat_id,
+                "external_chat_id": default_external_chat_id,
                 "session_id": default_session_id,
             }
         )
@@ -775,9 +775,11 @@ class WebAdapter(MessageAdapter):
                 if msg.type == WSMsgType.TEXT:
                     try:
                         payload = self._parse_incoming_payload(msg.data)
-                        payload_chat_id = self._coerce_optional_text(payload.get("chat_id"), default=default_chat_id)
-                        payload["chat_id"] = payload_chat_id
-                        payload.setdefault("session_id", self._build_session_id(payload_chat_id))
+                        payload_external_chat_id = self._coerce_optional_text(
+                            payload.get("external_chat_id"), default=default_external_chat_id
+                        )
+                        payload["external_chat_id"] = payload_external_chat_id
+                        payload.setdefault("session_id", self._build_session_id(payload_external_chat_id))
                         user_message = await self.to_user_message(payload)
                     except ValueError as exc:
                         await ws.send_json({"type": "error", "error": str(exc)})
@@ -794,7 +796,7 @@ class WebAdapter(MessageAdapter):
 
         return ws
 
-    async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str | None) -> None:
+    async def _on_response(self, response: AssistantMessage, channel: str, external_chat_id: str | None) -> None:
         await self.send(response)
 
     async def _on_run_event(self, event: RunEvent) -> None:

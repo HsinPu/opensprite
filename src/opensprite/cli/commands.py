@@ -477,24 +477,24 @@ def search_rebuild(
         "-c",
         help="Path to an OpenSprite JSON config file.",
     ),
-    chat_id: str | None = typer.Option(
+    session_id: str | None = typer.Option(
         None,
-        "--chat-id",
-        help="Optional chat id to rebuild instead of rebuilding the full index.",
+        "--session-id",
+        help="Optional session id to rebuild instead of rebuilding the full index.",
     ),
 ) -> None:
     """Rebuild the SQLite search index from stored messages."""
     try:
         loaded, search_store = _load_sqlite_search_store(config)
-        result = asyncio.run(search_store.rebuild_index(chat_id=chat_id))
+        result = asyncio.run(search_store.rebuild_index(session_id=session_id))
         status = asyncio.run(search_store.wait_for_embedding_idle())
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
-    scope = chat_id or "all chats"
+    scope = session_id or "all sessions"
     typer.echo(f"Rebuilt search index for {scope}.")
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
-    typer.echo(f"Chats: {result['chat_count']}")
+    typer.echo(f"Sessions: {result['session_count']}")
     typer.echo(f"Messages: {result['message_count']}")
     typer.echo(f"Knowledge sources: {result['knowledge_count']}")
     typer.echo(f"Chunks: {result['chunk_count']}")
@@ -512,24 +512,24 @@ def search_status(
         "-c",
         help="Path to an OpenSprite JSON config file.",
     ),
-    chat_id: str | None = typer.Option(
+    session_id: str | None = typer.Option(
         None,
-        "--chat-id",
-        help="Optional chat id to inspect instead of the full search index.",
+        "--session-id",
+        help="Optional session id to inspect instead of the full search index.",
     ),
 ) -> None:
     """Show SQLite search index and embedding status."""
     try:
         loaded, search_store = _load_sqlite_search_store(config)
-        status = asyncio.run(search_store.get_status(chat_id=chat_id))
+        status = asyncio.run(search_store.get_status(session_id=session_id))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
-    scope = chat_id or "all chats"
+    scope = session_id or "all sessions"
     embedding = loaded.search.embedding
     typer.echo(f"Search status for {scope}.")
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
-    typer.echo(f"Chats: {status['chat_count']}")
+    typer.echo(f"Sessions: {status['session_count']}")
     typer.echo(f"Messages: {status['message_count']}")
     typer.echo(f"Knowledge sources: {status['knowledge_count']}")
     typer.echo(f"Chunks: {status['chunk_count']}")
@@ -572,10 +572,10 @@ def search_refresh_embeddings(
         "-c",
         help="Path to an OpenSprite JSON config file.",
     ),
-    chat_id: str | None = typer.Option(
+    session_id: str | None = typer.Option(
         None,
-        "--chat-id",
-        help="Optional chat id to refresh instead of refreshing all embeddings.",
+        "--session-id",
+        help="Optional session id to refresh instead of refreshing all embeddings.",
     ),
     force: bool = typer.Option(
         False,
@@ -588,11 +588,11 @@ def search_refresh_embeddings(
         loaded, search_store = _load_sqlite_search_store(config)
         if not loaded.search.embedding.enabled:
             raise ValueError("search.embedding.enabled=false; enable embeddings first")
-        status = asyncio.run(search_store.refresh_embeddings(chat_id=chat_id, force=force, wait=True))
+        status = asyncio.run(search_store.refresh_embeddings(session_id=session_id, force=force, wait=True))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
-    scope = chat_id or "all chats"
+    scope = session_id or "all sessions"
     embedding = loaded.search.embedding
     typer.echo(f"Refreshed embeddings for {scope}.")
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
@@ -671,7 +671,7 @@ def search_run_queue(
 @search_app.command("benchmark")
 def search_benchmark(
     query: str = typer.Option(..., "--query", help="Search query to benchmark."),
-    chat_id: str = typer.Option(..., "--chat-id", help="Chat id to benchmark against."),
+    session_id: str = typer.Option(..., "--session-id", help="Session id to benchmark against."),
     kind: str = typer.Option("knowledge", "--kind", help="Benchmark `history` or `knowledge` search."),
     strategy: str = typer.Option("both", "--strategy", help="Benchmark `fts`, `vector`, or `both`."),
     vector_backend: str | None = typer.Option(None, "--vector-backend", help="Override vector backend for this benchmark: `exact`, `sqlite_vec`, `auto`, or `both` (compare exact vs sqlite_vec)."),
@@ -687,7 +687,7 @@ def search_benchmark(
     truncated: bool | None = typer.Option(None, "--truncated", help="Knowledge truncation filter for knowledge benchmarks."),
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
 ) -> None:
-    """Benchmark FTS and vector candidate strategies for one chat query."""
+    """Benchmark FTS and vector candidate strategies for one session query."""
     if kind not in {"history", "knowledge"}:
         _handle_search_error("--kind must be 'history' or 'knowledge'")
     if strategy not in {"fts", "vector", "both"}:
@@ -735,7 +735,7 @@ def search_benchmark(
         strategies = [item for item in strategies if item != "vector"]
 
     benchmark_payload: dict[str, object] = {
-        "chat_id": chat_id,
+        "session_id": session_id,
         "kind": kind,
         "query": query,
         "repeat": repeat,
@@ -747,7 +747,7 @@ def search_benchmark(
     }
 
     if not json_output:
-        typer.echo(f"Search benchmark for {chat_id} ({kind}).")
+        typer.echo(f"Search benchmark for {session_id} ({kind}).")
         typer.echo(f"Query: {query}")
         if vector_backend:
             typer.echo(f"Vector backend override: {vector_backend}")
@@ -773,7 +773,7 @@ def search_benchmark(
                     elapsed_ms, hits = _benchmark_one_strategy(
                         search_store,
                         kind=kind,
-                        chat_id=chat_id,
+                        session_id=session_id,
                         query=query,
                         limit=limit,
                         source_type=source_type,
@@ -863,24 +863,24 @@ def search_benchmark(
 @search_app.command("seed-demo")
 def search_seed_demo(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-    chat_id: str = typer.Option("demo:search-benchmark", "--chat-id", help="Chat id that will receive the synthetic benchmark dataset."),
+    session_id: str = typer.Option("demo:search-benchmark", "--session-id", help="Session id that will receive the synthetic benchmark dataset."),
     reset: bool = typer.Option(True, "--reset/--append", help="Replace any existing demo chat data before seeding."),
 ) -> None:
-    """Seed synthetic chat and web knowledge so benchmark commands can run without real user data."""
+    """Seed synthetic session history and web knowledge so benchmark commands can run without real user data."""
     try:
         loaded, search_store = _load_sqlite_search_store(config)
-        result = asyncio.run(_seed_demo_search_data(loaded, search_store, chat_id=chat_id, reset=reset))
+        result = asyncio.run(_seed_demo_search_data(loaded, search_store, session_id=session_id, reset=reset))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
-    typer.echo(f"Seeded demo search data for {chat_id}.")
+    typer.echo(f"Seeded demo search data for {session_id}.")
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
     typer.echo(f"Messages: {result['messages']}")
     typer.echo(f"Knowledge sources: {result['knowledge_sources']}")
     typer.echo(f"Chunks: {result['chunks']}")
     typer.echo(f"Completed embeddings: {result['completed']}")
     typer.echo("Try:")
-    typer.echo(f"  opensprite search benchmark --chat-id {chat_id} --query \"orchard irrigation\" --strategy both --repeat 5")
+    typer.echo(f"  opensprite search benchmark --session-id {session_id} --query \"orchard irrigation\" --strategy both --repeat 5")
 
 
 @search_app.command("retry-embeddings")
@@ -891,10 +891,10 @@ def search_retry_embeddings(
         "-c",
         help="Path to an OpenSprite JSON config file.",
     ),
-    chat_id: str | None = typer.Option(
+    session_id: str | None = typer.Option(
         None,
-        "--chat-id",
-        help="Optional chat id to retry instead of retrying all failed embeddings.",
+        "--session-id",
+        help="Optional session id to retry instead of retrying all failed embeddings.",
     ),
 ) -> None:
     """Retry failed embedding jobs and wait for the queue to go idle."""
@@ -902,11 +902,11 @@ def search_retry_embeddings(
         loaded, search_store = _load_sqlite_search_store(config)
         if not loaded.search.embedding.enabled:
             raise ValueError("search.embedding.enabled=false; enable embeddings first")
-        status = asyncio.run(search_store.retry_failed_embeddings(chat_id=chat_id, wait=True))
+        status = asyncio.run(search_store.retry_failed_embeddings(session_id=session_id, wait=True))
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         _handle_search_error(exc)
 
-    scope = chat_id or "all chats"
+    scope = session_id or "all sessions"
     embedding = loaded.search.embedding
     typer.echo(f"Retried failed embeddings for {scope}.")
     typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
@@ -1082,7 +1082,7 @@ def _benchmark_one_strategy(
     search_store,
     *,
     kind: str,
-    chat_id: str,
+    session_id: str,
     query: str,
     limit: int,
     source_type: str | None = None,
@@ -1095,11 +1095,11 @@ def _benchmark_one_strategy(
     """Run one benchmark query and return elapsed time with hits."""
     started = time.perf_counter()
     if kind == "history":
-        hits = asyncio.run(search_store.search_history(chat_id, query, limit=limit))
+        hits = asyncio.run(search_store.search_history(session_id, query, limit=limit))
     else:
         hits = asyncio.run(
             search_store.search_knowledge(
-                chat_id,
+                session_id,
                 query,
                 limit=limit,
                 source_type=source_type,
@@ -1164,14 +1164,14 @@ def _demo_fetch_payload(url: str, title: str, content: str, *, extractor: str = 
     )
 
 
-async def _seed_demo_search_data(loaded, search_store, *, chat_id: str, reset: bool) -> dict[str, int]:
-    """Seed one synthetic chat with history and stored web knowledge."""
+async def _seed_demo_search_data(loaded, search_store, *, session_id: str, reset: bool) -> dict[str, int]:
+    """Seed one synthetic session with history and stored web knowledge."""
     from ..storage.sqlite import SQLiteStorage
 
     storage = SQLiteStorage(loaded.storage.path)
     if reset:
-        await storage.clear_messages(chat_id)
-        await search_store.clear_chat(chat_id)
+        await storage.clear_messages(session_id)
+        await search_store.clear_session(session_id)
 
     seeded_messages = [
         StoredMessage(role="user", content="Compare SQLite FTS and vector search strategies.", timestamp=10.0),
@@ -1180,9 +1180,9 @@ async def _seed_demo_search_data(loaded, search_store, *, chat_id: str, reset: b
     ]
 
     for message in seeded_messages:
-        await storage.add_message(chat_id, message)
+        await storage.add_message(session_id, message)
         await search_store.index_message(
-            chat_id,
+            session_id,
             role=message.role,
             content=message.content,
             tool_name=message.tool_name,
@@ -1236,16 +1236,16 @@ async def _seed_demo_search_data(loaded, search_store, *, chat_id: str, reset: b
 
     for tool_name, tool_args, payload, created_at in demo_knowledge:
         tool_message = StoredMessage(role="tool", content=payload, timestamp=created_at, tool_name=tool_name)
-        await storage.add_message(chat_id, tool_message)
+        await storage.add_message(session_id, tool_message)
         await search_store.index_message(
-            chat_id,
+            session_id,
             role=tool_message.role,
             content=tool_message.content,
             tool_name=tool_message.tool_name,
             created_at=tool_message.timestamp,
         )
         await search_store.index_tool_result(
-            chat_id,
+            session_id,
             tool_name=tool_name,
             tool_args=tool_args,
             result=payload,

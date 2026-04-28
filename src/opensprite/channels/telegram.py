@@ -361,7 +361,7 @@ class TelegramAdapter(MessageAdapter):
         return UserMessage(
             text=text,
             channel=self.channel_instance_id,
-            chat_id=chat_id,
+            external_chat_id=chat_id,
             session_id=session_id,
             sender_id=sender_id,
             sender_name=sender_name,
@@ -481,7 +481,7 @@ class TelegramAdapter(MessageAdapter):
                 fallback_extension="jpg",
                 filename_stem=f"image-{index}",
             )
-            await self.app.bot.send_photo(chat_id=message.chat_id, photo=payload)
+            await self.app.bot.send_photo(chat_id=message.external_chat_id, photo=payload)
 
         for index, voice in enumerate(message.voices or [], start=1):
             payload = self._coerce_outbound_media(
@@ -490,7 +490,7 @@ class TelegramAdapter(MessageAdapter):
                 fallback_extension="ogg",
                 filename_stem=f"voice-{index}",
             )
-            await self.app.bot.send_voice(chat_id=message.chat_id, voice=payload)
+            await self.app.bot.send_voice(chat_id=message.external_chat_id, voice=payload)
 
         for index, audio in enumerate(message.audios or [], start=1):
             payload = self._coerce_outbound_media(
@@ -499,7 +499,7 @@ class TelegramAdapter(MessageAdapter):
                 fallback_extension="mp3",
                 filename_stem=f"audio-{index}",
             )
-            await self.app.bot.send_audio(chat_id=message.chat_id, audio=payload)
+            await self.app.bot.send_audio(chat_id=message.external_chat_id, audio=payload)
 
         for index, video in enumerate(message.videos or [], start=1):
             payload = self._coerce_outbound_media(
@@ -508,7 +508,7 @@ class TelegramAdapter(MessageAdapter):
                 fallback_extension="mp4",
                 filename_stem=f"video-{index}",
             )
-            await self.app.bot.send_video(chat_id=message.chat_id, video=payload)
+            await self.app.bot.send_video(chat_id=message.external_chat_id, video=payload)
     
     async def send(self, message: AssistantMessage) -> None:
         """
@@ -522,15 +522,15 @@ class TelegramAdapter(MessageAdapter):
         if self.app is None:
             raise RuntimeError("TelegramAdapter 未啟動，請先呼叫 run()")
         
-        if message.chat_id is None:
-            raise ValueError("AssistantMessage 缺少 chat_id，無法發送")
+        if message.external_chat_id is None:
+            raise ValueError("AssistantMessage 缺少 external_chat_id，無法發送")
         
         has_media = self._has_outbound_media(message)
         text = message.text or ""
         if not text.strip() and not has_media:
             logger.warning(
                 "Telegram reply text is empty for chat {} session {}; sending fallback notice",
-                message.chat_id,
+                message.external_chat_id,
                 message.session_id,
             )
             text = self.messages.telegram.empty_message_fallback
@@ -547,7 +547,7 @@ class TelegramAdapter(MessageAdapter):
             if not html_text.strip():
                 logger.warning(
                     "Telegram HTML renderer produced empty output for chat {} session {}; using escaped plain text",
-                    message.chat_id,
+                    message.external_chat_id,
                     message.session_id,
                 )
                 html_text = html.escape(text)
@@ -555,7 +555,7 @@ class TelegramAdapter(MessageAdapter):
             # 嘗試發送 HTML，失敗則用純文字
             try:
                 await self.app.bot.send_message(
-                    chat_id=message.chat_id,
+                    chat_id=message.external_chat_id,
                     text=html_text,
                     parse_mode="HTML"
                 )
@@ -563,7 +563,7 @@ class TelegramAdapter(MessageAdapter):
                 logger.warning("Telegram HTML send failed, falling back to plain text: {}", exc)
                 # Fallback 到純文字
                 await self.app.bot.send_message(
-                    chat_id=message.chat_id,
+                    chat_id=message.external_chat_id,
                     text=text
                 )
 
@@ -812,7 +812,7 @@ class TelegramAdapter(MessageAdapter):
             
             if self.mq:
                 # === 新方式：走 MessageQueue ===
-                self._start_typing_indicator(user_msg.session_id, user_msg.chat_id)
+                self._start_typing_indicator(user_msg.session_id, user_msg.external_chat_id)
                 await self.mq.enqueue(user_msg)
             else:
                 # === 舊方式：直接叫 agent（向後相容）===

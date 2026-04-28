@@ -248,7 +248,7 @@ class SQLiteSearchStore(SearchStore):
                     CREATE VIRTUAL TABLE {SQLITE_VEC_INDEX_TABLE} USING vec0(
                         chunk_id integer primary key,
                         embedding float[{vector_dim}] distance_metric=cosine,
-                        chat_id text,
+                        session_id text,
                         owner_type text,
                         source_type text,
                         provider text,
@@ -276,7 +276,7 @@ class SQLiteSearchStore(SearchStore):
             """
             SELECT
                 c.id,
-                c.chat_id,
+                c.session_id,
                 c.owner_type,
                 c.source_type,
                 COALESCE(ks.provider, '') AS provider,
@@ -305,7 +305,7 @@ class SQLiteSearchStore(SearchStore):
                 INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
                     chunk_id,
                     embedding,
-                    chat_id,
+                    session_id,
                     owner_type,
                     source_type,
                     provider,
@@ -318,7 +318,7 @@ class SQLiteSearchStore(SearchStore):
                 (
                     int(row["id"]),
                     row["embedding"],
-                    str(row["chat_id"] or ""),
+                    str(row["session_id"] or ""),
                     str(row["owner_type"] or ""),
                     str(row["source_type"] or ""),
                     str(row["provider"] or ""),
@@ -350,7 +350,7 @@ class SQLiteSearchStore(SearchStore):
             f"""
             SELECT
                 c.id,
-                c.chat_id,
+                c.session_id,
                 c.owner_type,
                 c.source_type,
                 COALESCE(ks.provider, '') AS provider,
@@ -382,7 +382,7 @@ class SQLiteSearchStore(SearchStore):
                 INSERT INTO {SQLITE_VEC_INDEX_TABLE}(
                     chunk_id,
                     embedding,
-                    chat_id,
+                    session_id,
                     owner_type,
                     source_type,
                     provider,
@@ -395,7 +395,7 @@ class SQLiteSearchStore(SearchStore):
                 (
                     int(row["id"]),
                     row["embedding"],
-                    str(row["chat_id"] or ""),
+                    str(row["session_id"] or ""),
                     str(row["owner_type"] or ""),
                     str(row["source_type"] or ""),
                     str(row["provider"] or ""),
@@ -665,7 +665,7 @@ class SQLiteSearchStore(SearchStore):
 
         return last_status
 
-    async def _requeue_embeddings(self, *, from_status: str, chat_id: str | None = None) -> int:
+    async def _requeue_embeddings(self, *, from_status: str, session_id: str | None = None) -> int:
         """Move matching embedding jobs back to pending."""
         if self.embedding_provider is None:
             return 0
@@ -676,9 +676,9 @@ class SQLiteSearchStore(SearchStore):
                 params: list[object] = [self.embedding_provider.model_name]
                 where_clauses = ["ce.embedding_status = ?", "ce.embedding_model = ?"]
                 params.insert(0, from_status)
-                if chat_id:
-                    where_clauses.append("sc.chat_id = ?")
-                    params.append(chat_id)
+                if session_id:
+                    where_clauses.append("sc.session_id = ?")
+                    params.append(session_id)
                 rows = conn.execute(
                     f"""
                     SELECT ce.chunk_id
@@ -703,30 +703,30 @@ class SQLiteSearchStore(SearchStore):
 
     async def retry_failed_embeddings(
         self,
-        chat_id: str | None = None,
+        session_id: str | None = None,
         *,
         wait: bool = True,
     ) -> dict[str, int]:
         """Move failed embedding jobs back to pending and optionally wait for completion."""
         if self.embedding_provider is None:
-            status = await self.get_status(chat_id=chat_id)
+            status = await self.get_status(session_id=session_id)
             status["retried"] = 0
             return status
 
-        retried = await self._requeue_embeddings(from_status="failed", chat_id=chat_id)
+        retried = await self._requeue_embeddings(from_status="failed", session_id=session_id)
 
         if retried:
             self._schedule_pending_embeddings()
             if wait:
                 await self.wait_for_embedding_idle()
 
-        filtered_status = await self.get_status(chat_id=chat_id)
+        filtered_status = await self.get_status(session_id=session_id)
         filtered_status["retried"] = retried
         return filtered_status
 
     async def refresh_embeddings(
         self,
-        chat_id: str | None = None,
+        session_id: str | None = None,
         *,
         force: bool = False,
         wait: bool = True,
@@ -734,7 +734,7 @@ class SQLiteSearchStore(SearchStore):
     ) -> dict[str, int]:
         """Queue embeddings for missing, stale, or explicitly refreshed chunks."""
         if self.embedding_provider is None:
-            status = await self.get_status(chat_id=chat_id)
+            status = await self.get_status(session_id=session_id)
             status["refreshed"] = 0
             return status
 
@@ -743,9 +743,9 @@ class SQLiteSearchStore(SearchStore):
             try:
                 filters = []
                 params: list[object] = []
-                if chat_id:
-                    filters.append("sc.chat_id = ?")
-                    params.append(chat_id)
+                if session_id:
+                    filters.append("sc.session_id = ?")
+                    params.append(session_id)
 
                 if force:
                     where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
@@ -785,22 +785,22 @@ class SQLiteSearchStore(SearchStore):
                 else:
                     await self.process_pending_embeddings()
 
-        status = await self.get_status(chat_id=chat_id)
+        status = await self.get_status(session_id=session_id)
         status["refreshed"] = len(chunk_ids)
         return status
 
-    async def get_status(self, chat_id: str | None = None) -> dict[str, int]:
+    async def get_status(self, session_id: str | None = None) -> dict[str, int]:
         """Return search and embedding status counts."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 filters = ""
                 params: list[object] = []
-                if chat_id:
-                    filters = " WHERE chat_id = ?"
-                    params.append(chat_id)
+                if session_id:
+                    filters = " WHERE session_id = ?"
+                    params.append(session_id)
                 chats = conn.execute(
-                    f"SELECT COUNT(DISTINCT chat_id) FROM search_chunks{filters}",
+                    f"SELECT COUNT(DISTINCT session_id) FROM search_chunks{filters}",
                     params,
                 ).fetchone()[0]
                 knowledge = conn.execute(
@@ -818,9 +818,9 @@ class SQLiteSearchStore(SearchStore):
 
                 embedding_filters = ""
                 embedding_params: list[object] = []
-                if chat_id:
-                    embedding_filters = " WHERE sc.chat_id = ?"
-                    embedding_params.append(chat_id)
+                if session_id:
+                    embedding_filters = " WHERE sc.session_id = ?"
+                    embedding_params.append(session_id)
                 status_rows = conn.execute(
                     f"""
                     SELECT ce.embedding_status, COUNT(*) AS count
@@ -903,7 +903,7 @@ class SQLiteSearchStore(SearchStore):
         counts = {str(row["embedding_status"]): int(row["count"] or 0) for row in status_rows}
         total_embeddings = sum(counts.values())
         return {
-            "chat_count": int(chats or 0),
+            "session_count": int(chats or 0),
             "message_count": int(messages or 0),
             "knowledge_count": int(knowledge or 0),
             "chunk_count": int(chunks or 0),
@@ -1007,7 +1007,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1025,7 +1025,7 @@ class SQLiteSearchStore(SearchStore):
         if self.vector_backend_effective == "sqlite_vec":
             rows = await self._sqlite_vec_candidate_rows(
                 conn,
-                chat_id=chat_id,
+                session_id=session_id,
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
@@ -1041,7 +1041,7 @@ class SQLiteSearchStore(SearchStore):
 
         return await self._exact_vector_candidate_rows(
             conn,
-            chat_id=chat_id,
+            session_id=session_id,
             query=query,
             owner_type=owner_type,
             limit=limit,
@@ -1057,7 +1057,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1086,7 +1086,7 @@ class SQLiteSearchStore(SearchStore):
             SELECT
                 c.id,
                 c.owner_id,
-                c.chat_id,
+                c.session_id,
                 c.source_type,
                 c.content,
                 c.created_at,
@@ -1106,14 +1106,14 @@ class SQLiteSearchStore(SearchStore):
             FROM search_chunks c
             JOIN chunk_embeddings ce ON ce.chunk_id = c.id
             LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
-            WHERE c.chat_id = ?
+            WHERE c.session_id = ?
               AND c.owner_type = ?
               AND ce.embedding_status = 'completed'
               AND COALESCE(ce.embedding_provider, '') = ?
               AND COALESCE(ce.embedding_model, '') = ?
         """
         params: list[object] = [
-            chat_id,
+            session_id,
             owner_type,
             self.embedding_provider.provider_name,
             self.embedding_provider.model_name,
@@ -1164,7 +1164,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1199,10 +1199,10 @@ class SQLiteSearchStore(SearchStore):
                 FROM {SQLITE_VEC_INDEX_TABLE}
                 WHERE embedding MATCH ?
                   AND k = ?
-                  AND chat_id = ?
+                  AND session_id = ?
                   AND owner_type = ?
         """
-        params: list[object] = [query_blob, max(limit, 1), chat_id, owner_type]
+        params: list[object] = [query_blob, max(limit, 1), session_id, owner_type]
         if source_type:
             sql += " AND source_type = ?"
             params.append(source_type)
@@ -1227,7 +1227,7 @@ class SQLiteSearchStore(SearchStore):
             SELECT
                 c.id,
                 c.owner_id,
-                c.chat_id,
+                c.session_id,
                 c.source_type,
                 c.content,
                 c.created_at,
@@ -1489,7 +1489,7 @@ class SQLiteSearchStore(SearchStore):
 
     async def index_message(
         self,
-        chat_id: str,
+        session_id: str,
         role: str,
         content: str,
         tool_name: str | None = None,
@@ -1512,7 +1512,7 @@ class SQLiteSearchStore(SearchStore):
             try:
                 owner_id = find_message_owner_id(
                     conn,
-                    chat_id=chat_id,
+                    session_id=session_id,
                     role=role,
                     content=content,
                     tool_name=tool_name,
@@ -1520,7 +1520,7 @@ class SQLiteSearchStore(SearchStore):
                 )
                 chunk_ids = insert_search_chunks(
                     conn,
-                    chat_id=chat_id,
+                    session_id=session_id,
                     owner_type="message",
                     owner_id=owner_id,
                     chunks=chunks,
@@ -1534,7 +1534,7 @@ class SQLiteSearchStore(SearchStore):
 
     async def index_tool_result(
         self,
-        chat_id: str,
+        session_id: str,
         tool_name: str,
         tool_args: dict,
         result: str,
@@ -1557,7 +1557,7 @@ class SQLiteSearchStore(SearchStore):
                 for document in documents:
                     _, chunk_ids = insert_knowledge_document(
                         conn,
-                        chat_id=chat_id,
+                        session_id=session_id,
                         document=document,
                         created_at=current_created_at,
                     )
@@ -1568,14 +1568,14 @@ class SQLiteSearchStore(SearchStore):
                 conn.close()
         self._schedule_pending_embeddings()
 
-    async def search_history(self, chat_id: str, query: str, limit: int = 5) -> list[SearchHit]:
+    async def search_history(self, session_id: str, query: str, limit: int = 5) -> list[SearchHit]:
         async with self._lock:
             conn = self._get_conn()
             try:
                 requested_limit = limit or self.history_top_k
                 rows = await self._select_candidate_rows(
                     conn,
-                    chat_id=chat_id,
+                    session_id=session_id,
                     query=query,
                     owner_type="message",
                     limit=requested_limit,
@@ -1593,7 +1593,7 @@ class SQLiteSearchStore(SearchStore):
 
     async def search_knowledge(
         self,
-        chat_id: str,
+        session_id: str,
         query: str,
         limit: int = 5,
         source_type: str | None = None,
@@ -1609,7 +1609,7 @@ class SQLiteSearchStore(SearchStore):
                 requested_limit = limit or self.knowledge_top_k
                 rows = await self._select_candidate_rows(
                     conn,
-                    chat_id=chat_id,
+                    session_id=session_id,
                     query=query,
                     owner_type="knowledge",
                     limit=requested_limit,
@@ -1635,7 +1635,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1650,7 +1650,7 @@ class SQLiteSearchStore(SearchStore):
         if self.embedding_candidate_strategy == "vector" and self.embedding_provider is not None:
             rows = await self._vector_candidate_rows(
                 conn,
-                chat_id=chat_id,
+                session_id=session_id,
                 query=query,
                 owner_type=owner_type,
                 limit=self._vector_limit(limit),
@@ -1666,7 +1666,7 @@ class SQLiteSearchStore(SearchStore):
 
         return self._search_rows(
             conn,
-            chat_id=chat_id,
+            session_id=session_id,
             query=query,
             owner_type=owner_type,
             limit=self._candidate_limit(limit),
@@ -1678,38 +1678,38 @@ class SQLiteSearchStore(SearchStore):
             truncated=truncated,
         )
 
-    async def clear_chat(self, chat_id: str) -> None:
+    async def clear_session(self, session_id: str) -> None:
         async with self._lock:
             conn = self._get_conn()
             try:
                 if self.vector_backend_effective == "sqlite_vec":
-                    conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chat_id = ?", (chat_id,))
-                conn.execute("DELETE FROM search_chunks WHERE chat_id = ?", (chat_id,))
-                conn.execute("DELETE FROM knowledge_sources WHERE chat_id = ?", (chat_id,))
+                    conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM knowledge_sources WHERE session_id = ?", (session_id,))
                 conn.commit()
             finally:
                 conn.close()
 
-    async def rebuild_index(self, chat_id: str | None = None) -> dict[str, int]:
+    async def rebuild_index(self, session_id: str | None = None) -> dict[str, int]:
         """Rebuild indexed history and knowledge rows from persisted messages."""
         async with self._lock:
             conn = self._get_conn()
             try:
                 ensure_sqlite_schema(conn)
                 conn.execute("BEGIN")
-                if chat_id:
+                if session_id:
                     if self.vector_backend_effective == "sqlite_vec":
-                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE chat_id = ?", (chat_id,))
-                    conn.execute("DELETE FROM search_chunks WHERE chat_id = ?", (chat_id,))
-                    conn.execute("DELETE FROM knowledge_sources WHERE chat_id = ?", (chat_id,))
+                        conn.execute(f"DELETE FROM {SQLITE_VEC_INDEX_TABLE} WHERE session_id = ?", (session_id,))
+                    conn.execute("DELETE FROM search_chunks WHERE session_id = ?", (session_id,))
+                    conn.execute("DELETE FROM knowledge_sources WHERE session_id = ?", (session_id,))
                     rows = conn.execute(
                         """
-                        SELECT id, chat_id, role, content, tool_name, created_at
+                        SELECT id, session_id, role, content, tool_name, created_at
                         FROM messages
-                        WHERE chat_id = ?
+                        WHERE session_id = ?
                         ORDER BY id ASC
                         """,
-                        (chat_id,),
+                        (session_id,),
                     ).fetchall()
                 else:
                     if self.vector_backend_effective == "sqlite_vec":
@@ -1718,9 +1718,9 @@ class SQLiteSearchStore(SearchStore):
                     conn.execute("DELETE FROM knowledge_sources")
                     rows = conn.execute(
                         """
-                        SELECT id, chat_id, role, content, tool_name, created_at
+                        SELECT id, session_id, role, content, tool_name, created_at
                         FROM messages
-                        ORDER BY chat_id ASC, id ASC
+                        ORDER BY session_id ASC, id ASC
                         """
                     ).fetchall()
 
@@ -1739,7 +1739,7 @@ class SQLiteSearchStore(SearchStore):
                     )
                     history_chunk_ids = insert_search_chunks(
                         conn,
-                        chat_id=str(row["chat_id"]),
+                        session_id=str(row["session_id"]),
                         owner_type="message",
                         owner_id=int(row["id"]),
                         chunks=history_chunks,
@@ -1762,7 +1762,7 @@ class SQLiteSearchStore(SearchStore):
                     for document in documents:
                         _, knowledge_chunk_ids = insert_knowledge_document(
                             conn,
-                            chat_id=str(row["chat_id"]),
+                            session_id=str(row["session_id"]),
                             document=document,
                             created_at=created_at,
                         )
@@ -1774,7 +1774,7 @@ class SQLiteSearchStore(SearchStore):
                 conn.commit()
                 self._schedule_pending_embeddings()
                 return {
-                    "chat_count": len({str(row["chat_id"]) for row in rows}),
+                    "session_count": len({str(row["session_id"]) for row in rows}),
                     "message_count": message_count,
                     "knowledge_count": knowledge_count,
                     "chunk_count": chunk_count,
@@ -1789,7 +1789,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1804,7 +1804,7 @@ class SQLiteSearchStore(SearchStore):
         if match_query is None:
             return self._search_rows_fallback(
                 conn,
-                chat_id=chat_id,
+                session_id=session_id,
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
@@ -1820,7 +1820,7 @@ class SQLiteSearchStore(SearchStore):
             SELECT
                 c.id,
                 c.owner_id,
-                c.chat_id,
+                c.session_id,
                 c.source_type,
                 c.content,
                 c.created_at,
@@ -1840,10 +1840,10 @@ class SQLiteSearchStore(SearchStore):
             JOIN search_chunks c ON c.id = search_chunks_fts.rowid
             LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
             WHERE search_chunks_fts MATCH ?
-              AND c.chat_id = ?
+              AND c.session_id = ?
               AND c.owner_type = ?
         """
-        params: list[object] = [match_query, chat_id, owner_type]
+        params: list[object] = [match_query, session_id, owner_type]
         if source_type:
             sql += " AND c.source_type = ?"
             params.append(source_type)
@@ -1870,7 +1870,7 @@ class SQLiteSearchStore(SearchStore):
         except Exception:
             return self._search_rows_fallback(
                 conn,
-                chat_id=chat_id,
+                session_id=session_id,
                 query=query,
                 owner_type=owner_type,
                 limit=limit,
@@ -1886,7 +1886,7 @@ class SQLiteSearchStore(SearchStore):
         self,
         conn,
         *,
-        chat_id: str,
+        session_id: str,
         query: str,
         owner_type: str,
         limit: int,
@@ -1901,7 +1901,7 @@ class SQLiteSearchStore(SearchStore):
             SELECT
                 c.id,
                 c.owner_id,
-                c.chat_id,
+                c.session_id,
                 c.source_type,
                 c.content,
                 c.created_at,
@@ -1918,10 +1918,10 @@ class SQLiteSearchStore(SearchStore):
                 ks.truncated
             FROM search_chunks c
             LEFT JOIN knowledge_sources ks ON c.owner_type = 'knowledge' AND ks.id = c.owner_id
-            WHERE c.chat_id = ?
+            WHERE c.session_id = ?
               AND c.owner_type = ?
         """
-        params: list[object] = [chat_id, owner_type]
+        params: list[object] = [session_id, owner_type]
         if source_type:
             sql += " AND c.source_type = ?"
             params.append(source_type)
@@ -1986,7 +1986,7 @@ class SQLiteSearchStore(SearchStore):
         score = row["score"] if isinstance(row, dict) else row["score"]
         return SearchHit(
             id=str(row["id"]),
-            chat_id=str(row["chat_id"]),
+            session_id=str(row["session_id"]),
             source_type=str(row["source_type"]),
             content=str(row["content"]),
             created_at=float(row["created_at"] or 0),

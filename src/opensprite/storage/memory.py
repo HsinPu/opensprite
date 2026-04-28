@@ -30,16 +30,16 @@ class MemoryStorage(StorageProvider):
         self._run_parts: dict[tuple[str, str], list[StoredRunPart]] = defaultdict(list)
         self._work_states: dict[str, StoredWorkState] = {}
     
-    async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
+    async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
         """
         取得對話歷史
         """
-        messages = self._messages.get(chat_id, [])
+        messages = self._messages.get(session_id, [])
         if limit:
             return messages[-limit:]
         return messages
     
-    async def add_message(self, chat_id: str, message: StoredMessage) -> None:
+    async def add_message(self, session_id: str, message: StoredMessage) -> None:
         """
         加入訊息
         """
@@ -47,58 +47,58 @@ class MemoryStorage(StorageProvider):
         if message.timestamp == 0:
             message.timestamp = time.time()
         
-        self._messages[chat_id].append(message)
+        self._messages[session_id].append(message)
 
-    async def get_message_count(self, chat_id: str) -> int:
+    async def get_message_count(self, session_id: str) -> int:
         """Return the total message count for one in-memory chat."""
-        return len(self._messages.get(chat_id, []))
+        return len(self._messages.get(session_id, []))
 
     async def get_messages_slice(
         self,
-        chat_id: str,
+        session_id: str,
         *,
         start_index: int = 0,
         end_index: int | None = None,
     ) -> list[StoredMessage]:
         """Return one message slice without copying the full chat history first."""
-        messages = self._messages.get(chat_id, [])
+        messages = self._messages.get(session_id, [])
         return list(messages[max(0, start_index):end_index])
     
-    async def clear_messages(self, chat_id: str) -> None:
+    async def clear_messages(self, session_id: str) -> None:
         """
         清除歷史
         """
-        if chat_id in self._messages:
-            self._messages[chat_id].clear()
-        self._consolidated_index.pop(chat_id, None)
+        if session_id in self._messages:
+            self._messages[session_id].clear()
+        self._consolidated_index.pop(session_id, None)
         for run_id, run in list(self._runs.items()):
-            if run.chat_id == chat_id:
+            if run.session_id == session_id:
                 self._runs.pop(run_id, None)
-                self._run_events.pop((chat_id, run_id), None)
-                self._run_file_changes.pop((chat_id, run_id), None)
-                self._run_parts.pop((chat_id, run_id), None)
-        self._work_states.pop(chat_id, None)
+                self._run_events.pop((session_id, run_id), None)
+                self._run_file_changes.pop((session_id, run_id), None)
+                self._run_parts.pop((session_id, run_id), None)
+        self._work_states.pop(session_id, None)
     
-    async def get_consolidated_index(self, chat_id: str) -> int:
+    async def get_consolidated_index(self, session_id: str) -> int:
         """取得 consolidation 標記"""
-        return self._consolidated_index.get(chat_id, 0)
+        return self._consolidated_index.get(session_id, 0)
     
-    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+    async def set_consolidated_index(self, session_id: str, index: int) -> None:
         """設定 consolidation 標記"""
-        self._consolidated_index[chat_id] = index
+        self._consolidated_index[session_id] = index
     
-    async def get_all_chats(self) -> list[str]:
+    async def get_all_sessions(self) -> list[str]:
         """
         取得所有聊天室
         """
-        chat_ids = set(self._messages.keys())
-        chat_ids.update(run.chat_id for run in self._runs.values())
-        chat_ids.update(self._work_states.keys())
-        return sorted(chat_ids)
+        session_ids = set(self._messages.keys())
+        session_ids.update(run.session_id for run in self._runs.values())
+        session_ids.update(self._work_states.keys())
+        return sorted(session_ids)
 
     async def create_run(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         *,
         status: str = "running",
@@ -108,7 +108,7 @@ class MemoryStorage(StorageProvider):
         now = float(created_at or time.time())
         run = StoredRun(
             run_id=run_id,
-            chat_id=chat_id,
+            session_id=session_id,
             status=status,
             created_at=now,
             updated_at=now,
@@ -119,7 +119,7 @@ class MemoryStorage(StorageProvider):
 
     async def update_run_status(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         status: str,
         *,
@@ -137,27 +137,27 @@ class MemoryStorage(StorageProvider):
             run.metadata.update(metadata)
         return run
 
-    async def get_runs(self, chat_id: str, limit: int | None = None) -> list[StoredRun]:
-        runs = [run for run in self._runs.values() if run.chat_id == chat_id]
+    async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
+        runs = [run for run in self._runs.values() if run.session_id == session_id]
         runs.sort(key=lambda run: (run.created_at, run.run_id), reverse=True)
         if limit is not None:
             return runs[:limit]
         return runs
 
-    async def get_run(self, chat_id: str, run_id: str) -> StoredRun | None:
+    async def get_run(self, session_id: str, run_id: str) -> StoredRun | None:
         run = self._runs.get(run_id)
-        if run is None or run.chat_id != chat_id:
+        if run is None or run.session_id != session_id:
             return None
         return run
 
-    async def get_work_state(self, chat_id: str) -> StoredWorkState | None:
-        return self._work_states.get(chat_id)
+    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
+        return self._work_states.get(session_id)
 
     async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState:
-        existing = self._work_states.get(state.chat_id)
+        existing = self._work_states.get(state.session_id)
         created_at = existing.created_at if existing is not None and existing.created_at else float(state.created_at or time.time())
         updated = StoredWorkState(
-            chat_id=state.chat_id,
+            session_id=state.session_id,
             objective=state.objective,
             kind=state.kind,
             status=state.status,
@@ -187,25 +187,25 @@ class MemoryStorage(StorageProvider):
             created_at=created_at,
             updated_at=float(state.updated_at or time.time()),
         )
-        self._work_states[state.chat_id] = updated
+        self._work_states[state.session_id] = updated
         return updated
 
-    async def clear_work_state(self, chat_id: str) -> None:
-        self._work_states.pop(chat_id, None)
+    async def clear_work_state(self, session_id: str) -> None:
+        self._work_states.pop(session_id, None)
 
     async def add_run_event(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         event_type: str,
         *,
         payload: dict | None = None,
         created_at: float | None = None,
     ) -> StoredRunEvent:
-        key = (chat_id, run_id)
+        key = (session_id, run_id)
         event = StoredRunEvent(
             run_id=run_id,
-            chat_id=chat_id,
+            session_id=session_id,
             event_type=event_type,
             payload=dict(payload or {}),
             created_at=float(created_at or time.time()),
@@ -214,12 +214,12 @@ class MemoryStorage(StorageProvider):
         self._run_events[key].append(event)
         return event
 
-    async def get_run_events(self, chat_id: str, run_id: str) -> list[StoredRunEvent]:
-        return list(self._run_events.get((chat_id, run_id), []))
+    async def get_run_events(self, session_id: str, run_id: str) -> list[StoredRunEvent]:
+        return list(self._run_events.get((session_id, run_id), []))
 
     async def add_run_part(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         part_type: str,
         *,
@@ -228,10 +228,10 @@ class MemoryStorage(StorageProvider):
         metadata: dict | None = None,
         created_at: float | None = None,
     ) -> StoredRunPart:
-        key = (chat_id, run_id)
+        key = (session_id, run_id)
         part = StoredRunPart(
             run_id=run_id,
-            chat_id=chat_id,
+            session_id=session_id,
             part_type=part_type,
             content=str(content or ""),
             tool_name=tool_name,
@@ -242,12 +242,12 @@ class MemoryStorage(StorageProvider):
         self._run_parts[key].append(part)
         return part
 
-    async def get_run_parts(self, chat_id: str, run_id: str) -> list[StoredRunPart]:
-        return list(self._run_parts.get((chat_id, run_id), []))
+    async def get_run_parts(self, session_id: str, run_id: str) -> list[StoredRunPart]:
+        return list(self._run_parts.get((session_id, run_id), []))
 
     async def add_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         tool_name: str,
         path: str,
@@ -261,10 +261,10 @@ class MemoryStorage(StorageProvider):
         metadata: dict[str, Any] | None = None,
         created_at: float | None = None,
     ) -> StoredRunFileChange:
-        key = (chat_id, run_id)
+        key = (session_id, run_id)
         change = StoredRunFileChange(
             run_id=run_id,
-            chat_id=chat_id,
+            session_id=session_id,
             tool_name=tool_name,
             path=path,
             action=action,
@@ -280,16 +280,16 @@ class MemoryStorage(StorageProvider):
         self._run_file_changes[key].append(change)
         return change
 
-    async def get_run_file_changes(self, chat_id: str, run_id: str) -> list[StoredRunFileChange]:
-        return list(self._run_file_changes.get((chat_id, run_id), []))
+    async def get_run_file_changes(self, session_id: str, run_id: str) -> list[StoredRunFileChange]:
+        return list(self._run_file_changes.get((session_id, run_id), []))
 
     async def get_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         change_id: int,
     ) -> StoredRunFileChange | None:
-        for change in self._run_file_changes.get((chat_id, run_id), []):
+        for change in self._run_file_changes.get((session_id, run_id), []):
             if change.change_id == change_id:
                 return change
         return None

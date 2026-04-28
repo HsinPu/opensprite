@@ -12,7 +12,7 @@ def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
     conn.execute(
         """
         CREATE TABLE sessions (
-            chat_id TEXT PRIMARY KEY,
+            session_id TEXT PRIMARY KEY,
             messages TEXT DEFAULT '[]',
             consolidated_index INTEGER DEFAULT 0,
             created_at REAL,
@@ -73,7 +73,7 @@ def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
         },
     ]
     conn.execute(
-        "INSERT INTO sessions (chat_id, messages, consolidated_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (session_id, messages, consolidated_index, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
         ("chat-1", json.dumps(legacy_messages), 4, 1.0, 3.0),
     )
     conn.commit()
@@ -83,7 +83,7 @@ def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
 
     messages = asyncio.run(storage.get_messages("chat-1"))
     consolidated_index = asyncio.run(storage.get_consolidated_index("chat-1"))
-    chats = asyncio.run(storage.get_all_chats())
+    chats = asyncio.run(storage.get_all_sessions())
 
     assert [message.role for message in messages] == ["user", "tool", "tool"]
     assert [message.tool_name for message in messages] == [None, "web_search", "web_fetch"]
@@ -219,7 +219,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
         trace = await storage.get_run_trace("chat-1", "run-1")
         work_state = await storage.upsert_work_state(
             StoredWorkState(
-                chat_id="chat-1",
+                session_id="chat-1",
                 objective="Finish the refactor",
                 kind="refactor",
                 status="active",
@@ -253,7 +253,7 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
         loaded_work_state = await storage.get_work_state("chat-1")
         await storage.clear_work_state("chat-1")
         cleared_work_state = await storage.get_work_state("chat-1")
-        chats = await storage.get_all_chats()
+        chats = await storage.get_all_sessions()
         return created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, work_state, loaded_work_state, cleared_work_state, chats
 
     created, event, part, file_change, updated, latest, single_run, events, parts, file_changes, single_change, trace, work_state, loaded_work_state, cleared_work_state, chats = asyncio.run(scenario())

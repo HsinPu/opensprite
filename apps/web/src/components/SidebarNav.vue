@@ -22,11 +22,11 @@
         <div class="session-list">
           <button
             v-for="session in state.sessions"
-            :key="session.chatId"
+            :key="session.externalChatId"
             class="session-tile"
-            :class="{ 'session-tile--active': session.chatId === state.activeChatId }"
+            :class="{ 'session-tile--active': session.externalChatId === state.activeExternalChatId }"
             type="button"
-            @click="$emit('set-active-session', session.chatId)"
+            @click="$emit('set-active-session', session.externalChatId)"
           >
             <strong>{{ session.title }}</strong>
             <span>{{ getSessionDisplayId(session) }}</span>

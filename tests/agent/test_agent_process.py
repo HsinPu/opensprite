@@ -85,7 +85,7 @@ class FakeStorage:
     async def set_consolidated_index(self, chat_id, index):
         return None
 
-    async def get_all_chats(self):
+    async def get_all_sessions(self):
         return []
 
 
@@ -217,7 +217,7 @@ def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_pa
             UserMessage(
                 text="hello",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
                 sender_id="user-1",
                 sender_name="alice",
@@ -300,7 +300,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
             UserMessage(
                 text="hello",
                 channel="web",
-                chat_id="browser-1",
+                external_chat_id="browser-1",
                 session_id="web:browser-1",
                 sender_id="user-1",
             )
@@ -315,7 +315,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
 
     assert response.text == "assistant reply"
     assert run.status == "completed"
-    assert run.chat_id == "web:browser-1"
+    assert run.session_id == "web:browser-1"
     assert [event.event_type for event in events] == [
         "run_started",
         "task_intent.detected",
@@ -566,7 +566,7 @@ def test_agent_process_persists_media_only_message_without_llm(tmp_path):
             UserMessage(
                 text="",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
                 images=[_image_data_url(b"image-bytes")],
                 audios=[_media_data_url(b"audio-bytes", "audio/ogg")],
@@ -658,7 +658,7 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
             UserMessage(
                 text="請幫我分析這些檔案",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
                 images=[_image_data_url(b"image-bytes")],
                 audios=[_media_data_url(b"audio-bytes", "audio/ogg")],
@@ -711,7 +711,7 @@ def test_agent_process_seeds_active_task_from_detected_intent(tmp_path):
             UserMessage(
                 text="Please refactor the agent and run tests. Keep the public API stable.",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -761,7 +761,7 @@ def test_agent_process_emits_completion_gate_needs_verification_after_code_chang
             UserMessage(
                 text="Please refactor the agent and run tests.",
                 channel="web",
-                chat_id="browser-1",
+                external_chat_id="browser-1",
                 session_id="web:browser-1",
             )
         )
@@ -816,7 +816,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
             UserMessage(
                 text="Please refactor the agent and run tests.",
                 channel="web",
-                chat_id="browser-1",
+                external_chat_id="browser-1",
                 session_id="web:browser-1",
             )
         )
@@ -885,7 +885,7 @@ def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp
             UserMessage(
                 text="Please refactor the agent and run tests.",
                 channel="web",
-                chat_id="browser-1",
+                external_chat_id="browser-1",
                 session_id="web:browser-1",
             )
         )
@@ -957,7 +957,7 @@ def test_agent_process_marks_active_task_done_when_completion_gate_completes(tmp
             UserMessage(
                 text="Please implement the final cleanup.",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -1029,7 +1029,7 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
             UserMessage(
                 text="Please refactor the agent and run tests.",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -1075,7 +1075,7 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
 
         await storage.upsert_work_state(
             StoredWorkState(
-                chat_id="web:browser-1",
+                session_id="web:browser-1",
                 objective="Finish the refactor",
                 kind="refactor",
                 status="active",
@@ -1092,7 +1092,7 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
             UserMessage(
                 text="continue",
                 channel="web",
-                chat_id="browser-1",
+                external_chat_id="browser-1",
                 session_id="web:browser-1",
             )
         )
@@ -1237,7 +1237,7 @@ def test_agent_process_rejects_overlapping_runs_for_same_session(tmp_path):
                 UserMessage(
                     text="Please implement the change.",
                     channel="web",
-                    chat_id="browser-1",
+                    external_chat_id="browser-1",
                     session_id="web:browser-1",
                 )
             )
@@ -1254,7 +1254,7 @@ def test_agent_process_rejects_overlapping_runs_for_same_session(tmp_path):
                 UserMessage(
                     text="Please implement another change.",
                     channel="web",
-                    chat_id="browser-1",
+                    external_chat_id="browser-1",
                     session_id="web:browser-1",
                 )
             )
@@ -1300,7 +1300,7 @@ def test_agent_process_cancel_request_marks_run_cancelled_and_clears_active_run(
                 UserMessage(
                     text="Please implement the change.",
                     channel="web",
-                    chat_id="browser-1",
+                    external_chat_id="browser-1",
                     session_id="web:browser-1",
                 )
             )
@@ -1383,7 +1383,7 @@ def test_agent_process_cancel_request_kills_owned_background_sessions(tmp_path):
                 UserMessage(
                     text="Please implement the change.",
                     channel="web",
-                    chat_id="browser-1",
+                    external_chat_id="browser-1",
                     session_id="web:browser-1",
                 )
             )
@@ -1467,7 +1467,7 @@ def test_agent_process_returns_queued_outbound_media(tmp_path):
             UserMessage(
                 text="send it",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -1596,7 +1596,7 @@ def test_process_moves_active_task_to_waiting_user_when_reply_requests_missing_i
             UserMessage(
                 text="繼續做",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -1661,7 +1661,7 @@ def test_process_moves_active_task_to_blocked_when_reply_reports_blocking_error(
             UserMessage(
                 text="繼續驗證",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )
@@ -1730,7 +1730,7 @@ def test_background_session_exit_notifier_publishes_outbound_and_persists_messag
     assert len(fake_bus.outbound) == 1
     outbound = fake_bus.outbound[0]
     assert outbound.channel == "telegram"
-    assert outbound.chat_id == "room-1"
+    assert outbound.external_chat_id == "room-1"
     assert outbound.session_id == "telegram:room-1"
     assert "Background session finished." in outbound.content
     assert "Session ID: bg123" in outbound.content
@@ -1944,7 +1944,7 @@ def test_agent_process_returns_setup_hint_when_llm_not_configured(tmp_path):
             UserMessage(
                 text="hello",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
                 sender_id="user-1",
                 sender_name="alice",

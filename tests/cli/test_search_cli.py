@@ -102,8 +102,8 @@ def test_search_rebuild_cli_rebuilds_index_from_messages(tmp_path):
     result = runner.invoke(app, ["search", "rebuild", "--config", str(config_path)])
 
     assert result.exit_code == 0
-    assert "Rebuilt search index for all chats." in result.stdout
-    assert "Chats: 1" in result.stdout
+    assert "Rebuilt search index for all sessions." in result.stdout
+    assert "Sessions: 1" in result.stdout
     assert "Messages: 2" in result.stdout
     assert "Knowledge sources: 1" in result.stdout
 
@@ -155,7 +155,7 @@ def test_search_status_cli_reports_index_and_embedding_counts(tmp_path):
     result = runner.invoke(app, ["search", "status", "--config", str(config_path)])
 
     assert result.exit_code == 0
-    assert "Search status for all chats." in result.stdout
+    assert "Search status for all sessions." in result.stdout
     assert "Messages: 1" in result.stdout
     assert "Chunks: 1" in result.stdout
     assert "Embedding: enabled=no provider=openai model=<unset> candidate_strategy=vector vector_backend=auto retry_failed_on_startup=no" in result.stdout
@@ -185,8 +185,8 @@ def test_search_retry_embeddings_cli_reports_retried_jobs(monkeypatch, tmp_path)
     )
 
     class FakeSearchStore:
-        async def retry_failed_embeddings(self, chat_id=None, wait=True):
-            assert chat_id == "telegram:user-a"
+        async def retry_failed_embeddings(self, session_id=None, wait=True):
+            assert session_id == "telegram:user-a"
             assert wait is True
             return {
                 "retried": 2,
@@ -219,7 +219,7 @@ def test_search_retry_embeddings_cli_reports_retried_jobs(monkeypatch, tmp_path)
 
     result = runner.invoke(
         app,
-        ["search", "retry-embeddings", "--config", str(config_path), "--chat-id", "telegram:user-a"],
+        ["search", "retry-embeddings", "--config", str(config_path), "--session-id", "telegram:user-a"],
     )
 
     assert result.exit_code == 0
@@ -248,8 +248,8 @@ def test_search_refresh_embeddings_cli_reports_refreshed_jobs(monkeypatch, tmp_p
     )
 
     class FakeSearchStore:
-        async def refresh_embeddings(self, chat_id=None, force=False, wait=True):
-            assert chat_id == "telegram:user-a"
+        async def refresh_embeddings(self, session_id=None, force=False, wait=True):
+            assert session_id == "telegram:user-a"
             assert force is True
             assert wait is True
             return {
@@ -283,7 +283,7 @@ def test_search_refresh_embeddings_cli_reports_refreshed_jobs(monkeypatch, tmp_p
 
     result = runner.invoke(
         app,
-        ["search", "refresh-embeddings", "--config", str(config_path), "--chat-id", "telegram:user-a", "--force"],
+        ["search", "refresh-embeddings", "--config", str(config_path), "--session-id", "telegram:user-a", "--force"],
     )
 
     assert result.exit_code == 0
@@ -388,7 +388,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
     def fake_benchmark(store, **kwargs):
         hit = SearchHit(
             id=f"{store.strategy}-1",
-            chat_id="telegram:user-a",
+            session_id="telegram:user-a",
             source_type="web_fetch",
             title=f"{store.strategy} result",
             content="content",
@@ -407,7 +407,7 @@ def test_search_benchmark_cli_reports_both_strategies(monkeypatch, tmp_path):
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "telegram:user-a",
             "--query",
             "sqlite guide",
@@ -458,7 +458,7 @@ def test_search_benchmark_cli_skips_vector_when_embeddings_disabled(monkeypatch)
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "telegram:user-a",
             "--query",
             "sqlite guide",
@@ -499,7 +499,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
     def fake_benchmark(store, **kwargs):
         hit = SearchHit(
             id="hit-1",
-            chat_id="telegram:user-a",
+            session_id="telegram:user-a",
             source_type="web_fetch",
             title="vector result",
             content="content",
@@ -518,7 +518,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "telegram:user-a",
             "--query",
             "sqlite guide",
@@ -532,7 +532,7 @@ def test_search_benchmark_cli_can_emit_json(monkeypatch):
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["chat_id"] == "telegram:user-a"
+    assert payload["session_id"] == "telegram:user-a"
     assert payload["repeat"] == 2
     assert payload["strategies"][0]["strategy"] == "vector"
     assert payload["strategies"][0]["summary"]["avg_ms"] == 6.0
@@ -547,7 +547,7 @@ def test_search_seed_demo_cli_seeds_benchmark_ready_data(tmp_path):
 
     seed_result = runner.invoke(
         app,
-        ["search", "seed-demo", "--config", str(config_path), "--chat-id", "demo:bench"],
+        ["search", "seed-demo", "--config", str(config_path), "--session-id", "demo:bench"],
     )
 
     assert seed_result.exit_code == 0
@@ -562,7 +562,7 @@ def test_search_seed_demo_cli_seeds_benchmark_ready_data(tmp_path):
             "benchmark",
             "--config",
             str(config_path),
-            "--chat-id",
+            "--session-id",
             "demo:bench",
             "--query",
             "orchard irrigation",
@@ -619,7 +619,7 @@ def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
     def fake_benchmark(store, **kwargs):
         hit = SearchHit(
             id="hit-1",
-            chat_id="demo:bench",
+            session_id="demo:bench",
             source_type="web_fetch",
             title="demo vector result",
             content="content",
@@ -638,7 +638,7 @@ def test_search_benchmark_cli_can_use_demo_embeddings(monkeypatch):
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "demo:bench",
             "--query",
             "orchard irrigation",
@@ -682,7 +682,7 @@ def test_search_benchmark_cli_passes_vector_backend_override(monkeypatch):
     def fake_benchmark(store, **kwargs):
         hit = SearchHit(
             id="hit-1",
-            chat_id="telegram:user-a",
+            session_id="telegram:user-a",
             source_type="web_fetch",
             title="sqlite vec result",
             content="content",
@@ -701,7 +701,7 @@ def test_search_benchmark_cli_passes_vector_backend_override(monkeypatch):
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "telegram:user-a",
             "--query",
             "sqlite guide",
@@ -747,7 +747,7 @@ def test_search_benchmark_cli_can_compare_vector_backends(monkeypatch):
         title = "sqlite vec result" if store.vector_backend_requested == "sqlite_vec" else "exact result"
         hit = SearchHit(
             id=f"{store.vector_backend_requested}-1",
-            chat_id="telegram:user-a",
+            session_id="telegram:user-a",
             source_type="web_fetch",
             title=title,
             content="content",
@@ -766,7 +766,7 @@ def test_search_benchmark_cli_can_compare_vector_backends(monkeypatch):
         [
             "search",
             "benchmark",
-            "--chat-id",
+            "--session-id",
             "telegram:user-a",
             "--query",
             "sqlite guide",

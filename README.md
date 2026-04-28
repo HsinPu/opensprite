@@ -389,11 +389,11 @@ Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
 ```powershell
 opensprite search status
 opensprite search rebuild
-opensprite search rebuild --chat-id telegram:user-a
+opensprite search rebuild --session-id telegram:user-a
 opensprite search retry-embeddings
 opensprite search refresh-embeddings
 opensprite search run-queue
-opensprite search benchmark --chat-id telegram:user-a --query "keyword" --strategy both --repeat 5
+opensprite search benchmark --session-id telegram:user-a --query "keyword" --strategy both --repeat 5
 opensprite search seed-demo
 ```
 

@@ -38,12 +38,12 @@ class TurnInputPreparer:
 
     def prepare(self, user_message: UserMessage) -> PreparedTurnInput:
         """Prepare all process input fields derived directly from the inbound message."""
-        session_id = user_message.session_id or user_message.chat_id or "default"
+        session_id = user_message.session_id or user_message.external_chat_id or "default"
         channel = user_message.channel or None
 
         if ":" not in session_id:
             logger.warning(
-                "Received non-namespaced chat_id '{}' in Agent.process; this may mix sessions if MessageQueue is bypassed",
+                "Received non-namespaced session_id '{}' in Agent.process; this may mix sessions if MessageQueue is bypassed",
                 session_id,
             )
 
@@ -59,7 +59,7 @@ class TurnInputPreparer:
         user_metadata = {
             **dict(user_message.metadata or {}),
             "channel": channel,
-            "external_chat_id": user_message.chat_id,
+            "external_chat_id": user_message.external_chat_id,
             "sender_id": user_message.sender_id,
             "sender_name": user_message.sender_name,
             "images_count": len(user_message.images or []),
@@ -75,10 +75,10 @@ class TurnInputPreparer:
         user_metadata = {key: value for key, value in user_metadata.items() if value is not None}
         assistant_metadata = {
             "channel": channel,
-            "external_chat_id": user_message.chat_id,
+            "external_chat_id": user_message.external_chat_id,
         }
         assistant_metadata = {key: value for key, value in assistant_metadata.items() if value is not None}
-        external_chat_id = str(user_message.chat_id) if user_message.chat_id is not None else None
+        external_chat_id = str(user_message.external_chat_id) if user_message.external_chat_id is not None else None
 
         return PreparedTurnInput(
             session_id=session_id,

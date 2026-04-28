@@ -103,7 +103,7 @@ def test_process_connects_mcp_before_saving_and_calling_llm(tmp_path):
             UserMessage(
                 text="hello",
                 channel="telegram",
-                chat_id="room-1",
+                external_chat_id="room-1",
                 session_id="telegram:room-1",
             )
         )

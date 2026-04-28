@@ -18,7 +18,7 @@ class InboundMessage:
 
     channel: str  # telegram, discord, slack, whatsapp
     sender_id: str  # User identifier
-    chat_id: str  # Transport chat/channel identifier
+    external_chat_id: str  # Transport chat/channel identifier
     content: str  # Message text
     session_id: str | None = None  # Internal normalized chat/session identifier
     sender_name: str | None = None
@@ -32,7 +32,7 @@ class InboundMessage:
     @property
     def session_key(self) -> str:
         """Unique key for session identification."""
-        return self.session_id or f"{self.channel}:{self.chat_id}"
+        return self.session_id or f"{self.channel}:{self.external_chat_id}"
 
 
 @dataclass
@@ -40,7 +40,7 @@ class OutboundMessage:
     """Message to send to a chat channel."""
 
     channel: str
-    chat_id: str  # Transport chat/channel identifier
+    external_chat_id: str  # Transport chat/channel identifier
     content: str
     session_id: str | None = None
     reply_to: str | None = None
@@ -54,7 +54,7 @@ class RunEvent:
     """Structured status event emitted while a user-facing run executes."""
 
     channel: str
-    chat_id: str
+    external_chat_id: str
     session_id: str
     run_id: str
     event_type: str

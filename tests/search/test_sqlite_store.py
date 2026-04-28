@@ -147,7 +147,7 @@ def test_sqlite_search_store_indexes_and_filters_history_and_knowledge(tmp_path)
         ).fetchall()
         conn.close()
 
-        await search.clear_chat("chat-a")
+        await search.clear_session("chat-a")
         cleared_history_hits = await search.search_history("chat-a", "sqlite docs")
         remaining_messages = await storage.get_messages("chat-a")
 
@@ -488,7 +488,7 @@ def test_sqlite_search_store_uses_sqlite_vec_dispatch_when_available(tmp_path, m
             {
                 "id": 1,
                 "owner_id": 1,
-                "chat_id": "chat-a",
+                "session_id": "chat-a",
                 "source_type": "history",
                 "content": "orchard manual",
                 "created_at": 1.0,
@@ -603,7 +603,7 @@ def test_sqlite_search_store_can_retry_failed_embeddings(tmp_path):
 
         failed_status = await search.wait_for_embedding_idle()
         embedder.should_fail = False
-        retried_status = await search.retry_failed_embeddings(chat_id="chat-a", wait=True)
+        retried_status = await search.retry_failed_embeddings(session_id="chat-a", wait=True)
 
         conn = sqlite3.connect(str(db_path))
         embedding_rows = conn.execute(

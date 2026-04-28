@@ -23,7 +23,7 @@ class StoredMessage:
     timestamp: float  # 時間戳記
     tool_name: str | None = None  # 如果是 tool，記錄用了什麼工具
     is_consolidated: bool = False  # 是否已被 consolidate 過
-    metadata: dict[str, Any] = field(default_factory=dict)  # 額外欄位（channel、sender、transport chat id...）
+    metadata: dict[str, Any] = field(default_factory=dict)  # 額外欄位（channel、sender、external chat id...）
 
 
 @dataclass
@@ -31,7 +31,7 @@ class StoredRun:
     """Persisted execution run for one user-facing turn."""
 
     run_id: str
-    chat_id: str
+    session_id: str
     status: str
     created_at: float
     updated_at: float
@@ -44,7 +44,7 @@ class StoredRunEvent:
     """One structured event emitted while a run is executing."""
 
     run_id: str
-    chat_id: str
+    session_id: str
     event_type: str
     payload: dict[str, Any] = field(default_factory=dict)
     created_at: float = 0.0
@@ -56,7 +56,7 @@ class StoredRunPart:
     """One durable, ordered execution artifact for a run."""
 
     run_id: str
-    chat_id: str
+    session_id: str
     part_type: str
     content: str = ""
     tool_name: str | None = None
@@ -70,7 +70,7 @@ class StoredRunFileChange:
     """One file mutation captured during a run for later inspection."""
 
     run_id: str
-    chat_id: str
+    session_id: str
     tool_name: str
     path: str
     action: str
@@ -98,7 +98,7 @@ class StoredRunTrace:
 class StoredWorkState:
     """Persisted structured task state for one chat session."""
 
-    chat_id: str
+    session_id: str
     objective: str
     kind: str
     status: str = "active"
@@ -144,12 +144,12 @@ class StorageProvider(ABC):
     """
     
     @abstractmethod
-    async def get_messages(self, chat_id: str, limit: int | None = None) -> list[StoredMessage]:
+    async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
         """
         取得對話歷史
         
         參數：
-            chat_id: 聊天室 ID
+            session_id: 聊天室 ID
             limit: 最多取幾筆（可選）
         
         回傳：
@@ -157,55 +157,55 @@ class StorageProvider(ABC):
         """
         pass
 
-    async def get_message_count(self, chat_id: str) -> int:
+    async def get_message_count(self, session_id: str) -> int:
         """Return the total persisted message count for one chat."""
-        return len(await self.get_messages(chat_id))
+        return len(await self.get_messages(session_id))
 
     async def get_messages_slice(
         self,
-        chat_id: str,
+        session_id: str,
         *,
         start_index: int = 0,
         end_index: int | None = None,
     ) -> list[StoredMessage]:
         """Return one contiguous message slice using Python slice semantics."""
-        messages = await self.get_messages(chat_id)
+        messages = await self.get_messages(session_id)
         return messages[max(0, start_index):end_index]
     
     @abstractmethod
-    async def add_message(self, chat_id: str, message: StoredMessage) -> None:
+    async def add_message(self, session_id: str, message: StoredMessage) -> None:
         """
         加入訊息到歷史
         
         參數：
-            chat_id: 聊天室 ID
+            session_id: 聊天室 ID
             message: StoredMessage 訊息
         """
         pass
     
     @abstractmethod
-    async def clear_messages(self, chat_id: str) -> None:
+    async def clear_messages(self, session_id: str) -> None:
         """
         清除指定聊天室的歷史
         
         參數：
-            chat_id: 聊天室 ID
+            session_id: 聊天室 ID
         """
         pass
 
     @abstractmethod
-    async def get_consolidated_index(self, chat_id: str) -> int:
+    async def get_consolidated_index(self, session_id: str) -> int:
         """Get the last consolidated message index for a chat."""
         pass
 
     @abstractmethod
-    async def set_consolidated_index(self, chat_id: str, index: int) -> None:
+    async def set_consolidated_index(self, session_id: str, index: int) -> None:
         """Persist the last consolidated message index for a chat."""
         pass
 
     async def create_run(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         *,
         status: str = "running",
@@ -217,7 +217,7 @@ class StorageProvider(ABC):
 
     async def update_run_status(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         status: str,
         *,
@@ -227,25 +227,25 @@ class StorageProvider(ABC):
         """Update a persisted run status when supported."""
         return None
 
-    async def get_runs(self, chat_id: str, limit: int | None = None) -> list[StoredRun]:
+    async def get_runs(self, session_id: str, limit: int | None = None) -> list[StoredRun]:
         """Return persisted runs for one chat from newest to oldest when supported."""
         return []
 
-    async def get_run(self, chat_id: str, run_id: str) -> StoredRun | None:
+    async def get_run(self, session_id: str, run_id: str) -> StoredRun | None:
         """Return one persisted run for a chat when supported."""
-        for run in await self.get_runs(chat_id):
+        for run in await self.get_runs(session_id):
             if run.run_id == run_id:
                 return run
         return None
 
-    async def get_latest_run(self, chat_id: str) -> StoredRun | None:
+    async def get_latest_run(self, session_id: str) -> StoredRun | None:
         """Return the newest persisted run for one chat when supported."""
-        runs = await self.get_runs(chat_id, limit=1)
+        runs = await self.get_runs(session_id, limit=1)
         return runs[0] if runs else None
 
     async def add_run_event(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         event_type: str,
         *,
@@ -255,13 +255,13 @@ class StorageProvider(ABC):
         """Persist one structured run event when supported."""
         return None
 
-    async def get_run_events(self, chat_id: str, run_id: str) -> list[StoredRunEvent]:
+    async def get_run_events(self, session_id: str, run_id: str) -> list[StoredRunEvent]:
         """Return persisted events for one run when supported."""
         return []
 
     async def add_run_part(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         part_type: str,
         *,
@@ -273,13 +273,13 @@ class StorageProvider(ABC):
         """Persist one ordered run artifact when supported."""
         return None
 
-    async def get_run_parts(self, chat_id: str, run_id: str) -> list[StoredRunPart]:
+    async def get_run_parts(self, session_id: str, run_id: str) -> list[StoredRunPart]:
         """Return ordered run artifacts for one run when supported."""
         return []
 
     async def add_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         tool_name: str,
         path: str,
@@ -296,35 +296,35 @@ class StorageProvider(ABC):
         """Persist one file mutation captured during a run when supported."""
         return None
 
-    async def get_run_file_changes(self, chat_id: str, run_id: str) -> list[StoredRunFileChange]:
+    async def get_run_file_changes(self, session_id: str, run_id: str) -> list[StoredRunFileChange]:
         """Return ordered file mutations captured for one run when supported."""
         return []
 
     async def get_run_file_change(
         self,
-        chat_id: str,
+        session_id: str,
         run_id: str,
         change_id: int,
     ) -> StoredRunFileChange | None:
         """Return one captured file mutation for a run when supported."""
-        for change in await self.get_run_file_changes(chat_id, run_id):
+        for change in await self.get_run_file_changes(session_id, run_id):
             if change.change_id == change_id:
                 return change
         return None
 
-    async def get_run_trace(self, chat_id: str, run_id: str) -> StoredRunTrace | None:
+    async def get_run_trace(self, session_id: str, run_id: str) -> StoredRunTrace | None:
         """Return a run with its ordered events and durable parts."""
-        run = await self.get_run(chat_id, run_id)
+        run = await self.get_run(session_id, run_id)
         if run is None:
             return None
         return StoredRunTrace(
             run=run,
-            events=await self.get_run_events(chat_id, run_id),
-            parts=await self.get_run_parts(chat_id, run_id),
-            file_changes=await self.get_run_file_changes(chat_id, run_id),
+            events=await self.get_run_events(session_id, run_id),
+            parts=await self.get_run_parts(session_id, run_id),
+            file_changes=await self.get_run_file_changes(session_id, run_id),
         )
 
-    async def get_work_state(self, chat_id: str) -> StoredWorkState | None:
+    async def get_work_state(self, session_id: str) -> StoredWorkState | None:
         """Return persisted structured work state for one chat when supported."""
         return None
 
@@ -332,12 +332,12 @@ class StorageProvider(ABC):
         """Create or replace the persisted work state for one chat when supported."""
         return None
 
-    async def clear_work_state(self, chat_id: str) -> None:
+    async def clear_work_state(self, session_id: str) -> None:
         """Remove persisted structured work state for one chat when supported."""
         return None
     
     @abstractmethod
-    async def get_all_chats(self) -> list[str]:
+    async def get_all_sessions(self) -> list[str]:
         """
         取得所有聊天室 ID
         
@@ -347,17 +347,17 @@ class StorageProvider(ABC):
         pass
 
 
-async def get_storage_message_count(storage: Any, chat_id: str) -> int:
+async def get_storage_message_count(storage: Any, session_id: str) -> int:
     """Compatibility helper for storages that may not implement get_message_count yet."""
     getter = getattr(storage, "get_message_count", None)
     if callable(getter):
-        return int(await getter(chat_id))
-    return len(await storage.get_messages(chat_id))
+        return int(await getter(session_id))
+    return len(await storage.get_messages(session_id))
 
 
 async def get_storage_messages_slice(
     storage: Any,
-    chat_id: str,
+    session_id: str,
     *,
     start_index: int = 0,
     end_index: int | None = None,
@@ -365,16 +365,16 @@ async def get_storage_messages_slice(
     """Compatibility helper for storages that may not implement get_messages_slice yet."""
     getter = getattr(storage, "get_messages_slice", None)
     if callable(getter):
-        return list(await getter(chat_id, start_index=max(0, start_index), end_index=end_index))
-    messages = await storage.get_messages(chat_id)
+        return list(await getter(session_id, start_index=max(0, start_index), end_index=end_index))
+    messages = await storage.get_messages(session_id)
     return list(messages[max(0, start_index):end_index])
 
 
-async def get_storage_work_state(storage: Any, chat_id: str) -> StoredWorkState | None:
+async def get_storage_work_state(storage: Any, session_id: str) -> StoredWorkState | None:
     """Compatibility helper for storages that may not implement work-state APIs yet."""
     getter = getattr(storage, "get_work_state", None)
     if callable(getter):
-        return await getter(chat_id)
+        return await getter(session_id)
     return None
 
 
@@ -386,8 +386,8 @@ async def upsert_storage_work_state(storage: Any, state: StoredWorkState) -> Sto
     return None
 
 
-async def clear_storage_work_state(storage: Any, chat_id: str) -> None:
+async def clear_storage_work_state(storage: Any, session_id: str) -> None:
     """Compatibility helper for storages that may not implement work-state APIs yet."""
     clearer = getattr(storage, "clear_work_state", None)
     if callable(clearer):
-        await clearer(chat_id)
+        await clearer(session_id)
