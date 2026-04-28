@@ -45,7 +45,7 @@
           :events="runTimeline"
         />
 
-        <RunTraceViewer v-if="currentRun" :run="currentRun" />
+        <RunTraceViewer v-if="currentRun" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
       </div>
     </section>
 
@@ -147,5 +147,6 @@ defineEmits([
   "composer-input",
   "composer-keydown",
   "submit-message",
+  "cancel-run",
 ]);
 </script>

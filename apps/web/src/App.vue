@@ -42,6 +42,7 @@
       @composer-input="resizeComposer"
       @composer-keydown="handleComposerKeydown"
       @submit-message="submitMessage"
+      @cancel-run="cancelRun"
     />
   </div>
 
@@ -94,6 +95,7 @@ const {
   connectSocket,
   resizeComposer,
   createNewChat,
+  cancelRun,
   saveSettingsAndConnect,
   disconnectFromSettings,
   submitMessage,

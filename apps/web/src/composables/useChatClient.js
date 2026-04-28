@@ -152,6 +152,15 @@ function runTone(status, fallbackTone = "running") {
   return fallbackTone || "running";
 }
 
+function buildRunCancelUrl(wsUrl, runId, chatId) {
+  const url = new URL(wsUrl);
+  url.protocol = url.protocol === "wss:" ? "https:" : "http:";
+  url.pathname = `/api/runs/${encodeURIComponent(runId)}/cancel`;
+  url.search = "";
+  url.searchParams.set("chat_id", chatId);
+  return url.toString();
+}
+
 function statusFromRunEvent(eventType, payload) {
   if (eventType === "run_started") {
     return "running";
@@ -688,6 +697,26 @@ export function useChatClient() {
     disconnectSocket("Disconnected from the gateway.", "warning");
   }
 
+  async function cancelRun(run) {
+    const session = currentSession.value;
+    if (!session || !run?.runId || run.status !== "running") {
+      return;
+    }
+
+    run.cancelPending = true;
+    try {
+      const response = await fetch(buildRunCancelUrl(state.wsUrl, run.runId, session.chatId), { method: "POST" });
+      if (!response.ok) {
+        throw new Error(`Cancel request failed with HTTP ${response.status}`);
+      }
+      setNotice(`Cancel requested for run ${run.runId}.`, "warning");
+    } catch (error) {
+      setNotice(error?.message || "Could not request run cancellation.", "error");
+    } finally {
+      run.cancelPending = false;
+    }
+  }
+
   function submitMessage(event) {
     event.preventDefault();
     const text = messageText.value.trim();
@@ -794,6 +823,7 @@ export function useChatClient() {
     connectSocket,
     resizeComposer,
     createNewChat,
+    cancelRun,
     saveSettingsAndConnect,
     disconnectFromSettings,
     submitMessage,
