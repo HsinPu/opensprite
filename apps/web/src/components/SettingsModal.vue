@@ -220,31 +220,6 @@
                 </button>
               </div>
 
-              <div v-if="settingsState.connectForm.providerId === provider.id" class="provider-connect-form">
-                <label>
-                  <span>API key</span>
-                  <input v-model="settingsState.connectForm.apiKey" type="password" autocomplete="off" />
-                </label>
-                <button
-                  class="provider-connect-form__toggle"
-                  type="button"
-                  @click="settingsState.connectForm.showAdvanced = !settingsState.connectForm.showAdvanced"
-                >
-                  {{ settingsState.connectForm.showAdvanced ? "隱藏進階設定" : "進階設定" }}
-                </button>
-                <label v-if="settingsState.connectForm.showAdvanced">
-                  <span>Base URL</span>
-                  <input v-model="settingsState.connectForm.baseUrl" type="text" spellcheck="false" />
-                </label>
-                <div class="provider-connect-form__actions">
-                  <button class="primary-button" type="button" @click="$emit('save-provider-connection')">
-                    儲存連線
-                  </button>
-                  <button class="secondary-button" type="button" @click="$emit('cancel-provider-connect')">
-                    取消
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         </section>
@@ -323,12 +298,73 @@
           </div>
         </section>
       </div>
+
+      <div v-if="selectedConnectProvider" class="provider-connect-dialog" role="dialog" aria-modal="true">
+        <header class="provider-connect-dialog__top">
+          <button
+            class="provider-connect-dialog__icon-button"
+            type="button"
+            aria-label="Back to providers"
+            @click="$emit('cancel-provider-connect')"
+          >
+            ←
+          </button>
+          <button
+            class="provider-connect-dialog__icon-button"
+            type="button"
+            aria-label="Close provider connection"
+            @click="$emit('cancel-provider-connect')"
+          >
+            ×
+          </button>
+        </header>
+
+        <form class="provider-connect-dialog__body" @submit.prevent="$emit('save-provider-connection')">
+          <div class="provider-connect-dialog__title">
+            <span class="provider-row__mark" aria-hidden="true">{{ selectedConnectProvider.name.slice(0, 2) }}</span>
+            <h3>連線 {{ selectedConnectProvider.name }}</h3>
+          </div>
+
+          <p>
+            輸入你的 {{ selectedConnectProvider.name }} API key 以連線帳戶，之後可到模型頁選擇使用的模型。
+          </p>
+
+          <label class="provider-connect-field">
+            <span>{{ selectedConnectProvider.name }} API key</span>
+            <input
+              v-model="settingsState.connectForm.apiKey"
+              type="password"
+              placeholder="API key"
+              autocomplete="off"
+            />
+          </label>
+
+          <button
+            class="provider-connect-dialog__advanced"
+            type="button"
+            @click="settingsState.connectForm.showAdvanced = !settingsState.connectForm.showAdvanced"
+          >
+            {{ settingsState.connectForm.showAdvanced ? "隱藏進階設定" : "進階設定" }}
+          </button>
+
+          <label v-if="settingsState.connectForm.showAdvanced" class="provider-connect-field">
+            <span>Base URL</span>
+            <input v-model="settingsState.connectForm.baseUrl" type="text" spellcheck="false" />
+          </label>
+
+          <button class="primary-button provider-connect-dialog__submit" type="submit">
+            提交
+          </button>
+        </form>
+      </div>
     </section>
   </div>
 </template>
 
 <script setup>
-defineProps({
+import { computed } from "vue";
+
+const props = defineProps({
   open: {
     type: Boolean,
     required: true,
@@ -349,6 +385,18 @@ defineProps({
     type: Object,
     required: true,
   },
+});
+
+const selectedConnectProvider = computed(() => {
+  const providerId = props.settingsState.connectForm.providerId;
+  if (!providerId) {
+    return null;
+  }
+  return (
+    props.settingsState.providers.available.find((provider) => provider.id === providerId) ||
+    props.settingsState.providers.connected.find((provider) => provider.id === providerId) ||
+    null
+  );
 });
 
 defineEmits([
