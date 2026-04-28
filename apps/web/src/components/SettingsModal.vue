@@ -35,6 +35,15 @@
           <p>伺服器</p>
           <button
             class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'channels' }"
+            type="button"
+            @click="$emit('select-section', 'channels')"
+          >
+            <span aria-hidden="true">☷</span>
+            Channels
+          </button>
+          <button
+            class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'providers' }"
             type="button"
             @click="$emit('select-section', 'providers')"
@@ -171,6 +180,105 @@
               <div class="shortcut-keys"><kbd>Enter</kbd></div>
             </div>
           </div>
+        </section>
+
+        <section v-show="section === 'channels'" class="settings-page">
+          <p v-if="settingsState.channelsLoading" class="settings-inline-status">讀取 channel 設定中...</p>
+          <p v-if="settingsState.channelsError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.channelsError }}
+          </p>
+          <p v-if="settingsState.channelsNotice" class="settings-inline-status settings-inline-status--success">
+            {{ settingsState.channelsNotice }}
+          </p>
+
+          <h3>Channels</h3>
+          <template v-for="channel in settingsState.channels.channels" :key="channel.id">
+            <div v-if="settingsState.channelDrafts[channel.id]" class="settings-card channel-card">
+              <div class="channel-card__header">
+                <div class="provider-row__main">
+                  <span class="provider-row__mark" aria-hidden="true">{{ channel.name.slice(0, 2) }}</span>
+                  <div>
+                    <div class="provider-row__title">
+                      <strong>{{ channel.name }}</strong>
+                      <span class="provider-row__badge">{{ channel.enabled ? "啟用" : "停用" }}</span>
+                      <span v-if="!channel.registered" class="provider-row__badge">未註冊 adapter</span>
+                    </div>
+                    <span>{{ channel.description }}</span>
+                  </div>
+                </div>
+                <input
+                  v-model="settingsState.channelDrafts[channel.id].enabled"
+                  class="switch"
+                  type="checkbox"
+                  :disabled="settingsState.channelsLoading"
+                />
+              </div>
+
+              <div v-if="channel.id === 'web'" class="channel-fields">
+                <label class="channel-field">
+                  <span>Host</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].host" type="text" spellcheck="false" />
+                </label>
+                <label class="channel-field">
+                  <span>Port</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].port" type="number" min="1" max="65535" />
+                </label>
+                <label class="channel-field">
+                  <span>WebSocket path</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].path" type="text" spellcheck="false" />
+                </label>
+                <label class="channel-field">
+                  <span>Health path</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].healthPath" type="text" spellcheck="false" />
+                </label>
+              </div>
+
+              <div v-else-if="channel.id === 'telegram'" class="channel-fields">
+                <label class="channel-field channel-field--wide">
+                  <span>Bot token</span>
+                  <input
+                    v-model="settingsState.channelDrafts[channel.id].token"
+                    type="password"
+                    :placeholder="channel.token_configured ? 'Token already configured' : 'Telegram bot token'"
+                    autocomplete="off"
+                  />
+                </label>
+                <label class="channel-field">
+                  <span>Poll timeout</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].pollTimeout" type="number" min="1" />
+                </label>
+                <label class="channel-field">
+                  <span>Bootstrap retries</span>
+                  <input v-model="settingsState.channelDrafts[channel.id].bootstrapRetries" type="number" min="0" />
+                </label>
+                <label class="settings-row channel-card__switch-row">
+                  <div>
+                    <strong>Drop pending updates</strong>
+                    <span>啟動 Telegram bot 時丟棄尚未處理的舊訊息。</span>
+                  </div>
+                  <input
+                    v-model="settingsState.channelDrafts[channel.id].dropPendingUpdates"
+                    class="switch"
+                    type="checkbox"
+                  />
+                </label>
+              </div>
+
+              <p v-else class="settings-muted">這個 channel 目前沒有可編輯欄位。</p>
+
+              <div class="channel-card__footer">
+                <span class="settings-muted">儲存後需重啟 gateway 才會啟停 channel adapter。</span>
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.channelsLoading"
+                  @click="$emit('update-channel', channel)"
+                >
+                  儲存 Channel
+                </button>
+              </div>
+            </div>
+          </template>
         </section>
 
         <section v-show="section === 'providers'" class="settings-page">
@@ -445,6 +553,7 @@ defineEmits([
   "close",
   "select-section",
   "toggle-connection",
+  "update-channel",
   "begin-provider-connect",
   "cancel-provider-connect",
   "save-provider-connection",

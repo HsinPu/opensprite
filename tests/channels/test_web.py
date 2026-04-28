@@ -553,6 +553,37 @@ async def _run_web_settings_provider_api(tmp_path: Path):
         assert port is not None
 
         async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/channels") as resp:
+                assert resp.status == 200
+                channels_payload = await resp.json()
+
+            telegram = next(channel for channel in channels_payload["channels"] if channel["id"] == "telegram")
+            assert telegram["token_configured"] is False
+            assert "token" not in telegram["settings"]
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/channels/telegram",
+                json={
+                    "enabled": True,
+                    "settings": {
+                        "token": "telegram-secret",
+                        "drop_pending_updates": True,
+                        "poll_timeout": 12,
+                    },
+                },
+            ) as resp:
+                assert resp.status == 200
+                channel_update_payload = await resp.json()
+
+            assert channel_update_payload["restart_required"] is True
+            assert channel_update_payload["channel"]["enabled"] is True
+            assert channel_update_payload["channel"]["token_configured"] is True
+            assert "token" not in channel_update_payload["channel"]["settings"]
+            channels = json.loads((tmp_path / "channels.json").read_text(encoding="utf-8"))
+            assert channels["telegram"]["token"] == "telegram-secret"
+            assert channels["telegram"]["drop_pending_updates"] is True
+            assert channels["telegram"]["poll_timeout"] == 12
+
             async with session.get(f"http://127.0.0.1:{port}/api/settings/providers") as resp:
                 assert resp.status == 200
                 providers_payload = await resp.json()

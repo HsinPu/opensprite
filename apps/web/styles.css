@@ -1363,6 +1363,60 @@ button:disabled {
   min-width: 78px;
 }
 
+.channel-card {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.channel-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.channel-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.channel-field {
+  display: grid;
+  gap: 6px;
+  color: #777777;
+  font-size: 0.82rem;
+}
+
+.channel-field--wide,
+.channel-card__switch-row {
+  grid-column: 1 / -1;
+}
+
+.channel-field input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d7d7d7;
+  border-radius: 7px;
+  color: #151515;
+  background: #ffffff;
+}
+
+.channel-card__switch-row {
+  padding: 10px 0 0;
+  border-bottom: 0;
+}
+
+.channel-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 4px;
+}
+
 .model-provider-card {
   display: grid;
   gap: 16px;
@@ -1642,9 +1696,20 @@ textarea:focus-visible {
   .settings-row--field,
   .provider-row,
   .provider-row__content,
+  .channel-card__header,
+  .channel-card__footer,
   .custom-model-row {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .channel-card__header,
+  .channel-card__footer {
+    display: grid;
+  }
+
+  .channel-fields {
+    grid-template-columns: 1fr;
   }
 
   .provider-row {

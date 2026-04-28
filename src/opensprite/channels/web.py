@@ -21,6 +21,12 @@ from aiohttp import WSMsgType, web
 from ..bus.events import RunEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..config import Config, MessagesConfig
+from ..config.channel_settings import (
+    ChannelSettingsError,
+    ChannelSettingsNotFound,
+    ChannelSettingsService,
+    ChannelSettingsValidationError,
+)
 from ..config.provider_settings import (
     ProviderSettingsConflict,
     ProviderSettingsError,
@@ -299,6 +305,9 @@ class WebAdapter(MessageAdapter):
     def _get_provider_settings(self) -> ProviderSettingsService:
         return ProviderSettingsService(self._get_config_path())
 
+    def _get_channel_settings(self) -> ChannelSettingsService:
+        return ChannelSettingsService(self._get_config_path())
+
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
         if not force and not payload.get("restart_required"):
@@ -342,6 +351,14 @@ class WebAdapter(MessageAdapter):
             raise web.HTTPNotFound(text=str(exc)) from exc
         if isinstance(exc, ProviderSettingsConflict):
             raise web.HTTPConflict(text=str(exc)) from exc
+        raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+
+    @staticmethod
+    def _raise_channel_settings_error(exc: ChannelSettingsError) -> None:
+        if isinstance(exc, ChannelSettingsValidationError):
+            raise web.HTTPBadRequest(text=str(exc)) from exc
+        if isinstance(exc, ChannelSettingsNotFound):
+            raise web.HTTPNotFound(text=str(exc)) from exc
         raise web.HTTPServiceUnavailable(text=str(exc)) from exc
 
     def _serialize_run(self, run: Any) -> dict[str, Any]:
@@ -603,6 +620,28 @@ class WebAdapter(MessageAdapter):
             self._raise_provider_settings_error(exc)
         return web.json_response(payload)
 
+    async def _handle_settings_channels(self, request: web.Request) -> web.Response:
+        try:
+            payload = self._get_channel_settings().list_channels()
+        except ChannelSettingsError as exc:
+            self._raise_channel_settings_error(exc)
+        return web.json_response(payload)
+
+    async def _handle_settings_channel_update(self, request: web.Request) -> web.Response:
+        channel_id = self._coerce_optional_text(request.match_info.get("channel_id"))
+        if channel_id is None:
+            raise web.HTTPBadRequest(text="channel_id is required")
+        body = await self._read_json_body(request)
+        try:
+            payload = self._get_channel_settings().update_channel(
+                channel_id,
+                enabled=body.get("enabled") if "enabled" in body else None,
+                settings=body.get("settings", {}),
+            )
+        except ChannelSettingsError as exc:
+            self._raise_channel_settings_error(exc)
+        return web.json_response(payload)
+
     async def _handle_settings_provider_connect(self, request: web.Request) -> web.Response:
         provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
         if provider_id is None:
@@ -746,6 +785,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/runs/{run_id}", self._handle_run_trace)
         self.app.router.add_get("/api/runs/{run_id}/events", self._handle_run_events)
         self.app.router.add_post("/api/runs/{run_id}/cancel", self._handle_run_cancel)
+        self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
+        self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
         self.app.router.add_get("/api/settings/providers", self._handle_settings_providers)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)

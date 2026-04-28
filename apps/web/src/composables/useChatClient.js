@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
 const SETTINGS_TITLES = {
   general: "一般",
   shortcuts: "快速鍵",
+  channels: "Channels",
   providers: "提供者",
   models: "模型",
 };
@@ -316,6 +317,13 @@ export function useChatClient() {
     showRunTrace: state.showRunTrace,
   });
   const settingsState = reactive({
+    channelsLoading: false,
+    channelsError: "",
+    channelsNotice: "",
+    channels: {
+      channels: [],
+    },
+    channelDrafts: {},
     providersLoading: false,
     providersError: "",
     providersNotice: "",
@@ -641,6 +649,37 @@ export function useChatClient() {
     }
   }
 
+  function syncChannelDrafts() {
+    for (const channel of settingsState.channels.channels || []) {
+      const settings = channel.settings || {};
+      settingsState.channelDrafts[channel.id] = {
+        enabled: Boolean(channel.enabled),
+        token: "",
+        host: settings.host || "",
+        port: settings.port ?? "",
+        path: settings.path || "",
+        healthPath: settings.health_path || "",
+        maxMessageSize: settings.max_message_size ?? "",
+        dropPendingUpdates: Boolean(settings.drop_pending_updates),
+        pollTimeout: settings.poll_timeout ?? "",
+        bootstrapRetries: settings.bootstrap_retries ?? "",
+      };
+    }
+  }
+
+  async function loadChannelSettings() {
+    settingsState.channelsLoading = true;
+    settingsState.channelsError = "";
+    try {
+      settingsState.channels = await requestSettingsJson("/api/settings/channels");
+      syncChannelDrafts();
+    } catch (error) {
+      settingsState.channelsError = error?.message || "Could not load channel settings.";
+    } finally {
+      settingsState.channelsLoading = false;
+    }
+  }
+
   async function loadModelSettings() {
     settingsState.modelsLoading = true;
     settingsState.modelsError = "";
@@ -659,12 +698,66 @@ export function useChatClient() {
   }
 
   function loadSettingsSection(sectionName) {
+    if (sectionName === "channels") {
+      loadChannelSettings();
+      return;
+    }
     if (sectionName === "providers") {
       loadProviderSettings();
       return;
     }
     if (sectionName === "models") {
       loadModelSettings();
+    }
+  }
+
+  function buildChannelSettingsPayload(channel, draft) {
+    if (channel.id === "web") {
+      return {
+        host: draft.host,
+        port: draft.port,
+        path: draft.path,
+        health_path: draft.healthPath,
+      };
+    }
+    if (channel.id === "telegram") {
+      const settings = {
+        drop_pending_updates: Boolean(draft.dropPendingUpdates),
+        poll_timeout: draft.pollTimeout,
+        bootstrap_retries: draft.bootstrapRetries,
+      };
+      if (String(draft.token || "").trim()) {
+        settings.token = draft.token;
+      }
+      return settings;
+    }
+    return {};
+  }
+
+  async function updateChannelSettings(channel) {
+    const draft = settingsState.channelDrafts[channel.id];
+    if (!draft) {
+      return;
+    }
+    settingsState.channelsLoading = true;
+    settingsState.channelsError = "";
+    settingsState.channelsNotice = "";
+    try {
+      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channel.id)}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          enabled: Boolean(draft.enabled),
+          settings: buildChannelSettingsPayload(channel, draft),
+        }),
+      });
+      settingsState.channelsNotice = payload.restart_required
+        ? `${channel.name} 已儲存，重啟 opensprite gateway 後生效。`
+        : `${channel.name} 已套用。`;
+      await loadChannelSettings();
+    } catch (error) {
+      settingsState.channelsError = error?.message || "Could not update channel settings.";
+    } finally {
+      settingsState.channelsLoading = false;
     }
   }
 
@@ -1034,6 +1127,8 @@ export function useChatClient() {
     closeSettings,
     loadProviderSettings,
     loadModelSettings,
+    loadChannelSettings,
+    updateChannelSettings,
     beginProviderConnect,
     cancelProviderConnect,
     saveProviderConnection,
