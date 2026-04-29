@@ -78,7 +78,7 @@ class PromptBudgetService:
             current_message=current_message,
             current_images=None,
             channel=channel,
-            chat_id=session_id,
+            session_id=session_id,
         )
         base_tokens = count_messages_tokens(base_messages, model=model) + tool_schema_tokens
         if budget <= 0 or not history:

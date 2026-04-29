@@ -126,11 +126,11 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    chat_id = "telegram:room-1"
+    session_id = "telegram:room-1"
 
     async def _run() -> str:
         return await agent.call_llm(
-            chat_id,
+            session_id,
             "hello from integration test",
             channel="telegram",
             allow_tools=False,
@@ -146,7 +146,7 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
     system_text = llm_messages[0].content
     assert isinstance(system_text, str)
 
-    expected = context_builder.build_system_prompt(chat_id)
+    expected = context_builder.build_system_prompt(session_id)
     assert system_text == expected
 
     assert "You are OpenSprite" in system_text
@@ -189,11 +189,11 @@ def test_main_agent_system_prompt_lists_connected_mcp_tools(tmp_path: Path) -> N
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    chat_id = "telegram:room-1"
+    session_id = "telegram:room-1"
 
     async def _run() -> str:
         return await agent.call_llm(
-            chat_id,
+            session_id,
             "show me available mcp tools",
             channel="telegram",
             allow_tools=False,
@@ -239,11 +239,11 @@ def test_main_agent_call_llm_seeds_active_task_on_first_turn(tmp_path: Path) -> 
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    chat_id = "telegram:room-1"
+    session_id = "telegram:room-1"
 
     async def _run() -> str:
         return await agent.call_llm(
-            chat_id,
+            session_id,
             "Refactor the agent in small safe steps and keep it on task.",
             channel="telegram",
             allow_tools=False,
@@ -289,10 +289,10 @@ def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    chat_id = "telegram:room-1"
+    session_id = "telegram:room-1"
 
     async def _run() -> str:
-        task_store = create_active_task_store(app_home, chat_id, workspace_root=context_builder.tool_workspace)
+        task_store = create_active_task_store(app_home, session_id, workspace_root=context_builder.tool_workspace)
         task_store.write_managed_block(
             "- Status: active\n"
             "- Goal: Refactor the agent in small safe steps.\n"
@@ -313,7 +313,7 @@ def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(
             "  - none"
         )
         return await agent.call_llm(
-            chat_id,
+            session_id,
             "改成先幫我檢查 MCP lifecycle",
             channel="telegram",
             allow_tools=False,
@@ -355,11 +355,11 @@ def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_pa
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    chat_id = "telegram:room-1"
+    session_id = "telegram:room-1"
 
     async def _run() -> str:
         return await agent.call_llm(
-            chat_id,
+            session_id,
             "你覺得這樣可以嗎？",
             channel="telegram",
             allow_tools=False,

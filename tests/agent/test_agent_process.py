@@ -30,10 +30,10 @@ class FakeContextBuilder:
         self.memory_dir = workspace / "memory"
         self.last_history = None
 
-    def build_system_prompt(self, chat_id: str = "default") -> str:
+    def build_system_prompt(self, session_id: str = "default") -> str:
         return "system"
 
-    def build_messages(self, history, current_message, current_images=None, channel=None, chat_id=None):
+    def build_messages(self, history, current_message, current_images=None, channel=None, session_id=None):
         self.last_history = list(history)
         return [{"role": "user", "content": current_message}]
 

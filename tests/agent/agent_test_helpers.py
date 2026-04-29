@@ -29,10 +29,10 @@ class FakeContextBuilder:
         if tool_workspace is not None:
             self.tool_workspace = tool_workspace
 
-    def build_system_prompt(self, chat_id: str = "default") -> str:
+    def build_system_prompt(self, session_id: str = "default") -> str:
         return "system"
 
-    def build_messages(self, history, current_message, current_images=None, channel=None, chat_id=None):
+    def build_messages(self, history, current_message, current_images=None, channel=None, session_id=None):
         self.last_history = list(history)
         message = {"role": "user", "content": current_message}
         if self.include_images:

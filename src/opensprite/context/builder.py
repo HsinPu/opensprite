@@ -16,7 +16,7 @@ class ContextBuilder(Protocol):
     Implement this to create different ways of building context/prompts.
     """
     
-    def build_system_prompt(self, chat_id: str = "default") -> str:
+    def build_system_prompt(self, session_id: str = "default") -> str:
         """Build the system prompt."""
         ...
     
@@ -26,7 +26,7 @@ class ContextBuilder(Protocol):
         current_message: str,
         current_images: list[str] | None = None,
         channel: str | None = None,
-        chat_id: str | None = None,
+        session_id: str | None = None,
     ) -> list[dict]:
         """
         Build complete message list for LLM call.
@@ -36,7 +36,7 @@ class ContextBuilder(Protocol):
             current_message: Current user message
             current_images: Current user images (base64 data URLs)
             channel: Channel name (e.g., "telegram", "discord")
-            chat_id: Chat/room ID
+            session_id: OpenSprite session ID
             
         Returns:
             List of message dicts with "role" and "content"

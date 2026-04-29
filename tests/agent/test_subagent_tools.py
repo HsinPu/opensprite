@@ -15,10 +15,10 @@ class FakeContextBuilder:
         self.workspace = workspace
         self.memory_dir = workspace / "memory"
 
-    def build_system_prompt(self, chat_id: str = "default") -> str:
+    def build_system_prompt(self, session_id: str = "default") -> str:
         return "system"
 
-    def build_messages(self, history, current_message, current_images=None, channel=None, chat_id=None):
+    def build_messages(self, history, current_message, current_images=None, channel=None, session_id=None):
         return [{"role": "user", "content": current_message}]
 
     def add_tool_result(self, messages, tool_call_id, tool_name, result):

@@ -13,7 +13,7 @@ def build_runtime_context(
     *,
     workspace: str | Path | None = None,
     channel: str | None = None,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     current_time: str | None = None,
 ) -> str:
     """Build a shared runtime metadata block without behavioral instructions."""
@@ -24,7 +24,7 @@ def build_runtime_context(
         lines.append(f"Workspace: {Path(workspace)}")
     if channel:
         lines.append(f"Channel: {channel}")
-    if chat_id:
-        lines.append(f"Session ID: {chat_id}")
+    if session_id:
+        lines.append(f"Session ID: {session_id}")
 
     return "\n".join(lines)

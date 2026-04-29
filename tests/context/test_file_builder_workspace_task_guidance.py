@@ -18,7 +18,7 @@ def test_build_messages_adds_workspace_task_guidance_for_code_task(tmp_path):
         history=[],
         current_message="Please fix the failing pytest in tests/test_app.py",
         channel="web",
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
     )
 
     assert [message["role"] for message in messages] == ["system", "system", "user", "user"]
@@ -34,7 +34,7 @@ def test_build_messages_adds_workspace_task_guidance_for_chinese_error_task(tmp_
         history=[],
         current_message="這個 build 報錯，幫我修復",
         channel="web",
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
     )
 
     assert messages[1]["role"] == "system"
@@ -48,7 +48,7 @@ def test_build_messages_skips_workspace_task_guidance_for_plain_chat(tmp_path):
         history=[],
         current_message="你覺得這樣可以嗎？",
         channel="telegram",
-        chat_id="telegram:room-1",
+        session_id="telegram:room-1",
     )
 
     assert [message["role"] for message in messages] == ["system", "user", "user"]
@@ -62,7 +62,7 @@ def test_build_messages_adds_planning_mode_overlay_for_explicit_plan_only_reques
         history=[],
         current_message="先規劃不要動手，幫我整理 tests/test_app.py 這個修復方案",
         channel="web",
-        chat_id="web:browser-1",
+        session_id="web:browser-1",
     )
 
     assert [message["role"] for message in messages] == ["system", "system", "system", "user", "user"]

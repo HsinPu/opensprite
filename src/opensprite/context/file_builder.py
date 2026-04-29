@@ -3,9 +3,9 @@ opensprite/context/file_builder.py - File-based ContextBuilder.
 
 Assembles the system prompt from:
 - bootstrap/*.md startup files
-- workspace/chats/{session}/USER.md durable per-chat profile (beside skills/ and subagent_prompts/)
-- global + per-chat skill metadata summaries (full skill content loads on demand)
-- memory/<chat>/MEMORY.md long-term memory
+- workspace/chats/{session}/USER.md durable per-session profile (beside skills/ and subagent_prompts/)
+- global + per-session skill metadata summaries (full skill content loads on demand)
+- memory/<session>/MEMORY.md long-term memory
 """
 
 import platform
@@ -111,9 +111,9 @@ These MCP tools are already connected and available through normal tool calling.
 {tool_lines}
 """
 
-    def _build_subagent_summary(self, chat_id: str) -> str:
+    def _build_subagent_summary(self, session_id: str) -> str:
         """Describe the available delegate prompt types for the main agent."""
-        session_ws = self.get_chat_workspace(chat_id)
+        session_ws = self.get_chat_workspace(session_id)
         subagents = get_all_subagents(self.app_home, session_workspace=session_ws)
         if not subagents:
             return ""
@@ -124,7 +124,7 @@ These MCP tools are already connected and available through normal tool calling.
         return f"""# Available Subagents
 
 Use `delegate` when a focused subproblem would benefit from a dedicated prompt.
-Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md` overrides `~/.opensprite/subagent_prompts/<id>.md` when both exist. Use `configure_subagent` for adds and edits under this session's `subagent_prompts/`.
+Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>.md` overrides `~/.opensprite/subagent_prompts/<id>.md` when both exist. Use `configure_subagent` for adds and edits under this session's `subagent_prompts/`.
 
 {subagent_lines}
 """
@@ -184,32 +184,32 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
         """Resolve the current workspace's AGENTS.md instructions path."""
         return self.get_chat_workspace(chat_id) / "AGENTS.md"
 
-    def _read_user_profile(self, chat_id: str) -> str:
+    def _read_user_profile(self, session_id: str) -> str:
         """Load the current user/session profile text, creating it from the template when needed."""
         return create_user_profile_store(
             self.app_home,
-            chat_id,
+            session_id,
             bootstrap_dir=self.bootstrap_dir,
             workspace_root=self.tool_workspace,
         ).read_text()
 
-    def _read_active_task(self, chat_id: str) -> str:
+    def _read_active_task(self, session_id: str) -> str:
         """Load the current session's active task context when present."""
         from ..documents.active_task import create_active_task_store, build_active_task_execution_guidance
 
         store = create_active_task_store(
             self.app_home,
-            chat_id,
+            session_id,
             workspace_root=self.tool_workspace,
         )
-        task_context = store.get_context(chat_id)
+        task_context = store.get_context(session_id)
         if not task_context:
             return ""
         return f"{task_context}\n\n---\n\n{build_active_task_execution_guidance(store.read_managed_block())}"
 
-    def _read_workspace_agents(self, chat_id: str) -> str:
+    def _read_workspace_agents(self, session_id: str) -> str:
         """Load AGENTS.md from the active workspace when present."""
-        agents_path = self.get_workspace_agents_path(chat_id)
+        agents_path = self.get_workspace_agents_path(session_id)
         if not agents_path.is_file():
             return ""
         content = agents_path.read_text(encoding="utf-8").strip()
@@ -240,12 +240,12 @@ Ids and descriptions below are **merged**: this chat's `subagent_prompts/<id>.md
 This request appears to be a workspace or project task. Use the active workspace autonomously: inspect relevant files and search results first, edit directly when the path forward is clear, run focused verification when feasible, then summarize the changes, verification result, and any remaining risk.
 """
 
-    def build_system_prompt(self, chat_id: str = "default") -> str:
+    def build_system_prompt(self, session_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
-        parts = [self._build_session_context(chat_id)]
+        parts = [self._build_session_context(session_id)]
 
         bootstrap = load_bootstrap_files(self.bootstrap_dir)
-        bootstrap["USER"] = self._read_user_profile(chat_id)
+        bootstrap["USER"] = self._read_user_profile(session_id)
         for key, content in bootstrap.items():
             if content:
                 section = content.strip()
@@ -254,11 +254,11 @@ This request appears to be a workspace or project task. Use the active workspace
                 else:
                     parts.append(f"## {key}\n\n{section}")
 
-        workspace_agents = self._read_workspace_agents(chat_id)
+        workspace_agents = self._read_workspace_agents(session_id)
         if workspace_agents:
             parts.append(workspace_agents)
 
-        active_task = self._read_active_task(chat_id)
+        active_task = self._read_active_task(session_id)
         if active_task:
             parts.append(active_task)
 
@@ -266,7 +266,7 @@ This request appears to be a workspace or project task. Use the active workspace
         # skill metadata in the main prompt, then load a full SKILL.md only when
         # the model decides a skill is relevant via read_skill.
         skills_summary = self.skills_loader.build_skills_summary(
-            personal_skills_dir=self.get_chat_skills_dir(chat_id)
+            personal_skills_dir=self.get_chat_skills_dir(session_id)
         )
         if skills_summary:
             parts.append(f"""# Available Skills
@@ -276,7 +276,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
 {skills_summary}
 """)
 
-        subagent_summary = self._build_subagent_summary(chat_id)
+        subagent_summary = self._build_subagent_summary(session_id)
         if subagent_summary:
             parts.append(subagent_summary)
 
@@ -284,24 +284,24 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         if mcp_tools_summary:
             parts.append(mcp_tools_summary)
 
-        memory = self.memory_store.read(chat_id)
+        memory = self.memory_store.read(session_id)
         if memory:
             parts.append(f"# Memory\n\n{memory}")
 
-        recent_summary = self.recent_summary_store.read(chat_id)
+        recent_summary = self.recent_summary_store.read(session_id)
         if recent_summary:
             parts.append(f"# Recent Summary\n\n{recent_summary}")
 
         return "\n\n---\n\n".join(parts)
 
-    def _build_session_context(self, chat_id: str) -> str:
+    def _build_session_context(self, session_id: str) -> str:
         """Build the runtime session context block."""
         app_home_path = str(self.app_home.expanduser().resolve())
         bootstrap_path = str(self.bootstrap_dir.expanduser().resolve())
-        workspace_path = str(self.get_chat_workspace(chat_id).expanduser().resolve())
-        user_profile_path = str(self.get_user_profile_path(chat_id).expanduser().resolve())
-        active_task_path = str(self.get_active_task_path(chat_id).expanduser().resolve())
-        memory_path = str(get_memory_file(self.memory_dir, chat_id).expanduser().resolve())
+        workspace_path = str(self.get_chat_workspace(session_id).expanduser().resolve())
+        user_profile_path = str(self.get_user_profile_path(session_id).expanduser().resolve())
+        active_task_path = str(self.get_active_task_path(session_id).expanduser().resolve())
+        memory_path = str(get_memory_file(self.memory_dir, session_id).expanduser().resolve())
         system = platform.system()
         runtime = f"{system} {platform.machine()}, Python {platform.python_version()}"
 
@@ -329,9 +329,9 @@ Be conservative only for actions with external side effects or boundaries outsid
 """
 
     @staticmethod
-    def _build_runtime_context(channel: str | None, chat_id: str | None) -> str:
+    def _build_runtime_context(channel: str | None, session_id: str | None) -> str:
         """Build an untrusted runtime metadata block."""
-        return build_runtime_context(channel=channel, chat_id=chat_id)
+        return build_runtime_context(channel=channel, session_id=session_id)
 
     def build_messages(
         self,
@@ -339,10 +339,10 @@ Be conservative only for actions with external side effects or boundaries outsid
         current_message: str,
         current_images: list[str] | None = None,
         channel: str | None = None,
-        chat_id: str | None = None,
+        session_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Build the complete message list for an LLM call."""
-        chat_id = chat_id or "default"
+        session_id = session_id or "default"
 
         if current_images:
             content: list[Any] = [{"type": "text", "text": current_message}]
@@ -352,7 +352,7 @@ Be conservative only for actions with external side effects or boundaries outsid
         else:
             user_message = {"role": "user", "content": current_message}
 
-        messages = [{"role": "system", "content": self.build_system_prompt(chat_id)}]
+        messages = [{"role": "system", "content": self.build_system_prompt(session_id)}]
         workspace_task_guidance = self._build_workspace_task_guidance(current_message)
         if workspace_task_guidance:
             messages.append({"role": "system", "content": workspace_task_guidance})
@@ -361,7 +361,7 @@ Be conservative only for actions with external side effects or boundaries outsid
             messages.append({"role": "system", "content": planning_mode_guidance})
         messages.extend(history)
         messages.extend([
-            {"role": "user", "content": self._build_runtime_context(channel, chat_id)},
+            {"role": "user", "content": self._build_runtime_context(channel, session_id)},
             user_message,
         ])
         return messages

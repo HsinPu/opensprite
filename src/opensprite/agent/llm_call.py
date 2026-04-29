@@ -172,7 +172,7 @@ class LlmCallService:
             current_message=prompt_message,
             current_images=None,
             channel=channel,
-            chat_id=session_id,
+            session_id=session_id,
         )
 
         chat_messages = []
