@@ -79,6 +79,9 @@
     @cancel-mcp-edit="cancelMcpEdit"
     @remove-mcp-server="removeMcpServer"
     @reload-mcp-settings="reloadMcpSettings"
+    @toggle-mcp-advanced="toggleMcpAdvanced"
+    @toggle-mcp-json="toggleMcpJsonInput"
+    @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-cron-job="saveCronJob"
     @edit-cron-job="beginCronJobEdit"
@@ -139,6 +142,9 @@ const {
   saveMcpServer,
   removeMcpServer,
   reloadMcpSettings,
+  toggleMcpAdvanced,
+  toggleMcpJsonInput,
+  applyMcpJson,
   saveScheduleSettings,
   beginCronJobEdit,
   cancelCronJobEdit,

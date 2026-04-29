@@ -1802,6 +1802,41 @@ button:disabled {
   gap: 10px;
 }
 
+.mcp-editor__hint {
+  margin: 0;
+  color: #6f6f6f;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.mcp-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mcp-editor__json {
+  display: grid;
+  gap: 10px;
+}
+
+.mcp-editor__json .secondary-button {
+  justify-self: start;
+}
+
+.mcp-editor__section-title {
+  display: grid;
+  gap: 4px;
+  color: #858585;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.mcp-editor__section-title strong {
+  color: #1d1d1d;
+  font-size: 0.94rem;
+}
+
 .schedule-editor__header {
   display: flex;
   align-items: center;

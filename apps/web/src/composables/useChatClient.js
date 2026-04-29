@@ -23,6 +23,7 @@ const LANGUAGE_ATTRIBUTES = {
 
 const MAX_RUN_EVENTS = 80;
 const MAX_TIMELINE_EVENTS = 8;
+const MCP_TRANSPORT_TYPES = new Set(["stdio", "sse", "streamableHttp"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "llm_status",
@@ -417,6 +418,9 @@ export function useChatClient() {
       headersJson: "",
       toolTimeout: "30",
       enabledToolsText: "*",
+      showAdvanced: false,
+      showJsonInput: false,
+      jsonText: "",
     },
   });
 
@@ -920,6 +924,82 @@ export function useChatClient() {
     }
   }
 
+  function formatJsonObject(value) {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? JSON.stringify(value, null, 2)
+      : "";
+  }
+
+  function formatListField(value, fallback = "") {
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+    }
+    if (typeof value === "string") {
+      return value.trim();
+    }
+    return fallback;
+  }
+
+  function normalizeMcpTransport(value, fallback = "stdio") {
+    const transport = String(value || "").trim();
+    if (MCP_TRANSPORT_TYPES.has(transport)) {
+      return transport;
+    }
+    if (["streamable-http", "streamable_http", "http"].includes(transport)) {
+      return "streamableHttp";
+    }
+    return fallback;
+  }
+
+  function getMcpServerMap(parsed) {
+    if (parsed?.mcpServers && typeof parsed.mcpServers === "object" && !Array.isArray(parsed.mcpServers)) {
+      return parsed.mcpServers;
+    }
+    if (parsed?.mcp_servers && typeof parsed.mcp_servers === "object" && !Array.isArray(parsed.mcp_servers)) {
+      return parsed.mcp_servers;
+    }
+    if (parsed?.servers && typeof parsed.servers === "object" && !Array.isArray(parsed.servers)) {
+      return parsed.servers;
+    }
+    return null;
+  }
+
+  function extractMcpServerFromJson(parsed) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      settingsState.mcpError = copy.value.notices.mcpJsonInvalid(copy.value.settings.mcp.configJson);
+      return null;
+    }
+
+    const serverMap = getMcpServerMap(parsed);
+    if (serverMap) {
+      const entries = Object.entries(serverMap).filter(([, value]) => value && typeof value === "object" && !Array.isArray(value));
+      if (entries.length !== 1) {
+        settingsState.mcpError = copy.value.notices.mcpJsonSingleServer;
+        return null;
+      }
+      const [serverId, server] = entries[0];
+      return { serverId, server };
+    }
+
+    if (Array.isArray(parsed.servers)) {
+      if (parsed.servers.length !== 1 || !parsed.servers[0] || typeof parsed.servers[0] !== "object") {
+        settingsState.mcpError = copy.value.notices.mcpJsonSingleServer;
+        return null;
+      }
+      const server = parsed.servers[0];
+      return { serverId: server.id || server.name || server.server_id || server.server_name || "", server };
+    }
+
+    if (parsed.server && typeof parsed.server === "object" && !Array.isArray(parsed.server)) {
+      return { serverId: parsed.server_name || parsed.server_id || parsed.id || parsed.name || "", server: parsed.server };
+    }
+
+    return {
+      serverId: parsed.server_id || parsed.serverId || parsed.server_name || parsed.serverName || parsed.id || parsed.name || "",
+      server: parsed,
+    };
+  }
+
   function normalizeMcpSettings(payload) {
     return {
       ...payload,
@@ -947,6 +1027,9 @@ export function useChatClient() {
     settingsState.mcpForm.headersJson = "";
     settingsState.mcpForm.toolTimeout = "30";
     settingsState.mcpForm.enabledToolsText = "*";
+    settingsState.mcpForm.showAdvanced = false;
+    settingsState.mcpForm.showJsonInput = false;
+    settingsState.mcpForm.jsonText = "";
   }
 
   function buildMcpServerPayload() {
@@ -1359,10 +1442,62 @@ export function useChatClient() {
     settingsState.mcpForm.headersJson = "";
     settingsState.mcpForm.toolTimeout = String(server.tool_timeout || 30);
     settingsState.mcpForm.enabledToolsText = Array.isArray(server.enabled_tools) ? server.enabled_tools.join("\n") : "*";
+    settingsState.mcpForm.showAdvanced = false;
+    settingsState.mcpForm.showJsonInput = false;
+    settingsState.mcpForm.jsonText = "";
   }
 
   function cancelMcpEdit() {
     resetMcpForm();
+  }
+
+  function toggleMcpAdvanced() {
+    settingsState.mcpForm.showAdvanced = !settingsState.mcpForm.showAdvanced;
+  }
+
+  function toggleMcpJsonInput() {
+    settingsState.mcpForm.showJsonInput = !settingsState.mcpForm.showJsonInput;
+  }
+
+  function applyMcpJson() {
+    settingsState.mcpError = "";
+    settingsState.mcpNotice = "";
+    let parsed;
+    try {
+      parsed = JSON.parse(String(settingsState.mcpForm.jsonText || ""));
+    } catch {
+      settingsState.mcpError = copy.value.notices.mcpJsonInvalid(copy.value.settings.mcp.configJson);
+      return;
+    }
+
+    const extracted = extractMcpServerFromJson(parsed);
+    if (!extracted) {
+      return;
+    }
+
+    const form = settingsState.mcpForm;
+    const server = extracted.server;
+    const nextServerId = String(extracted.serverId || "").trim();
+    if (form.editingId && nextServerId && nextServerId !== form.editingId) {
+      settingsState.mcpError = copy.value.notices.mcpJsonEditingMismatch;
+      return;
+    }
+    if (!form.editingId && nextServerId) {
+      form.serverId = nextServerId;
+    }
+
+    const rawType = server.type || server.transport_type || server.transport;
+    form.type = normalizeMcpTransport(rawType, server.url ? "streamableHttp" : "stdio");
+    form.command = String(server.command || "").trim();
+    form.argsText = formatListField(server.args, form.argsText);
+    form.url = String(server.url || "").trim();
+    form.toolTimeout = String(server.tool_timeout || server.toolTimeout || form.toolTimeout || 30);
+    form.enabledToolsText = formatListField(server.enabled_tools || server.enabledTools, form.enabledToolsText || "*") || "*";
+    form.envJson = formatJsonObject(server.env) || form.envJson;
+    form.headersJson = formatJsonObject(server.headers) || form.headersJson;
+    form.showAdvanced = Boolean(server.env || server.headers || server.tool_timeout || server.toolTimeout || server.enabled_tools || server.enabledTools);
+    form.showJsonInput = false;
+    settingsState.mcpNotice = copy.value.notices.mcpJsonApplied;
   }
 
   async function saveMcpServer() {
@@ -1879,6 +2014,9 @@ export function useChatClient() {
     saveMcpServer,
     removeMcpServer,
     reloadMcpSettings,
+    toggleMcpAdvanced,
+    toggleMcpJsonInput,
+    applyMcpJson,
     saveScheduleSettings,
     beginCronJobEdit,
     cancelCronJobEdit,

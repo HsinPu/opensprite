@@ -459,6 +459,7 @@
 
           <h3>{{ settingsState.mcpForm.editingId ? copy.settings.mcp.editTitle : copy.settings.mcp.addTitle }}</h3>
           <div class="settings-card mcp-editor">
+            <p class="mcp-editor__hint">{{ copy.settings.mcp.simpleHint }}</p>
             <div class="schedule-form-grid">
               <label class="channel-field">
                 <span>{{ copy.settings.mcp.serverId }}</span>
@@ -493,6 +494,37 @@
                 <span>{{ copy.settings.mcp.url }}</span>
                 <input v-model="settingsState.mcpForm.url" type="text" spellcheck="false" />
               </label>
+            </div>
+
+            <div class="mcp-editor__toolbar">
+              <button class="secondary-button" type="button" @click="$emit('toggle-mcp-advanced')">
+                {{ settingsState.mcpForm.showAdvanced ? copy.settings.mcp.hideAdvanced : copy.settings.mcp.showAdvanced }}
+              </button>
+              <button class="secondary-button" type="button" @click="$emit('toggle-mcp-json')">
+                {{ settingsState.mcpForm.showJsonInput ? copy.settings.mcp.hideJson : copy.settings.mcp.showJson }}
+              </button>
+            </div>
+
+            <div v-if="settingsState.mcpForm.showJsonInput" class="mcp-editor__json">
+              <label class="channel-field channel-field--wide">
+                <span>{{ copy.settings.mcp.configJson }}</span>
+                <textarea
+                  v-model="settingsState.mcpForm.jsonText"
+                  rows="7"
+                  spellcheck="false"
+                  :placeholder="copy.settings.mcp.configJsonPlaceholder"
+                ></textarea>
+              </label>
+              <button class="secondary-button" type="button" @click="$emit('apply-mcp-json')">
+                {{ copy.settings.mcp.applyJson }}
+              </button>
+            </div>
+
+            <div v-if="settingsState.mcpForm.showAdvanced" class="schedule-form-grid">
+              <div class="mcp-editor__section-title channel-field--wide">
+                <strong>{{ copy.settings.mcp.advancedTitle }}</strong>
+                <span>{{ copy.settings.mcp.advancedHint }}</span>
+              </div>
 
               <label class="channel-field">
                 <span>{{ copy.settings.mcp.toolTimeout }}</span>
@@ -1032,6 +1064,9 @@ defineEmits([
   "cancel-mcp-edit",
   "remove-mcp-server",
   "reload-mcp-settings",
+  "toggle-mcp-advanced",
+  "toggle-mcp-json",
+  "apply-mcp-json",
   "save-schedule-settings",
   "save-cron-job",
   "edit-cron-job",
