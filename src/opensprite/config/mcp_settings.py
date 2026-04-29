@@ -167,6 +167,15 @@ class MCPSettingsService:
             payload["tool_timeout"] = _coerce_timeout(body.get("tool_timeout"), default=30)
 
         transport_type = payload.get("type")
+        command = _coerce_text(payload.get("command"))
+        url = _coerce_text(payload.get("url"))
+        if not transport_type:
+            if command:
+                payload["type"] = "stdio"
+                transport_type = "stdio"
+            elif url:
+                payload["type"] = "streamableHttp"
+                transport_type = "streamableHttp"
         if transport_type == "stdio" and not _coerce_text(payload.get("command")):
             raise MCPSettingsValidationError("stdio MCP servers require command")
         if transport_type in {"sse", "streamableHttp"} and not _coerce_text(payload.get("url")):

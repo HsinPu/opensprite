@@ -2,7 +2,7 @@ import asyncio
 import sys
 from types import ModuleType, SimpleNamespace
 
-from opensprite.tools.mcp import MCPToolWrapper
+from opensprite.tools.mcp import MCPToolWrapper, _http_url_transport_attempts
 
 
 class _TextContent:
@@ -61,3 +61,8 @@ def test_mcp_tool_wrapper_returns_timeout_message(monkeypatch):
     result = asyncio.run(wrapper.execute())
 
     assert result == "(MCP tool call timed out after 0.01s)"
+
+
+def test_implicit_http_transport_tries_streamable_http_before_sse():
+    assert _http_url_transport_attempts("https://example.test/mcp") == ["streamableHttp", "sse"]
+    assert _http_url_transport_attempts("https://example.test/sse") == ["streamableHttp", "sse"]

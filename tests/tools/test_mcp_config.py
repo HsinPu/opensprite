@@ -72,6 +72,34 @@ def test_configure_mcp_upserts_server_and_reloads(tmp_path):
     assert "reloaded now" in result
     assert reload_calls == ["reload"]
     assert saved["filesystem"]["command"] == "npx"
+    assert saved["filesystem"]["type"] == "stdio"
+
+
+def test_configure_mcp_defaults_remote_servers_to_streamable_http(tmp_path):
+    config_path, mcp_path = _write_config(tmp_path)
+
+    async def fake_reload() -> str:
+        return "reloaded"
+
+    tool = ConfigureMCPTool(
+        config_path_resolver=lambda: config_path,
+        reload_callback=fake_reload,
+    )
+
+    result = asyncio.run(
+        tool.execute(
+            action="upsert",
+            server_name="remote",
+            url="https://example.test/mcp",
+            reload=False,
+        )
+    )
+
+    saved = json.loads(mcp_path.read_text(encoding="utf-8"))
+
+    assert "Added MCP server 'remote'" in result
+    assert saved["remote"]["type"] == "streamableHttp"
+    assert saved["remote"]["url"] == "https://example.test/mcp"
 
 
 def test_configure_mcp_removes_server_without_reload(tmp_path):

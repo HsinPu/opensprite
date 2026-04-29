@@ -111,6 +111,14 @@ class ConfigureMCPTool(Tool):
         command = str(payload.get("command", "") or "")
         url = str(payload.get("url", "") or "")
 
+        if not transport_type:
+            if command:
+                payload["type"] = "stdio"
+                transport_type = "stdio"
+            elif url:
+                payload["type"] = "streamableHttp"
+                transport_type = "streamableHttp"
+
         if transport_type == "stdio" and not command:
             raise ValueError("stdio MCP servers require command")
         if transport_type in {"sse", "streamableHttp"} and not url:

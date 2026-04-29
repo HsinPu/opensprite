@@ -87,18 +87,12 @@ class _ReparentAsyncExitStack:
         return False
 
 
-def _infer_url_http_transport(url: str) -> str:
-    return "sse" if url.rstrip("/").endswith("/sse") else "streamableHttp"
-
-
-def _http_url_transport_attempts(url: str) -> list[str]:
-    primary = _infer_url_http_transport(url)
-    secondary = "streamableHttp" if primary == "sse" else "sse"
-    return [primary, secondary]
+def _http_url_transport_attempts(_url: str) -> list[str]:
+    return ["streamableHttp", "sse"]
 
 
 def _use_implicit_http_transport_fallback(cfg: MCPServerConfig) -> bool:
-    """When type is omitted and only a URL is given, try SSE and streamable HTTP in order."""
+    """When type is omitted and only a URL is given, try streamable HTTP before SSE."""
     return cfg.type is None and bool(cfg.url) and not (cfg.command or "").strip()
 
 
@@ -327,7 +321,7 @@ async def connect_mcp_servers(
                 if cfg.command:
                     transport_type = "stdio"
                 elif cfg.url:
-                    transport_type = _infer_url_http_transport(cfg.url)
+                    transport_type = "streamableHttp"
                 else:
                     continue
 
