@@ -398,6 +398,7 @@ export function useChatClient() {
     mcpLoading: false,
     mcpError: "",
     mcpNotice: "",
+    mcpToolGroupsExpanded: {},
     mcp: {
       servers: [],
       runtime: {
@@ -1469,6 +1470,11 @@ export function useChatClient() {
     settingsState.mcpForm.showJsonInput = !settingsState.mcpForm.showJsonInput;
   }
 
+  function toggleMcpToolGroup(serverId) {
+    const key = String(serverId || "").trim() || "unknown";
+    settingsState.mcpToolGroupsExpanded[key] = settingsState.mcpToolGroupsExpanded[key] !== true;
+  }
+
   function applyMcpJson() {
     settingsState.mcpError = "";
     settingsState.mcpNotice = "";
@@ -2027,6 +2033,7 @@ export function useChatClient() {
     reloadMcpSettings,
     toggleMcpAdvanced,
     toggleMcpJsonInput,
+    toggleMcpToolGroup,
     applyMcpJson,
     saveScheduleSettings,
     beginCronJobEdit,

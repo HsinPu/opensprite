@@ -82,6 +82,7 @@
     @reload-mcp-settings="reloadMcpSettings"
     @toggle-mcp-advanced="toggleMcpAdvanced"
     @toggle-mcp-json="toggleMcpJsonInput"
+    @toggle-mcp-tool-group="toggleMcpToolGroup"
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-cron-job="saveCronJob"
@@ -146,6 +147,7 @@ const {
   reloadMcpSettings,
   toggleMcpAdvanced,
   toggleMcpJsonInput,
+  toggleMcpToolGroup,
   applyMcpJson,
   saveScheduleSettings,
   beginCronJobEdit,

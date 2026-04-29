@@ -452,7 +452,22 @@
             <div class="settings-row">
               <div>
                 <strong>{{ copy.settings.mcp.connectedTools }}</strong>
-                <span>{{ mcpToolNames }}</span>
+                <span v-if="mcpToolGroups.length === 0">{{ copy.settings.mcp.noTools }}</span>
+              </div>
+            </div>
+
+            <div v-if="mcpToolGroups.length" class="mcp-tool-groups">
+              <div v-for="group in mcpToolGroups" :key="group.serverId" class="mcp-tool-group">
+                <button class="mcp-tool-group__header" type="button" @click="$emit('toggle-mcp-tool-group', group.serverId)">
+                  <span aria-hidden="true">{{ group.expanded ? '▾' : '▸' }}</span>
+                  <strong>{{ group.serverName }}</strong>
+                  <small>{{ copy.settings.mcp.toolCount(group.tools.length) }}</small>
+                </button>
+                <div v-if="group.expanded" class="mcp-tool-group__tools">
+                  <span v-for="tool in group.tools" :key="tool.fullName" class="mcp-tool-chip">
+                    {{ tool.name }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -1057,9 +1072,53 @@ const mcpRuntimeStatus = computed(() => {
   return props.copy.settings.mcp.runtimeDisconnected;
 });
 
-const mcpToolNames = computed(() => {
+const mcpToolGroups = computed(() => {
   const toolNames = props.settingsState.mcp.runtime?.tool_names || [];
-  return toolNames.length ? toolNames.join(", ") : props.copy.settings.mcp.noTools;
+  const servers = Array.isArray(props.settingsState.mcp.servers) ? props.settingsState.mcp.servers : [];
+  const serverIds = servers.map((server) => String(server.id || "").trim()).filter(Boolean);
+  const groups = new Map();
+
+  for (const server of servers) {
+    const serverId = String(server.id || "").trim();
+    if (!serverId) {
+      continue;
+    }
+    groups.set(serverId, {
+      serverId,
+      serverName: server.name || serverId,
+      expanded: props.settingsState.mcpToolGroupsExpanded[serverId] === true,
+      tools: [],
+    });
+  }
+
+  for (const fullName of toolNames) {
+    const normalized = String(fullName || "").trim();
+    if (!normalized) {
+      continue;
+    }
+    const withoutPrefix = normalized.startsWith("mcp_") ? normalized.slice(4) : normalized;
+    const serverId = serverIds
+      .filter((candidate) => withoutPrefix.startsWith(`${candidate}_`))
+      .sort((left, right) => right.length - left.length)[0] || "unknown";
+    const toolName = serverId === "unknown" ? withoutPrefix : withoutPrefix.slice(serverId.length + 1);
+    if (!groups.has(serverId)) {
+      groups.set(serverId, {
+        serverId,
+        serverName: serverId === "unknown" ? props.copy.settings.mcp.unknownServer : serverId,
+        expanded: props.settingsState.mcpToolGroupsExpanded[serverId] === true,
+        tools: [],
+      });
+    }
+    groups.get(serverId).tools.push({ fullName: normalized, name: toolName || normalized });
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      tools: group.tools.sort((left, right) => left.name.localeCompare(right.name)),
+    }))
+    .filter((group) => group.tools.length > 0)
+    .sort((left, right) => left.serverName.localeCompare(right.serverName));
 });
 
 defineEmits([
@@ -1084,6 +1143,7 @@ defineEmits([
   "reload-mcp-settings",
   "toggle-mcp-advanced",
   "toggle-mcp-json",
+  "toggle-mcp-tool-group",
   "apply-mcp-json",
   "save-schedule-settings",
   "save-cron-job",

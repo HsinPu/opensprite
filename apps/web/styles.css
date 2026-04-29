@@ -1815,6 +1815,60 @@ button:disabled {
   margin: 0;
 }
 
+.mcp-tool-groups {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+
+.mcp-tool-group {
+  overflow: hidden;
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.mcp-tool-group__header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: #333333;
+  background: #fbfbfb;
+  text-align: left;
+}
+
+.mcp-tool-group__header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-tool-group__header small {
+  color: #858585;
+  font-size: 0.78rem;
+}
+
+.mcp-tool-group__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+
+.mcp-tool-chip {
+  max-width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #e1e1e1;
+  border-radius: 999px;
+  color: #555555;
+  background: #f8f8f8;
+  font-size: 0.82rem;
+}
+
 .mcp-editor__toolbar {
   display: flex;
   flex-wrap: wrap;
