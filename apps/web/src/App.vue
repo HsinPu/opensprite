@@ -7,18 +7,21 @@
       :aria-expanded="String(sidebarOpen)"
       @click="toggleSidebar"
     >
-      Menu
+      {{ copy.app.menu }}
     </button>
 
     <SidebarNav
+      :copy="copy"
       :state="state"
       :get-session-display-id="getSessionDisplayId"
+      :get-session-title="getSessionTitle"
       @create-new-chat="createNewChat"
       @set-active-session="setActiveSession"
       @open-settings="openSettings()"
     />
 
     <ChatPanel
+      :copy="copy"
       :prompts="prompts"
       :messages="currentMessages"
       :current-run="currentRun"
@@ -49,6 +52,7 @@
   </div>
 
   <SettingsModal
+    :copy="copy"
     :open="settingsOpen"
     :section="settingsSection"
     :title="settingsTitle"
@@ -57,6 +61,7 @@
     :connection-state="state.connectionState"
     @close="closeSettings"
     @select-section="selectSettingsSection"
+    @save-connection-settings="saveConnectionSettings"
     @toggle-connection="toggleSettingsConnection"
     @begin-channel-connect="beginChannelConnect"
     @cancel-channel-connect="cancelChannelConnect"
@@ -77,6 +82,7 @@ import SidebarNav from "./components/SidebarNav.vue";
 import { useChatClient } from "./composables/useChatClient";
 
 const {
+  copy,
   prompts,
   state,
   messageText,
@@ -100,10 +106,12 @@ const {
   setMessageStageRef,
   setMessageText,
   getSessionDisplayId,
+  getSessionTitle,
   setActiveSession,
   selectSettingsSection,
   openSettings,
   closeSettings,
+  saveConnectionSettings,
   beginChannelConnect,
   cancelChannelConnect,
   saveChannelConnection,

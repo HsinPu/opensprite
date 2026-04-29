@@ -3,14 +3,14 @@
     <button
       class="settings-modal__backdrop"
       type="button"
-      aria-label="Close settings"
+      :aria-label="copy.settings.closeAria"
       @click="$emit('close')"
     ></button>
 
     <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <aside class="settings-nav" aria-label="Settings sections">
         <div class="settings-nav__group">
-          <p>桌面</p>
+          <p>{{ copy.settings.desktop }}</p>
           <button
             class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'general' }"
@@ -18,7 +18,7 @@
             @click="$emit('select-section', 'general')"
           >
             <span aria-hidden="true">⌘</span>
-            一般
+            {{ copy.settingsTitles.general }}
           </button>
           <button
             class="settings-nav__item"
@@ -27,12 +27,12 @@
             @click="$emit('select-section', 'shortcuts')"
           >
             <span aria-hidden="true">⌗</span>
-            快速鍵
+            {{ copy.settingsTitles.shortcuts }}
           </button>
         </div>
 
         <div class="settings-nav__group">
-          <p>伺服器</p>
+          <p>{{ copy.settings.server }}</p>
           <button
             class="settings-nav__item"
             :class="{ 'settings-nav__item--active': section === 'providers' }"
@@ -40,7 +40,7 @@
             @click="$emit('select-section', 'providers')"
           >
             <span aria-hidden="true">⚙</span>
-            提供者
+            {{ copy.settingsTitles.providers }}
           </button>
           <button
             class="settings-nav__item"
@@ -49,7 +49,7 @@
             @click="$emit('select-section', 'models')"
           >
             <span aria-hidden="true">✦</span>
-            模型
+            {{ copy.settingsTitles.models }}
           </button>
           <button
             class="settings-nav__item"
@@ -58,21 +58,21 @@
             @click="$emit('select-section', 'channels')"
           >
             <span aria-hidden="true">☷</span>
-            頻道
+            {{ copy.settingsTitles.channels }}
           </button>
         </div>
 
         <div class="settings-nav__footer">
           <strong>OpenSprite Web</strong>
-          <span>v0.1.0</span>
+          <span>{{ copy.settings.version }}</span>
         </div>
       </aside>
 
       <div class="settings-content">
         <header class="settings-content__header">
           <h2 id="settingsTitle">{{ title }}</h2>
-          <button class="settings-panel__close" type="button" aria-label="Close settings" @click="$emit('close')">
-            Close
+          <button class="settings-panel__close" type="button" :aria-label="copy.settings.closeAria" @click="$emit('close')">
+            {{ copy.settings.close }}
           </button>
         </header>
 
@@ -80,61 +80,61 @@
           <div class="settings-card">
             <div class="settings-row">
               <div>
-                <strong>語言</strong>
-                <span>變更 OpenSprite 的顯示語言</span>
+                <strong>{{ copy.settings.general.language.title }}</strong>
+                <span>{{ copy.settings.general.language.description }}</span>
               </div>
-              <select aria-label="Language">
-                <option>繁體中文</option>
-                <option>English</option>
+              <select v-model="form.language" :aria-label="copy.settings.general.language.title">
+                <option value="zh-TW">{{ copy.settings.general.language.options.zhTW }}</option>
+                <option value="en">{{ copy.settings.general.language.options.en }}</option>
               </select>
             </div>
 
             <label class="settings-row">
               <div>
-                <strong>顯示 Run 進度</strong>
-                <span>在對話下方顯示目前執行狀態摘要。</span>
+                <strong>{{ copy.settings.general.runTimeline.title }}</strong>
+                <span>{{ copy.settings.general.runTimeline.description }}</span>
               </div>
               <input v-model="form.showRunTimeline" class="switch" type="checkbox" />
             </label>
 
             <label class="settings-row">
               <div>
-                <strong>顯示 Trace</strong>
-                <span>顯示工具、LLM、驗證事件等詳細追蹤資訊。</span>
+                <strong>{{ copy.settings.general.runTrace.title }}</strong>
+                <span>{{ copy.settings.general.runTrace.description }}</span>
               </div>
               <input v-model="form.showRunTrace" class="switch" type="checkbox" />
             </label>
           </div>
 
-          <h3>連線</h3>
+          <h3>{{ copy.settings.general.connectionTitle }}</h3>
           <div class="settings-card settings-card--form">
             <label class="settings-row settings-row--field">
               <div>
-                <strong>WebSocket URL</strong>
-                <span>OpenSprite gateway 的連線位置</span>
+                <strong>{{ copy.settings.general.wsUrl.title }}</strong>
+                <span>{{ copy.settings.general.wsUrl.description }}</span>
               </div>
-              <input v-model="form.wsUrl" type="text" spellcheck="false" />
+              <input v-model="form.wsUrl" type="text" spellcheck="false" @change="$emit('save-connection-settings')" />
             </label>
 
             <label class="settings-row settings-row--field">
               <div>
-                <strong>Display name</strong>
-                <span>送出訊息時顯示的使用者名稱</span>
+                <strong>{{ copy.settings.general.displayName.title }}</strong>
+                <span>{{ copy.settings.general.displayName.description }}</span>
               </div>
-              <input v-model="form.displayName" type="text" maxlength="60" />
+              <input v-model="form.displayName" type="text" maxlength="60" @change="$emit('save-connection-settings')" />
             </label>
 
             <label class="settings-row settings-row--field">
               <div>
-                <strong>External chat ID</strong>
-                <span>用固定外部 ID 將瀏覽器分頁綁定到同一個 session</span>
+                <strong>{{ copy.settings.general.externalChatId.title }}</strong>
+                <span>{{ copy.settings.general.externalChatId.description }}</span>
               </div>
-              <input v-model="form.externalChatId" type="text" spellcheck="false" />
+              <input v-model="form.externalChatId" type="text" spellcheck="false" @change="$emit('save-connection-settings')" />
             </label>
 
             <label class="settings-row">
               <div>
-                <strong>Gateway 連線</strong>
+                <strong>{{ copy.settings.general.gateway.title }}</strong>
                 <span>{{ connectionSwitchLabel }}</span>
               </div>
               <input
@@ -147,17 +147,17 @@
             </label>
           </div>
 
-          <h3>外觀</h3>
+          <h3>{{ copy.settings.general.appearanceTitle }}</h3>
           <div class="settings-card">
             <div class="settings-row">
               <div>
-                <strong>配色方案</strong>
-                <span>選擇 OpenSprite 要跟隨系統、淺色或深色主題</span>
+                <strong>{{ copy.settings.general.colorScheme.title }}</strong>
+                <span>{{ copy.settings.general.colorScheme.description }}</span>
               </div>
-              <select aria-label="Color scheme">
-                <option>系統</option>
-                <option>淺色</option>
-                <option>深色</option>
+              <select v-model="form.colorScheme" :aria-label="copy.settings.general.colorScheme.title">
+                <option value="system">{{ copy.settings.general.colorScheme.options.system }}</option>
+                <option value="light">{{ copy.settings.general.colorScheme.options.light }}</option>
+                <option value="dark">{{ copy.settings.general.colorScheme.options.dark }}</option>
               </select>
             </div>
           </div>
@@ -167,15 +167,15 @@
           <div class="settings-card">
             <div class="settings-row">
               <div>
-                <strong>開啟設定</strong>
-                <span>快速開啟這個設定視窗</span>
+                <strong>{{ copy.settings.shortcuts.openSettings }}</strong>
+                <span>{{ copy.settings.shortcuts.openSettingsDescription }}</span>
               </div>
               <div class="shortcut-keys"><kbd>Ctrl</kbd><kbd>,</kbd></div>
             </div>
             <div class="settings-row">
               <div>
-                <strong>送出訊息</strong>
-                <span>在輸入框中送出目前訊息</span>
+                <strong>{{ copy.settings.shortcuts.sendMessage }}</strong>
+                <span>{{ copy.settings.shortcuts.sendMessageDescription }}</span>
               </div>
               <div class="shortcut-keys"><kbd>Enter</kbd></div>
             </div>
@@ -183,7 +183,7 @@
         </section>
 
         <section v-show="section === 'channels'" class="settings-page">
-          <p v-if="settingsState.channelsLoading" class="settings-inline-status">讀取頻道設定中...</p>
+          <p v-if="settingsState.channelsLoading" class="settings-inline-status">{{ copy.settings.channels.loading }}</p>
           <p v-if="settingsState.channelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.channelsError }}
           </p>
@@ -191,12 +191,12 @@
             {{ settingsState.channelsNotice }}
           </p>
 
-          <h3>已連線的頻道</h3>
+          <h3>{{ copy.settings.channels.connectedTitle }}</h3>
           <div class="settings-card provider-card">
             <div v-if="settingsState.channels.connected.length === 0" class="provider-row provider-row--empty">
               <div>
-                <strong>尚未連線頻道</strong>
-                <span>從下方可新增頻道開始連線。</span>
+                <strong>{{ copy.settings.channels.noConnectedTitle }}</strong>
+                <span>{{ copy.settings.channels.noConnectedDescription }}</span>
               </div>
             </div>
 
@@ -206,8 +206,8 @@
                 <div>
                   <div class="provider-row__title">
                     <strong>{{ channel.name }}</strong>
-                    <span class="provider-row__badge">已連線</span>
-                    <span v-if="channel.enabled" class="provider-row__badge">啟用</span>
+                    <span class="provider-row__badge">{{ copy.settings.channels.connectedBadge }}</span>
+                    <span v-if="channel.enabled" class="provider-row__badge">{{ copy.settings.channels.enabledBadge }}</span>
                   </div>
                   <span>{{ channel.description }}</span>
                 </div>
@@ -218,17 +218,17 @@
                 :disabled="settingsState.channelsLoading"
                 @click="$emit('disconnect-channel', channel)"
               >
-                中斷連線
+                {{ copy.settings.channels.disconnect }}
               </button>
             </div>
           </div>
 
-          <h3>可新增頻道</h3>
+          <h3>{{ copy.settings.channels.availableTitle }}</h3>
           <div class="settings-card provider-card">
             <div v-if="settingsState.channels.available.length === 0" class="provider-row provider-row--empty">
               <div>
-                <strong>所有內建頻道都已連線</strong>
-                <span>需要停用時可在上方中斷連線。</span>
+                <strong>{{ copy.settings.channels.noAvailableTitle }}</strong>
+                <span>{{ copy.settings.channels.noAvailableDescription }}</span>
               </div>
             </div>
 
@@ -239,7 +239,7 @@
                   <div>
                     <div class="provider-row__title">
                       <strong>{{ channel.name }}</strong>
-                      <span class="provider-row__badge">內建</span>
+                      <span class="provider-row__badge">{{ copy.settings.channels.builtInBadge }}</span>
                     </div>
                     <span>{{ channel.description }}</span>
                   </div>
@@ -250,7 +250,7 @@
                   :disabled="settingsState.channelsLoading"
                   @click="$emit('begin-channel-connect', channel)"
                 >
-                  + 新增
+                  {{ copy.settings.channels.add }}
                 </button>
               </div>
             </div>
@@ -258,7 +258,7 @@
         </section>
 
         <section v-show="section === 'providers'" class="settings-page">
-          <p v-if="settingsState.providersLoading" class="settings-inline-status">讀取提供商設定中...</p>
+          <p v-if="settingsState.providersLoading" class="settings-inline-status">{{ copy.settings.providers.loading }}</p>
           <p v-if="settingsState.providersError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.providersError }}
           </p>
@@ -266,12 +266,12 @@
             {{ settingsState.providersNotice }}
           </p>
 
-          <h3>已連線的提供商</h3>
+          <h3>{{ copy.settings.providers.connectedTitle }}</h3>
           <div class="settings-card provider-card">
             <div v-if="settingsState.providers.connected.length === 0" class="provider-row provider-row--empty">
               <div>
-                <strong>尚未連線提供商</strong>
-                <span>從下方熱門提供商開始連線。</span>
+                <strong>{{ copy.settings.providers.noConnectedTitle }}</strong>
+                <span>{{ copy.settings.providers.noConnectedDescription }}</span>
               </div>
             </div>
 
@@ -281,7 +281,7 @@
                 <div>
                   <div class="provider-row__title">
                     <strong>{{ provider.name }}</strong>
-                    <span v-if="provider.is_default" class="provider-row__badge">目前使用中</span>
+                    <span v-if="provider.is_default" class="provider-row__badge">{{ copy.settings.providers.currentBadge }}</span>
                   </div>
                   <span>{{ provider.base_url }}</span>
                 </div>
@@ -292,17 +292,17 @@
                 :disabled="settingsState.providersLoading"
                 @click="$emit('disconnect-provider', provider)"
               >
-                中斷連線
+                {{ copy.settings.providers.disconnect }}
               </button>
             </div>
           </div>
 
-          <h3>熱門提供商</h3>
+          <h3>{{ copy.settings.providers.popularTitle }}</h3>
           <div class="settings-card provider-card">
             <div v-if="settingsState.providers.available.length === 0" class="provider-row provider-row--empty">
               <div>
-                <strong>所有內建提供商都已連線</strong>
-                <span>請到模型頁選擇要使用的模型。</span>
+                <strong>{{ copy.settings.providers.noAvailableTitle }}</strong>
+                <span>{{ copy.settings.providers.noAvailableDescription }}</span>
               </div>
             </div>
 
@@ -313,7 +313,7 @@
                   <div>
                     <div class="provider-row__title">
                       <strong>{{ provider.name }}</strong>
-                      <span class="provider-row__badge">內建</span>
+                      <span class="provider-row__badge">{{ copy.settings.providers.builtInBadge }}</span>
                     </div>
                     <span>{{ provider.default_base_url }}</span>
                   </div>
@@ -324,7 +324,7 @@
                   :disabled="settingsState.providersLoading"
                   @click="$emit('begin-provider-connect', provider)"
                 >
-                  + 連線
+                  {{ copy.settings.providers.connect }}
                 </button>
               </div>
 
@@ -333,7 +333,7 @@
         </section>
 
         <section v-show="section === 'models'" class="settings-page">
-          <p v-if="settingsState.modelsLoading" class="settings-inline-status">讀取模型設定中...</p>
+          <p v-if="settingsState.modelsLoading" class="settings-inline-status">{{ copy.settings.models.loading }}</p>
           <p v-if="settingsState.modelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.modelsError }}
           </p>
@@ -344,10 +344,10 @@
           <div v-if="settingsState.models.providers.length === 0" class="settings-card">
             <div class="settings-row">
               <div>
-                <strong>尚未連線提供商</strong>
-                <span>請先到提供者頁連線 OpenAI、OpenRouter 或 MiniMax。</span>
+                <strong>{{ copy.settings.models.noProvidersTitle }}</strong>
+                <span>{{ copy.settings.models.noProvidersDescription }}</span>
               </div>
-              <span class="settings-muted">No providers</span>
+              <span class="settings-muted">{{ copy.settings.models.noProvidersBadge }}</span>
             </div>
           </div>
 
@@ -362,9 +362,9 @@
                 <div>
                   <div class="provider-row__title">
                     <strong>{{ provider.name }}</strong>
-                    <span v-if="provider.is_default" class="provider-row__badge">目前使用中</span>
+                    <span v-if="provider.is_default" class="provider-row__badge">{{ copy.settings.models.currentBadge }}</span>
                   </div>
-                  <span>{{ provider.selected_model || "尚未選擇模型" }}</span>
+                  <span>{{ provider.selected_model || copy.settings.models.noModel }}</span>
                 </div>
               </div>
             </div>
@@ -380,17 +380,17 @@
                 @click="$emit('select-model', provider.id, model)"
               >
                 <strong>{{ model }}</strong>
-                <span>{{ provider.is_default && provider.selected_model === model ? "目前使用中" : "選擇模型" }}</span>
+                <span>{{ provider.is_default && provider.selected_model === model ? copy.settings.models.active : copy.settings.models.select }}</span>
               </button>
             </div>
 
             <div class="custom-model-row">
               <label>
-                <span>自訂模型</span>
+                <span>{{ copy.settings.models.customModel }}</span>
                 <input
                   v-model="settingsState.customModels[provider.id]"
                   type="text"
-                  placeholder="輸入模型名稱"
+                  :placeholder="copy.settings.models.customPlaceholder"
                   spellcheck="false"
                 />
               </label>
@@ -400,7 +400,7 @@
                 :disabled="settingsState.modelsLoading"
                 @click="$emit('select-model', provider.id, settingsState.customModels[provider.id])"
               >
-                使用自訂模型
+                {{ copy.settings.models.useCustom }}
               </button>
             </div>
           </div>
@@ -412,7 +412,7 @@
           <button
             class="provider-connect-dialog__icon-button"
             type="button"
-            aria-label="Back to providers"
+            :aria-label="copy.settings.providers.backAria"
             @click="$emit('cancel-provider-connect')"
           >
             ←
@@ -420,7 +420,7 @@
           <button
             class="provider-connect-dialog__icon-button"
             type="button"
-            aria-label="Close provider connection"
+            :aria-label="copy.settings.providers.closeAria"
             @click="$emit('cancel-provider-connect')"
           >
             ×
@@ -430,15 +430,15 @@
         <form class="provider-connect-dialog__body" @submit.prevent="$emit('save-provider-connection')">
           <div class="provider-connect-dialog__title">
             <span class="provider-row__mark" aria-hidden="true">{{ selectedConnectProvider.name.slice(0, 2) }}</span>
-            <h3>連線 {{ selectedConnectProvider.name }}</h3>
+            <h3>{{ copy.settings.providers.dialogTitle(selectedConnectProvider.name) }}</h3>
           </div>
 
           <p>
-            輸入你的 {{ selectedConnectProvider.name }} API key 以連線帳戶，之後可到模型頁選擇使用的模型。
+            {{ copy.settings.providers.dialogDescription(selectedConnectProvider.name) }}
           </p>
 
           <label class="provider-connect-field">
-            <span>{{ selectedConnectProvider.name }} API key</span>
+            <span>{{ copy.settings.providers.apiKeyLabel(selectedConnectProvider.name) }}</span>
             <input
               v-model="settingsState.connectForm.apiKey"
               type="password"
@@ -452,7 +452,7 @@
             type="button"
             @click="settingsState.connectForm.showAdvanced = !settingsState.connectForm.showAdvanced"
           >
-            {{ settingsState.connectForm.showAdvanced ? "隱藏進階設定" : "進階設定" }}
+            {{ settingsState.connectForm.showAdvanced ? copy.settings.providers.advancedHide : copy.settings.providers.advancedShow }}
           </button>
 
           <label v-if="settingsState.connectForm.showAdvanced" class="provider-connect-field">
@@ -461,7 +461,7 @@
           </label>
 
           <button class="primary-button provider-connect-dialog__submit" type="submit">
-            提交
+            {{ copy.settings.providers.submit }}
           </button>
         </form>
       </div>
@@ -471,7 +471,7 @@
           <button
             class="provider-connect-dialog__icon-button"
             type="button"
-            aria-label="Back to channels"
+            :aria-label="copy.settings.channels.backAria"
             @click="$emit('cancel-channel-connect')"
           >
             ←
@@ -479,7 +479,7 @@
           <button
             class="provider-connect-dialog__icon-button"
             type="button"
-            aria-label="Close channel connection"
+            :aria-label="copy.settings.channels.closeAria"
             @click="$emit('cancel-channel-connect')"
           >
             ×
@@ -489,23 +489,23 @@
         <form class="provider-connect-dialog__body" @submit.prevent="$emit('save-channel-connection')">
           <div class="provider-connect-dialog__title">
             <span class="provider-row__mark" aria-hidden="true">{{ selectedConnectChannel.name.slice(0, 2) }}</span>
-            <h3>新增 {{ selectedConnectChannel.name }}</h3>
+            <h3>{{ copy.settings.channels.dialogTitle(selectedConnectChannel.name) }}</h3>
           </div>
 
-          <p>輸入你的 {{ selectedConnectChannel.name }} token 以連線這個頻道。</p>
+          <p>{{ copy.settings.channels.dialogDescription(selectedConnectChannel.name) }}</p>
 
           <label class="provider-connect-field">
-            <span>頻道名稱</span>
+            <span>{{ copy.settings.channels.nameLabel }}</span>
             <input
               v-model="settingsState.channelConnectForm.name"
               type="text"
-              placeholder="例如：工作 Telegram"
+              :placeholder="copy.settings.channels.namePlaceholder"
               autocomplete="off"
             />
           </label>
 
           <label class="provider-connect-field">
-            <span>{{ selectedConnectChannel.name }} token</span>
+            <span>{{ copy.settings.channels.tokenLabel(selectedConnectChannel.name) }}</span>
             <input
               v-model="settingsState.channelConnectForm.token"
               type="password"
@@ -515,7 +515,7 @@
           </label>
 
           <button class="primary-button provider-connect-dialog__submit" type="submit">
-            提交
+            {{ copy.settings.channels.submit }}
           </button>
         </form>
       </div>
@@ -527,6 +527,10 @@
 import { computed } from "vue";
 
 const props = defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   open: {
     type: Boolean,
     required: true,
@@ -583,17 +587,18 @@ const connectionSwitchChecked = computed(
 
 const connectionSwitchLabel = computed(() => {
   if (props.connectionState === "connecting") {
-    return "正在連線到 OpenSprite gateway...";
+    return props.copy.settings.general.gateway.connecting;
   }
   if (props.connectionState === "connected") {
-    return "已連線。關掉開關後會中斷目前 gateway 連線。";
+    return props.copy.settings.general.gateway.connected;
   }
-  return "開啟後會套用上方連線設定並連線。";
+  return props.copy.settings.general.gateway.disconnected;
 });
 
 defineEmits([
   "close",
   "select-section",
+  "save-connection-settings",
   "toggle-connection",
   "begin-channel-connect",
   "cancel-channel-connect",

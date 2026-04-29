@@ -1,4 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { getDisplayCopy } from "../i18n/copy";
 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
@@ -6,14 +7,17 @@ const STORAGE_KEYS = {
   activeExternalChatId: "opensprite:web:activeExternalChatId",
   showRunTimeline: "opensprite:web:showRunTimeline",
   showRunTrace: "opensprite:web:showRunTrace",
+  language: "opensprite:web:language",
+  colorScheme: "opensprite:web:colorScheme",
 };
 
-const SETTINGS_TITLES = {
-  general: "一般",
-  shortcuts: "快速鍵",
-  channels: "頻道",
-  providers: "提供者",
-  models: "模型",
+const DEFAULT_LANGUAGE = "zh-TW";
+const DEFAULT_COLOR_SCHEME = "system";
+const SUPPORTED_LANGUAGES = new Set(["zh-TW", "en"]);
+const SUPPORTED_COLOR_SCHEMES = new Set(["system", "light", "dark"]);
+const LANGUAGE_ATTRIBUTES = {
+  "zh-TW": "zh-Hant-TW",
+  en: "en",
 };
 
 const MAX_RUN_EVENTS = 80;
@@ -27,29 +31,6 @@ const TIMELINE_EVENT_TYPES = new Set([
   "run_finished",
   "run_failed",
 ]);
-
-const prompts = [
-  {
-    title: "Summarize capabilities",
-    description: "Get a quick overview of the local assistant.",
-    text: "Summarize what OpenSprite can do in five bullets.",
-  },
-  {
-    title: "Plan a feature",
-    description: "Turn an idea into a practical implementation path.",
-    text: "Help me plan the next feature for this project.",
-  },
-  {
-    title: "Review structure",
-    description: "Ask for architecture and maintainability feedback.",
-    text: "Review the current project structure and suggest improvements.",
-  },
-  {
-    title: "Draft docs",
-    description: "Create clear project documentation quickly.",
-    text: "Draft a concise README section for the web gateway.",
-  },
-];
 
 function resolveDefaultWsUrl() {
   if (window.location.protocol === "http:" || window.location.protocol === "https:") {
@@ -67,6 +48,25 @@ function readStoredValue(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeChoice(value, fallback, allowedValues) {
+  const normalized = String(value || "").trim();
+  return allowedValues.has(normalized) ? normalized : fallback;
+}
+
+function readStoredChoice(key, fallback, allowedValues) {
+  return normalizeChoice(readStoredValue(key, fallback), fallback, allowedValues);
+}
+
+function getResolvedColorScheme(colorScheme) {
+  if (colorScheme !== "system") {
+    return colorScheme;
+  }
+  if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
 }
 
 function writeStoredValue(key, value) {
@@ -144,14 +144,8 @@ function shortRunId(runId) {
   return normalized.length > 8 ? normalized.slice(0, 8) : normalized;
 }
 
-function runStatusLabel(status) {
-  const labels = {
-    running: "Running",
-    completed: "Complete",
-    failed: "Failed",
-    cancelled: "Cancelled",
-  };
-  return labels[status] || "Running";
+function runStatusLabel(status, copy) {
+  return copy.run.statusLabels[status] || copy.run.statusLabels.running;
 }
 
 function runTone(status, fallbackTone = "running") {
@@ -194,34 +188,34 @@ function statusFromRunEvent(eventType, payload) {
   return null;
 }
 
-function formatRunFinishDetail(payload) {
+function formatRunFinishDetail(payload, copy) {
   const parts = [];
   if (Number.isFinite(Number(payload.executed_tool_calls))) {
-    parts.push(`${payload.executed_tool_calls} tool call(s)`);
+    parts.push(copy.run.toolCalls(payload.executed_tool_calls));
   }
   if (Number.isFinite(Number(payload.context_compactions)) && Number(payload.context_compactions) > 0) {
-    parts.push(`${payload.context_compactions} compaction(s)`);
+    parts.push(copy.run.compactions(payload.context_compactions));
   }
   if (payload.had_tool_error) {
-    parts.push("tool warning recorded");
+    parts.push(copy.run.toolWarning);
   }
   return parts.join(" · ");
 }
 
-function describeRunEvent(eventType, payload) {
+function describeRunEvent(eventType, payload, copy) {
   if (!TIMELINE_EVENT_TYPES.has(eventType)) {
     return null;
   }
 
   if (eventType === "run_started") {
-    return { label: "Run started", detail: "Preparing the local task.", tone: "running" };
+    return { label: copy.run.runStarted, detail: copy.run.preparingTask, tone: "running" };
   }
 
   if (eventType === "llm_status") {
-    const message = String(payload.message || "Thinking");
+    const message = String(payload.message || copy.run.thinking);
     return {
-      label: message === "processing" ? "Thinking" : "LLM status",
-      detail: message === "processing" ? "Preparing prompt and tool context." : message,
+      label: message === "processing" ? copy.run.thinking : copy.run.llmStatus,
+      detail: message === "processing" ? copy.run.preparingPrompt : message,
       tone: "running",
     };
   }
@@ -231,16 +225,16 @@ function describeRunEvent(eventType, payload) {
       return null;
     }
     return {
-      label: `Tool: ${payload.tool_name || "unknown"}`,
-      detail: payload.args_preview || "Executing tool.",
+      label: `${copy.run.tool}: ${payload.tool_name || copy.run.unknownTool}`,
+      detail: payload.args_preview || copy.run.executingTool,
       tone: "running",
     };
   }
 
   if (eventType === "verification_started") {
     return {
-      label: `Verifying: ${payload.action || "auto"}`,
-      detail: payload.path ? `Path: ${payload.path}` : "Running project checks.",
+      label: `${copy.run.verifying}: ${payload.action || copy.run.auto}`,
+      detail: payload.path ? `${copy.run.pathPrefix} ${payload.path}` : copy.run.runningChecks,
       tone: "running",
     };
   }
@@ -248,16 +242,16 @@ function describeRunEvent(eventType, payload) {
   if (eventType === "verification_result") {
     const ok = payload.ok !== false;
     return {
-      label: ok ? "Verification passed" : "Verification failed",
-      detail: payload.result_preview || "Verification completed.",
+      label: ok ? copy.run.verificationPassed : copy.run.verificationFailed,
+      detail: payload.result_preview || copy.run.verificationCompleted,
       tone: ok ? "success" : "error",
     };
   }
 
   if (eventType === "run_finished") {
     return {
-      label: payload.had_tool_error ? "Run completed with warnings" : "Run completed",
-      detail: formatRunFinishDetail(payload) || "Final response delivered.",
+      label: payload.had_tool_error ? copy.run.completedWithWarnings : copy.run.completed,
+      detail: formatRunFinishDetail(payload, copy) || copy.run.finalDelivered,
       tone: payload.had_tool_error ? "warning" : "success",
     };
   }
@@ -265,8 +259,8 @@ function describeRunEvent(eventType, payload) {
   if (eventType === "run_failed") {
     const cancelled = payload.status === "cancelled";
     return {
-      label: cancelled ? "Run cancelled" : "Run failed",
-      detail: payload.error || "The run stopped before completion.",
+      label: cancelled ? copy.run.cancelled : copy.run.failed,
+      detail: payload.error || copy.run.stopped,
       tone: cancelled ? "warning" : "error",
     };
   }
@@ -287,6 +281,9 @@ export function formatEventTime(timestamp) {
 
 export function useChatClient() {
   const storedExternalChatId = readStoredValue(STORAGE_KEYS.activeExternalChatId, "");
+  const initialLanguage = readStoredChoice(STORAGE_KEYS.language, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES);
+  const initialColorScheme = readStoredChoice(STORAGE_KEYS.colorScheme, DEFAULT_COLOR_SCHEME, SUPPORTED_COLOR_SCHEMES);
+  const initialCopy = getDisplayCopy(initialLanguage);
   const initialSession = createSession(storedExternalChatId || generateExternalChatId());
 
   const state = reactive({
@@ -294,14 +291,19 @@ export function useChatClient() {
     displayName: readStoredValue(STORAGE_KEYS.displayName, "Local browser"),
     showRunTimeline: readStoredBoolean(STORAGE_KEYS.showRunTimeline, true),
     showRunTrace: readStoredBoolean(STORAGE_KEYS.showRunTrace, true),
+    language: initialLanguage,
+    colorScheme: initialColorScheme,
     activeExternalChatId: initialSession.externalChatId,
     sessions: [initialSession],
     connectionState: "disconnected",
     notice: {
-      text: "Connecting to your local OpenSprite gateway...",
+      text: initialCopy.notices.connectingGateway,
       tone: "info",
     },
   });
+
+  const copy = computed(() => getDisplayCopy(state.language));
+  const prompts = computed(() => copy.value.prompts);
 
   const messageText = ref("");
   const messageInput = ref(null);
@@ -315,6 +317,8 @@ export function useChatClient() {
     externalChatId: state.activeExternalChatId,
     showRunTimeline: state.showRunTimeline,
     showRunTrace: state.showRunTrace,
+    language: state.language,
+    colorScheme: state.colorScheme,
   });
   const settingsState = reactive({
     channelsLoading: false,
@@ -356,6 +360,46 @@ export function useChatClient() {
   });
 
   let activeSocket = null;
+  let colorSchemeMediaQuery = null;
+
+  function applyDocumentPreferences() {
+    if (typeof document === "undefined") {
+      return;
+    }
+    document.documentElement.lang = LANGUAGE_ATTRIBUTES[state.language] || LANGUAGE_ATTRIBUTES[DEFAULT_LANGUAGE];
+    document.documentElement.dataset.colorScheme = getResolvedColorScheme(state.colorScheme);
+    document.documentElement.dataset.colorSchemePreference = state.colorScheme;
+  }
+
+  function handleSystemColorSchemeChange() {
+    if (state.colorScheme === "system") {
+      applyDocumentPreferences();
+    }
+  }
+
+  function addColorSchemeListener() {
+    if (typeof window === "undefined" || !window.matchMedia) {
+      return;
+    }
+    colorSchemeMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    if (colorSchemeMediaQuery.addEventListener) {
+      colorSchemeMediaQuery.addEventListener("change", handleSystemColorSchemeChange);
+      return;
+    }
+    colorSchemeMediaQuery.addListener?.(handleSystemColorSchemeChange);
+  }
+
+  function removeColorSchemeListener() {
+    if (!colorSchemeMediaQuery) {
+      return;
+    }
+    if (colorSchemeMediaQuery.removeEventListener) {
+      colorSchemeMediaQuery.removeEventListener("change", handleSystemColorSchemeChange);
+    } else {
+      colorSchemeMediaQuery.removeListener?.(handleSystemColorSchemeChange);
+    }
+    colorSchemeMediaQuery = null;
+  }
 
   const currentSession = computed(() => {
     return state.sessions.find((session) => session.externalChatId === state.activeExternalChatId) || null;
@@ -384,35 +428,31 @@ export function useChatClient() {
     }
     return {
       shortId: shortRunId(run.runId),
-      statusLabel: runStatusLabel(run.status),
+      statusLabel: runStatusLabel(run.status, copy.value),
       title: latestEvent.label,
       tone: runTone(run.status, latestEvent.tone),
     };
   });
 
-  const settingsTitle = computed(() => SETTINGS_TITLES[settingsSection.value] || SETTINGS_TITLES.general);
+  const settingsTitle = computed(() => copy.value.settingsTitles[settingsSection.value] || copy.value.settingsTitles.general);
 
   const sessionMeta = computed(() => {
     const session = currentSession.value;
-    return `${session?.title || "New chat"} · ${getSessionDisplayId(session)}`;
+    return `${getSessionTitle(session)} · ${getSessionDisplayId(session)}`;
   });
 
-  const runtimeHint = computed(() => currentSession.value?.externalChatId || "No active chat");
+  const runtimeHint = computed(() => currentSession.value?.externalChatId || copy.value.session.noActiveChat);
 
   const connectionLabel = computed(() => {
-    const labels = {
-      disconnected: "Disconnected",
-      connecting: "Connecting",
-      connected: "Connected",
-    };
+    const labels = copy.value.connection;
     return labels[state.connectionState] || labels.disconnected;
   });
 
   const connectButtonLabel = computed(() => {
     const labels = {
-      disconnected: "Retry",
-      connecting: "Connecting",
-      connected: "Reconnect",
+      disconnected: copy.value.connection.retry,
+      connecting: copy.value.connection.connecting,
+      connected: copy.value.connection.reconnect,
     };
     return labels[state.connectionState] || labels.disconnected;
   });
@@ -443,6 +483,36 @@ export function useChatClient() {
     writeStoredValue(STORAGE_KEYS.showRunTrace, String(state.showRunTrace));
   }
 
+  function saveDisplaySettings(language, colorScheme) {
+    state.language = normalizeChoice(language, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES);
+    state.colorScheme = normalizeChoice(colorScheme, DEFAULT_COLOR_SCHEME, SUPPORTED_COLOR_SCHEMES);
+    writeStoredValue(STORAGE_KEYS.language, state.language);
+    writeStoredValue(STORAGE_KEYS.colorScheme, state.colorScheme);
+    applyDocumentPreferences();
+  }
+
+  function rebuildLocalizedRunEvents() {
+    for (const session of state.sessions) {
+      for (const run of session.runs || []) {
+        run.events = (run.rawEvents || [])
+          .map((event) => {
+            const description = describeRunEvent(event.eventType, event.payload, copy.value);
+            return description
+              ? {
+                  id: `${event.id}-localized`,
+                  eventType: event.eventType,
+                  createdAt: event.createdAt,
+                  payload: event.payload,
+                  ...description,
+                }
+              : null;
+          })
+          .filter(Boolean)
+          .slice(-MAX_RUN_EVENTS);
+      }
+    }
+  }
+
   watch(settingsOpen, (isOpen) => {
     document.body.classList.toggle("settings-open", isOpen);
   });
@@ -458,15 +528,40 @@ export function useChatClient() {
     },
   );
 
+  watch(
+    () => [settingsForm.language, settingsForm.colorScheme],
+    ([language, colorScheme]) => {
+      saveDisplaySettings(language, colorScheme);
+    },
+  );
+
+  watch(
+    () => [state.language, state.colorScheme],
+    ([language], [previousLanguage] = []) => {
+      applyDocumentPreferences();
+      if (previousLanguage && language !== previousLanguage) {
+        rebuildLocalizedRunEvents();
+      }
+    },
+    { immediate: true },
+  );
+
   function sortSessions() {
     state.sessions.sort((left, right) => right.updatedAt - left.updatedAt);
   }
 
   function getSessionDisplayId(session) {
     if (!session) {
-      return "No active chat";
+      return copy.value.session.noActiveChat;
     }
     return session.sessionId || `web:${session.externalChatId}`;
+  }
+
+  function getSessionTitle(session) {
+    if (!session || session.title === "New chat") {
+      return copy.value.session.newChat;
+    }
+    return session.title;
   }
 
   function ensureSession(externalChatId, sessionId) {
@@ -477,7 +572,7 @@ export function useChatClient() {
       session.messages = [
         makeMessage(
           "assistant",
-          "This thread was created from the live gateway. Send a message to continue the conversation.",
+          copy.value.session.liveGatewayThread,
           "OpenSprite",
         ),
       ];
@@ -542,7 +637,7 @@ export function useChatClient() {
       run.status = "running";
     }
 
-    const description = describeRunEvent(eventType, eventPayload);
+    const description = describeRunEvent(eventType, eventPayload, copy.value);
     if (description) {
       run.events.push({
         id: `${runId}-${eventType}-${createdAt}-${randomToken()}`,
@@ -574,7 +669,7 @@ export function useChatClient() {
   }
 
   function selectSettingsSection(sectionName) {
-    settingsSection.value = SETTINGS_TITLES[sectionName] ? sectionName : "general";
+    settingsSection.value = Object.prototype.hasOwnProperty.call(copy.value.settingsTitles, sectionName) ? sectionName : "general";
     loadSettingsSection(settingsSection.value);
   }
 
@@ -584,6 +679,8 @@ export function useChatClient() {
     settingsForm.externalChatId = currentSession.value?.externalChatId || "";
     settingsForm.showRunTimeline = state.showRunTimeline;
     settingsForm.showRunTrace = state.showRunTrace;
+    settingsForm.language = state.language;
+    settingsForm.colorScheme = state.colorScheme;
   }
 
   function openSettings(sectionName = "general") {
@@ -593,6 +690,11 @@ export function useChatClient() {
   }
 
   function closeSettings() {
+    if (settingsOpen.value) {
+      saveConnectionSettings();
+    }
+    cancelChannelConnect();
+    cancelProviderConnect();
     settingsOpen.value = false;
   }
 
@@ -649,7 +751,7 @@ export function useChatClient() {
     try {
       settingsState.providers = await requestSettingsJson("/api/settings/providers");
     } catch (error) {
-      settingsState.providersError = error?.message || "Could not load provider settings.";
+      settingsState.providersError = error?.message || copy.value.notices.providerLoadFailed;
     } finally {
       settingsState.providersLoading = false;
     }
@@ -686,7 +788,7 @@ export function useChatClient() {
       const payload = await requestSettingsJson("/api/settings/channels");
       settingsState.channels = normalizeChannelSettings(payload);
     } catch (error) {
-      settingsState.channelsError = error?.message || "無法載入頻道設定。";
+      settingsState.channelsError = error?.message || copy.value.notices.channelLoadFailed;
     } finally {
       settingsState.channelsLoading = false;
     }
@@ -703,7 +805,7 @@ export function useChatClient() {
         }
       }
     } catch (error) {
-      settingsState.modelsError = error?.message || "Could not load model settings.";
+      settingsState.modelsError = error?.message || copy.value.notices.modelLoadFailed;
     } finally {
       settingsState.modelsLoading = false;
     }
@@ -755,13 +857,11 @@ export function useChatClient() {
           token: settingsState.channelConnectForm.token,
         }),
       });
-      settingsState.channelsNotice = payload.restart_required
-        ? `${payload.channel.name} 已連線，重啟 opensprite gateway 後生效。`
-        : `${payload.channel.name} 已連線。`;
+      settingsState.channelsNotice = copy.value.notices.channelConnected(payload.channel.name, payload.restart_required);
       cancelChannelConnect();
       await loadChannelSettings();
     } catch (error) {
-      settingsState.channelsError = error?.message || "無法連線頻道。";
+      settingsState.channelsError = error?.message || copy.value.notices.channelConnectFailed;
     } finally {
       settingsState.channelsLoading = false;
     }
@@ -775,12 +875,10 @@ export function useChatClient() {
       const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channel.id)}/disconnect`, {
         method: "POST",
       });
-      settingsState.channelsNotice = payload.restart_required
-        ? `${channel.name} 已中斷連線，重啟 opensprite gateway 後生效。`
-        : `${channel.name} 已中斷連線。`;
+      settingsState.channelsNotice = copy.value.notices.channelDisconnected(channel.name, payload.restart_required);
       await loadChannelSettings();
     } catch (error) {
-      settingsState.channelsError = error?.message || "無法中斷頻道連線。";
+      settingsState.channelsError = error?.message || copy.value.notices.channelDisconnectFailed;
     } finally {
       settingsState.channelsLoading = false;
     }
@@ -819,12 +917,12 @@ export function useChatClient() {
           base_url: settingsState.connectForm.baseUrl,
         }),
       });
-      settingsState.providersNotice = "已連線，請到模型頁選擇使用的模型。";
+      settingsState.providersNotice = copy.value.notices.providerConnected;
       cancelProviderConnect();
       await loadProviderSettings();
       await loadModelSettings();
     } catch (error) {
-      settingsState.providersError = error?.message || "Could not connect provider.";
+      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
     } finally {
       settingsState.providersLoading = false;
     }
@@ -838,13 +936,11 @@ export function useChatClient() {
       const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/disconnect`, {
         method: "POST",
       });
-      settingsState.providersNotice = payload.restart_required
-        ? `${provider.name} 已中斷連線，重啟 opensprite gateway 後生效。`
-        : `${provider.name} 已中斷連線。`;
+      settingsState.providersNotice = copy.value.notices.providerDisconnected(provider.name, payload.restart_required);
       await loadProviderSettings();
       await loadModelSettings();
     } catch (error) {
-      settingsState.providersError = error?.message || "Could not disconnect provider.";
+      settingsState.providersError = error?.message || copy.value.notices.providerDisconnectFailed;
     } finally {
       settingsState.providersLoading = false;
     }
@@ -853,7 +949,7 @@ export function useChatClient() {
   async function selectModel(providerId, model) {
     const normalizedModel = String(model || "").trim();
     if (!normalizedModel) {
-      settingsState.modelsError = "請先輸入模型名稱。";
+      settingsState.modelsError = copy.value.notices.modelRequired;
       return;
     }
 
@@ -866,13 +962,13 @@ export function useChatClient() {
         body: JSON.stringify({ provider_id: providerId, model: normalizedModel }),
       });
       settingsState.modelsNotice = payload.restart_required
-        ? "已儲存，重啟 opensprite gateway 後生效。"
-        : "已套用模型設定。";
+        ? copy.value.notices.modelRestartRequired
+        : copy.value.notices.modelApplied;
       settingsState.customModels[providerId] = "";
       await loadModelSettings();
       await loadProviderSettings();
     } catch (error) {
-      settingsState.modelsError = error?.message || "Could not select model.";
+      settingsState.modelsError = error?.message || copy.value.notices.modelSelectFailed;
     } finally {
       settingsState.modelsLoading = false;
     }
@@ -883,7 +979,7 @@ export function useChatClient() {
     try {
       payload = JSON.parse(rawData);
     } catch {
-      setNotice("The gateway sent a payload that could not be parsed.", "error");
+      setNotice(copy.value.notices.parseError, "error");
       return;
     }
 
@@ -892,7 +988,7 @@ export function useChatClient() {
       if (!state.activeExternalChatId) {
         state.activeExternalChatId = session.externalChatId;
       }
-      setNotice(`Live session ready: ${payload.session_id}`, "success");
+      setNotice(copy.value.notices.liveSessionReady(payload.session_id), "success");
       return;
     }
 
@@ -911,7 +1007,7 @@ export function useChatClient() {
     }
 
     if (payload.type === "error") {
-      setNotice(payload.error || "The gateway returned an error.", "error");
+      setNotice(payload.error || copy.value.notices.gatewayError, "error");
     }
   }
 
@@ -925,17 +1021,17 @@ export function useChatClient() {
     try {
       socketUrl = buildSocketUrl(state.wsUrl, session.externalChatId);
     } catch {
-      setNotice("The WebSocket URL is invalid. Check it in settings first.", "error");
+      setNotice(copy.value.notices.invalidWs, "error");
       openSettings("general");
       return;
     }
 
     if (activeSocket) {
-      disconnectSocket("Refreshing the connection...", "info");
+      disconnectSocket(copy.value.notices.refreshConnection, "info");
     }
 
     state.connectionState = "connecting";
-    setNotice(`Connecting to ${state.wsUrl}`, "info");
+    setNotice(copy.value.notices.connectingTo(state.wsUrl), "info");
 
     const socket = new WebSocket(socketUrl);
     activeSocket = socket;
@@ -945,7 +1041,7 @@ export function useChatClient() {
         return;
       }
       state.connectionState = "connected";
-      setNotice("Connected. Send a message to talk to your local gateway.", "success");
+      setNotice(copy.value.notices.connected, "success");
     });
 
     socket.addEventListener("message", (event) => {
@@ -959,7 +1055,7 @@ export function useChatClient() {
       if (activeSocket !== socket) {
         return;
       }
-      setNotice("The WebSocket connection failed. Make sure `opensprite gateway` is running.", "error");
+      setNotice(copy.value.notices.socketFailed, "error");
     });
 
     socket.addEventListener("close", () => {
@@ -970,7 +1066,7 @@ export function useChatClient() {
       activeSocket = null;
       state.connectionState = "disconnected";
       setNotice(
-        failedToConnect ? "Could not connect. Start the gateway, then try again." : "Disconnected from the gateway.",
+        failedToConnect ? copy.value.notices.couldNotConnect : copy.value.notices.disconnected,
         failedToConnect ? "error" : "warning",
       );
     });
@@ -999,12 +1095,15 @@ export function useChatClient() {
     state.sessions.unshift(session);
     state.activeExternalChatId = session.externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, session.externalChatId);
-    setNotice("Started a fresh local draft. Your next live message will use a new chat ID.", "info");
+    setNotice(copy.value.notices.newDraft, "info");
     scrollMessagesToBottom();
   }
 
   function saveConnectionSettings() {
-    state.wsUrl = settingsForm.wsUrl.trim() || DEFAULT_WS_URL;
+    const nextWsUrl = settingsForm.wsUrl.trim() || DEFAULT_WS_URL;
+    const shouldReconnect = state.wsUrl !== nextWsUrl && activeSocket && state.connectionState !== "disconnected";
+
+    state.wsUrl = nextWsUrl;
     state.displayName = settingsForm.displayName.trim() || "Local browser";
     saveRunPanelVisibilitySettings(settingsForm.showRunTimeline, settingsForm.showRunTrace);
 
@@ -1012,11 +1111,23 @@ export function useChatClient() {
     if (requestedExternalChatId) {
       ensureSession(requestedExternalChatId);
       state.activeExternalChatId = requestedExternalChatId;
+    } else {
+      const session = createSession();
+      state.sessions.unshift(session);
+      state.activeExternalChatId = session.externalChatId;
+      settingsForm.externalChatId = session.externalChatId;
     }
 
     writeStoredValue(STORAGE_KEYS.wsUrl, state.wsUrl);
     writeStoredValue(STORAGE_KEYS.displayName, state.displayName);
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
+    settingsForm.wsUrl = state.wsUrl;
+    settingsForm.displayName = state.displayName;
+    settingsForm.externalChatId = state.activeExternalChatId;
+
+    if (shouldReconnect) {
+      connectSocket();
+    }
   }
 
   function toggleSettingsConnection(shouldConnect) {
@@ -1025,7 +1136,7 @@ export function useChatClient() {
       connectSocket();
       return;
     }
-    disconnectSocket("Disconnected from the gateway.", "warning");
+    disconnectSocket(copy.value.notices.disconnected, "warning");
   }
 
   async function cancelRun(run) {
@@ -1040,9 +1151,9 @@ export function useChatClient() {
       if (!response.ok) {
         throw new Error(`Cancel request failed with HTTP ${response.status}`);
       }
-      setNotice(`Cancel requested for run ${run.runId}.`, "warning");
+      setNotice(copy.value.notices.cancelRequested(run.runId), "warning");
     } catch (error) {
-      setNotice(error?.message || "Could not request run cancellation.", "error");
+      setNotice(error?.message || copy.value.notices.cancelFailed, "error");
     } finally {
       run.cancelPending = false;
     }
@@ -1057,10 +1168,10 @@ export function useChatClient() {
 
     if (!activeSocket || activeSocket.readyState !== WebSocket.OPEN) {
       if (state.connectionState === "connecting") {
-        setNotice("Still connecting to the local gateway. Your message can be sent once the status turns connected.", "info");
+        setNotice(copy.value.notices.stillConnecting, "info");
         return;
       }
-      setNotice("The automatic connection is not active. Check the endpoint, then retry.", "warning");
+      setNotice(copy.value.notices.inactiveConnection, "warning");
       openSettings("general");
       return;
     }
@@ -1099,6 +1210,13 @@ export function useChatClient() {
   }
 
   function handleGlobalKeydown(event) {
+    const pressedSettingsShortcut = event.key === "," && (event.ctrlKey || event.metaKey);
+    if (pressedSettingsShortcut) {
+      event.preventDefault();
+      openSettings("general");
+      return;
+    }
+
     if (event.key === "Escape") {
       closeSettings();
       closeSidebar();
@@ -1106,6 +1224,8 @@ export function useChatClient() {
   }
 
   onMounted(() => {
+    addColorSchemeListener();
+    applyDocumentPreferences();
     document.addEventListener("keydown", handleGlobalKeydown);
     resizeComposer();
     scrollMessagesToBottom();
@@ -1113,6 +1233,7 @@ export function useChatClient() {
   });
 
   onBeforeUnmount(() => {
+    removeColorSchemeListener();
     document.removeEventListener("keydown", handleGlobalKeydown);
     document.body.classList.remove("settings-open", "sidebar-open");
     if (activeSocket && activeSocket.readyState !== WebSocket.CLOSED) {
@@ -1122,6 +1243,7 @@ export function useChatClient() {
   });
 
   return {
+    copy,
     prompts,
     state,
     messageText,
@@ -1147,10 +1269,12 @@ export function useChatClient() {
     setMessageStageRef,
     setMessageText,
     getSessionDisplayId,
+    getSessionTitle,
     setActiveSession,
     selectSettingsSection,
     openSettings,
     closeSettings,
+    saveConnectionSettings,
     loadProviderSettings,
     loadModelSettings,
     loadChannelSettings,

@@ -2,13 +2,13 @@
   <section class="run-timeline" :data-tone="summary.tone" :data-collapsed="!expanded" aria-live="polite">
     <div class="run-timeline__header">
       <div class="run-timeline__title">
-        <span class="run-timeline__eyebrow">Run {{ summary.shortId }}</span>
+        <span class="run-timeline__eyebrow">{{ copy.timeline.runPrefix }} {{ summary.shortId }}</span>
         <strong>{{ summary.title }}</strong>
       </div>
       <div class="run-timeline__actions">
         <span class="run-timeline__status">{{ summary.statusLabel }}</span>
         <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
-          {{ expanded ? "收起" : "展開" }}
+          {{ expanded ? copy.timeline.collapse : copy.timeline.expand }}
         </button>
       </div>
     </div>
@@ -39,6 +39,10 @@ import { formatEventTime } from "../composables/useChatClient";
 const expanded = ref(false);
 
 defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   summary: {
     type: Object,
     required: true,

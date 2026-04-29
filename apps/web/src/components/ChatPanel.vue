@@ -2,7 +2,7 @@
   <main class="chat-panel">
     <header class="topbar">
       <div class="topbar__title">
-        <strong>OpenSprite Chat</strong>
+        <strong>{{ copy.chat.title }}</strong>
         <span>{{ sessionMeta }}</span>
       </div>
 
@@ -33,23 +33,26 @@
       <div class="conversation-wrap">
         <EmptyState
           v-if="messages.length === 0"
+          :copy="copy"
           :prompts="prompts"
           @apply-prompt="$emit('apply-prompt', $event)"
         />
 
-        <MessageList :messages="messages" :display-name="displayName" />
+        <MessageList :copy="copy" :messages="messages" :display-name="displayName" />
 
         <RunTimeline
           v-if="showRunTimeline && runSummary"
+          :copy="copy"
           :summary="runSummary"
           :events="runTimeline"
         />
 
-        <RunTraceViewer v-if="showRunTrace && currentRun" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
+        <RunTraceViewer v-if="showRunTrace && currentRun" :copy="copy" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
       </div>
     </section>
 
     <ChatComposer
+      :copy="copy"
       :model-value="messageText"
       :set-input-ref="setMessageInputRef"
       :disabled="sendDisabled"
@@ -70,6 +73,10 @@ import RunTimeline from "./RunTimeline.vue";
 import RunTraceViewer from "./RunTraceViewer.vue";
 
 defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   prompts: {
     type: Array,
     required: true,

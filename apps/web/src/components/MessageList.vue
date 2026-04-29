@@ -6,7 +6,7 @@
       class="message"
       :class="`message--${message.role}`"
     >
-      <div class="message__avatar">{{ message.role === "user" ? "You" : "OS" }}</div>
+      <div class="message__avatar">{{ message.role === "user" ? copy.message.userAvatar : copy.message.assistantAvatar }}</div>
       <div class="message__content">
         <div class="message__meta">
           {{ message.meta || (message.role === "user" ? displayName : "OpenSprite") }}
@@ -19,6 +19,10 @@
 
 <script setup>
 defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   messages: {
     type: Array,
     required: true,

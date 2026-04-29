@@ -1,23 +1,23 @@
 <template>
   <form class="composer" @submit="$emit('submit', $event)">
-    <label class="sr-only" for="messageInput">Message</label>
+    <label class="sr-only" for="messageInput">{{ copy.composer.label }}</label>
     <div class="composer__box">
       <textarea
         id="messageInput"
         :ref="setInputRef"
         :value="modelValue"
         rows="1"
-        placeholder="Message OpenSprite"
+        :placeholder="copy.composer.placeholder"
         autocomplete="off"
         @input="handleInput"
         @keydown="$emit('keydown', $event)"
       ></textarea>
-      <button class="send-button" type="submit" aria-label="Send message" :disabled="disabled">
-        Send
+      <button class="send-button" type="submit" :aria-label="copy.composer.sendAria" :disabled="disabled">
+        {{ copy.composer.send }}
       </button>
     </div>
     <div class="composer__footer">
-      <span>OpenSprite can make mistakes. Check important work.</span>
+      <span>{{ copy.composer.disclaimer }}</span>
       <span>{{ runtimeHint }}</span>
     </div>
   </form>
@@ -25,6 +25,10 @@
 
 <script setup>
 defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   modelValue: {
     type: String,
     required: true,

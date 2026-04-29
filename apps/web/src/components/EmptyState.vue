@@ -1,8 +1,8 @@
 <template>
-  <section class="empty-state" aria-label="Start a chat">
+  <section class="empty-state" :aria-label="copy.empty.ariaLabel">
     <div class="empty-state__mark" aria-hidden="true">OS</div>
-    <h1>How can OpenSprite help?</h1>
-    <p>Start a local conversation. The page connects to your gateway automatically.</p>
+    <h1>{{ copy.empty.title }}</h1>
+    <p>{{ copy.empty.description }}</p>
     <div class="prompt-grid">
       <button
         v-for="prompt in prompts"
@@ -20,6 +20,10 @@
 
 <script setup>
 defineProps({
+  copy: {
+    type: Object,
+    required: true,
+  },
   prompts: {
     type: Array,
     required: true,
