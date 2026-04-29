@@ -31,7 +31,7 @@ from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
-from ..context.paths import get_chat_workspace, get_recent_summary_state_file
+from ..context.paths import get_session_workspace, get_recent_summary_state_file
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
@@ -973,12 +973,12 @@ class AgentLoop:
         """Resolve the current task-local workspace."""
         workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
         session_id = self._get_current_session_id() or "default"
-        return get_chat_workspace(session_id, workspace_root=workspace_root)
+        return get_session_workspace(session_id, workspace_root=workspace_root)
 
     def _get_workspace_for_session(self, session_id: str) -> Path:
         """Resolve the isolated workspace for a specific session id."""
         workspace_root = self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())
-        return get_chat_workspace(session_id, workspace_root=workspace_root)
+        return get_session_workspace(session_id, workspace_root=workspace_root)
 
     async def preview_run_file_change_revert(
         self,

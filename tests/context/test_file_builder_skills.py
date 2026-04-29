@@ -27,7 +27,7 @@ def test_file_builder_includes_personal_skill_summary_for_chat(tmp_path):
         default_skills_dir=global_dir,
     )
 
-    personal_dir = builder.get_chat_skills_dir("telegram:room-1")
+    personal_dir = builder.get_session_skills_dir("telegram:room-1")
     _write_skill(personal_dir, "planner", "personal planner", "Personal body")
     _write_skill(personal_dir, "chat-only", "chat only", "Chat body")
 

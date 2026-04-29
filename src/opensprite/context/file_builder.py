@@ -3,7 +3,7 @@ opensprite/context/file_builder.py - File-based ContextBuilder.
 
 Assembles the system prompt from:
 - bootstrap/*.md startup files
-- workspace/chats/{session}/USER.md durable per-session profile (beside skills/ and subagent_prompts/)
+- workspace/sessions/{session}/USER.md durable per-session profile (beside skills/ and subagent_prompts/)
 - global + per-session skill metadata summaries (full skill content loads on demand)
 - memory/<session>/MEMORY.md long-term memory
 """
@@ -17,10 +17,10 @@ from .paths import (
     get_active_task_file,
     get_app_home,
     get_bootstrap_dir,
-    get_chat_workspace,
-    get_chat_skills_dir,
     get_memory_dir,
     get_memory_file,
+    get_session_workspace,
+    get_session_skills_dir,
     get_skills_dir,
     get_tool_workspace,
     get_user_profile_file,
@@ -113,7 +113,7 @@ These MCP tools are already connected and available through normal tool calling.
 
     def _build_subagent_summary(self, session_id: str) -> str:
         """Describe the available delegate prompt types for the main agent."""
-        session_ws = self.get_chat_workspace(session_id)
+        session_ws = self.get_session_workspace(session_id)
         subagents = get_all_subagents(self.app_home, session_workspace=session_ws)
         if not subagents:
             return ""
@@ -164,25 +164,25 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         """Store the connected MCP tool summary for prompt generation."""
         self._runtime_mcp_tools = list(tools)
 
-    def get_chat_workspace(self, chat_id: str = "default") -> Path:
+    def get_session_workspace(self, session_id: str = "default") -> Path:
         """Resolve the current session's isolated workspace."""
-        return get_chat_workspace(chat_id, workspace_root=self.tool_workspace)
+        return get_session_workspace(session_id, workspace_root=self.tool_workspace)
 
-    def get_chat_skills_dir(self, chat_id: str = "default") -> Path:
+    def get_session_skills_dir(self, session_id: str = "default") -> Path:
         """Resolve the personal skills directory for the current session."""
-        return get_chat_skills_dir(chat_id, workspace_root=self.tool_workspace)
+        return get_session_skills_dir(session_id, workspace_root=self.tool_workspace)
 
-    def get_user_profile_path(self, chat_id: str = "default") -> Path:
+    def get_user_profile_path(self, session_id: str = "default") -> Path:
         """Resolve the USER.md path for the current user/session scope."""
-        return get_user_profile_file(self.app_home, chat_id=chat_id, workspace_root=self.tool_workspace)
+        return get_user_profile_file(self.app_home, session_id=session_id, workspace_root=self.tool_workspace)
 
-    def get_active_task_path(self, chat_id: str = "default") -> Path:
+    def get_active_task_path(self, session_id: str = "default") -> Path:
         """Resolve the ACTIVE_TASK.md path for the current session scope."""
-        return get_active_task_file(self.app_home, chat_id=chat_id, workspace_root=self.tool_workspace)
+        return get_active_task_file(self.app_home, session_id=session_id, workspace_root=self.tool_workspace)
 
-    def get_workspace_agents_path(self, chat_id: str = "default") -> Path:
+    def get_workspace_agents_path(self, session_id: str = "default") -> Path:
         """Resolve the current workspace's AGENTS.md instructions path."""
-        return self.get_chat_workspace(chat_id) / "AGENTS.md"
+        return self.get_session_workspace(session_id) / "AGENTS.md"
 
     def _read_user_profile(self, session_id: str) -> str:
         """Load the current user/session profile text, creating it from the template when needed."""
@@ -266,7 +266,7 @@ This request appears to be a workspace or project task. Use the active workspace
         # skill metadata in the main prompt, then load a full SKILL.md only when
         # the model decides a skill is relevant via read_skill.
         skills_summary = self.skills_loader.build_skills_summary(
-            personal_skills_dir=self.get_chat_skills_dir(session_id)
+            personal_skills_dir=self.get_session_skills_dir(session_id)
         )
         if skills_summary:
             parts.append(f"""# Available Skills
@@ -298,7 +298,7 @@ To use a skill, read its SKILL.md file using the read_skill tool.
         """Build the runtime session context block."""
         app_home_path = str(self.app_home.expanduser().resolve())
         bootstrap_path = str(self.bootstrap_dir.expanduser().resolve())
-        workspace_path = str(self.get_chat_workspace(session_id).expanduser().resolve())
+        workspace_path = str(self.get_session_workspace(session_id).expanduser().resolve())
         user_profile_path = str(self.get_user_profile_path(session_id).expanduser().resolve())
         active_task_path = str(self.get_active_task_path(session_id).expanduser().resolve())
         memory_path = str(get_memory_file(self.memory_dir, session_id).expanduser().resolve())

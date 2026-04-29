@@ -331,9 +331,9 @@ Main file snippet:
 
 ## Architecture · 架構摘要
 
-**English:** Agent-centric design with ports-and-adapters boundaries: **AgentLoop** orchestrates storage, context, execution, maintenance, and replies; **ExecutionEngine** runs the LLM/tool loop; **ToolResultPersistence** writes tool output back and optionally indexes; **tool_registration** wires default tools; **consolidation** maintains long-term memory under `~/.opensprite/memory/` and per-chat `USER.md` at `~/.opensprite/workspace/chats/<channel>/<chat_id>/USER.md`; **channels / llms / storage / search / media** isolate external systems.
+**English:** Agent-centric design with ports-and-adapters boundaries: **AgentLoop** orchestrates storage, context, execution, maintenance, and replies; **ExecutionEngine** runs the LLM/tool loop; **ToolResultPersistence** writes tool output back and optionally indexes; **tool_registration** wires default tools; **consolidation** maintains long-term memory under `~/.opensprite/memory/` and per-session `USER.md` at `~/.opensprite/workspace/sessions/<channel>/<external_chat_id>/USER.md`; **channels / llms / storage / search / media** isolate external systems.
 
-**中文：** 採用代理為核心、連接埠與適配器分層：**AgentLoop** 負責訊息儲存、組上下文、執行引擎、維護與回覆；**ExecutionEngine** 負責 LLM 與工具迴圈；**ToolResultPersistence** 將工具輸出寫回並可選索引；**tool_registration** 註冊預設工具；**consolidation** 維護 `~/.opensprite/memory/` 下的長期記憶，以及各對話工作區 `~/.opensprite/workspace/chats/<channel>/<chat_id>/USER.md`；**channels／llms／storage／search／media** 為對外適配層。
+**中文：** 採用代理為核心、連接埠與適配器分層：**AgentLoop** 負責訊息儲存、組上下文、執行引擎、維護與回覆；**ExecutionEngine** 負責 LLM 與工具迴圈；**ToolResultPersistence** 將工具輸出寫回並可選索引；**tool_registration** 註冊預設工具；**consolidation** 維護 `~/.opensprite/memory/` 下的長期記憶，以及各 session workspace 的 `~/.opensprite/workspace/sessions/<channel>/<external_chat_id>/USER.md`；**channels／llms／storage／search／media** 為對外適配層。
 
 ```text
 Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
@@ -378,9 +378,9 @@ Channel Adapter -> MessageQueue -> AgentLoop -> ExecutionEngine -> LLM / Tools
 
 ## Scheduling (cron) · 排程（Cron）
 
-**English:** Per-session jobs live under the session workspace, e.g. `~/.opensprite/workspace/chats/<channel>/<chat_id>/cron/jobs.json`. Supported kinds include `at` (one-shot ISO time), `every` (fixed interval in seconds), and `cron` (cron expression with optional timezone). When a job fires, the agent runs again with the stored message; if the job was created with `deliver=true`, the reply is sent back to the original channel. The **gateway must be running** (or a Linux user service installed) for jobs to execute. CLI: `opensprite cron list|add|remove|pause|enable --session telegram:<chat_id> ...`. In Telegram you can use `/cron`, `/cron help`, `/cron add every 300 "message"`, etc. (handled immediately by the queue layer, like `/stop`).
+**English:** Per-session jobs live under the session workspace, e.g. `~/.opensprite/workspace/sessions/<channel>/<external_chat_id>/cron/jobs.json`. Supported kinds include `at` (one-shot ISO time), `every` (fixed interval in seconds), and `cron` (cron expression with optional timezone). When a job fires, the agent runs again with the stored message; if the job was created with `deliver=true`, the reply is sent back to the original channel. The **gateway must be running** (or a Linux user service installed) for jobs to execute. CLI: `opensprite cron list|add|remove|pause|enable --session telegram:<external_chat_id> ...`. In Telegram you can use `/cron`, `/cron help`, `/cron add every 300 "message"`, etc. (handled immediately by the queue layer, like `/stop`).
 
-**中文：** 排程檔放在該工作階段的 workspace 內，例如 `~/.opensprite/workspace/chats/<channel>/<chat_id>/cron/jobs.json`。支援 `at`（單次 ISO 時間）、`every`（固定秒數間隔）、`cron`（cron 表達式，可帶時區）。觸發時以儲存訊息再跑一輪代理；若建立工作時 `deliver=true`，結果會送回原頻道。**閘道必須在執行中**（或 Linux 上已安裝 user service）排程才會跑。CLI：`opensprite cron list|add|remove|pause|enable --session telegram:<chat_id> ...`。Telegram 內可使用 `/cron`、`/cron help`、`/cron add every 300 "訊息"` 等（與 `/stop` 類似，由佇列層立即處理）。
+**中文：** 排程檔放在該工作階段的 workspace 內，例如 `~/.opensprite/workspace/sessions/<channel>/<external_chat_id>/cron/jobs.json`。支援 `at`（單次 ISO 時間）、`every`（固定秒數間隔）、`cron`（cron 表達式，可帶時區）。觸發時以儲存訊息再跑一輪代理；若建立工作時 `deliver=true`，結果會送回原頻道。**閘道必須在執行中**（或 Linux 上已安裝 user service）排程才會跑。CLI：`opensprite cron list|add|remove|pause|enable --session telegram:<external_chat_id> ...`。Telegram 內可使用 `/cron`、`/cron help`、`/cron add every 300 "訊息"` 等（與 `/stop` 類似，由佇列層立即處理）。
 
 ---
 

@@ -5,14 +5,14 @@ Path layout:
 - app home: ~/.opensprite
 - subagent prompts: ~/.opensprite/subagent_prompts/*.md (seeded from bundled templates on first sync)
 - bootstrap files: ~/.opensprite/bootstrap/*.md
-- per-session user profile: ~/.opensprite/workspace/chats/{channel}/{chat_id}/USER.md (alongside skills/ and subagent_prompts/)
-- memory: ~/.opensprite/memory/<chat>/MEMORY.md
-- recent summary: ~/.opensprite/memory/<chat>/RECENT_SUMMARY.md
+- per-session user profile: ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}/USER.md (alongside skills/ and subagent_prompts/)
+- memory: ~/.opensprite/memory/<session>/MEMORY.md
+- recent summary: ~/.opensprite/memory/<session>/RECENT_SUMMARY.md
 - bundled skills (read-only, synced from package): ~/.opensprite/skills/<skill_id>/SKILL.md
-- session workspace skills (mutable): ~/.opensprite/workspace/chats/{channel}/{chat_id}/skills/*/SKILL.md
-- session subagent overrides: ~/.opensprite/workspace/chats/{channel}/{chat_id}/subagent_prompts/*.md
+- session workspace skills (mutable): ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}/skills/*/SKILL.md
+- session subagent overrides: ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}/subagent_prompts/*.md
 - workspace root: ~/.opensprite/workspace
-- per-session workspaces: ~/.opensprite/workspace/chats/{channel}/{chat_id}
+- per-session workspaces: ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}
 """
 
 import hashlib
@@ -29,7 +29,7 @@ BOOTSTRAP_DIRNAME = "bootstrap"
 MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
 WORKSPACE_DIRNAME = "workspace"
-WORKSPACE_CHATS_DIRNAME = "chats"
+WORKSPACE_SESSIONS_DIRNAME = "sessions"
 LEGACY_USER_PROFILES_DIRNAME = "users"
 SUBAGENT_PROMPTS_DIRNAME = "subagent_prompts"
 USER_PROFILE_STATE_FILENAME = ".user_profile_state.json"
@@ -60,51 +60,51 @@ def get_bootstrap_dir(app_home: str | Path | None = None) -> Path:
 def get_user_profile_file(
     app_home: str | Path | None = None,
     *,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     workspace_root: str | Path | None = None,
 ) -> Path:
     """Get the per-session USER.md profile file path."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / "USER.md"
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / "USER.md"
 
 
 def get_user_profile_state_file(
     app_home: str | Path | None = None,
     *,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     workspace_root: str | Path | None = None,
 ) -> Path:
     """Get the persisted state file for per-session USER.md auto-update."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / USER_PROFILE_STATE_FILENAME
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / USER_PROFILE_STATE_FILENAME
 
 
 def get_active_task_file(
     app_home: str | Path | None = None,
     *,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     workspace_root: str | Path | None = None,
 ) -> Path:
     """Get the ACTIVE_TASK.md file path for one session."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / "ACTIVE_TASK.md"
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / "ACTIVE_TASK.md"
 
 
 def get_active_task_state_file(
     app_home: str | Path | None = None,
     *,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     workspace_root: str | Path | None = None,
 ) -> Path:
     """Get the persisted state file for ACTIVE_TASK.md auto-update."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_STATE_FILENAME
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_STATE_FILENAME
 
 
 def get_active_task_event_log_file(
     app_home: str | Path | None = None,
     *,
-    chat_id: str | None = None,
+    session_id: str | None = None,
     workspace_root: str | Path | None = None,
 ) -> Path:
     """Get the append-only ACTIVE_TASK event log for one session."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_EVENT_LOG_FILENAME
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / ACTIVE_TASK_EVENT_LOG_FILENAME
 
 
 def get_memory_dir(app_home: str | Path | None = None) -> Path:
@@ -162,8 +162,8 @@ def split_session_id(session_id: str | None) -> tuple[str, str]:
     """Split a session id into channel and raw external chat id."""
     value = (session_id or "default").strip() or "default"
     if ":" in value:
-        channel, chat_id = value.split(":", 1)
-        return channel.strip() or "default", chat_id.strip() or "default"
+        channel, external_chat_id = value.split(":", 1)
+        return channel.strip() or "default", external_chat_id.strip() or "default"
     return "default", value
 
 
@@ -182,49 +182,49 @@ def _sanitize_path_segment(value: str, default: str = "default", max_length: int
     return slug or default
 
 
-def get_chat_workspace(
-    chat_id: str | None,
+def get_session_workspace(
+    session_id: str | None,
     *,
     workspace_root: str | Path | None = None,
     app_home: str | Path | None = None,
 ) -> Path:
     """Get the isolated workspace directory for a session."""
     root = ensure_dir(Path(workspace_root).expanduser()) if workspace_root is not None else get_tool_workspace(app_home)
-    channel, raw_chat_id = split_session_id(chat_id)
+    channel, external_chat_id = split_session_id(session_id)
     safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
-    safe_chat_id = _sanitize_path_segment(raw_chat_id, default="default")
-    return ensure_dir(root / WORKSPACE_CHATS_DIRNAME / safe_channel / safe_chat_id)
+    safe_external_chat_id = _sanitize_path_segment(external_chat_id, default="default")
+    return ensure_dir(root / WORKSPACE_SESSIONS_DIRNAME / safe_channel / safe_external_chat_id)
 
 
-def get_chat_skills_dir(
-    chat_id: str | None,
+def get_session_skills_dir(
+    session_id: str | None,
     *,
     workspace_root: str | Path | None = None,
     app_home: str | Path | None = None,
 ) -> Path:
     """Get the personal/per-session skills directory for a session."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / SKILLS_DIRNAME
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / SKILLS_DIRNAME
 
 
-def get_chat_subagent_prompts_dir(
-    chat_id: str | None,
+def get_session_subagent_prompts_dir(
+    session_id: str | None,
     *,
     workspace_root: str | Path | None = None,
     app_home: str | Path | None = None,
 ) -> Path:
-    """Per-chat subagent prompt overrides under the session workspace (mirrors app-home layout)."""
-    return get_chat_workspace(chat_id, workspace_root=workspace_root, app_home=app_home) / SUBAGENT_PROMPTS_DIRNAME
+    """Per-session subagent prompt overrides under the session workspace (mirrors app-home layout)."""
+    return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / SUBAGENT_PROMPTS_DIRNAME
 
 
-def get_memory_file(memory_dir: str | Path, chat_id: str = "default") -> Path:
-    """Get the memory file path for a chat without creating it."""
-    safe_chat_id = _sanitize_path_segment(chat_id, default="default", max_length=72)
-    return Path(memory_dir).expanduser() / safe_chat_id / "MEMORY.md"
+def get_memory_file(memory_dir: str | Path, session_id: str = "default") -> Path:
+    """Get the memory file path for a session without creating it."""
+    safe_session_id = _sanitize_path_segment(session_id, default="default", max_length=72)
+    return Path(memory_dir).expanduser() / safe_session_id / "MEMORY.md"
 
 
-def get_recent_summary_file(memory_dir: str | Path, chat_id: str = "default") -> Path:
-    """Get the recent summary file path for a chat without creating it."""
-    return get_memory_file(memory_dir, chat_id).with_name("RECENT_SUMMARY.md")
+def get_recent_summary_file(memory_dir: str | Path, session_id: str = "default") -> Path:
+    """Get the recent summary file path for a session without creating it."""
+    return get_memory_file(memory_dir, session_id).with_name("RECENT_SUMMARY.md")
 
 
 def get_recent_summary_state_file(memory_dir: str | Path) -> Path:
@@ -292,7 +292,7 @@ def migrate_legacy_bootstrap(app_home: str | Path | None = None, silent: bool = 
 
 
 def migrate_legacy_memory(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
-    """Copy legacy memory files into ~/.opensprite/memory/{chat_id}/MEMORY.md."""
+    """Copy legacy memory files into ~/.opensprite/memory/{session_id}/MEMORY.md."""
     home = get_app_home(app_home)
     memory_dir = get_memory_dir(home)
     workspace_memory_dir = get_tool_workspace(home) / MEMORY_DIRNAME
@@ -321,11 +321,11 @@ def migrate_legacy_memory(app_home: str | Path | None = None, silent: bool = Fal
 
 
 def migrate_legacy_user_profiles(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
-    """Copy legacy ~/.opensprite/users/... profiles into workspace/chats/... (same relative paths)."""
+    """Copy legacy ~/.opensprite/users/... profiles into workspace/sessions/... (same relative paths)."""
     home = get_app_home(app_home)
     legacy_root = home / LEGACY_USER_PROFILES_DIRNAME
     workspace_root = get_tool_workspace(home)
-    dest_root = workspace_root / WORKSPACE_CHATS_DIRNAME
+    dest_root = workspace_root / WORKSPACE_SESSIONS_DIRNAME
     migrated: list[str] = []
 
     if not legacy_root.is_dir():
@@ -427,13 +427,13 @@ def load_bootstrap_files(bootstrap_dir: str | Path) -> dict[str, str]:
     return result
 
 
-def load_memory(memory_dir: str | Path, chat_id: str = "default") -> str:
-    """Load long-term memory for a chat."""
-    target = get_memory_file(memory_dir, chat_id)
+def load_memory(memory_dir: str | Path, session_id: str = "default") -> str:
+    """Load long-term memory for a session."""
+    target = get_memory_file(memory_dir, session_id)
     if target.exists():
         return target.read_text(encoding="utf-8")
 
-    if chat_id == "default":
+    if session_id == "default":
         legacy_default = Path(memory_dir).expanduser() / "MEMORY.md"
         if legacy_default.exists():
             return legacy_default.read_text(encoding="utf-8")
@@ -441,8 +441,8 @@ def load_memory(memory_dir: str | Path, chat_id: str = "default") -> str:
     return ""
 
 
-def save_memory(memory_dir: str | Path, content: str, chat_id: str = "default") -> None:
-    """Save long-term memory for a chat."""
-    memory_path = get_memory_file(memory_dir, chat_id)
+def save_memory(memory_dir: str | Path, content: str, session_id: str = "default") -> None:
+    """Save long-term memory for a session."""
+    memory_path = get_memory_file(memory_dir, session_id)
     memory_path.parent.mkdir(parents=True, exist_ok=True)
     memory_path.write_text(content, encoding="utf-8")

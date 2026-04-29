@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from ..context.paths import get_chat_workspace
+from ..context.paths import get_session_workspace
 from ..utils.log import logger
 
 
@@ -90,7 +90,7 @@ class AgentMediaService:
         if not media_items:
             return []
 
-        workspace = get_chat_workspace(
+        workspace = get_session_workspace(
             session_id,
             workspace_root=self._workspace_root_getter(),
             app_home=self._app_home_getter(),

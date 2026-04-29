@@ -582,9 +582,9 @@ def test_agent_process_persists_media_only_message_without_llm(tmp_path):
     image_files = user_metadata["image_files"]
     audio_files = user_metadata["audio_files"]
     video_files = user_metadata["video_files"]
-    saved_image = workspace_root / "chats" / "telegram" / "room-1" / image_files[0]
-    saved_audio = workspace_root / "chats" / "telegram" / "room-1" / audio_files[0]
-    saved_video = workspace_root / "chats" / "telegram" / "room-1" / video_files[0]
+    saved_image = workspace_root / "sessions" / "telegram" / "room-1" / image_files[0]
+    saved_audio = workspace_root / "sessions" / "telegram" / "room-1" / audio_files[0]
+    saved_video = workspace_root / "sessions" / "telegram" / "room-1" / video_files[0]
 
     assert response.text == "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
     assert user_metadata["images_dir"] == "images"

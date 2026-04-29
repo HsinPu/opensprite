@@ -4,7 +4,7 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
-from opensprite.context.paths import get_chat_workspace
+from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
@@ -189,7 +189,7 @@ def test_code_reviewer_subagent_is_read_only(tmp_path):
 
 def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
     workspace = tmp_path / "workspace"
-    session_workspace = get_chat_workspace("telegram:user-a", workspace_root=workspace)
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
     prompt_dir = session_workspace / "subagent_prompts"
     prompt_dir.mkdir(parents=True)
     (prompt_dir / "custom-implementer.md").write_text(
@@ -236,8 +236,8 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
 
 def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):
     workspace = tmp_path / "workspace"
-    chat_workspace = get_chat_workspace("telegram:user-a", workspace_root=workspace)
-    prompt_dir = chat_workspace / "subagent_prompts"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
     prompt_dir.mkdir(parents=True)
     (prompt_dir / "custom-agent.md").write_text(
         "---\n"
@@ -280,8 +280,8 @@ def test_custom_subagent_without_tool_profile_defaults_read_only(tmp_path):
 
 def test_invalid_subagent_tool_profile_blocks_delegation(tmp_path):
     workspace = tmp_path / "workspace"
-    chat_workspace = get_chat_workspace("telegram:user-a", workspace_root=workspace)
-    prompt_dir = chat_workspace / "subagent_prompts"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
     prompt_dir.mkdir(parents=True)
     (prompt_dir / "bad-agent.md").write_text(
         "---\n"

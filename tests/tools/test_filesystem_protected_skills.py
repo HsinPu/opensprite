@@ -33,7 +33,7 @@ def test_write_file_allows_skills_memory_in_session_workspace(tmp_path, monkeypa
     monkeypatch.setattr("opensprite.context.paths.get_skills_dir", lambda app_home=None: app_skills)
     app_skills.mkdir(parents=True)
 
-    session = tmp_path / "chat_ws"
+    session = tmp_path / "session_ws"
     tool = WriteFileTool(workspace=session)
     out = asyncio.run(
         tool.execute(path="skills/memory/SKILL.md", content="---\nname: memory\n---\n\nbody\n")

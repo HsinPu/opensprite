@@ -12,7 +12,7 @@ import time
 import typer
 
 from .. import __version__
-from ..context.paths import get_chat_workspace, get_tool_workspace
+from ..context.paths import get_session_workspace, get_tool_workspace
 from ..cron import CronSchedule, CronService
 from ..cron.presentation import format_cron_timestamp, format_cron_timing, render_cron_jobs
 from ..runtime import gateway as run_gateway
@@ -1263,7 +1263,7 @@ async def _seed_demo_search_data(loaded, search_store, *, session_id: str, reset
 
 def _get_cron_service(session: str) -> CronService:
     """Open the cron service store for a session without starting a timer loop."""
-    workspace = get_chat_workspace(session, workspace_root=_resolve_workspace_root())
+    workspace = get_session_workspace(session, workspace_root=_resolve_workspace_root())
     return CronService(workspace / "cron" / "jobs.json", session_id=session)
 
 

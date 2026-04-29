@@ -22,8 +22,8 @@ _VALID_BODY = (
 
 def test_configure_skill_lists_skills(tmp_path):
     skills_root = tmp_path / "home_skills"
-    chat_ws = tmp_path / "chat_session"
-    user_dir = chat_ws / "skills"
+    session_ws = tmp_path / "session_workspace"
+    user_dir = session_ws / "skills"
     (user_dir / "alpha").mkdir(parents=True)
     (user_dir / "alpha" / "SKILL.md").write_text(
         "---\nname: alpha\ndescription: First skill\n---\n\n# Alpha\n",
@@ -33,7 +33,7 @@ def test_configure_skill_lists_skills(tmp_path):
     loader = SkillsLoader(default_skills_dir=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
-        workspace_resolver=lambda: chat_ws,
+        workspace_resolver=lambda: session_ws,
     )
 
     result = asyncio.run(tool.execute(action="list"))
@@ -80,7 +80,7 @@ def test_configure_skill_add_upsert_and_get(tmp_path):
             description=_VALID_DESCRIPTION,
             body=(
                 "# Instructions\n\n"
-                "Replaced body: follow conventions and verify results after each step in this chat.\n"
+                "Replaced body: follow conventions and verify results after each step in this session.\n"
             ),
         )
     )
@@ -98,8 +98,8 @@ def test_configure_skill_add_upsert_and_get(tmp_path):
 
 def test_configure_skill_remove(tmp_path):
     skills_root = tmp_path / "home_skills"
-    chat_ws = tmp_path / "chat_session"
-    skill_dir = chat_ws / "skills" / "gone"
+    session_ws = tmp_path / "session_workspace"
+    skill_dir = session_ws / "skills" / "gone"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
         "---\nname: gone\ndescription: x\n---\n\n# Gone\n",
@@ -109,7 +109,7 @@ def test_configure_skill_remove(tmp_path):
     loader = SkillsLoader(default_skills_dir=skills_root)
     tool = ConfigureSkillTool(
         skills_loader=loader,
-        workspace_resolver=lambda: chat_ws,
+        workspace_resolver=lambda: session_ws,
     )
 
     result = asyncio.run(tool.execute(action="remove", skill_name="gone"))
@@ -207,14 +207,14 @@ def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
 def test_configure_skill_can_shadow_system_skill_id(tmp_path):
     """Session workspace skills may shadow a bundled system skill id."""
     skills_root = tmp_path / "home_skills"
-    chat_ws = tmp_path / "chat_session"
+    session_ws = tmp_path / "session_workspace"
     (skills_root / "memory").mkdir(parents=True)
     (skills_root / "memory" / "SKILL.md").write_text(
         "---\nname: memory\ndescription: system memory skill\n---\n\n# System\n",
         encoding="utf-8",
     )
     loader = SkillsLoader(default_skills_dir=skills_root)
-    tool = ConfigureSkillTool(skills_loader=loader, workspace_resolver=lambda: chat_ws)
+    tool = ConfigureSkillTool(skills_loader=loader, workspace_resolver=lambda: session_ws)
     out = asyncio.run(
         tool.execute(
             action="upsert",
@@ -224,7 +224,7 @@ def test_configure_skill_can_shadow_system_skill_id(tmp_path):
         )
     )
     assert "memory" in out and "Error" not in out
-    user_skill = chat_ws / "skills" / "memory" / "SKILL.md"
+    user_skill = session_ws / "skills" / "memory" / "SKILL.md"
     assert user_skill.is_file()
     assert "System" not in user_skill.read_text(encoding="utf-8")
 

@@ -167,8 +167,8 @@ def create_user_profile_store(
 ) -> UserProfileStore:
     """Create the per-session USER.md store for the given user/session scope."""
     return UserProfileStore(
-        user_profile_file=get_user_profile_file(app_home, chat_id=session_id, workspace_root=workspace_root),
-        state_file=get_user_profile_state_file(app_home, chat_id=session_id, workspace_root=workspace_root),
+        user_profile_file=get_user_profile_file(app_home, session_id=session_id, workspace_root=workspace_root),
+        state_file=get_user_profile_state_file(app_home, session_id=session_id, workspace_root=workspace_root),
         bootstrap_text=load_user_profile_bootstrap_text(app_home, bootstrap_dir=bootstrap_dir),
     )
 

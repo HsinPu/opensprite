@@ -22,7 +22,7 @@ def _write_skill(root: Path, name: str, description: str, body: str) -> None:
 
 def test_skills_loader_session_skills_override_system(tmp_path):
     skills_root = tmp_path / "sr"
-    session_skills = tmp_path / "chat_ws" / "skills"
+    session_skills = tmp_path / "session_ws" / "skills"
     (skills_root / "shared").mkdir(parents=True)
     (skills_root / "shared" / "SKILL.md").write_text(
         "---\nname: shared\ndescription: from system\n---\n\nsystem body\n",
@@ -42,7 +42,7 @@ def test_skills_loader_session_skills_override_system(tmp_path):
 
 def test_skills_loader_uses_personal_over_system(tmp_path):
     skills_root = tmp_path / "home_skills"
-    personal_skills = tmp_path / "chat_ws" / "skills"
+    personal_skills = tmp_path / "session_ws" / "skills"
 
     _write_skill(skills_root, "planner", "system planner", "System body")
     _write_skill(skills_root, "system-only", "system only", "System only body")

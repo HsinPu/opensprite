@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from ..context.paths import get_chat_workspace
+from ..context.paths import get_session_workspace
 from .service import CronService
 from .types import CronJob
 
@@ -26,7 +26,7 @@ class CronManager:
         self._lock = asyncio.Lock()
 
     def _jobs_path(self, session_id: str) -> Path:
-        return get_chat_workspace(session_id, workspace_root=self.workspace_root) / "cron" / "jobs.json"
+        return get_session_workspace(session_id, workspace_root=self.workspace_root) / "cron" / "jobs.json"
 
     async def _build_service(self, session_id: str) -> CronService:
         async def on_job(job: CronJob) -> str | None:

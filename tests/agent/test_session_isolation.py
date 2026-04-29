@@ -4,7 +4,7 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.bus.message import UserMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.file_builder import FileContextBuilder
-from opensprite.context.paths import get_chat_workspace
+from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse
 from opensprite.storage.sqlite import SQLiteStorage
 from opensprite.tools.base import Tool
@@ -94,8 +94,8 @@ def test_agent_process_keeps_workspace_and_sqlite_history_isolated_per_session(t
             "messages_a": messages_a,
             "messages_b": messages_b,
             "all_sessions": all_sessions,
-            "workspace_a": get_chat_workspace("telegram:user-a", workspace_root=workspace_root),
-            "workspace_b": get_chat_workspace("telegram:user-b", workspace_root=workspace_root),
+            "workspace_a": get_session_workspace("telegram:user-a", workspace_root=workspace_root),
+            "workspace_b": get_session_workspace("telegram:user-b", workspace_root=workspace_root),
             "response_a": response_a,
             "response_b": response_b,
         }

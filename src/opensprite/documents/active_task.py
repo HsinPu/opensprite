@@ -1005,7 +1005,7 @@ def create_active_task_store(
 ) -> ActiveTaskStore:
     """Create the per-session ACTIVE_TASK.md store for the given session scope."""
     return ActiveTaskStore(
-        active_task_file=get_active_task_file(app_home, chat_id=session_id, workspace_root=workspace_root),
-        state_file=get_active_task_state_file(app_home, chat_id=session_id, workspace_root=workspace_root),
-        event_log_file=get_active_task_event_log_file(app_home, chat_id=session_id, workspace_root=workspace_root),
+        active_task_file=get_active_task_file(app_home, session_id=session_id, workspace_root=workspace_root),
+        state_file=get_active_task_state_file(app_home, session_id=session_id, workspace_root=workspace_root),
+        event_log_file=get_active_task_event_log_file(app_home, session_id=session_id, workspace_root=workspace_root),
     )
