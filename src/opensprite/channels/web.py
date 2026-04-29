@@ -633,7 +633,7 @@ class WebAdapter(MessageAdapter):
         accepted = await agent.request_run_cancel(
             session_id,
             run_id,
-            channel="web",
+            channel=self.channel_instance_id,
             external_chat_id=self._external_chat_id_from_session(session_id),
         )
         if not accepted:

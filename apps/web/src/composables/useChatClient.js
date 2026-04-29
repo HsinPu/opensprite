@@ -554,7 +554,11 @@ export function useChatClient() {
     if (!session) {
       return copy.value.session.noActiveChat;
     }
-    return session.sessionId || `web:${session.externalChatId}`;
+    return session.sessionId || session.externalChatId;
+  }
+
+  function getSessionApiId(session) {
+    return session?.sessionId || "";
   }
 
   function getSessionTitle(session) {
@@ -1173,10 +1177,15 @@ export function useChatClient() {
     if (!session || !run?.runId || run.status !== "running") {
       return;
     }
+    const sessionId = getSessionApiId(session);
+    if (!sessionId) {
+      setNotice(copy.value.notices.sessionNotReady, "warning");
+      return;
+    }
 
     run.cancelPending = true;
     try {
-      const response = await fetch(buildRunCancelUrl(state.wsUrl, run.runId, getSessionDisplayId(session)), { method: "POST" });
+      const response = await fetch(buildRunCancelUrl(state.wsUrl, run.runId, sessionId), { method: "POST" });
       if (!response.ok) {
         throw new Error(`Cancel request failed with HTTP ${response.status}`);
       }
@@ -1214,6 +1223,7 @@ export function useChatClient() {
     activeSocket.send(
       JSON.stringify({
         external_chat_id: session.externalChatId,
+        ...(session.sessionId ? { session_id: session.sessionId } : {}),
         sender_name: state.displayName,
         text,
       }),

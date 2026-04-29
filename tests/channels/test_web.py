@@ -442,8 +442,8 @@ def test_web_adapter_exposes_run_events_api():
 
 async def _run_web_run_cancel_api():
     storage = MemoryStorage()
-    await storage.create_run("web:browser-1", "run-1", status="running", created_at=100.0)
-    await storage.create_run("web:browser-1", "run-2", status="completed", created_at=101.0)
+    await storage.create_run("web_custom:browser-1", "run-1", status="running", created_at=100.0)
+    await storage.create_run("web_custom:browser-1", "run-2", status="completed", created_at=101.0)
     cancel_calls = []
 
     class CancelAgent(EchoAgent):
@@ -471,6 +471,7 @@ async def _run_web_run_cancel_api():
             "port": 0,
             "path": "/ws",
             "health_path": "/healthz",
+            "id": "web_custom",
             "frontend_auto_build": False,
         },
     )
@@ -484,29 +485,29 @@ async def _run_web_run_cancel_api():
         async with ClientSession() as session:
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/run-1/cancel",
-                params={"session_id": "web:browser-1"},
+                params={"session_id": "web_custom:browser-1"},
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
 
             assert payload == {
                 "ok": True,
-                "session_id": "web:browser-1",
+                "session_id": "web_custom:browser-1",
                 "run_id": "run-1",
                 "status": "cancelling",
             }
-            assert cancel_calls[0] == ("web:browser-1", "run-1", "web", "browser-1")
-            assert cancelled_sessions == [("web:browser-1", None)]
+            assert cancel_calls[0] == ("web_custom:browser-1", "run-1", "web_custom", "browser-1")
+            assert cancelled_sessions == [("web_custom:browser-1", None)]
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/run-2/cancel",
-                params={"session_id": "web:browser-1"},
+                params={"session_id": "web_custom:browser-1"},
             ) as resp:
                 assert resp.status == 409
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/runs/missing-run/cancel",
-                params={"session_id": "web:browser-1"},
+                params={"session_id": "web_custom:browser-1"},
             ) as resp:
                 assert resp.status == 404
     finally:
