@@ -26,7 +26,7 @@ def test_build_skill_review_user_content_wraps_transcript():
     assert "Nothing to save" in body
 
 
-def test_skill_review_scheduler_coalesces_same_chat_into_rerun(tmp_path):
+def test_skill_review_scheduler_coalesces_same_session_into_rerun(tmp_path):
     async def scenario():
         agent = make_agent_loop(tmp_path)
         agent._skill_review_tool_registry = lambda: object()
@@ -35,8 +35,8 @@ def test_skill_review_scheduler_coalesces_same_chat_into_rerun(tmp_path):
         started = asyncio.Event()
         calls: list[str] = []
 
-        async def fake_run(chat_id: str) -> None:
-            calls.append(chat_id)
+        async def fake_run(session_id: str) -> None:
+            calls.append(session_id)
             started.set()
             if len(calls) == 1:
                 await release.wait()
@@ -57,7 +57,7 @@ def test_skill_review_scheduler_coalesces_same_chat_into_rerun(tmp_path):
     assert calls == ["chat-a", "chat-a"]
 
 
-def test_skill_review_scheduler_keeps_different_chats_separate(tmp_path):
+def test_skill_review_scheduler_keeps_different_sessions_separate(tmp_path):
     async def scenario():
         agent = make_agent_loop(tmp_path)
         agent._skill_review_tool_registry = lambda: object()
@@ -66,9 +66,9 @@ def test_skill_review_scheduler_keeps_different_chats_separate(tmp_path):
         started = set()
         calls: list[str] = []
 
-        async def fake_run(chat_id: str) -> None:
-            calls.append(chat_id)
-            started.add(chat_id)
+        async def fake_run(session_id: str) -> None:
+            calls.append(session_id)
+            started.add(session_id)
             if len(started) < 2:
                 await asyncio.sleep(0)
             await release.wait()

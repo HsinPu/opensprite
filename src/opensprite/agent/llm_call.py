@@ -209,7 +209,7 @@ class LlmCallService:
         )
         execute_kwargs = {
             "allow_tools": allow_tools,
-            "tool_result_chat_id": session_id if allow_tools else None,
+            "tool_result_session_id": session_id if allow_tools else None,
             "tool_registry": selected_tool_registry,
             "on_tool_before_execute": on_tool_before_execute,
             "on_llm_status": on_llm_status,

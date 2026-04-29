@@ -107,7 +107,7 @@ def test_execution_engine_runs_tool_loop_and_persists_tool_result():
     messages = [ChatMessage(role="user", content="hi")]
 
     result = asyncio.run(
-        engine.execute_messages("chat-1", messages, allow_tools=True, tool_result_chat_id="chat-1")
+        engine.execute_messages("chat-1", messages, allow_tools=True, tool_result_session_id="chat-1")
     )
 
     assert result.content == "done"
@@ -146,7 +146,7 @@ def test_execution_engine_calls_on_tool_before_execute_before_tool_run():
             "chat-1",
             messages,
             allow_tools=True,
-            tool_result_chat_id="chat-1",
+            tool_result_session_id="chat-1",
             on_tool_before_execute=before,
         )
     )
@@ -398,7 +398,7 @@ def test_execution_engine_slims_tool_result_for_context_but_persists_full_result
     messages = [ChatMessage(role="user", content="hi")]
 
     result = asyncio.run(
-        engine.execute_messages("chat-1", messages, allow_tools=True, tool_result_chat_id="chat-1")
+        engine.execute_messages("chat-1", messages, allow_tools=True, tool_result_session_id="chat-1")
     )
 
     assert result.content == "done"
@@ -504,7 +504,7 @@ def test_execution_refreshes_system_and_tools_after_configure_skill_success():
             "chat-1",
             messages,
             allow_tools=True,
-            tool_result_chat_id="chat-1",
+            tool_result_session_id="chat-1",
             refresh_system_prompt=refresh_system,
         )
     )
@@ -842,7 +842,7 @@ def test_execution_context_compaction_does_not_consume_tool_iteration():
             "chat-1",
             [ChatMessage(role="user", content="hi")],
             allow_tools=True,
-            tool_result_chat_id="chat-1",
+            tool_result_session_id="chat-1",
         )
     )
 

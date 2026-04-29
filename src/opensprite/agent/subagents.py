@@ -166,7 +166,7 @@ class SubagentRunService:
             log_id,
             chat_messages,
             allow_tools=bool(subagent_tools.tool_names),
-            tool_result_chat_id=child_session_id,
+            tool_result_session_id=child_session_id,
             tool_registry=subagent_tools,
         )
         await self._save_message(

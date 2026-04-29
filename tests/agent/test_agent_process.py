@@ -1770,7 +1770,7 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
         chat_messages,
         *,
         allow_tools,
-        tool_result_chat_id=None,
+        tool_result_session_id=None,
         tool_registry=None,
         on_tool_before_execute=None,
         on_tool_after_execute=None,

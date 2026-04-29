@@ -29,7 +29,7 @@ def format_stored_messages_for_transcript(
     per_message_max_chars: int = 6000,
     transcript_max_chars: int = 100_000,
 ) -> str:
-    """Turn stored chat rows into a plain-text transcript for the review model."""
+    """Turn stored session rows into a plain-text transcript for the review model."""
     lines: list[str] = []
     total = 0
     for m in messages:
@@ -53,7 +53,7 @@ def format_stored_messages_for_transcript(
 def build_skill_review_user_content(transcript: str) -> str:
     """User turn for the review-only LLM run."""
     return (
-        "Below is a plain-text transcript of recent messages in this chat (including tools when logged).\n\n"
+        "Below is a plain-text transcript of recent messages in this session (including tools when logged).\n\n"
         f"--- TRANSCRIPT ---\n{transcript}\n--- END TRANSCRIPT ---\n\n"
         "Review the transcript. If a reusable how-to should be saved or updated as a skill, use the tools. "
         "Otherwise reply with exactly: Nothing to save."
@@ -89,12 +89,12 @@ class SkillReviewService:
         excluded = available - allowed
         return self.tools.filtered(exclude_names=excluded)
 
-    async def run(self, chat_id: str, *, tool_registry: ToolRegistry) -> None:
-        """Execute one review pass for a chat using the restricted skill tool registry."""
-        stored = await self.storage.get_messages(chat_id, limit=self._transcript_message_limit_getter())
+    async def run(self, session_id: str, *, tool_registry: ToolRegistry) -> None:
+        """Execute one review pass for a session using the restricted skill tool registry."""
+        stored = await self.storage.get_messages(session_id, limit=self._transcript_message_limit_getter())
         transcript = format_stored_messages_for_transcript(stored)
         if len(transcript) < 80:
-            logger.info("[%s] skill.review.skip | reason=transcript-too-short", chat_id)
+            logger.info("[%s] skill.review.skip | reason=transcript-too-short", session_id)
             return
 
         user_content = build_skill_review_user_content(transcript)
@@ -103,13 +103,13 @@ class SkillReviewService:
             ChatMessage(role="user", content=user_content),
         ]
         await self._execute_messages(
-            f"{chat_id}:skill-review",
+            f"{session_id}:skill-review",
             chat_messages,
             allow_tools=True,
-            tool_result_chat_id=None,
+            tool_result_session_id=None,
             tool_registry=tool_registry,
             on_tool_before_execute=None,
-            refresh_system_prompt=lambda: self._build_system_prompt(chat_id),
+            refresh_system_prompt=lambda: self._build_system_prompt(session_id),
             max_tool_iterations=self._max_tool_iterations_getter(),
         )
-        logger.info("[%s] skill.review.done", chat_id)
+        logger.info("[%s] skill.review.done", session_id)

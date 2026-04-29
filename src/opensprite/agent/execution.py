@@ -93,17 +93,17 @@ class ToolResultPersistence:
     async def persist(
         self,
         *,
-        chat_id: str | None,
+        session_id: str | None,
         tool_name: str,
         tool_args: dict[str, Any],
         result: str,
     ) -> None:
-        """Persist a single tool result when a target chat is available."""
-        if chat_id is None:
+        """Persist a single tool result when a target session is available."""
+        if session_id is None:
             return
 
         await self.save_message(
-            chat_id,
+            session_id,
             "tool",
             result,
             tool_name,
@@ -111,9 +111,9 @@ class ToolResultPersistence:
         )
         if self.search_store is not None:
             try:
-                await self.search_store.index_tool_result(chat_id, tool_name, tool_args, result)
+                await self.search_store.index_tool_result(session_id, tool_name, tool_args, result)
             except Exception as e:
-                logger.warning("[{}] Failed to index tool result for search: {}", chat_id, e)
+                logger.warning("[{}] Failed to index tool result for search: {}", session_id, e)
 
 
 class ExecutionEngine:
@@ -818,7 +818,7 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         allow_tools: bool,
-        tool_result_chat_id: str | None = None,
+        tool_result_session_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
         on_tool_after_execute: Callable[..., Awaitable[None]] | None = None,
@@ -1226,7 +1226,7 @@ Output exactly these sections when applicable:
                             logger.exception(f"[{log_id}] prompt.refresh.error | after_tool={tool_name}")
 
                     await self.tool_result_persistence.persist(
-                        chat_id=tool_result_chat_id,
+                        session_id=tool_result_session_id,
                         tool_name=tool_name,
                         tool_args=tool_args,
                         result=result,
