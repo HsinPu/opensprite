@@ -312,8 +312,10 @@ export const DISPLAY_COPY = {
         manageTitle: "管理所有排程",
         newJobTitle: "新增排程",
         editJobTitle: "編輯排程",
+        openAdd: "新增排程",
+        backToList: "返回列表",
         newJobDescription: "這裡建立的排程會綁定目前 chat，到時間後會把訊息送進 Agent。",
-        cancelEdit: "取消編輯",
+        cancelEdit: "取消",
         jobName: "名稱",
         jobType: "類型",
         jobTypes: {
@@ -734,8 +736,10 @@ export const DISPLAY_COPY = {
         manageTitle: "Manage all schedules",
         newJobTitle: "Create schedule",
         editJobTitle: "Edit schedule",
+        openAdd: "Create schedule",
+        backToList: "Back to list",
         newJobDescription: "Schedules created here are tied to the current chat and send their message to the Agent when due.",
-        cancelEdit: "Cancel edit",
+        cancelEdit: "Cancel",
         jobName: "Name",
         jobType: "Type",
         jobTypes: {

@@ -85,6 +85,7 @@
     @toggle-mcp-tool-group="toggleMcpToolGroup"
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
+    @begin-cron-job-create="beginCronJobCreate"
     @save-cron-job="saveCronJob"
     @edit-cron-job="beginCronJobEdit"
     @cancel-cron-job-edit="cancelCronJobEdit"
@@ -150,6 +151,7 @@ const {
   toggleMcpToolGroup,
   applyMcpJson,
   saveScheduleSettings,
+  beginCronJobCreate,
   beginCronJobEdit,
   cancelCronJobEdit,
   saveCronJob,

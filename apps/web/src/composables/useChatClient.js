@@ -384,6 +384,7 @@ export function useChatClient() {
     cronJobsNotice: "",
     cronJobs: [],
     cronJobForm: {
+      showEditor: false,
       sessionId: "",
       jobId: "",
       mode: "cron",
@@ -861,6 +862,7 @@ export function useChatClient() {
   }
 
   function resetCronJobForm() {
+    settingsState.cronJobForm.showEditor = false;
     settingsState.cronJobForm.sessionId = "";
     settingsState.cronJobForm.jobId = "";
     settingsState.cronJobForm.mode = "cron";
@@ -1615,6 +1617,7 @@ export function useChatClient() {
     const payload = job?.payload || {};
     settingsState.cronJobsNotice = "";
     settingsState.cronJobsError = "";
+    settingsState.cronJobForm.showEditor = true;
     settingsState.cronJobForm.sessionId = job?.session_id || "";
     settingsState.cronJobForm.jobId = job?.id || "";
     settingsState.cronJobForm.mode = schedule.kind || "cron";
@@ -1629,6 +1632,13 @@ export function useChatClient() {
 
   function cancelCronJobEdit() {
     resetCronJobForm();
+  }
+
+  function beginCronJobCreate() {
+    resetCronJobForm();
+    settingsState.cronJobsNotice = "";
+    settingsState.cronJobsError = "";
+    settingsState.cronJobForm.showEditor = true;
   }
 
   async function saveCronJob() {
@@ -2037,6 +2047,7 @@ export function useChatClient() {
     applyMcpJson,
     saveScheduleSettings,
     beginCronJobEdit,
+    beginCronJobCreate,
     cancelCronJobEdit,
     saveCronJob,
     runCronJobAction,

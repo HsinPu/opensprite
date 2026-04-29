@@ -1799,6 +1799,17 @@ button:disabled {
   padding: 16px;
 }
 
+.schedule-list-screen__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.schedule-list-screen__header h3 {
+  margin: 0;
+}
+
 .mcp-server-list-screen {
   display: grid;
   gap: 12px;
@@ -1929,7 +1940,6 @@ button:disabled {
 }
 
 .schedule-editor__deliver {
-  grid-column: 1 / -1;
   min-height: 58px;
   padding: 0;
   border-bottom: 0;
@@ -2266,6 +2276,7 @@ textarea:focus-visible {
   }
 
   .schedule-editor__header,
+  .schedule-list-screen__header,
   .mcp-server-list-screen__header {
     align-items: flex-start;
     flex-direction: column;
