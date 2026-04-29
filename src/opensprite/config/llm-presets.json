@@ -19,7 +19,7 @@
     "minimax": {
       "display_name": "MiniMax",
       "default_base_url": "https://api.minimax.io/v1",
-      "model_choices": ["MiniMax-M2.5"]
+      "model_choices": ["MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"]
     }
   }
 }

@@ -387,18 +387,22 @@
               </div>
             </div>
 
-            <div class="model-grid">
+            <div class="model-select-row">
+              <label>
+                <span>{{ copy.settings.models.modelChoice }}</span>
+                <select v-model="settingsState.modelSelections[provider.id]" :disabled="settingsState.modelsLoading">
+                  <option v-for="model in provider.models" :key="`${provider.id}:${model}`" :value="model">
+                    {{ model }}{{ provider.is_default && provider.selected_model === model ? ` (${copy.settings.models.active})` : '' }}
+                  </option>
+                </select>
+              </label>
               <button
-                v-for="model in provider.models"
-                :key="`${provider.id}:${model}`"
-                class="model-option"
-                :class="{ 'model-option--active': provider.is_default && provider.selected_model === model }"
+                class="secondary-button"
                 type="button"
-                :disabled="settingsState.modelsLoading"
-                @click="$emit('select-model', provider.id, model)"
+                :disabled="settingsState.modelsLoading || !settingsState.modelSelections[provider.id]"
+                @click="$emit('select-model', provider.id, settingsState.modelSelections[provider.id])"
               >
-                <strong>{{ model }}</strong>
-                <span>{{ provider.is_default && provider.selected_model === model ? copy.settings.models.active : copy.settings.models.select }}</span>
+                {{ copy.settings.models.select }}
               </button>
             </div>
 

@@ -9,3 +9,4 @@ def test_load_llm_presets_has_expected_providers():
     assert presets.providers["openai"].default_base_url.startswith("https://")
     assert presets.providers["openai"].model_choices[0] == "gpt-4.1"
     assert "gpt-4o-mini" in presets.providers["openai"].model_choices
+    assert presets.providers["minimax"].model_choices[:3] == ("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1")

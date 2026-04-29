@@ -368,6 +368,7 @@ export function useChatClient() {
       active_model: "",
       providers: [],
     },
+    modelSelections: {},
     customModels: {},
     scheduleLoading: false,
     scheduleError: "",
@@ -1207,6 +1208,8 @@ export function useChatClient() {
     try {
       settingsState.models = await requestSettingsJson("/api/settings/models");
       for (const provider of settingsState.models.providers || []) {
+        const selectedModel = provider.selected_model || provider.models?.[0] || "";
+        settingsState.modelSelections[provider.id] = selectedModel;
         if (!Object.prototype.hasOwnProperty.call(settingsState.customModels, provider.id)) {
           settingsState.customModels[provider.id] = "";
         }
@@ -1425,6 +1428,7 @@ export function useChatClient() {
         ? copy.value.notices.modelRestartRequired
         : copy.value.notices.modelApplied;
       settingsState.customModels[providerId] = "";
+      settingsState.modelSelections[providerId] = normalizedModel;
       await loadModelSettings();
       await loadProviderSettings();
     } catch (error) {
