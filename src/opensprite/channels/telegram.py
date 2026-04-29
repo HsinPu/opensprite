@@ -770,7 +770,7 @@ class TelegramAdapter(MessageAdapter):
 
         return "\n".join(rendered)
     
-    async def _on_response(self, response: AssistantMessage, channel: str, chat_id: str | None) -> None:
+    async def _on_response(self, response: AssistantMessage, channel: str, external_chat_id: str | None) -> None:
         """
         Telegram channel 的 outbound handler。
         """

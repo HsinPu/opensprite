@@ -223,11 +223,11 @@ def create_cron_manager(config: Config, agent: AgentLoop, mq: MessageQueue) -> C
     """Create the per-session cron manager bound to the running agent."""
 
     async def on_job(session_id: str, job: CronJob) -> str | None:
-        channel, raw_chat_id = split_session_id(session_id)
+        channel, raw_external_chat_id = split_session_id(session_id)
         user_message = UserMessage(
             text=job.payload.message,
             channel=job.payload.channel or channel,
-            external_chat_id=job.payload.chat_id or raw_chat_id,
+            external_chat_id=job.payload.external_chat_id or raw_external_chat_id,
             session_id=session_id,
             sender_id="system:cron",
             sender_name="cron",

@@ -459,11 +459,11 @@ async def _run_web_run_cancel_api():
     queue = MessageQueue(agent)
     cancelled_sessions = []
 
-    async def fake_cancel_chat(session_id, channel=None):
+    async def fake_cancel_session(session_id, channel=None):
         cancelled_sessions.append((session_id, channel))
         return 1
 
-    queue.cancel_chat = fake_cancel_chat
+    queue.cancel_session = fake_cancel_session
     adapter = WebAdapter(
         mq=queue,
         config={

@@ -176,7 +176,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 ## Memory And Retrieval Tools
 
 - `save_memory`
-  - Use to update durable chat-specific continuity in `memory/{chat_id}/MEMORY.md`.
+  - Use to update durable session-specific continuity in `memory/{session_id}/MEMORY.md`.
   - Save only information likely to matter again later.
   - Do not save secrets, temporary noise, or one-turn details.
 

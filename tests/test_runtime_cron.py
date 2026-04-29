@@ -110,7 +110,7 @@ def test_runtime_cron_jobs_are_enqueued_through_message_queue(tmp_path):
             message="/cron help should reach the agent",
             deliver=False,
             channel="telegram",
-            chat_id="same-chat",
+            external_chat_id="same-chat",
         )
         await service.run_job(job.id)
         await manager.stop()

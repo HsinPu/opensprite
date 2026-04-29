@@ -24,7 +24,7 @@ class CronPayload:
     message: str = ""
     deliver: bool = False
     channel: str | None = None
-    chat_id: str | None = None
+    external_chat_id: str | None = None
 
 
 @dataclass

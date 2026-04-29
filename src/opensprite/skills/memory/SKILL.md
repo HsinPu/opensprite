@@ -7,7 +7,7 @@ description: Persistent memory with auto-consolidation. Important facts are auto
 
 ## Structure
 
-- `memory/{chat_id}/MEMORY.md` — Long-term facts (preferences, project context). Automatically loaded into context.
+- `memory/{session_id}/MEMORY.md` — Long-term facts (preferences, project context). Automatically loaded into context.
 
 ## When to Update MEMORY.md
 

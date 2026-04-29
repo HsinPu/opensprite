@@ -16,14 +16,14 @@ def test_cron_service_persists_session_and_jobs(tmp_path):
         message="ping",
         deliver=True,
         channel="telegram",
-        chat_id="user-a",
+        external_chat_id="user-a",
     )
 
     data = json.loads(store_path.read_text(encoding="utf-8"))
 
     assert data["sessionId"] == "telegram:user-a"
     assert data["jobs"][0]["payload"]["message"] == "ping"
-    assert data["jobs"][0]["payload"]["chatId"] == "user-a"
+    assert data["jobs"][0]["payload"]["externalChatId"] == "user-a"
 
 
 def test_cron_service_runs_one_shot_job_and_removes_it(tmp_path):

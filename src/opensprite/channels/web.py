@@ -614,9 +614,9 @@ class WebAdapter(MessageAdapter):
         if not accepted:
             raise web.HTTPConflict(text="Run is not active")
 
-        cancel_chat = getattr(self.mq, "cancel_chat", None)
-        if callable(cancel_chat):
-            await cancel_chat(session_id)
+        cancel_session = getattr(self.mq, "cancel_session", None)
+        if callable(cancel_session):
+            await cancel_session(session_id)
 
         return web.json_response({"ok": True, "session_id": session_id, "run_id": run_id, "status": "cancelling"})
 

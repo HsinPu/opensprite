@@ -483,7 +483,7 @@ def test_cron_command_lists_jobs_for_current_session(tmp_path):
             message="Check weather",
             deliver=True,
             channel="telegram",
-            chat_id="same-chat",
+            external_chat_id="same-chat",
         )
 
         queue = MessageQueue(agent)
@@ -657,7 +657,7 @@ def test_cron_command_removes_job_for_current_session(tmp_path):
             message="Cleanup",
             deliver=True,
             channel="telegram",
-            chat_id="same-chat",
+            external_chat_id="same-chat",
         )
 
         queue = MessageQueue(agent)
@@ -706,7 +706,7 @@ def test_cron_command_can_pause_and_enable_job_for_current_session(tmp_path):
             message="Cleanup",
             deliver=True,
             channel="telegram",
-            chat_id="same-chat",
+            external_chat_id="same-chat",
         )
 
         queue = MessageQueue(agent)
@@ -765,7 +765,7 @@ def test_cron_command_can_run_job_for_current_session(tmp_path):
             message="Cleanup",
             deliver=True,
             channel="telegram",
-            chat_id="same-chat",
+            external_chat_id="same-chat",
         )
 
         queue = MessageQueue(agent)

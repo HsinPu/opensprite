@@ -120,7 +120,7 @@ class MessageQueue:
 
     @classmethod
     def resolve_session_id(cls, session_or_external_chat_id: str, channel: str | None = None) -> str:
-        """Resolve external or already-namespaced chat IDs to internal session IDs."""
+        """Resolve external chat IDs or already-namespaced values to internal session IDs."""
         if ":" in session_or_external_chat_id:
             return session_or_external_chat_id
         return cls.build_session_id(channel or "cli", session_or_external_chat_id)
@@ -291,9 +291,9 @@ class MessageQueue:
                 return self.messages.cron.error_prefix.format(message=details)
 
             if ":" in session_id:
-                channel, chat_id = session_id.split(":", 1)
+                channel, external_chat_id = session_id.split(":", 1)
             else:
-                channel, chat_id = "default", session_id
+                channel, external_chat_id = "default", session_id
 
             delete_after = schedule.kind == "at"
             try:
@@ -303,7 +303,7 @@ class MessageQueue:
                     message=message,
                     deliver=deliver,
                     channel=channel,
-                    chat_id=chat_id,
+                    external_chat_id=external_chat_id,
                     delete_after_run=delete_after,
                 )
             except ValueError as exc:
@@ -634,7 +634,7 @@ class MessageQueue:
         bypass_commands = bool(metadata.pop("_bypass_commands", False))
 
         if not bypass_commands and self.is_stop_command(user_message.text):
-            cancelled = await self.cancel_chat(session_id)
+            cancelled = await self.cancel_session(session_id)
             await self._publish_stop_response(
                 channel=channel,
                 external_chat_id=external_chat_id,
@@ -644,7 +644,7 @@ class MessageQueue:
             return
 
         if not bypass_commands and self.is_reset_command(user_message.text):
-            cancelled = await self.cancel_chat(session_id)
+            cancelled = await self.cancel_session(session_id)
             await self.agent.reset_history(session_id)
             await self._publish_reset_response(
                 channel=channel,
@@ -919,17 +919,17 @@ class MessageQueue:
             except Exception as e:
                 logger.exception(f"Inbound consumer 發生錯誤: {e}")
     
-    async def cancel_chat(self, chat_id: str, channel: str | None = None) -> int:
+    async def cancel_session(self, session_or_external_chat_id: str, channel: str | None = None) -> int:
         """
-        取消特定 chat_id 的所有正在處理的任務
+        取消特定 session 的所有正在處理的任務
         
         參數：
-            chat_id: 聊天室 ID
+            session_or_external_chat_id: session ID 或外部聊天室 ID
         
         回傳：
             int: 被取消的任務數量
         """
-        session_id = self.resolve_session_id(chat_id, channel)
+        session_id = self.resolve_session_id(session_or_external_chat_id, channel)
         tasks = self._active_tasks.pop(session_id, [])
         cancelled = 0
         for task in tasks:
@@ -950,9 +950,9 @@ class MessageQueue:
             int: 被取消的任務數量
         """
         total = 0
-        chat_ids = list(self._active_tasks.keys())
-        for chat_id in chat_ids:
-            total += await self.cancel_chat(chat_id)
+        session_ids = list(self._active_tasks.keys())
+        for session_id in session_ids:
+            total += await self.cancel_session(session_id)
         return total
     
     async def stop(self) -> None:
@@ -977,16 +977,16 @@ class MessageQueue:
         # 取消所有處理中的任務
         await self.cancel_all()
     
-    async def reset_conversation(self, chat_id: str, channel: str | None = None) -> None:
+    async def reset_conversation(self, session_or_external_chat_id: str, channel: str | None = None) -> None:
         """
         重置特定對話的歷史
         
         參數：
-            chat_id: 聊天室 ID
+            session_or_external_chat_id: session ID 或外部聊天室 ID
         """
-        # 先取消這個chat正在處理的任務
-        session_id = self.resolve_session_id(chat_id, channel)
-        await self.cancel_chat(session_id)
+        # 先取消這個 session 正在處理的任務
+        session_id = self.resolve_session_id(session_or_external_chat_id, channel)
+        await self.cancel_session(session_id)
         # 讓 Agent 去清除 Storage 裡的歷史
         await self.agent.reset_history(session_id)
     
@@ -1029,7 +1029,7 @@ async def main():
     mq = MessageQueue(agent)
     
     # 5. 定義收到回覆時要做什麼
-    async def on_response(response, channel, chat_id):
+    async def on_response(response, channel, external_chat_id):
         logger.info(f"[{channel}] 🤖: {response.text}")
 
     mq.register_response_handler("cli", on_response)
@@ -1055,17 +1055,17 @@ async def main():
             logger.info(f"Queue sizes: inbound={inbound}, outbound={outbound}")
             continue
         
-        # 解析 chat_id
+        # 解析 external_chat_id
         if line.startswith("@"):
             parts = line[1:].split(" ", 1)
-            chat_id = parts[0]
+            external_chat_id = parts[0]
             text = parts[1] if len(parts) > 1 else ""
         else:
-            chat_id = "default"
+            external_chat_id = "default"
             text = line
         
         # 加入佇列（現在用 enqueue_raw 更方便）
-        await mq.enqueue_raw(content=text, external_chat_id=chat_id, channel="cli")
+        await mq.enqueue_raw(content=text, external_chat_id=external_chat_id, channel="cli")
 
 asyncio.run(main())
 """

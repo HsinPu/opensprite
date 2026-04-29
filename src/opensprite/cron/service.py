@@ -107,7 +107,7 @@ class CronService:
                                 message=item["payload"].get("message", ""),
                                 deliver=item["payload"].get("deliver", False),
                                 channel=item["payload"].get("channel"),
-                                chat_id=item["payload"].get("chatId"),
+                                external_chat_id=item["payload"].get("externalChatId"),
                             ),
                             state=CronJobState(
                                 next_run_at_ms=item.get("state", {}).get("nextRunAtMs"),
@@ -169,7 +169,7 @@ class CronService:
                         "message": job.payload.message,
                         "deliver": job.payload.deliver,
                         "channel": job.payload.channel,
-                        "chatId": job.payload.chat_id,
+                        "externalChatId": job.payload.external_chat_id,
                     },
                     "state": {
                         "nextRunAtMs": job.state.next_run_at_ms,
@@ -314,7 +314,7 @@ class CronService:
         *,
         deliver: bool = False,
         channel: str | None = None,
-        chat_id: str | None = None,
+        external_chat_id: str | None = None,
         delete_after_run: bool = False,
     ) -> CronJob:
         store = self._load_store()
@@ -329,7 +329,7 @@ class CronService:
                 message=message,
                 deliver=deliver,
                 channel=channel,
-                chat_id=chat_id,
+                external_chat_id=external_chat_id,
             ),
             state=CronJobState(next_run_at_ms=_compute_next_run(schedule, now_ms)),
             created_at_ms=now_ms,

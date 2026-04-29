@@ -1496,16 +1496,16 @@ def cron_add(
         )
         service = _get_cron_service(session)
         if ":" in session:
-            channel, chat_id = session.split(":", 1)
+            channel, external_chat_id = session.split(":", 1)
         else:
-            channel, chat_id = "default", session
+            channel, external_chat_id = "default", session
         job = service.add_job(
             name=name or message[:30],
             schedule=schedule,
             message=message,
             deliver=deliver,
             channel=channel,
-            chat_id=chat_id,
+            external_chat_id=external_chat_id,
             delete_after_run=delete_after,
         )
     except ValueError as exc:

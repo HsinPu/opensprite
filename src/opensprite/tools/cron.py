@@ -165,9 +165,9 @@ class CronTool(Tool):
 
         session_id = self._get_session_id() or "default"
         if ":" in session_id:
-            channel, chat_id = session_id.split(":", 1)
+            channel, external_chat_id = session_id.split(":", 1)
         else:
-            channel, chat_id = "default", session_id
+            channel, external_chat_id = "default", session_id
 
         try:
             job = service.add_job(
@@ -176,7 +176,7 @@ class CronTool(Tool):
                 message=message,
                 deliver=deliver,
                 channel=channel,
-                chat_id=chat_id,
+                external_chat_id=external_chat_id,
                 delete_after_run=delete_after,
             )
         except ValueError as exc:

@@ -19,8 +19,8 @@ def normalize_identifier(value: str | None, *, fallback: str = "default") -> str
 def build_session_id(channel_instance_id: str, external_chat_id: str | None) -> str:
     """Build the internal session id from a channel instance and transport chat id."""
     instance_id = normalize_identifier(channel_instance_id, fallback="unknown")
-    chat_id = str(external_chat_id or "default").strip() or "default"
-    return f"{instance_id}:{chat_id}"
+    external_id = str(external_chat_id or "default").strip() or "default"
+    return f"{instance_id}:{external_id}"
 
 
 @dataclass(frozen=True)

@@ -98,11 +98,11 @@ class TaskUpdateTool(Tool):
             return "Error: ACTIVE_TASK.md store is unavailable in this runtime."
         return session_id, store
 
-    async def _mark_processed(self, chat_id: str, store: ActiveTaskStore) -> None:
+    async def _mark_processed(self, session_id: str, store: ActiveTaskStore) -> None:
         if self._get_message_count is None:
             return
-        count = await self._get_message_count(chat_id)
-        store.set_processed_index(chat_id, max(0, int(count)))
+        count = await self._get_message_count(session_id)
+        store.set_processed_index(session_id, max(0, int(count)))
 
     @staticmethod
     def _render_result(prefix: str, store: ActiveTaskStore) -> str:
@@ -112,7 +112,7 @@ class TaskUpdateTool(Tool):
         resolved = self._resolve_store()
         if isinstance(resolved, str):
             return resolved
-        chat_id, store = resolved
+        session_id, store = resolved
 
         action = str(kwargs["action"])
         note = str(kwargs.get("note") or "").strip()
@@ -122,8 +122,8 @@ class TaskUpdateTool(Tool):
             return rendered or "No active task."
 
         if action == "reset":
-            store.clear(chat_id)
-            await self._mark_processed(chat_id, store)
+            store.clear(session_id)
+            await self._mark_processed(session_id, store)
             store.append_event("reset", "tool", details={"note": note} if note else None)
             return self._render_result("Task reset.", store)
 
@@ -135,7 +135,7 @@ class TaskUpdateTool(Tool):
             if not task_block:
                 return "Error: action='set' could not create an active task from the provided task text."
             store.write_managed_block(task_block)
-            await self._mark_processed(chat_id, store)
+            await self._mark_processed(session_id, store)
             details = {"task": task}
             if note:
                 details["note"] = note
@@ -158,7 +158,7 @@ class TaskUpdateTool(Tool):
                 append_completed_step=current_step,
                 force=True,
             )
-            await self._mark_processed(chat_id, store)
+            await self._mark_processed(session_id, store)
             details = {"completed_step": current_step, "new_current_step": next_step}
             if note:
                 details["note"] = note
@@ -174,7 +174,7 @@ class TaskUpdateTool(Tool):
             )
             if rendered is None:
                 return "Error: cannot complete step because Current step is not set."
-            await self._mark_processed(chat_id, store)
+            await self._mark_processed(session_id, store)
             details = {"completed_step": current_step}
             if next_step_override:
                 details["next_step_override"] = str(next_step_override)
@@ -209,7 +209,7 @@ class TaskUpdateTool(Tool):
                 append_completed_step=str(completed_step).strip() if completed_step is not None else None,
                 force=True,
             )
-            await self._mark_processed(chat_id, store)
+            await self._mark_processed(session_id, store)
             details: dict[str, Any] = {}
             for key in ("status", "current_step", "next_step", "completed_step"):
                 if kwargs.get(key) is not None:
