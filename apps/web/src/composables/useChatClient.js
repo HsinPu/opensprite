@@ -408,6 +408,7 @@ export function useChatClient() {
       },
     },
     mcpForm: {
+      showEditor: false,
       editingId: "",
       serverId: "",
       type: "stdio",
@@ -1017,6 +1018,7 @@ export function useChatClient() {
   }
 
   function resetMcpForm() {
+    settingsState.mcpForm.showEditor = false;
     settingsState.mcpForm.editingId = "";
     settingsState.mcpForm.serverId = "";
     settingsState.mcpForm.type = "stdio";
@@ -1432,6 +1434,7 @@ export function useChatClient() {
   function beginMcpEdit(server) {
     settingsState.mcpNotice = "";
     settingsState.mcpError = "";
+    settingsState.mcpForm.showEditor = true;
     settingsState.mcpForm.editingId = server.id;
     settingsState.mcpForm.serverId = server.id;
     settingsState.mcpForm.type = server.type || "stdio";
@@ -1449,6 +1452,13 @@ export function useChatClient() {
 
   function cancelMcpEdit() {
     resetMcpForm();
+  }
+
+  function beginMcpCreate() {
+    resetMcpForm();
+    settingsState.mcpError = "";
+    settingsState.mcpNotice = "";
+    settingsState.mcpForm.showEditor = true;
   }
 
   function toggleMcpAdvanced() {
@@ -2010,6 +2020,7 @@ export function useChatClient() {
     disconnectProvider,
     selectModel,
     beginMcpEdit,
+    beginMcpCreate,
     cancelMcpEdit,
     saveMcpServer,
     removeMcpServer,

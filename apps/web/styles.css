@@ -1796,17 +1796,37 @@ button:disabled {
   padding: 16px;
 }
 
+.mcp-editor-screen,
+.mcp-server-list-screen {
+  display: grid;
+  gap: 12px;
+}
+
+.mcp-editor-screen__header,
+.mcp-server-list-screen__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mcp-editor-screen__header h3,
+.mcp-server-list-screen__header h3 {
+  margin: 0;
+}
+
+.mcp-editor-screen__header span {
+  display: block;
+  margin-top: 4px;
+  color: #858585;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .mcp-editor__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-}
-
-.mcp-editor__hint {
-  margin: 0;
-  color: #6f6f6f;
-  font-size: 0.9rem;
-  line-height: 1.45;
 }
 
 .mcp-editor__toolbar {
@@ -2200,7 +2220,9 @@ textarea:focus-visible {
     gap: 10px;
   }
 
-  .schedule-editor__header {
+  .schedule-editor__header,
+  .mcp-editor-screen__header,
+  .mcp-server-list-screen__header {
     align-items: flex-start;
     flex-direction: column;
   }
