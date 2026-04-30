@@ -1088,8 +1088,8 @@ async def _run_web_questions_api():
             session_id="telegram:42",
             objective="wait for external answer",
             kind="general",
-            status="active",
-            blockers=("ignored",),
+            status="waiting_user",
+            blockers=("Telegram needs its own reply UI.",),
             created_at=100.0,
             updated_at=124.0,
         )
@@ -1136,6 +1136,12 @@ async def _run_web_questions_api():
                     }
                 ]
             }
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/questions/work:telegram:42:124000/reply",
+                json={"answer": "This should not be accepted from Web."},
+            ) as resp:
+                assert resp.status == 404
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/questions/work:web:browser-1:123000/reply",

@@ -751,6 +751,7 @@ class WebAdapter(MessageAdapter):
             enqueue=self.mq.enqueue,
             sender_id="web-question",
             sender_name="Web inspector",
+            allowed_channels={self.channel_instance_id},
         )
 
     def _require_storage(self) -> Any:

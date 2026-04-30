@@ -27,11 +27,13 @@ class QuestionRequestService:
         enqueue: Callable[[UserMessage], Awaitable[None]],
         sender_id: str = "question-service",
         sender_name: str = "Question service",
+        allowed_channels: set[str] | None = None,
     ):
         self.storage = storage
         self.enqueue = enqueue
         self.sender_id = sender_id
         self.sender_name = sender_name
+        self.allowed_channels = {str(channel).strip() for channel in allowed_channels or set() if str(channel).strip()}
 
     @staticmethod
     def channel_from_session(session_id: str) -> str:
@@ -70,6 +72,8 @@ class QuestionRequestService:
 
         states = []
         for session_id in await get_all_sessions():
+            if self.allowed_channels and self.channel_from_session(session_id) not in self.allowed_channels:
+                continue
             state = await get_work_state(session_id)
             if state is None or getattr(state, "status", "") != "waiting_user":
                 continue
