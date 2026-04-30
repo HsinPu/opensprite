@@ -731,6 +731,8 @@ class AgentLoop:
             pass_decoding_params=self.llm_pass_decoding_params,
             context_compaction_enabled=self.config.context_compaction_enabled,
             context_compaction_token_budget=self._effective_context_token_budget(),
+            context_window_tokens=self.llm_context_window_tokens,
+            context_output_reserve_tokens=self.llm_chat_max_tokens,
             context_compaction_threshold_ratio=self.config.context_compaction_threshold_ratio,
             context_compaction_min_messages=self.config.context_compaction_min_messages,
             context_compaction_strategy=self.config.context_compaction_strategy,
@@ -936,6 +938,8 @@ class AgentLoop:
         self.execution_engine.chat_presence_penalty = self.llm_chat_presence_penalty
         self.execution_engine.pass_decoding_params = self.llm_pass_decoding_params
         self.execution_engine.context_compaction_token_budget = self._effective_context_token_budget()
+        self.execution_engine.context_window_tokens = self.llm_context_window_tokens
+        self.execution_engine.context_output_reserve_tokens = max(0, self.llm_chat_max_tokens)
 
         self.memory_consolidation.provider = provider
         self._refresh_consolidator_llm(self.user_profile_update.consolidator, provider)

@@ -30,6 +30,8 @@ class ContextCompactionEvent:
     compacted_tokens: int | None = None
     threshold_tokens: int | None = None
     budget_tokens: int | None = None
+    context_window_tokens: int | None = None
+    output_reserve_tokens: int | None = None
     message_tokens: int | None = None
     tool_schema_tokens: int | None = None
     fallback_reason: str | None = None
@@ -201,6 +203,8 @@ Output exactly these sections when applicable:
         pass_decoding_params: bool,
         context_compaction_enabled: bool = False,
         context_compaction_token_budget: int = 0,
+        context_window_tokens: int | None = None,
+        context_output_reserve_tokens: int = 0,
         context_compaction_threshold_ratio: float = 0.9,
         context_compaction_min_messages: int = 8,
         context_compaction_strategy: str = "deterministic",
@@ -216,6 +220,8 @@ Output exactly these sections when applicable:
         self.pass_decoding_params = pass_decoding_params
         self.context_compaction_enabled = context_compaction_enabled
         self.context_compaction_token_budget = max(0, context_compaction_token_budget)
+        self.context_window_tokens = context_window_tokens
+        self.context_output_reserve_tokens = max(0, context_output_reserve_tokens)
         self.context_compaction_threshold_ratio = context_compaction_threshold_ratio
         self.context_compaction_min_messages = max(1, context_compaction_min_messages)
         self.context_compaction_strategy = context_compaction_strategy
@@ -903,6 +909,8 @@ Output exactly these sections when applicable:
                             compacted_tokens=proactive_compaction.compacted_tokens,
                             threshold_tokens=proactive_compaction.threshold_tokens,
                             budget_tokens=self.context_compaction_token_budget,
+                            context_window_tokens=self.context_window_tokens,
+                            output_reserve_tokens=self.context_output_reserve_tokens,
                             message_tokens=proactive_compaction.message_tokens,
                             tool_schema_tokens=proactive_compaction.tool_schema_tokens,
                             fallback_reason=proactive_compaction.fallback_reason,
@@ -992,6 +1000,8 @@ Output exactly these sections when applicable:
                                     estimated_tokens=estimated_tokens,
                                     compacted_tokens=compacted_tokens,
                                     budget_tokens=self.context_compaction_token_budget,
+                                    context_window_tokens=self.context_window_tokens,
+                                    output_reserve_tokens=self.context_output_reserve_tokens,
                                     message_tokens=message_tokens,
                                     tool_schema_tokens=tool_schema_tokens,
                                     error=error_preview,

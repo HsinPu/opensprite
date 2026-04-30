@@ -618,6 +618,8 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
         [],
         context_compaction_enabled=True,
         context_compaction_token_budget=120,
+        context_window_tokens=200,
+        context_output_reserve_tokens=80,
         context_compaction_threshold_ratio=0.5,
         context_compaction_min_messages=3,
     )
@@ -652,6 +654,8 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert event.messages_before == 4
     assert event.messages_after == 4
     assert event.budget_tokens == 120
+    assert event.context_window_tokens == 200
+    assert event.output_reserve_tokens == 80
     assert event.threshold_tokens == 60
     assert event.estimated_tokens is not None and event.estimated_tokens > event.threshold_tokens
     assert event.compacted_tokens is not None and event.compacted_tokens < event.estimated_tokens
