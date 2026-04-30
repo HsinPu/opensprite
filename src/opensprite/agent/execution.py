@@ -928,6 +928,15 @@ Output exactly these sections when applicable:
                 f"[{log_id}] llm.request | iter={iteration + 1} messages={len(chat_messages)} "
                 f"tools={'on' if tools else 'off'} tail={self.summarize_messages(chat_messages)}"
             )
+            response_delta_count = 0
+            response_part_id = f"assistant:{log_id}:{iteration + 1}"
+
+            async def _provider_response_delta(delta: str) -> None:
+                nonlocal response_delta_count
+                response_delta_count += 1
+                if on_response_delta is not None:
+                    await on_response_delta(response_part_id, delta, "running", response_delta_count)
+
             while True:
                 self._raise_if_cancel_requested(should_cancel)
                 try:
@@ -948,6 +957,7 @@ Output exactly these sections when applicable:
                         frequency_penalty=dec_freq,
                         presence_penalty=dec_pres,
                         status_callback=on_llm_status,
+                        response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
                     )
                     break
                 except Exception as exc:
@@ -1045,7 +1055,7 @@ Output exactly these sections when applicable:
                         content = self.empty_response_fallback
                         await self._emit_response_deltas(
                             content,
-                            part_id=f"assistant:{log_id}:{iteration + 1}",
+                            part_id=response_part_id,
                             on_response_delta=on_response_delta,
                         )
                         return ExecutionResult(
@@ -1061,11 +1071,12 @@ Output exactly these sections when applicable:
                             context_compaction_events=context_compaction_events,
                         )
 
-                    await self._emit_response_deltas(
-                        response.content,
-                        part_id=f"assistant:{log_id}:{iteration + 1}",
-                        on_response_delta=on_response_delta,
-                    )
+                    if response_delta_count == 0:
+                        await self._emit_response_deltas(
+                            response.content,
+                            part_id=response_part_id,
+                            on_response_delta=on_response_delta,
+                        )
                     return ExecutionResult(
                         content=response.content,
                         executed_tool_calls=executed_tool_calls,
@@ -1220,7 +1231,7 @@ Output exactly these sections when applicable:
                             )
                             await self._emit_response_deltas(
                                 content,
-                                part_id=f"assistant:{log_id}:{iteration + 1}",
+                                part_id=response_part_id,
                                 on_response_delta=on_response_delta,
                             )
                             return ExecutionResult(
@@ -1301,7 +1312,7 @@ Output exactly these sections when applicable:
                 content = self.empty_response_fallback
                 await self._emit_response_deltas(
                     content,
-                    part_id=f"assistant:{log_id}:{iteration + 1}",
+                    part_id=response_part_id,
                     on_response_delta=on_response_delta,
                 )
                 return ExecutionResult(
@@ -1317,11 +1328,12 @@ Output exactly these sections when applicable:
                     context_compaction_events=context_compaction_events,
                 )
 
-            await self._emit_response_deltas(
-                response.content,
-                part_id=f"assistant:{log_id}:{iteration + 1}",
-                on_response_delta=on_response_delta,
-            )
+            if response_delta_count == 0:
+                await self._emit_response_deltas(
+                    response.content,
+                    part_id=response_part_id,
+                    on_response_delta=on_response_delta,
+                )
             return ExecutionResult(
                 content=response.content,
                 executed_tool_calls=executed_tool_calls,

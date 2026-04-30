@@ -79,6 +79,7 @@ class OpenRouterLLM(LLMProvider):
         frequency_penalty: float | None = None,
         presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
+        response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenRouter Chat Completions API
@@ -120,7 +121,28 @@ class OpenRouterLLM(LLMProvider):
         if tools:
             params["tools"] = tools
             params["tool_choice"] = "auto"
-        
+
+        if response_delta_callback is not None and not tools:
+            params["stream"] = True
+            content_parts: list[str] = []
+            model_name = model or self.default_model
+            stream = await self.client.chat.completions.create(**params)
+            async for chunk in stream:
+                model_name = getattr(chunk, "model", model_name)
+                choices = getattr(chunk, "choices", None)
+                if not choices:
+                    continue
+                delta_payload = getattr(choices[0], "delta", None)
+                piece = _coerce_content(getattr(delta_payload, "content", "")) if delta_payload is not None else ""
+                if not piece:
+                    continue
+                content_parts.append(piece)
+                try:
+                    await response_delta_callback(piece)
+                except Exception as cb_err:
+                    logger.warning("OpenRouter response_delta_callback failed; continuing stream: {}", cb_err)
+            return LLMResponse(content="".join(content_parts), model=model_name, tool_calls=[])
+
         # 呼叫 API
         response = await self.client.chat.completions.create(**params)
         choices = getattr(response, "choices", None)
