@@ -242,6 +242,35 @@ def run_part_artifact(
     }
 
 
+def serialize_run_part(part: Any) -> dict[str, Any]:
+    """Serialize one durable run part using the shared artifact projection."""
+    metadata = json_safe_payload(dict(getattr(part, "metadata", {}) or {}))
+    part_type = str(getattr(part, "part_type", "") or "")
+    tool_name = getattr(part, "tool_name", None)
+    content = str(getattr(part, "content", "") or "")
+    artifact = run_part_artifact(
+        part_id=getattr(part, "part_id", None),
+        part_type=part_type,
+        tool_name=tool_name,
+        content=content,
+        metadata=metadata,
+    )
+    return {
+        "schema_version": RUN_SCHEMA_VERSION,
+        "part_id": getattr(part, "part_id", None),
+        "run_id": getattr(part, "run_id", None),
+        "session_id": getattr(part, "session_id", None),
+        "part_type": part_type,
+        "kind": run_part_kind(part_type),
+        "state": run_part_state(part_type, metadata),
+        "content": content,
+        "tool_name": tool_name,
+        "metadata": metadata,
+        "artifact": artifact,
+        "created_at": getattr(part, "created_at", None),
+    }
+
+
 def file_change_artifact(change: Any) -> dict[str, Any]:
     metadata = json_safe_payload(dict(getattr(change, "metadata", {}) or {}))
     diff = str(getattr(change, "diff", "") or "")

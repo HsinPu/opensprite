@@ -53,10 +53,8 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..run_schema import (
     RUN_SCHEMA_VERSION,
     file_change_artifact,
-    run_part_artifact,
-    run_part_kind,
-    run_part_state,
     serialize_run_event,
+    serialize_run_part,
 )
 from ..utils.log import logger
 
@@ -729,28 +727,7 @@ class WebAdapter(MessageAdapter):
         return serialize_run_event(event)
 
     def _serialize_run_part(self, part: Any) -> dict[str, Any]:
-        metadata = self._json_safe(dict(part.metadata or {}))
-        artifact = run_part_artifact(
-            part_id=part.part_id,
-            part_type=part.part_type,
-            tool_name=part.tool_name,
-            content=part.content,
-            metadata=metadata,
-        )
-        return {
-            "schema_version": RUN_SCHEMA_VERSION,
-            "part_id": part.part_id,
-            "run_id": part.run_id,
-            "session_id": part.session_id,
-            "part_type": part.part_type,
-            "kind": run_part_kind(part.part_type),
-            "state": run_part_state(part.part_type, metadata),
-            "content": part.content,
-            "tool_name": part.tool_name,
-            "metadata": metadata,
-            "artifact": artifact,
-            "created_at": part.created_at,
-        }
+        return serialize_run_part(part)
 
     def _serialize_file_change(self, change: Any) -> dict[str, Any]:
         artifact = file_change_artifact(change)
