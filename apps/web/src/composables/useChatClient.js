@@ -283,6 +283,20 @@ function compactRunEvents(events) {
   return kept.reverse();
 }
 
+function normalizeTraceEventCounts(counts, events = []) {
+  const returned = coerceNonNegativeInteger(counts?.returned ?? events.length);
+  const total = coerceNonNegativeInteger(counts?.total ?? returned);
+  return {
+    total,
+    returned,
+    compacted: coerceNonNegativeInteger(counts?.compacted ?? Math.max(0, total - returned)),
+    textTotal: coerceNonNegativeInteger(counts?.text_total ?? counts?.textTotal),
+    textReturned: coerceNonNegativeInteger(counts?.text_returned ?? counts?.textReturned),
+    maxEvents: coerceNonNegativeInteger(counts?.max_events ?? counts?.maxEvents),
+    maxTextEvents: coerceNonNegativeInteger(counts?.max_text_events ?? counts?.maxTextEvents),
+  };
+}
+
 function normalizeRunArtifact(artifact, fallback = {}) {
   if (!artifact || typeof artifact !== "object") {
     return null;
@@ -456,6 +470,7 @@ function createRunViewState({ runId, sessionId, status = "running", createdAt, u
     finishedAt,
     events: [],
     rawEvents: [],
+    eventCounts: normalizeTraceEventCounts(null, []),
     parts: [],
     artifacts: [],
     fileChanges: [],
@@ -1981,6 +1996,7 @@ export function useChatClient() {
         ? payload.artifacts.map((artifact) => normalizeRunArtifact(artifact)).filter(Boolean)
         : [];
       run.rawEvents = rawEvents;
+      run.eventCounts = normalizeTraceEventCounts(payload?.event_counts || payload?.eventCounts, rawEvents);
       run.events = localizeRawRunEvents(rawEvents);
       run.parts = parts;
       run.artifacts = artifacts.length

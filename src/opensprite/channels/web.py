@@ -54,6 +54,7 @@ from ..run_schema import (
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
+    serialize_run_event_counts,
     serialize_run_events,
     serialize_run_part,
     serialize_run_summary,
@@ -946,11 +947,13 @@ class WebAdapter(MessageAdapter):
             raise web.HTTPNotFound(text="Run not found")
 
         events = await storage.get_run_events(session_id, run_id)
+        serialized_events = serialize_run_events(events)
         return web.json_response(
             {
                 "run_id": run_id,
                 "session_id": session_id,
-                "events": serialize_run_events(events),
+                "events": serialized_events,
+                "event_counts": serialize_run_event_counts(events, serialized_events),
             }
         )
 
@@ -1008,10 +1011,12 @@ class WebAdapter(MessageAdapter):
         if trace is None:
             raise web.HTTPNotFound(text="Run not found")
 
+        serialized_events = serialize_run_events(trace.events)
         return web.json_response(
             {
                 "run": self._serialize_run(trace.run),
-                "events": serialize_run_events(trace.events),
+                "events": serialized_events,
+                "event_counts": serialize_run_event_counts(trace.events, serialized_events),
                 "parts": [serialize_run_part(part) for part in trace.parts],
                 "file_changes": [serialize_file_change(change) for change in trace.file_changes],
                 "artifacts": serialize_run_artifacts(trace),

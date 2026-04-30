@@ -400,6 +400,15 @@ async def _run_web_run_events_api():
 
             assert payload["run_id"] == "run-1"
             assert payload["session_id"] == "web:browser-1"
+            assert payload["event_counts"] == {
+                "total": 4,
+                "returned": 4,
+                "compacted": 0,
+                "text_total": 0,
+                "text_returned": 0,
+                "max_events": 80,
+                "max_text_events": 24,
+            }
             assert [event["event_type"] for event in payload["events"]] == [
                 "task_intent.detected",
                 "completion_gate.evaluated",
@@ -436,6 +445,9 @@ async def _run_web_run_events_api():
 
             assert trace_payload["run"]["run_id"] == "run-1"
             assert trace_payload["run"]["metadata"] == {"objective": "notes.txt"}
+            assert trace_payload["event_counts"]["total"] == 4
+            assert trace_payload["event_counts"]["returned"] == 4
+            assert trace_payload["event_counts"]["compacted"] == 0
             assert [event["event_type"] for event in trace_payload["events"]] == [
                 "task_intent.detected",
                 "completion_gate.evaluated",

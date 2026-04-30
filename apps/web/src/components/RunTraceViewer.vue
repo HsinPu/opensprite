@@ -24,7 +24,7 @@
 
     <div v-show="expanded" class="run-trace__body">
       <div class="run-trace__summary" aria-label="Run event summary">
-        <span>{{ events.length }} {{ copy.trace.events }}</span>
+        <span>{{ eventCountLabel }}</span>
         <span>{{ artifactCount }} {{ copy.trace.artifacts }}</span>
         <span>{{ parts.length }} {{ copy.trace.parts }}</span>
         <span>{{ toolEventCount }} {{ copy.trace.tool }}</span>
@@ -231,6 +231,15 @@ const verificationEventCount = computed(() => countEventsByCategory("verificatio
 const permissionEventCount = computed(() => countEventsByCategory("permission"));
 const textEventCount = computed(() => countEventsByCategory("text"));
 const artifactCount = computed(() => artifacts.value.length);
+const eventCountLabel = computed(() => {
+  const counts = props.run?.eventCounts || {};
+  const returned = Number(counts.returned || events.value.length || 0);
+  const total = Number(counts.total || returned);
+  if (total > returned && typeof props.copy.trace.eventsShown === "function") {
+    return props.copy.trace.eventsShown(returned, total);
+  }
+  return `${events.value.length} ${props.copy.trace.events}`;
+});
 
 const artifactGroups = computed(() => {
   const toolArtifacts = artifacts.value.filter((artifact) => artifact.kind === "tool");

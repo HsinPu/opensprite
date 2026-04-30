@@ -250,6 +250,26 @@ def serialize_run_events(events: list[Any]) -> list[dict[str, Any]]:
     return [serialize_run_event(event) for event in compact_run_events(list(events or []))]
 
 
+def serialize_run_event_counts(events: list[Any], serialized_events: list[dict[str, Any]]) -> dict[str, Any]:
+    """Describe trace event retention so clients can show compacted payloads honestly."""
+    original = list(events or [])
+    text_total = sum(1 for event in original if _is_text_delta_event(event))
+    text_returned = sum(
+        1
+        for event in serialized_events
+        if _text(event.get("event_type")) in _TEXT_DELTA_EVENTS or event.get("kind") == "text"
+    )
+    return {
+        "total": len(original),
+        "returned": len(serialized_events),
+        "compacted": max(0, len(original) - len(serialized_events)),
+        "text_total": text_total,
+        "text_returned": text_returned,
+        "max_events": MAX_SERIALIZED_RUN_EVENTS,
+        "max_text_events": MAX_SERIALIZED_TEXT_EVENTS,
+    }
+
+
 def run_part_kind(part_type: str) -> str:
     normalized = _text(part_type)
     if normalized == "assistant_message":

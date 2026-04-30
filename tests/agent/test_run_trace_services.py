@@ -9,6 +9,7 @@ from opensprite.run_schema import (
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
+    serialize_run_event_counts,
     serialize_run_events,
     serialize_run_part,
     serialize_run_summary,
@@ -203,6 +204,15 @@ def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
     assert compacted[-1].event_id == 1029
     assert len(payload) == 104
     assert payload[-1]["event_type"] == "run_part_delta"
+    assert serialize_run_event_counts(events, payload) == {
+        "total": 120,
+        "returned": 104,
+        "compacted": 16,
+        "text_total": 30,
+        "text_returned": 24,
+        "max_events": 80,
+        "max_text_events": 24,
+    }
 
 
 def test_llm_delta_hook_emits_empty_completion_marker():
