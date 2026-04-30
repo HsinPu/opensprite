@@ -27,6 +27,9 @@ _EVENT_KINDS = {
     "verification_started": "verification",
     "verification_result": "verification",
     "file_changed": "file",
+    "permission_requested": "permission",
+    "permission_granted": "permission",
+    "permission_denied": "permission",
 }
 
 
@@ -65,6 +68,8 @@ def run_event_kind(event_type: str) -> str:
         return "llm"
     if normalized.startswith("work_") or normalized.startswith("task_"):
         return "work"
+    if normalized.startswith("permission_"):
+        return "permission"
     if normalized.startswith("run_") or normalized.startswith("auto_continue."):
         return "run"
     return "other"
@@ -142,6 +147,23 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "status": status,
             "title": _text(data.get("verification_name") or data.get("action") or "verification"),
             "detail": _text(data.get("result_preview") or data.get("path")),
+        }
+
+    if normalized in {"permission_requested", "permission_granted", "permission_denied"}:
+        request_id = _text(data.get("request_id"))
+        tool_name = _text(data.get("tool_name"))
+        if not request_id and not tool_name:
+            return None
+        return {
+            "schema_version": RUN_SCHEMA_VERSION,
+            "artifact_id": f"permission:{request_id}" if request_id else None,
+            "artifact_type": "permission",
+            "kind": "permission",
+            "status": status,
+            "title": tool_name or "permission",
+            "detail": _text(data.get("reason") or data.get("resolution_reason") or data.get("args_preview")),
+            "tool_name": tool_name,
+            "request_id": request_id or None,
         }
 
     return None

@@ -116,6 +116,38 @@ def test_serialize_run_event_builds_stable_envelope():
     }
 
 
+def test_serialize_run_event_projects_permission_artifacts():
+    event = SimpleNamespace(
+        event_id=43,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="permission_requested",
+        payload={
+            "request_id": "perm-1",
+            "tool_name": "apply_patch",
+            "reason": "tool requires approval",
+            "status": "pending",
+        },
+        created_at=12.75,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "permission"
+    assert payload["status"] == "pending"
+    assert payload["artifact"] == {
+        "schema_version": 1,
+        "artifact_id": "permission:perm-1",
+        "artifact_type": "permission",
+        "kind": "permission",
+        "status": "pending",
+        "title": "apply_patch",
+        "detail": "tool requires approval",
+        "tool_name": "apply_patch",
+        "request_id": "perm-1",
+    }
+
+
 def test_serialize_run_part_builds_stable_artifact_shape():
     part = SimpleNamespace(
         part_id=7,
