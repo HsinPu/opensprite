@@ -77,13 +77,17 @@ async def _run_web_roundtrip():
                 run_frame = await ws.receive_json(timeout=2)
                 assert run_frame == {
                     "type": "run_event",
+                    "schema_version": 1,
                     "channel": "web",
                     "channel_type": "web",
                     "external_chat_id": session_frame["external_chat_id"],
                     "session_id": session_frame["session_id"],
                     "run_id": "run-test",
                     "event_type": "run_started",
+                    "kind": "run",
+                    "status": "running",
                     "payload": {"status": "running"},
+                    "artifact": None,
                     "created_at": 123.0,
                 }
 
@@ -301,14 +305,28 @@ async def _run_web_run_events_api():
         payload={"status": "complete"},
         created_at=102.0,
     )
+    await storage.add_run_event(
+        "web:browser-1",
+        "run-1",
+        "tool_started",
+        payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "args_preview": "apply patch"},
+        created_at=102.5,
+    )
+    await storage.add_run_event(
+        "web:browser-1",
+        "run-1",
+        "tool_result",
+        payload={"tool_name": "apply_patch", "tool_call_id": "call-1", "ok": True, "result_preview": "done"},
+        created_at=102.75,
+    )
     await storage.add_run_part(
         "web:browser-1",
         "run-1",
         "tool_call",
         content="apply patch",
         tool_name="apply_patch",
-        metadata={"path": Path("notes.txt")},
-        created_at=103.0,
+        metadata={"path": Path("notes.txt"), "tool_call_id": "call-1"},
+        created_at=102.25,
     )
     await storage.add_run_file_change(
         "web:browser-1",
@@ -359,6 +377,8 @@ async def _run_web_run_events_api():
             assert [event["event_type"] for event in payload["events"]] == [
                 "task_intent.detected",
                 "completion_gate.evaluated",
+                "tool_started",
+                "tool_result",
             ]
             assert payload["events"][0]["event_id"] == 1
             assert payload["events"][0]["payload"] == {
@@ -366,6 +386,10 @@ async def _run_web_run_events_api():
                 "path": "notes.txt",
             }
             assert payload["events"][1]["created_at"] == 102.0
+            assert payload["events"][2]["artifact"]["artifact_id"] == "tool:call-1"
+            assert payload["events"][2]["artifact"]["status"] == "running"
+            assert payload["events"][3]["artifact"]["artifact_id"] == "tool:call-1"
+            assert payload["events"][3]["artifact"]["status"] == "completed"
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",
@@ -389,23 +413,47 @@ async def _run_web_run_events_api():
             assert [event["event_type"] for event in trace_payload["events"]] == [
                 "task_intent.detected",
                 "completion_gate.evaluated",
+                "tool_started",
+                "tool_result",
             ]
             assert trace_payload["parts"] == [
                 {
+                    "schema_version": 1,
                     "part_id": 1,
                     "run_id": "run-1",
                     "session_id": "web:browser-1",
                     "part_type": "tool_call",
+                    "kind": "tool",
+                    "state": "running",
                     "content": "apply patch",
                     "tool_name": "apply_patch",
-                    "metadata": {"path": "notes.txt"},
-                    "created_at": 103.0,
+                    "metadata": {"path": "notes.txt", "tool_call_id": "call-1"},
+                    "artifact": {
+                        "schema_version": 1,
+                        "artifact_id": "tool:call-1",
+                        "artifact_type": "tool",
+                        "kind": "tool",
+                        "status": "running",
+                        "phase": "tool_call",
+                        "tool_name": "apply_patch",
+                        "tool_call_id": "call-1",
+                        "iteration": None,
+                        "title": "apply_patch",
+                        "detail": "",
+                        "metadata": {"path": "notes.txt", "tool_call_id": "call-1"},
+                    },
+                    "created_at": 102.25,
                 }
             ]
             assert trace_payload["file_changes"][0]["change_id"] == 1
             assert trace_payload["file_changes"][0]["path"] == "notes.txt"
             assert trace_payload["file_changes"][0]["before_content"] == "old\n"
             assert trace_payload["file_changes"][0]["after_content"] == "new\n"
+            assert [artifact["kind"] for artifact in trace_payload["artifacts"]] == ["tool", "file"]
+            assert trace_payload["artifacts"][0]["artifact_id"] == "tool:call-1"
+            assert trace_payload["artifacts"][0]["status"] == "completed"
+            assert trace_payload["artifacts"][0]["sources"] == ["part", "event"]
+            assert trace_payload["artifacts"][1]["path"] == "notes.txt"
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
@@ -415,6 +463,7 @@ async def _run_web_run_events_api():
                 summary_payload = await resp.json()
 
             assert summary_payload == {
+                "schema_version": 1,
                 "run_id": "run-1",
                 "session_id": "web:browser-1",
                 "status": "completed",
@@ -442,11 +491,17 @@ async def _run_web_run_events_api():
                     "name": None,
                     "summary": "",
                 },
+                "artifact_counts": {
+                    "total": 2,
+                    "tool": 1,
+                    "file": 1,
+                    "verification": 0,
+                },
                 "completion": {"status": "complete"},
                 "next_action": None,
                 "warnings": [],
                 "counts": {
-                    "events": 2,
+                    "events": 4,
                     "parts": 1,
                     "tool_calls": 1,
                     "file_changes": 1,

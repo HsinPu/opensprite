@@ -73,7 +73,13 @@
           :events="runTimeline"
         />
 
-        <RunTraceViewer v-if="showRunTrace && currentRun" :copy="copy" :run="currentRun" @cancel-run="$emit('cancel-run', $event)" />
+        <RunTraceViewer
+          v-if="showRunTrace && currentRun"
+          :copy="copy"
+          :run="currentRun"
+          @cancel-run="$emit('cancel-run', $event)"
+          @inspect-file="selectedFileChange = $event"
+        />
       </div>
     </section>
 

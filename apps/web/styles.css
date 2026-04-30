@@ -66,6 +66,7 @@
 :root[data-color-scheme="dark"] .notice-banner[data-tone="success"],
 :root[data-color-scheme="dark"] .settings-inline-status--success,
 :root[data-color-scheme="dark"] .run-trace__status[data-status="completed"],
+:root[data-color-scheme="dark"] .run-trace__artifact-card[data-status="completed"] .run-trace__artifact-status,
 :root[data-color-scheme="dark"] .run-trace__filters .run-trace__filter--active {
   color: #98f5d7;
   background: rgba(32, 201, 151, 0.12);
@@ -75,6 +76,8 @@
 :root[data-color-scheme="dark"] .notice-banner[data-tone="error"],
 :root[data-color-scheme="dark"] .settings-inline-status--error,
 :root[data-color-scheme="dark"] .run-trace__status[data-status="failed"],
+:root[data-color-scheme="dark"] .run-trace__artifact-card[data-status="failed"] .run-trace__artifact-status,
+:root[data-color-scheme="dark"] .run-trace__artifact-card[data-status="error"] .run-trace__artifact-status,
 :root[data-color-scheme="dark"] .run-trace__cancel {
   color: #ffb0a8;
   background: rgba(255, 107, 94, 0.13);
@@ -82,7 +85,9 @@
 }
 
 :root[data-color-scheme="dark"] .notice-banner[data-tone="warning"],
-:root[data-color-scheme="dark"] .run-trace__status[data-status="cancelled"] {
+:root[data-color-scheme="dark"] .run-trace__status[data-status="cancelled"],
+:root[data-color-scheme="dark"] .run-trace__artifact-card[data-status="running"] .run-trace__artifact-status,
+:root[data-color-scheme="dark"] .run-trace__artifact-card[data-status="cancelling"] .run-trace__artifact-status {
   color: #ffd996;
   background: rgba(242, 184, 75, 0.12);
   border-color: rgba(242, 184, 75, 0.26);
@@ -131,6 +136,9 @@
 :root[data-color-scheme="dark"] .run-summary-card__file-button,
 :root[data-color-scheme="dark"] .run-trace__status,
 :root[data-color-scheme="dark"] .run-trace__summary span,
+:root[data-color-scheme="dark"] .run-trace__artifact-group,
+:root[data-color-scheme="dark"] .run-trace__artifact-card,
+:root[data-color-scheme="dark"] .run-trace__debug,
 :root[data-color-scheme="dark"] .run-trace__filters button,
 :root[data-color-scheme="dark"] .run-trace__event,
 :root[data-color-scheme="dark"] .run-trace__empty {
@@ -140,6 +148,10 @@
 :root[data-color-scheme="dark"] .run-trace__event pre {
   color: #dce3ee;
   background: #101218;
+}
+
+:root[data-color-scheme="dark"] .run-trace__artifact-card--button:not(:disabled):hover {
+  background: #1d2027;
 }
 
 :root[data-color-scheme="dark"] .run-summary-card__file pre {
@@ -1797,6 +1809,173 @@ button:disabled {
   background: rgba(255, 255, 255, 0.7);
   font-size: 0.74rem;
   font-weight: 650;
+}
+
+.run-trace__artifacts,
+.run-trace__debug {
+  display: grid;
+  gap: 8px;
+}
+
+.run-trace__debug {
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.54);
+}
+
+.run-trace__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.run-trace__section-head strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.run-trace__section-head span {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.run-trace__artifact-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.run-trace__artifact-group {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.run-trace__artifact-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.run-trace__artifact-group-title span {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.run-trace__artifact-group-title small {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.run-trace__artifact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.run-trace__artifact-card {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 92px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--text-soft);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  background: #ffffff;
+  text-align: left;
+}
+
+.run-trace__artifact-card:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.run-trace__artifact-card--button:not(:disabled):hover {
+  border-color: var(--border);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.run-trace__artifact-card[data-kind="tool"] {
+  border-left-color: #3b82f6;
+}
+
+.run-trace__artifact-card[data-kind="file"] {
+  border-left-color: var(--accent);
+}
+
+.run-trace__artifact-card[data-kind="verification"] {
+  border-left-color: #8b5cf6;
+}
+
+.run-trace__artifact-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-trace__artifact-card small,
+.run-trace__artifact-detail {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-trace__artifact-detail {
+  color: var(--text-soft);
+}
+
+.run-trace__artifact-status {
+  justify-self: start;
+  padding: 2px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.run-trace__artifact-card[data-status="running"] .run-trace__artifact-status,
+.run-trace__artifact-card[data-status="cancelling"] .run-trace__artifact-status {
+  color: #7c520f;
+  background: #fff8eb;
+  border-color: rgba(183, 121, 31, 0.18);
+}
+
+.run-trace__artifact-card[data-status="completed"] .run-trace__artifact-status {
+  color: #08634e;
+  background: #effaf6;
+  border-color: rgba(16, 163, 127, 0.18);
+}
+
+.run-trace__artifact-card[data-status="failed"] .run-trace__artifact-status,
+.run-trace__artifact-card[data-status="error"] .run-trace__artifact-status {
+  color: #9b241c;
+  background: #fff3f1;
+  border-color: rgba(217, 45, 32, 0.18);
 }
 
 .run-trace__filters {

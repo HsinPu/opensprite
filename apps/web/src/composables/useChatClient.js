@@ -22,19 +22,24 @@ const LANGUAGE_ATTRIBUTES = {
 };
 
 const MAX_RUN_EVENTS = 80;
+const MAX_RUN_ARTIFACTS = 200;
 const MAX_TIMELINE_EVENTS = 8;
 const RUN_HISTORY_LIMIT = 10;
 const RUN_SUMMARY_FETCH_DELAY_MS = 500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "work", "completion", "file", "text", "system", "other"]);
 const MCP_TRANSPORT_TYPES = new Set(["stdio", "sse", "streamableHttp"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "llm_status",
   "tool_started",
+  "file_changed",
   "verification_started",
   "verification_result",
   "run_finished",
   "run_failed",
+  "run_cancelled",
+  "run_cancel_requested",
 ]);
 
 function resolveDefaultWsUrl() {
@@ -164,6 +169,106 @@ function coerceNonNegativeInteger(value) {
   return Math.floor(number);
 }
 
+function normalizeRunKind(value, fallback = "other") {
+  const normalized = String(value || "").trim();
+  return RUN_EVENT_KINDS.has(normalized) ? normalized : fallback;
+}
+
+function inferRunEventKind(eventType) {
+  const normalized = String(eventType || "").trim();
+  if (normalized.startsWith("run_") || normalized.startsWith("auto_continue.")) {
+    return "run";
+  }
+  if (normalized.startsWith("llm_")) {
+    return "llm";
+  }
+  if (normalized.startsWith("tool_")) {
+    return "tool";
+  }
+  if (normalized.startsWith("verification_")) {
+    return "verification";
+  }
+  if (normalized.startsWith("work_") || normalized.startsWith("task_")) {
+    return "work";
+  }
+  if (normalized === "file_changed") {
+    return "file";
+  }
+  if (normalized === "completion_gate.evaluated") {
+    return "completion";
+  }
+  return "other";
+}
+
+function inferRunEventStatus(eventType, payload = {}) {
+  const normalized = String(eventType || "").trim();
+  const explicit = String(payload.status || payload.state || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  if (normalized === "run_started" || normalized.endsWith("_started") || normalized === "llm_status" || normalized === "auto_continue.scheduled") {
+    return "running";
+  }
+  if (normalized === "run_failed") {
+    return "failed";
+  }
+  if (normalized === "run_cancelled") {
+    return "cancelled";
+  }
+  if (normalized === "run_cancel_requested") {
+    return "cancelling";
+  }
+  if (payload.ok === false) {
+    return inferRunEventKind(normalized) === "verification" ? "failed" : "error";
+  }
+  return "completed";
+}
+
+function normalizeRunArtifact(artifact, fallback = {}) {
+  if (!artifact || typeof artifact !== "object") {
+    return null;
+  }
+  const kind = normalizeRunKind(artifact.kind, fallback.kind || "other");
+  const artifactType = String(artifact.artifact_type || artifact.artifactType || fallback.artifactType || "artifact").trim() || "artifact";
+  const source = String(artifact.source || fallback.source || "").trim();
+  const sourceId = artifact.source_id ?? artifact.sourceId ?? fallback.sourceId ?? "";
+  const createdAt = normalizeEventTimestamp(artifact.created_at ?? artifact.createdAt ?? fallback.createdAt);
+  const toolCallId = String(artifact.tool_call_id || artifact.toolCallId || fallback.toolCallId || "").trim();
+  const toolName = String(artifact.tool_name || artifact.toolName || "").trim();
+  const iteration = artifact.iteration ?? fallback.iteration ?? "";
+  const inferredToolId = toolCallId
+    ? `tool:${toolCallId}`
+    : toolName && iteration !== "" && iteration !== null && iteration !== undefined
+      ? `tool:${toolName}:${iteration}`
+      : "";
+  const artifactId = String(artifact.artifact_id || artifact.artifactId || inferredToolId || `${source || artifactType}:${sourceId || createdAt}`).trim();
+  const snapshots = artifact.snapshots_available || artifact.snapshotsAvailable || {};
+  return {
+    artifactId,
+    artifactType,
+    kind,
+    status: String(artifact.status || artifact.state || fallback.status || "completed").trim() || "completed",
+    phase: String(artifact.phase || fallback.phase || "").trim(),
+    title: String(artifact.title || artifact.tool_name || artifact.toolName || artifact.path || artifactType).trim(),
+    detail: String(artifact.detail || artifact.diff_preview || artifact.diffPreview || "").trim(),
+    source,
+    sourceId: sourceId === null || sourceId === undefined ? "" : String(sourceId),
+    createdAt,
+    toolName,
+    toolCallId,
+    iteration,
+    path: String(artifact.path || "").trim(),
+    action: String(artifact.action || "").trim(),
+    diffLen: coerceNonNegativeInteger(artifact.diff_len ?? artifact.diffLen),
+    diffPreview: String(artifact.diff_preview || artifact.diffPreview || ""),
+    snapshotsAvailable: {
+      before: coerceBoolean(snapshots.before),
+      after: coerceBoolean(snapshots.after),
+    },
+    metadata: artifact.metadata && typeof artifact.metadata === "object" ? artifact.metadata : {},
+  };
+}
+
 function normalizeWorkState(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -267,15 +372,21 @@ function buildRunsPath(sessionId) {
   return `/api/runs?session_id=${encodeURIComponent(sessionId)}&limit=${RUN_HISTORY_LIMIT}`;
 }
 
-function statusFromRunEvent(eventType, payload) {
+function statusFromRunEvent(eventType, payload, eventStatus = "") {
   if (eventType === "run_started") {
     return "running";
   }
   if (eventType === "run_finished") {
-    return payload.status || "completed";
+    return payload.status || eventStatus || "completed";
   }
   if (eventType === "run_failed") {
-    return payload.status || "failed";
+    return payload.status || eventStatus || "failed";
+  }
+  if (eventType === "run_cancelled") {
+    return payload.status || eventStatus || "cancelled";
+  }
+  if (eventType === "run_cancel_requested") {
+    return payload.status || eventStatus || "cancelling";
   }
   return null;
 }
@@ -301,7 +412,9 @@ function normalizeRunSummary(payload) {
 
   const verification = payload.verification && typeof payload.verification === "object" ? payload.verification : {};
   const counts = payload.counts && typeof payload.counts === "object" ? payload.counts : {};
+  const artifactCounts = payload.artifact_counts && typeof payload.artifact_counts === "object" ? payload.artifact_counts : {};
   return {
+    schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
     runId: String(payload.run_id || payload.runId || "").trim(),
     sessionId: String(payload.session_id || payload.sessionId || "").trim(),
     status: String(payload.status || "completed").trim() || "completed",
@@ -343,6 +456,12 @@ function normalizeRunSummary(payload) {
     completion: payload.completion && typeof payload.completion === "object" ? payload.completion : {},
     nextAction: String(payload.next_action || payload.nextAction || "").trim(),
     warnings: coerceStringList(payload.warnings),
+    artifactCounts: {
+      total: coerceNonNegativeInteger(artifactCounts.total),
+      tool: coerceNonNegativeInteger(artifactCounts.tool),
+      file: coerceNonNegativeInteger(artifactCounts.file),
+      verification: coerceNonNegativeInteger(artifactCounts.verification),
+    },
     counts: {
       events: coerceNonNegativeInteger(counts.events),
       parts: coerceNonNegativeInteger(counts.parts),
@@ -398,6 +517,14 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
+  if (eventType === "file_changed") {
+    return {
+      label: `${copy.run.fileChanged || "File changed"}: ${payload.path || "?"}`,
+      detail: payload.diff_preview || payload.action || "",
+      tone: "running",
+    };
+  }
+
   if (eventType === "run_finished") {
     return {
       label: payload.had_tool_error ? copy.run.completedWithWarnings : copy.run.completed,
@@ -412,6 +539,22 @@ function describeRunEvent(eventType, payload, copy) {
       label: cancelled ? copy.run.cancelled : copy.run.failed,
       detail: payload.error || copy.run.stopped,
       tone: cancelled ? "warning" : "error",
+    };
+  }
+
+  if (eventType === "run_cancelled") {
+    return {
+      label: copy.run.cancelled,
+      detail: payload.error || copy.run.stopped,
+      tone: "warning",
+    };
+  }
+
+  if (eventType === "run_cancel_requested") {
+    return {
+      label: copy.trace.cancelling,
+      detail: payload.status || "",
+      tone: "warning",
     };
   }
 
@@ -716,13 +859,16 @@ export function useChatClient() {
           .map((event) => {
             const description = describeRunEvent(event.eventType, event.payload, copy.value);
             return description
-              ? {
-                  id: `${event.id}-localized`,
-                  eventType: event.eventType,
-                  createdAt: event.createdAt,
-                  payload: event.payload,
-                  ...description,
-                }
+            ? {
+                id: `${event.id}-localized`,
+                eventType: event.eventType,
+                kind: event.kind,
+                status: event.status,
+                createdAt: event.createdAt,
+                payload: event.payload,
+                artifact: event.artifact,
+                ...description,
+              }
               : null;
           })
           .filter(Boolean)
@@ -854,6 +1000,8 @@ export function useChatClient() {
         updatedAt: createdAt,
         events: [],
         rawEvents: [],
+        parts: [],
+        artifacts: [],
         fileChanges: [],
         summary: null,
         summaryLoading: false,
@@ -933,21 +1081,85 @@ export function useChatClient() {
     }
   }
 
+  function upsertRunArtifact(run, artifact) {
+    const normalized = normalizeRunArtifact(artifact);
+    if (!normalized) {
+      return null;
+    }
+    const artifacts = run.artifacts || [];
+    const existingIndex = artifacts.findIndex((entry) => entry.artifactId === normalized.artifactId);
+    if (existingIndex >= 0) {
+      artifacts[existingIndex] = { ...artifacts[existingIndex], ...normalized };
+    } else {
+      artifacts.push(normalized);
+    }
+    artifacts.sort((left, right) => Number(left.createdAt || 0) - Number(right.createdAt || 0));
+    if (artifacts.length > MAX_RUN_ARTIFACTS) {
+      artifacts.splice(0, artifacts.length - MAX_RUN_ARTIFACTS);
+    }
+    run.artifacts = artifacts;
+    return normalized;
+  }
+
+  function applyRunEventArtifact(run, artifact) {
+    const normalized = upsertRunArtifact(run, artifact);
+    if (!normalized || normalized.kind !== "file" || !normalized.path) {
+      return;
+    }
+    const existingIndex = run.fileChanges.findIndex((change) => {
+      if (normalized.sourceId && change.changeId) {
+        return String(change.changeId) === String(normalized.sourceId);
+      }
+      return change.path === normalized.path && (!normalized.action || change.action === normalized.action);
+    });
+    const preview = {
+      changeId: normalized.sourceId || normalized.artifactId,
+      path: normalized.path,
+      action: normalized.action,
+      toolName: normalized.toolName,
+      diffLen: normalized.diffLen,
+      diff: "",
+      diffPreview: normalized.diffPreview,
+      beforeContent: null,
+      afterContent: null,
+      snapshotsAvailable: normalized.snapshotsAvailable,
+      artifact: normalized,
+      createdAt: normalized.createdAt,
+    };
+    if (existingIndex >= 0) {
+      run.fileChanges[existingIndex] = { ...run.fileChanges[existingIndex], ...preview };
+      return;
+    }
+    run.fileChanges.push(preview);
+  }
+
   function handleRunEvent(payload) {
     const externalChatId = payload.external_chat_id || currentSession.value?.externalChatId || generateExternalChatId();
     const session = ensureSession(externalChatId, payload.session_id);
     const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
     const eventType = String(payload.event_type || "run_event");
     const eventPayload = coerceEventPayload(payload.payload);
+    const eventKind = normalizeRunKind(payload.kind, inferRunEventKind(eventType));
+    const eventStatus = String(payload.status || inferRunEventStatus(eventType, eventPayload)).trim();
     const createdAt = normalizeEventTimestamp(payload.created_at);
+    const eventArtifact = normalizeRunArtifact(payload.artifact, {
+      kind: eventKind,
+      status: eventStatus,
+      source: "event",
+      sourceId: `${eventType}-${createdAt}`,
+      createdAt,
+    });
     const run = findOrCreateRun(session, runId, createdAt);
     applyWorkStateFromRunEvent(session, eventType, eventPayload, createdAt);
-    const nextStatus = statusFromRunEvent(eventType, eventPayload);
+    const nextStatus = statusFromRunEvent(eventType, eventPayload, eventStatus);
     run.rawEvents.push({
       id: `${runId}-raw-${eventType}-${createdAt}-${randomToken()}`,
       eventType,
+      kind: eventKind,
+      status: eventStatus || "completed",
       createdAt,
       payload: eventPayload,
+      artifact: eventArtifact,
     });
     if (run.rawEvents.length > MAX_RUN_EVENTS) {
       run.rawEvents.splice(0, run.rawEvents.length - MAX_RUN_EVENTS);
@@ -964,14 +1176,19 @@ export function useChatClient() {
       run.events.push({
         id: `${runId}-${eventType}-${createdAt}-${randomToken()}`,
         eventType,
+        kind: eventKind,
+        status: eventStatus || "completed",
         createdAt,
         payload: eventPayload,
+        artifact: eventArtifact,
         ...description,
       });
       if (run.events.length > MAX_RUN_EVENTS) {
         run.events.splice(0, run.events.length - MAX_RUN_EVENTS);
       }
     }
+
+    applyRunEventArtifact(run, eventArtifact);
 
     run.updatedAt = createdAt;
     session.updatedAt = createdAt;
@@ -1098,11 +1315,55 @@ export function useChatClient() {
   function normalizeTraceEvent(event) {
     const eventType = String(event?.event_type || event?.eventType || "run_event");
     const createdAt = normalizeEventTimestamp(event?.created_at ?? event?.createdAt);
+    const eventPayload = coerceEventPayload(event?.payload);
+    const kind = normalizeRunKind(event?.kind, inferRunEventKind(eventType));
+    const status = String(event?.status || inferRunEventStatus(eventType, eventPayload)).trim() || "completed";
+    const eventId = String(event?.event_id || event?.eventId || `${eventType}-${createdAt}-${randomToken()}`);
     return {
-      id: String(event?.event_id || event?.eventId || `${eventType}-${createdAt}-${randomToken()}`),
+      id: eventId,
+      schemaVersion: coerceNonNegativeInteger(event?.schema_version ?? event?.schemaVersion),
       eventType,
+      kind,
+      status,
       createdAt,
-      payload: coerceEventPayload(event?.payload),
+      payload: eventPayload,
+      artifact: normalizeRunArtifact(event?.artifact, {
+        kind,
+        status,
+        source: "event",
+        sourceId: eventId,
+        createdAt,
+      }),
+    };
+  }
+
+  function normalizeTracePart(part) {
+    if (!part || typeof part !== "object") {
+      return null;
+    }
+    const partId = String(part.part_id || part.partId || "").trim();
+    const partType = String(part.part_type || part.partType || "part").trim() || "part";
+    const createdAt = normalizeEventTimestamp(part.created_at ?? part.createdAt);
+    const kind = normalizeRunKind(part.kind, partType.startsWith("tool_") ? "tool" : "other");
+    const state = String(part.state || part.status || "completed").trim() || "completed";
+    return {
+      partId,
+      partType,
+      schemaVersion: coerceNonNegativeInteger(part.schema_version ?? part.schemaVersion),
+      kind,
+      state,
+      content: String(part.content || ""),
+      toolName: String(part.tool_name || part.toolName || "").trim(),
+      metadata: part.metadata && typeof part.metadata === "object" ? part.metadata : {},
+      artifact: normalizeRunArtifact(part.artifact, {
+        kind,
+        status: state,
+        source: "part",
+        sourceId: partId,
+        artifactType: partType,
+        createdAt,
+      }),
+      createdAt,
     };
   }
 
@@ -1113,8 +1374,12 @@ export function useChatClient() {
     }
     const beforeContent = change?.before_content ?? change?.beforeContent ?? null;
     const afterContent = change?.after_content ?? change?.afterContent ?? null;
+    const createdAt = normalizeEventTimestamp(change?.created_at ?? change?.createdAt);
     return {
       changeId: String(change?.change_id || change?.changeId || "").trim(),
+      schemaVersion: coerceNonNegativeInteger(change?.schema_version ?? change?.schemaVersion),
+      kind: normalizeRunKind(change?.kind, "file"),
+      state: String(change?.state || change?.status || "completed").trim() || "completed",
       path,
       action: String(change?.action || "").trim(),
       toolName: String(change?.tool_name || change?.toolName || "").trim(),
@@ -1126,6 +1391,15 @@ export function useChatClient() {
         before: coerceBoolean(change?.snapshots_available?.before ?? change?.snapshotsAvailable?.before ?? beforeContent !== null),
         after: coerceBoolean(change?.snapshots_available?.after ?? change?.snapshotsAvailable?.after ?? afterContent !== null),
       },
+      artifact: normalizeRunArtifact(change?.artifact, {
+        kind: "file",
+        status: "completed",
+        source: "file_change",
+        sourceId: change?.change_id || change?.changeId || "",
+        artifactType: "file_change",
+        createdAt,
+      }),
+      createdAt,
     };
   }
 
@@ -1200,8 +1474,22 @@ export function useChatClient() {
       const fileChanges = Array.isArray(payload?.file_changes || payload?.fileChanges)
         ? (payload.file_changes || payload.fileChanges).map(normalizeTraceFileChange).filter(Boolean)
         : [];
+      const parts = Array.isArray(payload?.parts)
+        ? payload.parts.map(normalizeTracePart).filter(Boolean)
+        : [];
+      const artifacts = Array.isArray(payload?.artifacts)
+        ? payload.artifacts.map((artifact) => normalizeRunArtifact(artifact)).filter(Boolean)
+        : [];
       run.rawEvents = rawEvents;
       run.events = localizeRawRunEvents(rawEvents);
+      run.parts = parts;
+      run.artifacts = artifacts.length
+        ? artifacts.slice(-MAX_RUN_ARTIFACTS)
+        : [
+            ...rawEvents.map((event) => event.artifact).filter(Boolean),
+            ...parts.map((part) => part.artifact).filter(Boolean),
+            ...fileChanges.map((change) => change.artifact).filter(Boolean),
+          ].slice(-MAX_RUN_ARTIFACTS);
       run.fileChanges = fileChanges;
       run.traceLoaded = true;
     } catch (error) {
@@ -1507,6 +1795,8 @@ export function useChatClient() {
       finishedAt: Number.isFinite(finishedAt) && finishedAt > 0 ? normalizeEventTimestamp(finishedAt) : null,
       events: [],
       rawEvents: [],
+      parts: [],
+      artifacts: [],
       fileChanges: [],
       summary: null,
       summaryLoading: false,

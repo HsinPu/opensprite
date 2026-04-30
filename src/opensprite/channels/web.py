@@ -50,6 +50,14 @@ from ..config.schedule_settings import (
 )
 from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
+from ..run_schema import (
+    RUN_SCHEMA_VERSION,
+    file_change_artifact,
+    run_event_envelope,
+    run_part_artifact,
+    run_part_kind,
+    run_part_state,
+)
 from ..utils.log import logger
 
 
@@ -701,32 +709,53 @@ class WebAdapter(MessageAdapter):
         }
 
     def _serialize_run_event(self, event: Any) -> dict[str, Any]:
+        envelope = run_event_envelope(event.event_type, dict(event.payload or {}))
         return {
+            "schema_version": envelope["schema_version"],
             "event_id": event.event_id,
             "run_id": event.run_id,
             "session_id": event.session_id,
             "event_type": event.event_type,
-            "payload": self._json_safe(dict(event.payload or {})),
+            "kind": envelope["kind"],
+            "status": envelope["status"],
+            "payload": envelope["payload"],
+            "artifact": envelope["artifact"],
             "created_at": event.created_at,
         }
 
     def _serialize_run_part(self, part: Any) -> dict[str, Any]:
+        metadata = self._json_safe(dict(part.metadata or {}))
+        artifact = run_part_artifact(
+            part_id=part.part_id,
+            part_type=part.part_type,
+            tool_name=part.tool_name,
+            content=part.content,
+            metadata=metadata,
+        )
         return {
+            "schema_version": RUN_SCHEMA_VERSION,
             "part_id": part.part_id,
             "run_id": part.run_id,
             "session_id": part.session_id,
             "part_type": part.part_type,
+            "kind": run_part_kind(part.part_type),
+            "state": run_part_state(part.part_type, metadata),
             "content": part.content,
             "tool_name": part.tool_name,
-            "metadata": self._json_safe(dict(part.metadata or {})),
+            "metadata": metadata,
+            "artifact": artifact,
             "created_at": part.created_at,
         }
 
     def _serialize_file_change(self, change: Any) -> dict[str, Any]:
+        artifact = file_change_artifact(change)
         return {
+            "schema_version": RUN_SCHEMA_VERSION,
             "change_id": change.change_id,
             "run_id": change.run_id,
             "session_id": change.session_id,
+            "kind": "file",
+            "state": "completed",
             "tool_name": change.tool_name,
             "path": change.path,
             "action": change.action,
@@ -736,8 +765,83 @@ class WebAdapter(MessageAdapter):
             "after_content": change.after_content,
             "diff": change.diff,
             "metadata": self._json_safe(dict(change.metadata or {})),
+            "artifact": artifact,
             "created_at": change.created_at,
         }
+
+    def _serialize_run_artifacts(self, trace: Any) -> list[dict[str, Any]]:
+        artifacts_by_key: dict[str, dict[str, Any]] = {}
+        candidates: list[dict[str, Any]] = []
+
+        def upsert_artifact(item: dict[str, Any]) -> None:
+            key = str(item.get("artifact_id") or f"{item.get('source')}:{item.get('source_id')}")
+            existing = artifacts_by_key.get(key)
+            if existing is None:
+                artifacts_by_key[key] = item
+                return
+            sources = list(existing.get("sources") or [existing.get("source")])
+            source = item.get("source")
+            if source and source not in sources:
+                sources.append(source)
+            artifacts_by_key[key] = {**existing, **item, "sources": [entry for entry in sources if entry]}
+
+        for event in trace.events or []:
+            serialized = self._serialize_run_event(event)
+            artifact = serialized.get("artifact")
+            if not isinstance(artifact, dict):
+                continue
+            candidates.append(
+                {
+                    **artifact,
+                    "source": "event",
+                    "source_id": serialized.get("event_id"),
+                    "event_type": serialized.get("event_type"),
+                    "created_at": serialized.get("created_at"),
+                }
+            )
+        for part in trace.parts or []:
+            serialized = self._serialize_run_part(part)
+            artifact = serialized.get("artifact")
+            if not isinstance(artifact, dict):
+                continue
+            candidates.append(
+                {
+                    **artifact,
+                    "source": "part",
+                    "source_id": serialized.get("part_id"),
+                    "part_type": serialized.get("part_type"),
+                    "created_at": serialized.get("created_at"),
+                }
+            )
+        for change in trace.file_changes or []:
+            serialized = self._serialize_file_change(change)
+            artifact = serialized.get("artifact")
+            if not isinstance(artifact, dict):
+                continue
+            candidates.append(
+                {
+                    **artifact,
+                    "source": "file_change",
+                    "source_id": serialized.get("change_id"),
+                    "created_at": serialized.get("created_at"),
+                }
+            )
+        candidates.sort(
+            key=lambda item: (
+                float(item.get("created_at") or 0),
+                str(item.get("artifact_id") or item.get("source_id") or ""),
+            )
+        )
+        for candidate in candidates:
+            upsert_artifact(candidate)
+        artifacts = list(artifacts_by_key.values())
+        artifacts.sort(
+            key=lambda item: (
+                float(item.get("created_at") or 0),
+                str(item.get("artifact_id") or item.get("source_id") or ""),
+            )
+        )
+        return artifacts
 
     @staticmethod
     def _latest_event_payload(events: list[Any], event_type: str) -> dict[str, Any] | None:
@@ -844,7 +948,9 @@ class WebAdapter(MessageAdapter):
             duration_seconds = max(0.0, float(run.finished_at) - float(run.created_at))
 
         objective = str(task_intent.get("objective") or run_metadata.get("objective") or "").strip()
+        artifacts = self._serialize_run_artifacts(trace)
         return {
+            "schema_version": RUN_SCHEMA_VERSION,
             "run_id": run.run_id,
             "session_id": run.session_id,
             "status": run.status,
@@ -856,6 +962,12 @@ class WebAdapter(MessageAdapter):
             "tools": self._summarize_tools(parts, events),
             "file_changes": self._summarize_file_changes(file_changes),
             "verification": verification,
+            "artifact_counts": {
+                "total": len(artifacts),
+                "tool": sum(1 for artifact in artifacts if artifact.get("kind") == "tool"),
+                "file": sum(1 for artifact in artifacts if artifact.get("kind") == "file"),
+                "verification": sum(1 for artifact in artifacts if artifact.get("kind") == "verification"),
+            },
             "completion": self._json_safe(completion),
             "next_action": work_progress.get("next_action"),
             "warnings": warnings,
@@ -973,16 +1085,22 @@ class WebAdapter(MessageAdapter):
         if ws is None or ws.closed:
             return
 
+        envelope = run_event_envelope(event.event_type, dict(event.payload or {}))
+
         await ws.send_json(
             {
                 "type": "run_event",
+                "schema_version": envelope["schema_version"],
                 "channel": self.channel_instance_id,
                 "channel_type": self.channel_type,
                 "external_chat_id": event.external_chat_id,
                 "session_id": event.session_id,
                 "run_id": event.run_id,
                 "event_type": event.event_type,
-                "payload": dict(event.payload or {}),
+                "kind": envelope["kind"],
+                "status": envelope["status"],
+                "payload": envelope["payload"],
+                "artifact": envelope["artifact"],
                 "created_at": event.created_at,
             }
         )
@@ -1056,6 +1174,7 @@ class WebAdapter(MessageAdapter):
                 "events": [self._serialize_run_event(event) for event in trace.events],
                 "parts": [self._serialize_run_part(part) for part in trace.parts],
                 "file_changes": [self._serialize_file_change(change) for change in trace.file_changes],
+                "artifacts": self._serialize_run_artifacts(trace),
             }
         )
 

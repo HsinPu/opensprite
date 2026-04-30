@@ -39,7 +39,7 @@
 
       <section class="run-file-drawer__section">
         <h3>{{ copy.runFileInspector.diff }}</h3>
-        <pre v-if="inspectedChange.diff">{{ inspectedChange.diff }}</pre>
+        <pre v-if="inspectedChange.diff || inspectedChange.diffPreview">{{ inspectedChange.diff || inspectedChange.diffPreview }}</pre>
         <p v-else>{{ copy.runFileInspector.noDiff }}</p>
       </section>
 
