@@ -148,6 +148,23 @@ def test_serialize_run_event_projects_permission_artifacts():
     }
 
 
+def test_serialize_run_event_classifies_part_delta_as_streaming_text():
+    event = SimpleNamespace(
+        event_id=44,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="run_part_delta",
+        payload={"part_id": "assistant-1", "part_type": "assistant_message", "content_delta": "hello"},
+        created_at=13.0,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "text"
+    assert payload["status"] == "running"
+    assert payload["artifact"] is None
+
+
 def test_serialize_run_part_builds_stable_artifact_shape():
     part = SimpleNamespace(
         part_id=7,

@@ -30,6 +30,8 @@ _EVENT_KINDS = {
     "permission_requested": "permission",
     "permission_granted": "permission",
     "permission_denied": "permission",
+    "run_part_delta": "text",
+    "message_part_delta": "text",
 }
 
 
@@ -90,6 +92,8 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "cancelled"
     if normalized == "run_cancel_requested":
         return explicit or "cancelling"
+    if normalized in {"run_part_delta", "message_part_delta"}:
+        return explicit or "running"
     if normalized.endswith("_started") or normalized == "llm_status" or normalized == "auto_continue.scheduled":
         return explicit or "running"
     if explicit:

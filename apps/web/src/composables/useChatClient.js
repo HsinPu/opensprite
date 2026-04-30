@@ -197,6 +197,9 @@ function normalizeRunKind(value, fallback = "other") {
 
 function inferRunEventKind(eventType) {
   const normalized = String(eventType || "").trim();
+  if (normalized === "run_part_delta" || normalized === "message_part_delta") {
+    return "text";
+  }
   if (normalized.startsWith("run_") || normalized.startsWith("auto_continue.")) {
     return "run";
   }
@@ -229,6 +232,9 @@ function inferRunEventStatus(eventType, payload = {}) {
   const explicit = String(payload.status || payload.state || "").trim();
   if (explicit) {
     return explicit;
+  }
+  if (normalized === "run_part_delta" || normalized === "message_part_delta") {
+    return "running";
   }
   if (normalized === "run_started" || normalized.endsWith("_started") || normalized === "llm_status" || normalized === "auto_continue.scheduled") {
     return "running";
@@ -1389,6 +1395,10 @@ export function useChatClient() {
       }
     }
 
+    if (eventType === "run_part_delta" || eventType === "message_part_delta") {
+      applyRunPartDelta(run, eventPayload, createdAt);
+    }
+
     applyRunEventArtifact(run, eventArtifact);
 
     run.updatedAt = createdAt;
@@ -1743,6 +1753,41 @@ export function useChatClient() {
       }),
       createdAt,
     };
+  }
+
+  function applyRunPartDelta(run, payload, createdAt) {
+    const partType = String(payload.part_type || payload.partType || "assistant_message").trim() || "assistant_message";
+    const partId = String(payload.part_id || payload.partId || `stream:${run.runId}:${partType}`).trim();
+    const delta = String(payload.content_delta ?? payload.delta ?? payload.text ?? payload.content ?? "");
+    if (!delta) {
+      return;
+    }
+
+    const metadata = payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {};
+    const existingIndex = run.parts.findIndex((part) => part.partId === partId);
+    const existing = existingIndex >= 0 ? run.parts[existingIndex] : null;
+    const nextPart = normalizeTracePart({
+      part_id: partId,
+      part_type: partType,
+      kind: payload.kind || existing?.kind || "text",
+      state: payload.state || payload.status || "running",
+      content: `${existing?.content || ""}${delta}`,
+      tool_name: payload.tool_name || payload.toolName || existing?.toolName || "",
+      metadata: { ...(existing?.metadata || {}), ...metadata, streaming: true },
+      created_at: existing?.createdAt || createdAt,
+    });
+    if (!nextPart) {
+      return;
+    }
+    if (existingIndex >= 0) {
+      run.parts[existingIndex] = nextPart;
+    } else {
+      run.parts.push(nextPart);
+    }
+    if (run.parts.length > MAX_RUN_ARTIFACTS) {
+      run.parts.splice(0, run.parts.length - MAX_RUN_ARTIFACTS);
+    }
+    applyRunEventArtifact(run, nextPart.artifact);
   }
 
   function normalizeTraceFileChange(change) {
