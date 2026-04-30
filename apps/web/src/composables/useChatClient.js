@@ -442,6 +442,10 @@ function buildRunTracePath(runId, sessionId) {
   return `/api/runs/${encodeURIComponent(runId)}?session_id=${encodeURIComponent(sessionId)}`;
 }
 
+function buildRunFileChangeRevertPath(runId, sessionId, changeId) {
+  return `/api/runs/${encodeURIComponent(runId)}/file-changes/${encodeURIComponent(changeId)}/revert?session_id=${encodeURIComponent(sessionId)}`;
+}
+
 function buildRunsPath(sessionId) {
   return `/api/runs?session_id=${encodeURIComponent(sessionId)}&limit=${RUN_HISTORY_LIMIT}`;
 }
@@ -3098,6 +3102,32 @@ export function useChatClient() {
     }
   }
 
+  async function revertRunFileChange(run, change) {
+    const sessionId = run?.sessionId || currentSession.value?.sessionId || "";
+    const changeId = change?.changeId || change?.sourceId || "";
+    if (!run?.runId || !sessionId || !changeId) {
+      setNotice(copy.value.runFileInspector.revertUnavailable, "warning");
+      return null;
+    }
+
+    try {
+      const payload = await requestSettingsJson(buildRunFileChangeRevertPath(run.runId, sessionId, changeId), {
+        method: "POST",
+        body: JSON.stringify({ dry_run: false }),
+      });
+      if (!payload?.revert?.applied) {
+        setNotice(payload?.revert?.reason || copy.value.runFileInspector.revertUnavailable, "warning");
+        return payload?.revert || null;
+      }
+      setNotice(copy.value.runFileInspector.revertApplied(change.path || ""), "success");
+      await loadRunTrace(currentSession.value, run);
+      return payload.revert;
+    } catch (error) {
+      setNotice(error?.message || copy.value.runFileInspector.revertFailed, "error");
+      return null;
+    }
+  }
+
   function submitMessage(event) {
     event.preventDefault();
     const text = messageText.value.trim();
@@ -3288,6 +3318,7 @@ export function useChatClient() {
     resizeComposer,
     createNewChat,
     cancelRun,
+    revertRunFileChange,
     resolvePermissionRequest,
     setQuestionAnswer,
     replyToQuestion,

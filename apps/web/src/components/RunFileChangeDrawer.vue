@@ -65,6 +65,21 @@
           </details>
         </div>
       </section>
+
+      <section class="run-file-drawer__section run-file-drawer__revert">
+        <div>
+          <h3>{{ copy.runFileInspector.revertTitle }}</h3>
+          <p>{{ revertDescription }}</p>
+        </div>
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="!canRevert"
+          @click="$emit('revert-file-change', inspectedChange)"
+        >
+          {{ copy.runFileInspector.revertAction }}
+        </button>
+      </section>
     </aside>
   </div>
 </template>
@@ -87,7 +102,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(["close"]);
+defineEmits(["close", "revert-file-change"]);
 
 const richChange = computed(() => {
   const changes = props.run.fileChanges || [];
@@ -113,6 +128,16 @@ const hasAfterContent = computed(() => inspectedChange.value.afterContent !== nu
 
 const beforeSnapshotLabel = computed(() => snapshotLabel(hasBeforeContent.value, inspectedChange.value.snapshotsAvailable?.before));
 const afterSnapshotLabel = computed(() => snapshotLabel(hasAfterContent.value, inspectedChange.value.snapshotsAvailable?.after));
+const canRevert = computed(() => Boolean(inspectedChange.value.changeId && inspectedChange.value.snapshotsAvailable?.before));
+const revertDescription = computed(() => {
+  if (!inspectedChange.value.changeId) {
+    return props.copy.runFileInspector.revertNoChangeId;
+  }
+  if (!inspectedChange.value.snapshotsAvailable?.before) {
+    return props.copy.runFileInspector.revertNoSnapshot;
+  }
+  return props.copy.runFileInspector.revertDescription;
+});
 
 function snapshotLabel(hasContent, available) {
   if (hasContent) {

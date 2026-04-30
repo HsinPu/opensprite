@@ -67,6 +67,7 @@
       @set-question-answer="setQuestionAnswer"
       @reply-question="replyToQuestion"
       @reject-question="rejectQuestion"
+      @revert-file-change="revertRunFileChange"
       @select-run="selectRun"
     />
   </div>
@@ -197,6 +198,7 @@ const {
   setQuestionAnswer,
   replyToQuestion,
   rejectQuestion,
+  revertRunFileChange,
   toggleSettingsConnection,
   submitMessage,
   handleComposerKeydown,

@@ -1821,6 +1821,23 @@ button:disabled {
   border-top: 1px solid var(--border-soft);
 }
 
+.run-file-drawer__revert {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.run-file-drawer__revert div {
+  display: grid;
+  gap: 5px;
+}
+
+.run-file-drawer__revert p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .run-timeline {
   display: grid;
   gap: 12px;
@@ -3717,6 +3734,10 @@ textarea:focus-visible {
   }
 
   .run-file-drawer__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .run-file-drawer__revert {
     grid-template-columns: 1fr;
   }
 

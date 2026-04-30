@@ -1060,6 +1060,29 @@ class WebAdapter(MessageAdapter):
 
         return web.json_response({"ok": True, "session_id": session_id, "run_id": run_id, "status": "cancelling"})
 
+    async def _handle_run_file_change_revert(self, request: web.Request) -> web.Response:
+        agent = self._get_agent()
+        revert = getattr(agent, "revert_run_file_change", None) if agent is not None else None
+        if not callable(revert):
+            raise web.HTTPServiceUnavailable(text="Run file-change revert is not available")
+
+        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
+        session_id = self._coerce_optional_text(request.query.get("session_id"))
+        if run_id is None or session_id is None:
+            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
+        try:
+            change_id = int(str(request.match_info.get("change_id") or ""))
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text="change_id must be an integer") from exc
+
+        body = await self._read_json_body(request)
+        dry_run = bool(body.get("dry_run", True))
+        result = await revert(session_id, run_id, change_id, dry_run=dry_run)
+        status = str(result.get("status") or "")
+        if status == "not_found":
+            raise web.HTTPNotFound(text=str(result.get("reason") or "File change not found"))
+        return web.json_response({"ok": bool(result.get("ok")), "revert": self._json_safe(result)})
+
     async def _handle_permissions(self, request: web.Request) -> web.Response:
         agent = self._get_agent()
         pending_requests = getattr(agent, "pending_permission_requests", None) if agent is not None else None
@@ -1571,6 +1594,10 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/runs/{run_id}", self._handle_run_trace)
         self.app.router.add_get("/api/runs/{run_id}/events", self._handle_run_events)
         self.app.router.add_post("/api/runs/{run_id}/cancel", self._handle_run_cancel)
+        self.app.router.add_post(
+            "/api/runs/{run_id}/file-changes/{change_id}/revert",
+            self._handle_run_file_change_revert,
+        )
         self.app.router.add_get("/api/permissions", self._handle_permissions)
         self.app.router.add_post("/api/permissions/{request_id}/approve", self._handle_permission_approve)
         self.app.router.add_post("/api/permissions/{request_id}/deny", self._handle_permission_deny)

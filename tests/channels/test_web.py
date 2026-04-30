@@ -853,6 +853,67 @@ def test_web_adapter_exposes_run_cancel_api():
     asyncio.run(_run_web_run_cancel_api())
 
 
+async def _run_web_file_change_revert_api():
+    calls = []
+
+    class RevertAgent(EchoAgent):
+        async def revert_run_file_change(self, session_id, run_id, change_id, *, dry_run=True):
+            calls.append((session_id, run_id, change_id, dry_run))
+            if change_id == 404:
+                return {"status": "not_found", "ok": False, "reason": "missing"}
+            return {"status": "applied", "ok": True, "applied": not dry_run, "change_id": change_id}
+
+    queue = MessageQueue(RevertAgent())
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/runs/run-1/file-changes/7/revert",
+                params={"session_id": "web:browser-1"},
+                json={"dry_run": False},
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/runs/run-1/file-changes/404/revert",
+                params={"session_id": "web:browser-1"},
+                json={"dry_run": False},
+            ) as resp:
+                assert resp.status == 404
+
+        assert payload == {"ok": True, "revert": {"status": "applied", "ok": True, "applied": True, "change_id": 7}}
+        assert calls == [
+            ("web:browser-1", "run-1", 7, False),
+            ("web:browser-1", "run-1", 404, False),
+        ]
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+
+
+def test_web_adapter_exposes_file_change_revert_api():
+    asyncio.run(_run_web_file_change_revert_api())
+
+
 async def _run_web_permissions_api():
     permission = SimpleNamespace(
         request_id="perm-1",

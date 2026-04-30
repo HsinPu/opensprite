@@ -188,6 +188,7 @@
       :run="currentRun"
       :change="selectedFileChange"
       @close="selectedFileChange = null"
+      @revert-file-change="$emit('revert-file-change', currentRun, $event)"
     />
   </main>
 </template>
@@ -339,6 +340,7 @@ defineEmits([
   "set-question-answer",
   "reply-question",
   "reject-question",
+  "revert-file-change",
   "select-run",
 ]);
 
