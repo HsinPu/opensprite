@@ -129,7 +129,7 @@ const props = defineProps({
 defineEmits(["inspect-file"]);
 
 const summary = computed(() => props.run.summary || null);
-const expanded = ref(true);
+const expanded = ref(false);
 const copyState = ref("idle");
 const reportFallbackOpen = ref(false);
 const reportText = ref("");
