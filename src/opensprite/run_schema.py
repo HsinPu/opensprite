@@ -7,6 +7,8 @@ from typing import Any
 from .utils.json_safe import json_safe_payload
 
 RUN_SCHEMA_VERSION = 1
+MAX_SERIALIZED_RUN_EVENTS = 80
+MAX_SERIALIZED_TEXT_EVENTS = 24
 
 
 _EVENT_KINDS = {
@@ -33,6 +35,9 @@ _EVENT_KINDS = {
     "run_part_delta": "text",
     "message_part_delta": "text",
 }
+
+
+_TEXT_DELTA_EVENTS = {"run_part_delta", "message_part_delta"}
 
 
 def _text(value: Any) -> str:
@@ -210,6 +215,39 @@ def serialize_run_event(
     if extra:
         serialized.update(json_safe_payload(extra))
     return serialized
+
+
+def _is_text_delta_event(event: Any) -> bool:
+    return _text(getattr(event, "event_type", "")) in _TEXT_DELTA_EVENTS
+
+
+def compact_run_events(
+    events: list[Any],
+    *,
+    max_events: int = MAX_SERIALIZED_RUN_EVENTS,
+    max_text_events: int = MAX_SERIALIZED_TEXT_EVENTS,
+) -> list[Any]:
+    """Keep recent text deltas without letting them evict lifecycle events."""
+    kept: list[Any] = []
+    text_count = 0
+    other_count = 0
+    for event in reversed(events):
+        if _is_text_delta_event(event):
+            if text_count >= max_text_events:
+                continue
+            text_count += 1
+        else:
+            if other_count >= max_events:
+                continue
+            other_count += 1
+        kept.append(event)
+    kept.reverse()
+    return kept
+
+
+def serialize_run_events(events: list[Any]) -> list[dict[str, Any]]:
+    """Serialize bounded run events for trace APIs."""
+    return [serialize_run_event(event) for event in compact_run_events(list(events or []))]
 
 
 def run_part_kind(part_type: str) -> str:

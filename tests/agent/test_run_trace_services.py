@@ -5,9 +5,11 @@ from opensprite.agent.run_hooks import RunHookService
 from opensprite.agent.run_trace import RUN_PART_CONTENT_MAX_CHARS, RunEventSink, RunTraceRecorder, truncate_run_part_content
 from opensprite.bus import MessageBus
 from opensprite.run_schema import (
+    compact_run_events,
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
+    serialize_run_events,
     serialize_run_part,
     serialize_run_summary,
 )
@@ -164,6 +166,43 @@ def test_serialize_run_event_classifies_part_delta_as_streaming_text():
     assert payload["kind"] == "text"
     assert payload["status"] == "running"
     assert payload["artifact"] is None
+
+
+def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
+    events = []
+    for index in range(90):
+        events.append(
+            SimpleNamespace(
+                event_id=index + 1,
+                run_id="run-1",
+                session_id="web:browser-1",
+                event_type="tool_result",
+                payload={"tool_name": f"tool-{index}"},
+                created_at=float(index),
+            )
+        )
+    for index in range(30):
+        events.append(
+            SimpleNamespace(
+                event_id=1000 + index,
+                run_id="run-1",
+                session_id="web:browser-1",
+                event_type="run_part_delta",
+                payload={"content_delta": str(index)},
+                created_at=100.0 + index,
+            )
+        )
+
+    compacted = compact_run_events(events)
+    payload = serialize_run_events(events)
+
+    assert len(compacted) == 104
+    assert sum(1 for event in compacted if event.event_type == "run_part_delta") == 24
+    assert sum(1 for event in compacted if event.event_type == "tool_result") == 80
+    assert compacted[0].event_id == 11
+    assert compacted[-1].event_id == 1029
+    assert len(payload) == 104
+    assert payload[-1]["event_type"] == "run_part_delta"
 
 
 def test_llm_delta_hook_emits_empty_completion_marker():

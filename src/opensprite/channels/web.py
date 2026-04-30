@@ -54,6 +54,7 @@ from ..run_schema import (
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event,
+    serialize_run_events,
     serialize_run_part,
     serialize_run_summary,
 )
@@ -949,7 +950,7 @@ class WebAdapter(MessageAdapter):
             {
                 "run_id": run_id,
                 "session_id": session_id,
-                "events": [serialize_run_event(event) for event in events],
+                "events": serialize_run_events(events),
             }
         )
 
@@ -1010,7 +1011,7 @@ class WebAdapter(MessageAdapter):
         return web.json_response(
             {
                 "run": self._serialize_run(trace.run),
-                "events": [serialize_run_event(event) for event in trace.events],
+                "events": serialize_run_events(trace.events),
                 "parts": [serialize_run_part(part) for part in trace.parts],
                 "file_changes": [serialize_file_change(change) for change in trace.file_changes],
                 "artifacts": serialize_run_artifacts(trace),
