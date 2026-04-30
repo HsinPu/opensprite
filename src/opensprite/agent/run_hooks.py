@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Awaitable, Callable
 
 from ..tools.verify import classify_verification_result
@@ -25,6 +26,18 @@ class RunHookService:
         self._add_run_part = add_run_part
         self._emit_run_event = emit_run_event
         self._format_log_preview = format_log_preview
+        self._tool_started_at: dict[tuple[str, str, str], float] = {}
+
+    @staticmethod
+    def _tool_lifecycle_key(
+        session_id: str,
+        run_id: str,
+        tool_call_id: str | None,
+        tool_name: str,
+        iteration: int | None,
+    ) -> tuple[str, str, str]:
+        identifier = tool_call_id or f"{tool_name}:{iteration or 0}"
+        return (session_id, run_id, identifier)
 
     @staticmethod
     def tool_warrants_progress_notice(tool_name: str) -> bool:
@@ -72,10 +85,13 @@ class RunHookService:
         async def _hook(tool_name: str, tool_args: dict[str, Any], tool_call_id: str | None = None, iteration: int | None = None) -> None:
             safe_args = json_safe_payload(tool_args or {})
             args_preview = self._format_log_preview(json.dumps(safe_args, ensure_ascii=False), max_chars=240)
+            started_at = time.time()
+            self._tool_started_at[self._tool_lifecycle_key(sid, rid, tool_call_id, tool_name, iteration)] = started_at
             metadata = {
                 "args": safe_args,
                 "args_preview": args_preview,
                 "state": "running",
+                "started_at": started_at,
             }
             if tool_call_id:
                 metadata["tool_call_id"] = tool_call_id
@@ -98,6 +114,8 @@ class RunHookService:
                     "args_preview": args_preview,
                     "tool_call_id": tool_call_id,
                     "iteration": iteration,
+                    "state": "running",
+                    "started_at": started_at,
                 },
                 channel=ch,
                 external_chat_id=tid,
@@ -159,13 +177,23 @@ class RunHookService:
             result_text = str(result or "")
             result_preview = self._format_log_preview(result_text, max_chars=240)
             ok = not result_text.lstrip().startswith("Error:")
+            finished_at = time.time()
+            started_at = self._tool_started_at.pop(
+                self._tool_lifecycle_key(session_id, rid, tool_call_id, tool_name, iteration),
+                None,
+            )
+            duration_ms = int(max(0.0, finished_at - started_at) * 1000) if started_at is not None else None
             metadata = {
                 "args": safe_args,
                 "ok": ok,
                 "result_len": len(result_text),
                 "result_preview": result_preview,
                 "state": state or ("completed" if ok else "error"),
+                "finished_at": finished_at,
             }
+            if started_at is not None:
+                metadata["started_at"] = started_at
+                metadata["duration_ms"] = duration_ms
             if interrupted:
                 metadata["interrupted"] = True
             if tool_call_id:
@@ -199,6 +227,9 @@ class RunHookService:
                     "delegate_prompt_type": delegate_prompt_type,
                     "state": metadata["state"],
                     "interrupted": interrupted,
+                    "started_at": started_at,
+                    "finished_at": finished_at,
+                    "duration_ms": duration_ms,
                 },
                 channel=channel,
                 external_chat_id=tid,

@@ -397,10 +397,20 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     assert stored_events[-1].payload["ok"] is True
     assert stored_events[-1].payload["verification_status"] == "passed"
     assert stored_events[-1].payload["verification_name"] == "python_compile"
+    assert stored_events[0].payload["state"] == "running"
+    assert stored_events[0].payload["started_at"] > 0
+    assert stored_events[2].payload["state"] == "completed"
+    assert stored_events[2].payload["started_at"] == stored_events[0].payload["started_at"]
+    assert stored_events[2].payload["finished_at"] >= stored_events[2].payload["started_at"]
+    assert stored_events[2].payload["duration_ms"] >= 0
     assert [part.part_type for part in stored_parts] == ["tool_call", "tool_result"]
     assert [part.tool_name for part in stored_parts] == ["verify", "verify"]
     assert stored_parts[0].metadata["args"] == {"action": "python_compile", "path": "src"}
+    assert stored_parts[0].metadata["state"] == "running"
+    assert stored_parts[0].metadata["started_at"] == stored_events[0].payload["started_at"]
     assert stored_parts[1].metadata["ok"] is True
+    assert stored_parts[1].metadata["state"] == "completed"
+    assert stored_parts[1].metadata["duration_ms"] >= 0
     assert stored_parts[1].content == "Verification passed: python_compile"
 
 
