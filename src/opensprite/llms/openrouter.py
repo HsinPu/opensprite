@@ -7,6 +7,7 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
+from .openai_streaming import collect_openai_compatible_stream
 from .tool_args import parse_tool_arguments
 from ..utils.log import logger
 
@@ -122,26 +123,15 @@ class OpenRouterLLM(LLMProvider):
             params["tools"] = tools
             params["tool_choice"] = "auto"
 
-        if response_delta_callback is not None and not tools:
+        if response_delta_callback is not None:
             params["stream"] = True
-            content_parts: list[str] = []
-            model_name = model or self.default_model
             stream = await self.client.chat.completions.create(**params)
-            async for chunk in stream:
-                model_name = getattr(chunk, "model", model_name)
-                choices = getattr(chunk, "choices", None)
-                if not choices:
-                    continue
-                delta_payload = getattr(choices[0], "delta", None)
-                piece = _coerce_content(getattr(delta_payload, "content", "")) if delta_payload is not None else ""
-                if not piece:
-                    continue
-                content_parts.append(piece)
-                try:
-                    await response_delta_callback(piece)
-                except Exception as cb_err:
-                    logger.warning("OpenRouter response_delta_callback failed; continuing stream: {}", cb_err)
-            return LLMResponse(content="".join(content_parts), model=model_name, tool_calls=[])
+            return await collect_openai_compatible_stream(
+                stream,
+                provider_name="OpenRouter",
+                default_model=model or self.default_model,
+                response_delta_callback=response_delta_callback,
+            )
 
         # 呼叫 API
         response = await self.client.chat.completions.create(**params)

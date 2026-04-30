@@ -35,6 +35,16 @@ def _chunk(text, model="gpt-test"):
     )
 
 
+def _tool_chunk(index=0, call_id=None, name=None, arguments=None, model="gpt-test"):
+    payload = {}
+    if name is not None or arguments is not None:
+        payload["function"] = SimpleNamespace(name=name, arguments=arguments)
+    return SimpleNamespace(
+        model=model,
+        choices=[SimpleNamespace(delta=SimpleNamespace(tool_calls=[SimpleNamespace(index=index, id=call_id, **payload)]))],
+    )
+
+
 def _message_response(content="done", model="gpt-test"):
     return SimpleNamespace(
         model=model,
@@ -73,13 +83,21 @@ def test_openai_streams_text_deltas_without_tools():
     assert completions.calls[0]["stream"] is True
 
 
-def test_openai_uses_non_streaming_call_when_tools_are_present():
-    completions = FakeCompletions(_message_response("tool path"))
+def test_openai_streams_and_assembles_tool_calls():
+    completions = FakeCompletions(
+        AsyncChunkStream([
+            _chunk("Checking "),
+            _tool_chunk(index=0, call_id="call-1", name="demo", arguments='{"value"'),
+            _tool_chunk(index=0, arguments=':"abc"}'),
+            _chunk("done"),
+        ])
+    )
     llm = _make_llm(completions)
+    deltas = []
 
     async def scenario():
         async def on_delta(delta):
-            raise AssertionError(f"unexpected delta: {delta}")
+            deltas.append(delta)
 
         return await llm.chat(
             [ChatMessage(role="user", content="hi")],
@@ -89,5 +107,10 @@ def test_openai_uses_non_streaming_call_when_tools_are_present():
 
     response = asyncio.run(scenario())
 
-    assert response.content == "tool path"
-    assert "stream" not in completions.calls[0]
+    assert response.content == "Checking done"
+    assert deltas == ["Checking ", "done"]
+    assert completions.calls[0]["stream"] is True
+    assert len(response.tool_calls) == 1
+    assert response.tool_calls[0].id == "call-1"
+    assert response.tool_calls[0].name == "demo"
+    assert response.tool_calls[0].arguments == {"value": "abc"}
