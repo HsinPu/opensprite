@@ -1,11 +1,14 @@
 <template>
-  <section class="run-summary-card" :data-status="status" aria-live="polite">
+  <section class="run-summary-card" :data-status="status" :data-collapsed="!expanded" aria-live="polite">
     <div class="run-summary-card__header">
       <div class="run-summary-card__title">
         <span class="run-summary-card__eyebrow">{{ copy.runSummary.title }}</span>
         <strong>{{ objective }}</strong>
       </div>
       <div class="run-summary-card__actions">
+        <button class="run-summary-card__copy" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? copy.runSummary.collapse : copy.runSummary.expand }}
+        </button>
         <button
           v-if="summary"
           class="run-summary-card__copy"
@@ -27,83 +30,85 @@
       </div>
     </div>
 
-    <p v-if="run.summaryLoading && !summary" class="run-summary-card__message">
-      {{ copy.runSummary.loading }}
-    </p>
+    <div v-show="expanded" class="run-summary-card__body">
+      <p v-if="run.summaryLoading && !summary" class="run-summary-card__message">
+        {{ copy.runSummary.loading }}
+      </p>
 
-    <p v-else-if="run.summaryError && !summary" class="run-summary-card__message" data-tone="error">
-      {{ copy.runSummary.unavailable }}: {{ run.summaryError }}
-    </p>
+      <p v-else-if="run.summaryError && !summary" class="run-summary-card__message" data-tone="error">
+        {{ copy.runSummary.unavailable }}: {{ run.summaryError }}
+      </p>
 
-    <template v-if="summary">
-      <dl class="run-summary-card__metrics">
-        <div>
-          <dt>{{ copy.runSummary.duration }}</dt>
-          <dd>{{ durationLabel }}</dd>
+      <template v-if="summary">
+        <dl class="run-summary-card__metrics">
+          <div>
+            <dt>{{ copy.runSummary.duration }}</dt>
+            <dd>{{ durationLabel }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.runSummary.tools }}</dt>
+            <dd>{{ copy.runSummary.totalToolCalls(toolCallCount) }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.runSummary.files }}</dt>
+            <dd>{{ copy.runSummary.fileCount(fileChangeCount) }}</dd>
+          </div>
+          <div>
+            <dt>{{ copy.runSummary.events }}</dt>
+            <dd>{{ copy.runSummary.eventCount(summary.counts.events) }}</dd>
+          </div>
+        </dl>
+
+        <div class="run-summary-card__note" :data-tone="verificationTone">
+          <strong>{{ copy.runSummary.verification }}</strong>
+          <span>{{ verificationLabel }}</span>
+          <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
-        <div>
-          <dt>{{ copy.runSummary.tools }}</dt>
-          <dd>{{ copy.runSummary.totalToolCalls(toolCallCount) }}</dd>
+
+        <div v-if="summary.tools.length" class="run-summary-card__chips">
+          <span>{{ copy.runSummary.tools }}</span>
+          <code v-for="tool in visibleTools" :key="tool.name">{{ tool.name }} x{{ tool.count }}</code>
         </div>
-        <div>
-          <dt>{{ copy.runSummary.files }}</dt>
-          <dd>{{ copy.runSummary.fileCount(fileChangeCount) }}</dd>
+
+        <div v-if="visibleFileChanges.length" class="run-summary-card__files">
+          <span>{{ copy.runSummary.files }}</span>
+          <button
+            v-for="change in visibleFileChanges"
+            :key="`${change.action}:${change.path}`"
+            class="run-summary-card__file-button"
+            type="button"
+            @click="$emit('inspect-file', change)"
+          >
+            <code>{{ change.action || "change" }} {{ change.path }}</code>
+            <small>{{ change.toolName || copy.runSummary.inspectFile }}</small>
+          </button>
+          <small v-if="hiddenFileChangeCount > 0">{{ copy.runSummary.moreFiles(hiddenFileChangeCount) }}</small>
         </div>
-        <div>
-          <dt>{{ copy.runSummary.events }}</dt>
-          <dd>{{ copy.runSummary.eventCount(summary.counts.events) }}</dd>
+
+        <div v-else class="run-summary-card__chips">
+          <span>{{ copy.runSummary.files }}</span>
+          <small>{{ copy.runSummary.noFiles }}</small>
         </div>
-      </dl>
 
-      <div class="run-summary-card__note" :data-tone="verificationTone">
-        <strong>{{ copy.runSummary.verification }}</strong>
-        <span>{{ verificationLabel }}</span>
-        <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
-      </div>
+        <div v-if="summary.nextAction" class="run-summary-card__note">
+          <strong>{{ copy.runSummary.nextAction }}</strong>
+          <span>{{ summary.nextAction }}</span>
+        </div>
 
-      <div v-if="summary.tools.length" class="run-summary-card__chips">
-        <span>{{ copy.runSummary.tools }}</span>
-        <code v-for="tool in visibleTools" :key="tool.name">{{ tool.name }} x{{ tool.count }}</code>
-      </div>
+        <div v-if="summary.warnings.length" class="run-summary-card__note" data-tone="warning">
+          <strong>{{ copy.runSummary.warnings }}</strong>
+          <span>{{ summary.warnings.join(", ") }}</span>
+        </div>
 
-      <div v-if="visibleFileChanges.length" class="run-summary-card__files">
-        <span>{{ copy.runSummary.files }}</span>
-        <button
-          v-for="change in visibleFileChanges"
-          :key="`${change.action}:${change.path}`"
-          class="run-summary-card__file-button"
-          type="button"
-          @click="$emit('inspect-file', change)"
-        >
-          <code>{{ change.action || "change" }} {{ change.path }}</code>
-          <small>{{ change.toolName || copy.runSummary.inspectFile }}</small>
-        </button>
-        <small v-if="hiddenFileChangeCount > 0">{{ copy.runSummary.moreFiles(hiddenFileChangeCount) }}</small>
-      </div>
-
-      <div v-else class="run-summary-card__chips">
-        <span>{{ copy.runSummary.files }}</span>
-        <small>{{ copy.runSummary.noFiles }}</small>
-      </div>
-
-      <div v-if="summary.nextAction" class="run-summary-card__note">
-        <strong>{{ copy.runSummary.nextAction }}</strong>
-        <span>{{ summary.nextAction }}</span>
-      </div>
-
-      <div v-if="summary.warnings.length" class="run-summary-card__note" data-tone="warning">
-        <strong>{{ copy.runSummary.warnings }}</strong>
-        <span>{{ summary.warnings.join(", ") }}</span>
-      </div>
-
-      <div v-if="reportFallbackOpen" class="run-summary-card__report-fallback">
-        <span>{{ copy.runSummary.reportFallback }}</span>
-        <label>
-          {{ copy.runSummary.reportTextLabel }}
-          <textarea ref="reportTextarea" :value="reportText" readonly rows="8"></textarea>
-        </label>
-      </div>
-    </template>
+        <div v-if="reportFallbackOpen" class="run-summary-card__report-fallback">
+          <span>{{ copy.runSummary.reportFallback }}</span>
+          <label>
+            {{ copy.runSummary.reportTextLabel }}
+            <textarea ref="reportTextarea" :value="reportText" readonly rows="8"></textarea>
+          </label>
+        </div>
+      </template>
+    </div>
   </section>
 </template>
 
@@ -124,6 +129,7 @@ const props = defineProps({
 defineEmits(["inspect-file"]);
 
 const summary = computed(() => props.run.summary || null);
+const expanded = ref(true);
 const copyState = ref("idle");
 const reportFallbackOpen = ref(false);
 const reportText = ref("");

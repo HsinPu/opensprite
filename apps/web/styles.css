@@ -1139,6 +1139,11 @@ button:disabled {
   flex: 0 0 auto;
 }
 
+.run-summary-card__body {
+  display: grid;
+  gap: 12px;
+}
+
 .run-summary-card__title {
   display: grid;
   min-width: 0;
@@ -1185,6 +1190,10 @@ button:disabled {
 .run-summary-card__copy:hover:not(:disabled) {
   border-color: var(--border);
   color: var(--text);
+}
+
+.run-summary-card[data-collapsed="true"] {
+  gap: 0;
 }
 
 .run-summary-card__message {
@@ -3227,6 +3236,7 @@ textarea:focus-visible {
   .work-state-card__header,
   .work-state-card__grid,
   .run-summary-card__header,
+  .run-summary-card__actions,
   .run-summary-card__metrics {
     display: grid;
     grid-template-columns: 1fr;

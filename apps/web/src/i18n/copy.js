@@ -123,6 +123,8 @@ export const DISPLAY_COPY = {
     },
     runSummary: {
       title: "本次執行摘要",
+      expand: "展開",
+      collapse: "收起",
       fallbackObjective: "本機任務已完成",
       loading: "正在整理摘要...",
       unavailable: "摘要暫時無法讀取",
@@ -655,6 +657,8 @@ export const DISPLAY_COPY = {
     },
     runSummary: {
       title: "Run summary",
+      expand: "Expand",
+      collapse: "Collapse",
       fallbackObjective: "Local task completed",
       loading: "Loading summary...",
       unavailable: "Summary is temporarily unavailable",
