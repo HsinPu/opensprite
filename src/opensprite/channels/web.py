@@ -50,7 +50,6 @@ from ..config.schedule_settings import (
 )
 from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
-from ..questions import QuestionRequestNotFound, QuestionRequestService
 from ..run_schema import (
     serialize_file_change,
     serialize_run_artifacts,
@@ -745,15 +744,6 @@ class WebAdapter(MessageAdapter):
             "timed_out": request.timed_out,
         }
 
-    def _question_requests(self) -> QuestionRequestService:
-        return QuestionRequestService(
-            storage=self._require_storage(),
-            enqueue=self.mq.enqueue,
-            sender_id="web-question",
-            sender_name="Web inspector",
-            allowed_channels={self.channel_instance_id},
-        )
-
     def _require_storage(self) -> Any:
         storage = self._get_storage()
         if storage is None:
@@ -1096,39 +1086,6 @@ class WebAdapter(MessageAdapter):
         if permission is None:
             raise web.HTTPNotFound(text="Permission request not found")
         return web.json_response({"ok": True, "permission": self._serialize_permission_request(permission)})
-
-    async def _handle_questions(self, request: web.Request) -> web.Response:
-        return web.json_response({"questions": await self._question_requests().list_pending()})
-
-    async def _handle_question_reply(self, request: web.Request) -> web.Response:
-        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
-        if request_id is None:
-            raise web.HTTPBadRequest(text="request_id is required")
-
-        body = await self._read_json_body(request)
-        answer = self._coerce_optional_text(body.get("answer"))
-        if answer is None:
-            answers = body.get("answers")
-            if isinstance(answers, list):
-                answer = "\n".join(str(item).strip() for item in answers if str(item).strip()) or None
-        if answer is None:
-            raise web.HTTPBadRequest(text="answer is required")
-
-        try:
-            question = await self._question_requests().reply(request_id, answer)
-        except QuestionRequestNotFound:
-            raise web.HTTPNotFound(text="Question request not found") from None
-        return web.json_response({"ok": True, "question": question})
-
-    async def _handle_question_reject(self, request: web.Request) -> web.Response:
-        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
-        if request_id is None:
-            raise web.HTTPBadRequest(text="request_id is required")
-        try:
-            question = await self._question_requests().reject(request_id)
-        except QuestionRequestNotFound:
-            raise web.HTTPNotFound(text="Question request not found") from None
-        return web.json_response({"ok": True, "question": question})
 
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
         try:
@@ -1552,9 +1509,6 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/permissions", self._handle_permissions)
         self.app.router.add_post("/api/permissions/{request_id}/approve", self._handle_permission_approve)
         self.app.router.add_post("/api/permissions/{request_id}/deny", self._handle_permission_deny)
-        self.app.router.add_get("/api/questions", self._handle_questions)
-        self.app.router.add_post("/api/questions/{request_id}/reply", self._handle_question_reply)
-        self.app.router.add_post("/api/questions/{request_id}/reject", self._handle_question_reject)
         self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
         self.app.router.add_post("/api/settings/channels", self._handle_settings_channel_create)
         self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
