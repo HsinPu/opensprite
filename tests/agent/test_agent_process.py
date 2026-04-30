@@ -851,6 +851,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "completion_gate.evaluated",
         "work_progress.updated",
         "auto_continue.completed",
+        "task_checklist.updated",
         "run_finished",
     ]
     assert events[4].payload["status"] == "incomplete"
@@ -859,9 +860,12 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[7].payload["status"] == "complete"
     assert events[8].payload["next_action"] == "finalize"
     assert events[9].payload["completion_status"] == "complete"
-    assert parts[-1].metadata["auto_continue_attempts"] == 1
-    assert parts[-1].metadata["verification_passed"] is True
-    assert parts[-1].metadata["work_progress"]["file_change_count"] == 1
+    assistant_part = next(part for part in parts if part.part_type == "assistant_message")
+    assert assistant_part.metadata["auto_continue_attempts"] == 1
+    assert assistant_part.metadata["verification_passed"] is True
+    assert assistant_part.metadata["work_progress"]["file_change_count"] == 1
+    assert any(part.part_type == "worktree_sandbox" for part in parts)
+    assert any(part.part_type == "task_checklist" for part in parts)
 
 
 def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp_path):
