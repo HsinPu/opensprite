@@ -50,16 +50,9 @@ from ..config.schedule_settings import (
 )
 from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
-from ..run_schema import (
-    serialize_file_change,
-    serialize_run_artifacts,
-    serialize_run_event,
-    serialize_run_event_counts,
-    serialize_run_events,
-    serialize_run_part,
-    serialize_run_summary,
-)
+from ..run_schema import serialize_run_event
 from ..utils.log import logger
+from .web_api import WebApiHandlers
 
 
 class WebAdapter(MessageAdapter):
@@ -90,6 +83,7 @@ class WebAdapter(MessageAdapter):
         self._started_event = asyncio.Event()
         self._session_connections: dict[str, web.WebSocketResponse] = {}
         self._socket_sessions: dict[web.WebSocketResponse, set[str]] = {}
+        self._api = WebApiHandlers(self)
         self._maybe_build_frontend()
         self._frontend_dir = self._resolve_frontend_dir()
 
@@ -894,199 +888,6 @@ class WebAdapter(MessageAdapter):
     async def _handle_health(self, request: web.Request) -> web.Response:
         return web.json_response({"ok": True, "channel": self.channel_instance_id, "channel_type": self.channel_type})
 
-    async def _handle_run_events(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-
-        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        run = await storage.get_run(session_id, run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        events = await storage.get_run_events(session_id, run_id)
-        serialized_events = serialize_run_events(events)
-        return web.json_response(
-            {
-                "run_id": run_id,
-                "session_id": session_id,
-                "events": serialized_events,
-                "event_counts": serialize_run_event_counts(events, serialized_events),
-            }
-        )
-
-    async def _handle_runs(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if session_id is None:
-            raise web.HTTPBadRequest(text="session_id is required")
-
-        runs = await storage.get_runs(session_id, limit=self._coerce_limit(request.query.get("limit")))
-        return web.json_response(
-            {
-                "session_id": session_id,
-                "runs": [self._serialize_run(run) for run in runs],
-            }
-        )
-
-    async def _handle_sessions(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-        session_limit = self._coerce_limit(request.query.get("limit"), default=30, maximum=100)
-        message_limit = self._coerce_limit(request.query.get("messages"), default=50, maximum=200)
-        channel_filter = self._coerce_optional_text(request.query.get("channel"))
-        session_ids = await storage.get_all_sessions()
-        if channel_filter is None:
-            session_prefix = f"{self.channel_instance_id}:"
-            session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
-        elif channel_filter.lower() != "all":
-            session_prefix = f"{channel_filter}:"
-            session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
-
-        sessions = [
-            await self._serialize_session_summary(storage, session_id, message_limit=message_limit)
-            for session_id in session_ids
-        ]
-        sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)
-        return web.json_response({"sessions": sessions[:session_limit], "channel": channel_filter or self.channel_instance_id})
-
-    async def _handle_session_status(self, request: web.Request) -> web.Response:
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if session_id is not None:
-            return web.json_response({"status": self._serialize_session_status(session_id)})
-
-        service = self._get_session_status_service()
-        statuses = [] if service is None else [self._serialize_session_status(item.session_id) for item in service.list()]
-        return web.json_response({"statuses": statuses})
-
-    async def _handle_run_trace(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        trace = await storage.get_run_trace(session_id, run_id)
-        if trace is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        serialized_events = serialize_run_events(trace.events)
-        return web.json_response(
-            {
-                "run": self._serialize_run(trace.run),
-                "events": serialized_events,
-                "event_counts": serialize_run_event_counts(trace.events, serialized_events),
-                "parts": [serialize_run_part(part) for part in trace.parts],
-                "file_changes": [serialize_file_change(change) for change in trace.file_changes],
-                "artifacts": serialize_run_artifacts(trace),
-            }
-        )
-
-    async def _handle_run_summary(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        trace = await storage.get_run_trace(session_id, run_id)
-        if trace is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        return web.json_response(serialize_run_summary(trace))
-
-    async def _handle_run_cancel(self, request: web.Request) -> web.Response:
-        storage = self._require_storage()
-        agent = self._get_agent()
-        if agent is None or not hasattr(agent, "request_run_cancel"):
-            raise web.HTTPServiceUnavailable(text="Run cancellation is not available")
-
-        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        run = await storage.get_run(session_id, run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        accepted = await agent.request_run_cancel(
-            session_id,
-            run_id,
-            channel=self.channel_instance_id,
-            external_chat_id=self._external_chat_id_from_session(session_id),
-        )
-        if not accepted:
-            raise web.HTTPConflict(text="Run is not active")
-
-        cancel_session = getattr(self.mq, "cancel_session", None)
-        if callable(cancel_session):
-            await cancel_session(session_id)
-
-        return web.json_response({"ok": True, "session_id": session_id, "run_id": run_id, "status": "cancelling"})
-
-    async def _handle_run_file_change_revert(self, request: web.Request) -> web.Response:
-        agent = self._get_agent()
-        revert = getattr(agent, "revert_run_file_change", None) if agent is not None else None
-        if not callable(revert):
-            raise web.HTTPServiceUnavailable(text="Run file-change revert is not available")
-
-        run_id = self._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = self._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-        try:
-            change_id = int(str(request.match_info.get("change_id") or ""))
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text="change_id must be an integer") from exc
-
-        body = await self._read_json_body(request)
-        dry_run = bool(body.get("dry_run", True))
-        result = await revert(session_id, run_id, change_id, dry_run=dry_run)
-        status = str(result.get("status") or "")
-        if status == "not_found":
-            raise web.HTTPNotFound(text=str(result.get("reason") or "File change not found"))
-        return web.json_response({"ok": bool(result.get("ok")), "revert": self._json_safe(result)})
-
-    async def _handle_permissions(self, request: web.Request) -> web.Response:
-        agent = self._get_agent()
-        pending_requests = getattr(agent, "pending_permission_requests", None) if agent is not None else None
-        if not callable(pending_requests):
-            raise web.HTTPServiceUnavailable(text="Permission requests are not available")
-        permissions = [self._serialize_permission_request(item) for item in pending_requests()]
-        return web.json_response({"permissions": permissions})
-
-    async def _handle_permission_approve(self, request: web.Request) -> web.Response:
-        agent = self._get_agent()
-        approve = getattr(agent, "approve_permission_request", None) if agent is not None else None
-        if not callable(approve):
-            raise web.HTTPServiceUnavailable(text="Permission approvals are not available")
-
-        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
-        if request_id is None:
-            raise web.HTTPBadRequest(text="request_id is required")
-        permission = await approve(request_id)
-        if permission is None:
-            raise web.HTTPNotFound(text="Permission request not found")
-        return web.json_response({"ok": True, "permission": self._serialize_permission_request(permission)})
-
-    async def _handle_permission_deny(self, request: web.Request) -> web.Response:
-        agent = self._get_agent()
-        deny = getattr(agent, "deny_permission_request", None) if agent is not None else None
-        if not callable(deny):
-            raise web.HTTPServiceUnavailable(text="Permission denials are not available")
-
-        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
-        if request_id is None:
-            raise web.HTTPBadRequest(text="request_id is required")
-        body = await self._read_json_body(request)
-        reason = self._coerce_optional_text(body.get("reason"), default="user denied approval") or "user denied approval"
-        permission = await deny(request_id, reason=reason)
-        if permission is None:
-            raise web.HTTPNotFound(text="Permission request not found")
-        return web.json_response({"ok": True, "permission": self._serialize_permission_request(permission)})
-
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_provider_settings().list_providers()
@@ -1495,20 +1296,20 @@ class WebAdapter(MessageAdapter):
         self.app = web.Application()
         self.app.router.add_get(ws_path, self._handle_websocket)
         self.app.router.add_get(health_path, self._handle_health)
-        self.app.router.add_get("/api/sessions/status", self._handle_session_status)
-        self.app.router.add_get("/api/sessions", self._handle_sessions)
-        self.app.router.add_get("/api/runs", self._handle_runs)
-        self.app.router.add_get("/api/runs/{run_id}/summary", self._handle_run_summary)
-        self.app.router.add_get("/api/runs/{run_id}", self._handle_run_trace)
-        self.app.router.add_get("/api/runs/{run_id}/events", self._handle_run_events)
-        self.app.router.add_post("/api/runs/{run_id}/cancel", self._handle_run_cancel)
+        self.app.router.add_get("/api/sessions/status", self._api.handle_session_status)
+        self.app.router.add_get("/api/sessions", self._api.handle_sessions)
+        self.app.router.add_get("/api/runs", self._api.handle_runs)
+        self.app.router.add_get("/api/runs/{run_id}/summary", self._api.handle_run_summary)
+        self.app.router.add_get("/api/runs/{run_id}", self._api.handle_run_trace)
+        self.app.router.add_get("/api/runs/{run_id}/events", self._api.handle_run_events)
+        self.app.router.add_post("/api/runs/{run_id}/cancel", self._api.handle_run_cancel)
         self.app.router.add_post(
             "/api/runs/{run_id}/file-changes/{change_id}/revert",
-            self._handle_run_file_change_revert,
+            self._api.handle_run_file_change_revert,
         )
-        self.app.router.add_get("/api/permissions", self._handle_permissions)
-        self.app.router.add_post("/api/permissions/{request_id}/approve", self._handle_permission_approve)
-        self.app.router.add_post("/api/permissions/{request_id}/deny", self._handle_permission_deny)
+        self.app.router.add_get("/api/permissions", self._api.handle_permissions)
+        self.app.router.add_post("/api/permissions/{request_id}/approve", self._api.handle_permission_approve)
+        self.app.router.add_post("/api/permissions/{request_id}/deny", self._api.handle_permission_deny)
         self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
         self.app.router.add_post("/api/settings/channels", self._handle_settings_channel_create)
         self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
