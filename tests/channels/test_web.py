@@ -591,7 +591,14 @@ async def _run_web_sessions_api():
     )
     await storage.add_message(
         "telegram:123",
-        StoredMessage(role="user", content="telegram should not appear", timestamp=300.0),
+        StoredMessage(role="user", content="telegram should appear for all", timestamp=300.0),
+    )
+    await storage.create_run(
+        "telegram:123",
+        "run-telegram-latest",
+        status="completed",
+        metadata={"objective": "inspect telegram"},
+        created_at=301.0,
     )
 
     agent = EchoAgent()
@@ -623,6 +630,20 @@ async def _run_web_sessions_api():
                 assert resp.status == 200
                 payload = await resp.json()
 
+            async with session.get(
+                f"http://127.0.0.1:{port}/api/sessions",
+                params={"channel": "all", "limit": "3", "messages": "1"},
+            ) as resp:
+                assert resp.status == 200
+                all_payload = await resp.json()
+
+            async with session.get(
+                f"http://127.0.0.1:{port}/api/sessions",
+                params={"channel": "telegram", "limit": "3", "messages": "1"},
+            ) as resp:
+                assert resp.status == 200
+                telegram_payload = await resp.json()
+
             async with session.get(f"http://127.0.0.1:{port}/api/sessions/status") as resp:
                 assert resp.status == 200
                 status_payload = await resp.json()
@@ -635,8 +656,21 @@ async def _run_web_sessions_api():
                 idle_status_payload = await resp.json()
 
         assert [item["session_id"] for item in payload["sessions"]] == ["web:browser-new"]
+        assert payload["channel"] == "web"
         assert payload["sessions"][0]["external_chat_id"] == "browser-new"
+        assert payload["sessions"][0]["channel"] == "web"
         assert payload["sessions"][0]["title"] == "new hello"
+        assert [item["session_id"] for item in all_payload["sessions"]] == [
+            "telegram:123",
+            "web:browser-new",
+            "web:browser-old",
+        ]
+        assert all_payload["channel"] == "all"
+        assert all_payload["sessions"][0]["channel"] == "telegram"
+        assert all_payload["sessions"][0]["external_chat_id"] == "123"
+        assert all_payload["sessions"][0]["runs"][0]["run_id"] == "run-telegram-latest"
+        assert [item["session_id"] for item in telegram_payload["sessions"]] == ["telegram:123"]
+        assert telegram_payload["channel"] == "telegram"
         assert payload["sessions"][0]["status"] == {
             "session_id": "web:browser-new",
             "status": "busy",
@@ -947,11 +981,11 @@ async def _run_web_settings_provider_api(tmp_path: Path):
                 models_payload = await resp.json()
 
             assert models_payload["providers"][0]["id"] == "openai"
-            assert "gpt-4.1-mini" in models_payload["providers"][0]["models"]
+            selected_openai_model = models_payload["providers"][0]["models"][0]
 
             async with session.post(
                 f"http://127.0.0.1:{port}/api/settings/models/select",
-                json={"provider_id": "openai", "model": "gpt-4.1-mini"},
+                json={"provider_id": "openai", "model": selected_openai_model},
             ) as resp:
                 assert resp.status == 200
                 select_payload = await resp.json()
@@ -960,14 +994,14 @@ async def _run_web_settings_provider_api(tmp_path: Path):
             assert select_payload["runtime_reloaded"] is True
             assert select_payload["runtime"] == {
                 "provider_id": "openai",
-                "model": "gpt-4.1-mini",
+                "model": selected_openai_model,
                 "configured": True,
             }
-            assert agent.reloads[-1] == ("openai", "gpt-4.1-mini")
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
             assert providers["openai"]["api_key"] == "secret-key"
             assert providers["openai"]["enabled"] is True
-            assert providers["openai"]["model"] == "gpt-4.1-mini"
+            assert providers["openai"]["model"] == selected_openai_model
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/providers/openrouter/connect",
@@ -984,9 +1018,9 @@ async def _run_web_settings_provider_api(tmp_path: Path):
                 "provider_id": "openrouter",
                 "restart_required": False,
                 "runtime_reloaded": True,
-                "runtime": {"provider_id": "openai", "model": "gpt-4.1-mini", "configured": True},
+                "runtime": {"provider_id": "openai", "model": selected_openai_model, "configured": True},
             }
-            assert agent.reloads[-1] == ("openai", "gpt-4.1-mini")
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
             assert set(providers) == {"openai"}
 

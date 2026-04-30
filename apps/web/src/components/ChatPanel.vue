@@ -88,6 +88,7 @@
       :model-value="messageText"
       :set-input-ref="setMessageInputRef"
       :disabled="sendDisabled"
+      :read-only="composerReadOnly"
       :runtime-hint="runtimeHint"
       @update:model-value="$emit('update-message-text', $event)"
       @input="$emit('composer-input')"
@@ -203,6 +204,10 @@ const props = defineProps({
     required: true,
   },
   sendDisabled: {
+    type: Boolean,
+    required: true,
+  },
+  composerReadOnly: {
     type: Boolean,
     required: true,
   },

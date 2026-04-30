@@ -38,12 +38,13 @@
       :show-run-trace="state.showRunTrace"
       :notice="state.notice"
       :session-meta="sessionMeta"
-      :runtime-hint="runtimeHint"
+      :runtime-hint="composerHint"
       :display-name="state.displayName"
       :message-text="messageText"
       :connection-label="connectionLabel"
       :connect-button-label="connectButtonLabel"
       :status-dot-class="statusDotClass"
+      :composer-read-only="currentSessionReadOnly"
       :send-disabled="sendDisabled"
       :connecting="state.connectionState === 'connecting'"
       :set-message-input-ref="setMessageInputRef"
@@ -126,10 +127,11 @@ const {
   currentRunSummary,
   settingsTitle,
   sessionMeta,
-  runtimeHint,
+  composerHint,
   connectionLabel,
   connectButtonLabel,
   statusDotClass,
+  currentSessionReadOnly,
   sendDisabled,
   setMessageInputRef,
   setMessageStageRef,

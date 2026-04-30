@@ -40,7 +40,12 @@
             @click="$emit('set-active-session', session.externalChatId)"
           >
             <span class="session-tile__initial" aria-hidden="true">{{ getSessionTitle(session).slice(0, 1) }}</span>
-            <strong>{{ getSessionTitle(session) }}</strong>
+            <span class="session-tile__heading">
+              <strong>{{ getSessionTitle(session) }}</strong>
+              <span v-if="session.channel && session.channel !== 'web'" class="session-tile__channel">
+                {{ session.channel }} · read-only
+              </span>
+            </span>
             <span class="session-tile__id">{{ getSessionDisplayId(session) }}</span>
           </button>
         </div>

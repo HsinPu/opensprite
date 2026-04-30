@@ -702,6 +702,7 @@ class WebAdapter(MessageAdapter):
         fallback_title = external_chat_id or session_id
         return {
             "session_id": session_id,
+            "channel": self._channel_from_session(session_id),
             "external_chat_id": external_chat_id,
             "title": self._session_title(display_messages, fallback_title),
             "updated_at": self._session_updated_at(messages, latest_runs),
@@ -1022,6 +1023,11 @@ class WebAdapter(MessageAdapter):
         return compact or None
 
     @staticmethod
+    def _channel_from_session(session_id: str) -> str:
+        parts = str(session_id or "").split(":", 1)
+        return parts[0].strip() if len(parts) == 2 and parts[0].strip() else "unknown"
+
+    @staticmethod
     def _coerce_media_list(value: Any) -> list[str] | None:
         if not isinstance(value, list):
             return None
@@ -1163,15 +1169,21 @@ class WebAdapter(MessageAdapter):
         storage = self._require_storage()
         session_limit = self._coerce_limit(request.query.get("limit"), default=30, maximum=100)
         message_limit = self._coerce_limit(request.query.get("messages"), default=50, maximum=200)
-        session_prefix = f"{self.channel_instance_id}:"
-        session_ids = [session_id for session_id in await storage.get_all_sessions() if session_id.startswith(session_prefix)]
+        channel_filter = self._coerce_optional_text(request.query.get("channel"))
+        session_ids = await storage.get_all_sessions()
+        if channel_filter is None:
+            session_prefix = f"{self.channel_instance_id}:"
+            session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
+        elif channel_filter.lower() != "all":
+            session_prefix = f"{channel_filter}:"
+            session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
 
         sessions = [
             await self._serialize_session_summary(storage, session_id, message_limit=message_limit)
             for session_id in session_ids
         ]
         sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)
-        return web.json_response({"sessions": sessions[:session_limit]})
+        return web.json_response({"sessions": sessions[:session_limit], "channel": channel_filter or self.channel_instance_id})
 
     async def _handle_session_status(self, request: web.Request) -> web.Response:
         session_id = self._coerce_optional_text(request.query.get("session_id"))

@@ -8,6 +8,7 @@
         :value="modelValue"
         rows="1"
         :placeholder="copy.composer.placeholder"
+        :readonly="readOnly"
         autocomplete="off"
         @input="handleInput"
         @keydown="$emit('keydown', $event)"
@@ -34,6 +35,10 @@ defineProps({
     required: true,
   },
   disabled: {
+    type: Boolean,
+    required: true,
+  },
+  readOnly: {
     type: Boolean,
     required: true,
   },

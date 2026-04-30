@@ -67,6 +67,7 @@ export const DISPLAY_COPY = {
       sendAria: "送出訊息",
       send: "送出",
       disclaimer: "OpenSprite 可能會出錯，重要內容請再確認。",
+      readOnlyChannel: (channel) => `${channel} 對話目前只能在 Web inspector 中檢視。`,
     },
     message: {
       userAvatar: "你",
@@ -615,6 +616,7 @@ export const DISPLAY_COPY = {
       sendAria: "Send message",
       send: "Send",
       disclaimer: "OpenSprite can make mistakes. Check important work.",
+      readOnlyChannel: (channel) => `${channel} sessions are read-only in the Web inspector.`,
     },
     message: {
       userAvatar: "You",

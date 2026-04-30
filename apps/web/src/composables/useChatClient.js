@@ -120,6 +120,12 @@ function externalChatIdFromSessionId(sessionId) {
   return normalized.slice(separatorIndex + 1).trim();
 }
 
+function channelFromSessionId(sessionId) {
+  const normalized = String(sessionId || "").trim();
+  const separatorIndex = normalized.indexOf(":");
+  return separatorIndex > 0 ? normalized.slice(0, separatorIndex).trim() : "web";
+}
+
 function summarizeTitle(text) {
   const singleLine = text.trim().replace(/\s+/g, " ");
   if (!singleLine) {
@@ -141,6 +147,8 @@ function makeMessage(role, text, meta) {
 function createSession(externalChatId) {
   return {
     externalChatId: externalChatId || generateExternalChatId(),
+    transportExternalChatId: externalChatId || "",
+    channel: "web",
     sessionId: null,
     title: "New chat",
     updatedAt: Date.now(),
@@ -857,6 +865,14 @@ export function useChatClient() {
 
   const runtimeHint = computed(() => currentSession.value?.externalChatId || copy.value.session.noActiveChat);
 
+  const composerHint = computed(() => {
+    const session = currentSession.value;
+    if (session?.channel && session.channel !== "web") {
+      return copy.value.composer.readOnlyChannel(session.channel);
+    }
+    return runtimeHint.value;
+  });
+
   const connectionLabel = computed(() => {
     const labels = copy.value.connection;
     return labels[state.connectionState] || labels.disconnected;
@@ -876,7 +892,12 @@ export function useChatClient() {
     "status-dot--connecting": state.connectionState === "connecting",
   }));
 
-  const sendDisabled = computed(() => state.connectionState !== "connected");
+  const currentSessionReadOnly = computed(() => {
+    const session = currentSession.value;
+    return Boolean(session && session.channel !== "web");
+  });
+
+  const sendDisabled = computed(() => state.connectionState !== "connected" || currentSessionReadOnly.value);
 
   function setMessageInputRef(element) {
     messageInput.value = element;
@@ -1016,6 +1037,9 @@ export function useChatClient() {
     if (!session) {
       return copy.value.session.noActiveChat;
     }
+    if (session.channel && session.channel !== "web") {
+      return session.sessionId || `${session.channel}:${session.transportExternalChatId || session.externalChatId}`;
+    }
     return session.sessionId || session.externalChatId;
   }
 
@@ -1046,7 +1070,9 @@ export function useChatClient() {
     }
     if (sessionId) {
       session.sessionId = sessionId;
+      session.channel = channelFromSessionId(sessionId);
     }
+    session.transportExternalChatId = resolvedExternalChatId;
     session.updatedAt = Date.now();
     return session;
   }
@@ -1943,10 +1969,14 @@ export function useChatClient() {
 
   function normalizeHistorySession(payload) {
     const sessionId = String(payload?.session_id || "").trim();
-    const externalChatId = String(payload?.external_chat_id || "").trim()
+    const channel = String(payload?.channel || channelFromSessionId(sessionId) || "web").trim() || "web";
+    const transportExternalChatId = String(payload?.external_chat_id || "").trim()
       || externalChatIdFromSessionId(sessionId)
       || generateExternalChatId();
+    const externalChatId = channel === "web" ? transportExternalChatId : (sessionId || `${channel}:${transportExternalChatId}`);
     const session = createSession(externalChatId);
+    session.channel = channel;
+    session.transportExternalChatId = transportExternalChatId;
     session.sessionId = sessionId || null;
     session.title = String(payload?.title || "").trim() || "New chat";
     session.updatedAt = normalizeEventTimestamp(payload?.updated_at);
@@ -1982,7 +2012,7 @@ export function useChatClient() {
 
   async function loadSessionHistory() {
     try {
-      const payload = await requestSettingsJson("/api/sessions?limit=50&messages=50");
+      const payload = await requestSettingsJson("/api/sessions?channel=all&limit=50&messages=50");
       const historySessions = Array.isArray(payload.sessions)
         ? payload.sessions.map(normalizeHistorySession)
         : [];
@@ -2786,6 +2816,10 @@ export function useChatClient() {
     if (!session) {
       return;
     }
+    if (session.channel !== "web") {
+      setNotice(copy.value.composer.readOnlyChannel(session.channel), "info");
+      return;
+    }
 
     addMessage(session.externalChatId, makeMessage("user", text, state.displayName || "Local browser"));
     activeSocket.send(
@@ -2888,9 +2922,11 @@ export function useChatClient() {
     settingsTitle,
     sessionMeta,
     runtimeHint,
+    composerHint,
     connectionLabel,
     connectButtonLabel,
     statusDotClass,
+    currentSessionReadOnly,
     sendDisabled,
     setMessageInputRef,
     setMessageStageRef,
