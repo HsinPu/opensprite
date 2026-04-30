@@ -498,6 +498,38 @@ async def _run_web_run_events_api():
             assert trace_payload["artifacts"][0]["status"] == "completed"
             assert trace_payload["artifacts"][0]["sources"] == ["part", "event"]
             assert trace_payload["artifacts"][1]["path"] == "notes.txt"
+            assert trace_payload["entries"] == [
+                {
+                    "schema_version": 1,
+                    "entry_id": "run:run-1",
+                    "entry_type": "assistant",
+                    "role": "assistant",
+                    "run_id": "run-1",
+                    "session_id": "web:browser-1",
+                    "status": "completed",
+                    "created_at": 100.0,
+                    "updated_at": 100.0,
+                    "content": [
+                        {
+                            "type": "tool",
+                            "status": "completed",
+                            "title": "apply_patch",
+                            "detail": "done",
+                            "artifact": trace_payload["artifacts"][0],
+                            "created_at": 102.75,
+                        },
+                        {
+                            "type": "file",
+                            "status": "completed",
+                            "title": "notes.txt",
+                            "detail": "notes.txt",
+                            "artifact": trace_payload["artifacts"][1],
+                            "created_at": 104.0,
+                        },
+                    ],
+                    "metadata": {"objective": "notes.txt"},
+                }
+            ]
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
@@ -800,6 +832,14 @@ async def _run_web_sessions_api():
                 "created_at": 200.0,
             }
         ]
+        assert [entry["entry_id"] for entry in payload["sessions"][0]["entries"]] == [
+            "message:1",
+            "run:run-new-latest",
+        ]
+        assert payload["sessions"][0]["entries"][0]["entry_type"] == "user"
+        assert payload["sessions"][0]["entries"][0]["text"] == "new hello"
+        assert payload["sessions"][0]["entries"][1]["entry_type"] == "assistant"
+        assert payload["sessions"][0]["entries"][1]["run_id"] == "run-new-latest"
     finally:
         adapter_task.cancel()
         try:

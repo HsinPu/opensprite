@@ -51,6 +51,7 @@ from ..config.schedule_settings import (
 from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..run_schema import serialize_run_event, serialize_work_state_todos
+from ..session_entries import serialize_session_entries
 from ..utils.log import logger
 from .web_api import WebApiHandlers
 
@@ -692,6 +693,12 @@ class WebAdapter(MessageAdapter):
         messages = await storage.get_messages(session_id, limit=message_limit)
         display_messages = [message for message in messages if str(getattr(message, "role", "") or "") in {"user", "assistant"}]
         latest_runs = await storage.get_runs(session_id, limit=1)
+        latest_traces = []
+        for run in latest_runs:
+            get_run_trace = getattr(storage, "get_run_trace", None)
+            trace = await get_run_trace(session_id, run.run_id) if callable(get_run_trace) else None
+            if trace is not None:
+                latest_traces.append(trace)
         get_work_state = getattr(storage, "get_work_state", None)
         work_state = await get_work_state(session_id) if callable(get_work_state) else None
         external_chat_id = self._external_chat_id_from_session(session_id)
@@ -706,6 +713,7 @@ class WebAdapter(MessageAdapter):
             "message_count": await storage.get_message_count(session_id),
             "messages": [self._serialize_message(message) for message in display_messages],
             "runs": [self._serialize_run(run) for run in latest_runs],
+            "entries": serialize_session_entries(display_messages, latest_traces),
             "work_state": self._serialize_work_state(work_state),
         }
 

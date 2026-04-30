@@ -14,6 +14,7 @@ from ..run_schema import (
     serialize_run_part,
     serialize_run_summary,
 )
+from ..session_entries import serialize_run_trace_entries
 
 
 class WebApiHandlers:
@@ -113,6 +114,7 @@ class WebApiHandlers:
                 "parts": [serialize_run_part(part) for part in trace.parts],
                 "file_changes": [serialize_file_change(change) for change in trace.file_changes],
                 "artifacts": serialize_run_artifacts(trace),
+                "entries": serialize_run_trace_entries(trace),
             }
         )
 
