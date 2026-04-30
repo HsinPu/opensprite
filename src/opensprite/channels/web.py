@@ -53,10 +53,10 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..run_schema import (
     RUN_SCHEMA_VERSION,
     file_change_artifact,
-    run_event_envelope,
     run_part_artifact,
     run_part_kind,
     run_part_state,
+    serialize_run_event,
 )
 from ..utils.log import logger
 
@@ -726,19 +726,7 @@ class WebAdapter(MessageAdapter):
         }
 
     def _serialize_run_event(self, event: Any) -> dict[str, Any]:
-        envelope = run_event_envelope(event.event_type, dict(event.payload or {}))
-        return {
-            "schema_version": envelope["schema_version"],
-            "event_id": event.event_id,
-            "run_id": event.run_id,
-            "session_id": event.session_id,
-            "event_type": event.event_type,
-            "kind": envelope["kind"],
-            "status": envelope["status"],
-            "payload": envelope["payload"],
-            "artifact": envelope["artifact"],
-            "created_at": event.created_at,
-        }
+        return serialize_run_event(event)
 
     def _serialize_run_part(self, part: Any) -> dict[str, Any]:
         metadata = self._json_safe(dict(part.metadata or {}))
@@ -1107,24 +1095,17 @@ class WebAdapter(MessageAdapter):
         if ws is None or ws.closed:
             return
 
-        envelope = run_event_envelope(event.event_type, dict(event.payload or {}))
-
         await ws.send_json(
-            {
-                "type": "run_event",
-                "schema_version": envelope["schema_version"],
-                "channel": self.channel_instance_id,
-                "channel_type": self.channel_type,
-                "external_chat_id": event.external_chat_id,
-                "session_id": event.session_id,
-                "run_id": event.run_id,
-                "event_type": event.event_type,
-                "kind": envelope["kind"],
-                "status": envelope["status"],
-                "payload": envelope["payload"],
-                "artifact": envelope["artifact"],
-                "created_at": event.created_at,
-            }
+            serialize_run_event(
+                event,
+                include_event_id=False,
+                extra={
+                    "type": "run_event",
+                    "channel": self.channel_instance_id,
+                    "channel_type": self.channel_type,
+                    "external_chat_id": event.external_chat_id,
+                },
+            )
         )
 
     async def send_session_status(self, event: SessionStatusEvent) -> None:

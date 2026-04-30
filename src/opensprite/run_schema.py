@@ -159,6 +159,33 @@ def run_event_envelope(event_type: str, payload: dict[str, Any] | None) -> dict[
     }
 
 
+def serialize_run_event(
+    event: Any,
+    *,
+    include_event_id: bool = True,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Serialize a stored or live run event using the shared envelope."""
+    event_type = str(getattr(event, "event_type", "") or "")
+    envelope = run_event_envelope(event_type, dict(getattr(event, "payload", {}) or {}))
+    serialized = {
+        "schema_version": envelope["schema_version"],
+        "run_id": getattr(event, "run_id", None),
+        "session_id": getattr(event, "session_id", None),
+        "event_type": event_type,
+        "kind": envelope["kind"],
+        "status": envelope["status"],
+        "payload": envelope["payload"],
+        "artifact": envelope["artifact"],
+        "created_at": getattr(event, "created_at", None),
+    }
+    if include_event_id:
+        serialized["event_id"] = getattr(event, "event_id", None)
+    if extra:
+        serialized.update(json_safe_payload(extra))
+    return serialized
+
+
 def run_part_kind(part_type: str) -> str:
     normalized = _text(part_type)
     if normalized == "assistant_message":
