@@ -50,22 +50,57 @@
             </div>
 
             <div class="run-trace__artifact-grid">
-              <button
+              <template
                 v-for="artifact in group.items"
                 :key="artifact.artifactId"
-                class="run-trace__artifact-card"
-                :class="{ 'run-trace__artifact-card--button': isFileArtifact(artifact) }"
-                :data-kind="isFileArtifact(artifact) ? 'file' : artifact.kind"
-                :data-status="artifact.status"
-                :disabled="!isFileArtifact(artifact)"
-                type="button"
-                @click="inspectArtifact(artifact)"
               >
-                <span class="run-trace__artifact-status">{{ artifact.status }}</span>
-                <strong>{{ artifactTitle(artifact) }}</strong>
-                <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
-                <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
-              </button>
+                <details
+                  v-if="isToolArtifact(artifact)"
+                  class="run-trace__artifact-card run-trace__artifact-card--details"
+                  :data-kind="artifact.kind"
+                  :data-status="artifact.status"
+                >
+                  <summary class="run-trace__artifact-summary">
+                    <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                    <strong>{{ artifactTitle(artifact) }}</strong>
+                    <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                    <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                  </summary>
+                  <dl v-if="toolDetailRows(artifact).length" class="run-trace__tool-details">
+                    <div v-for="row in toolDetailRows(artifact)" :key="row.label" :data-tone="row.tone || 'neutral'">
+                      <dt>{{ row.label }}</dt>
+                      <dd>{{ row.value }}</dd>
+                    </div>
+                  </dl>
+                  <p v-else class="run-trace__tool-empty">{{ copy.trace.noToolDetails }}</p>
+                </details>
+
+                <button
+                  v-else-if="isFileArtifact(artifact)"
+                  class="run-trace__artifact-card run-trace__artifact-card--button"
+                  :data-kind="'file'"
+                  :data-status="artifact.status"
+                  type="button"
+                  @click="inspectArtifact(artifact)"
+                >
+                  <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                  <strong>{{ artifactTitle(artifact) }}</strong>
+                  <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                </button>
+
+                <article
+                  v-else
+                  class="run-trace__artifact-card"
+                  :data-kind="artifact.kind"
+                  :data-status="artifact.status"
+                >
+                  <span class="run-trace__artifact-status">{{ artifact.status }}</span>
+                  <strong>{{ artifactTitle(artifact) }}</strong>
+                  <small v-if="artifactSubtitle(artifact)">{{ artifactSubtitle(artifact) }}</small>
+                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                </article>
+              </template>
             </div>
           </section>
         </div>
@@ -328,8 +363,60 @@ function artifactDetail(artifact) {
   return artifact.detail;
 }
 
+function isToolArtifact(artifact) {
+  return artifact.kind === "tool";
+}
+
 function isFileArtifact(artifact) {
   return (artifact.kind === "file" || Boolean(artifact.path)) && Boolean(artifact.path);
+}
+
+function relatedToolParts(artifact) {
+  return parts.value.filter((part) => {
+    if (part.kind !== "tool") {
+      return false;
+    }
+    const metadata = part.metadata || {};
+    if (artifact.toolCallId && String(metadata.tool_call_id || metadata.toolCallId || part.artifact?.toolCallId || "") === artifact.toolCallId) {
+      return true;
+    }
+    if (artifact.artifactId && part.artifact?.artifactId === artifact.artifactId) {
+      return true;
+    }
+    if (artifact.toolName && part.toolName === artifact.toolName) {
+      const partIteration = metadata.iteration ?? part.artifact?.iteration ?? "";
+      return !artifact.iteration || String(partIteration) === String(artifact.iteration);
+    }
+    return false;
+  });
+}
+
+function toolDetailRows(artifact) {
+  const labels = props.copy.trace.detailLabels;
+  const sources = [artifact.metadata, ...relatedToolParts(artifact).flatMap((part) => [part.metadata, part.artifact?.metadata])]
+    .filter((item) => item && typeof item === "object");
+  const rows = [
+    { label: labels.toolCallId, value: artifact.toolCallId },
+    { label: labels.iteration, value: artifact.iteration },
+    { label: labels.phase, value: artifact.phase },
+    { label: labels.args, value: firstMetadataValue(sources, ["args_preview", "argsPreview", "arguments", "args"]) },
+    { label: labels.result, value: firstMetadataValue(sources, ["result_preview", "resultPreview", "result", "output"]) },
+    { label: labels.error, value: firstMetadataValue(sources, ["error", "error_preview", "errorPreview"]), tone: "error" },
+    { label: labels.detail, value: artifact.detail },
+  ];
+  return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
+}
+
+function firstMetadataValue(sources, keys) {
+  for (const source of sources) {
+    for (const key of keys) {
+      const value = source[key];
+      if (value !== "" && value !== null && value !== undefined) {
+        return typeof value === "object" ? formatMetadata(value) : String(value);
+      }
+    }
+  }
+  return "";
 }
 
 function inspectArtifact(artifact) {

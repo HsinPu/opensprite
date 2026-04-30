@@ -138,6 +138,7 @@
 :root[data-color-scheme="dark"] .run-trace__summary span,
 :root[data-color-scheme="dark"] .run-trace__artifact-group,
 :root[data-color-scheme="dark"] .run-trace__artifact-card,
+:root[data-color-scheme="dark"] .run-trace__tool-details div,
 :root[data-color-scheme="dark"] .run-trace__part,
 :root[data-color-scheme="dark"] .run-trace__parts,
 :root[data-color-scheme="dark"] .run-trace__debug,
@@ -1926,6 +1927,86 @@ button:disabled {
 .run-trace__artifact-card--button:not(:disabled):hover {
   border-color: var(--border);
   background: rgba(255, 255, 255, 0.86);
+}
+
+.run-trace__artifact-card--details {
+  padding: 0;
+  overflow: hidden;
+}
+
+.run-trace__artifact-summary {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.run-trace__artifact-summary::-webkit-details-marker {
+  display: none;
+}
+
+.run-trace__artifact-summary::after {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--text-soft);
+  content: "+";
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.run-trace__artifact-card--details[open] .run-trace__artifact-summary::after {
+  content: "-";
+}
+
+.run-trace__tool-details {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0 10px 10px;
+}
+
+.run-trace__tool-details div {
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.run-trace__tool-details div[data-tone="error"] {
+  border-color: rgba(217, 45, 32, 0.18);
+}
+
+.run-trace__tool-details dt {
+  margin: 0 0 3px;
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.run-trace__tool-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.run-trace__tool-details div[data-tone="error"] dd {
+  color: #9b241c;
+}
+
+.run-trace__tool-empty {
+  margin: 0;
+  padding: 0 10px 10px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
 }
 
 .run-trace__artifact-card[data-kind="tool"] {
