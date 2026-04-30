@@ -7,7 +7,17 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 
-SessionStatusType = Literal["idle", "busy", "cancelling", "retry"]
+SessionStatusType = Literal[
+    "idle",
+    "queued",
+    "thinking",
+    "streaming",
+    "tool_running",
+    "waiting_permission",
+    "waiting_user",
+    "cancelling",
+    "retry",
+]
 
 
 @dataclass

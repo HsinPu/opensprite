@@ -417,6 +417,11 @@ function runStatusLabel(status, copy) {
   return copy.run.statusLabels[status] || copy.run.statusLabels.running;
 }
 
+function sessionStatusLabel(session, copy) {
+  const status = String(session?.status?.status || "idle").trim() || "idle";
+  return copy.run.statusLabels[status] || status;
+}
+
 function runTone(status, fallbackTone = "running") {
   if (status === "completed") {
     return fallbackTone === "warning" ? "warning" : "success";
@@ -1017,7 +1022,7 @@ export function useChatClient() {
 
   const sessionMeta = computed(() => {
     const session = currentSession.value;
-    return `${getSessionTitle(session)} · ${getSessionDisplayId(session)}`;
+    return `${getSessionTitle(session)} · ${getSessionDisplayId(session)} · ${sessionStatusLabel(session, copy.value)}`;
   });
 
   const runtimeHint = computed(() => currentSession.value?.externalChatId || copy.value.session.noActiveChat);

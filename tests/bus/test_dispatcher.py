@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
+from opensprite.bus.events import RunEvent
 from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.message import AssistantMessage
 from opensprite.config.schema import MessagesConfig, ToolsConfig
@@ -161,7 +162,7 @@ def test_message_queue_tracks_session_status_during_processing():
         try:
             await queue.enqueue_raw(content="ping", external_chat_id="status-chat", channel="telegram")
             await asyncio.wait_for(agent.started.wait(), timeout=2)
-            busy = queue.session_status.get("telegram:status-chat")
+            thinking = queue.session_status.get("telegram:status-chat")
             listed = queue.session_status.list()
             agent.release.set()
             await asyncio.wait_for(response_sent.wait(), timeout=2)
@@ -171,16 +172,115 @@ def test_message_queue_tracks_session_status_during_processing():
             await queue.stop()
             await asyncio.wait_for(processor, timeout=2)
 
-        return busy, listed, idle, final_list
+        return thinking, listed, idle, final_list
 
-    busy, listed, idle, final_list = asyncio.run(scenario())
+    thinking, listed, idle, final_list = asyncio.run(scenario())
 
-    assert busy.status == "busy"
-    assert busy.metadata == {"channel": "telegram", "external_chat_id": "status-chat"}
+    assert thinking.status == "thinking"
+    assert thinking.metadata == {"channel": "telegram", "external_chat_id": "status-chat"}
     assert [item.session_id for item in listed] == ["telegram:status-chat"]
     assert idle.status == "idle"
     assert idle.session_id == "telegram:status-chat"
     assert final_list == []
+
+
+def test_message_queue_maps_run_events_to_granular_session_status():
+    async def scenario():
+        queue = MessageQueue(FakeAgent())
+        event = RunEvent(
+            channel="web",
+            external_chat_id="browser-1",
+            session_id="web:browser-1",
+            run_id="run-1",
+            event_type="run_started",
+        )
+        await queue._set_session_status_from_run_event(event)
+        thinking = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="run_part_delta",
+                payload={"content_delta": "hi"},
+            )
+        )
+        streaming = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="tool_started",
+                payload={"tool_name": "demo"},
+            )
+        )
+        tool_running = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="permission_requested",
+                payload={"request_id": "perm-1", "tool_name": "demo"},
+            )
+        )
+        waiting_permission = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="permission_granted",
+                payload={"request_id": "perm-1", "tool_name": "demo"},
+            )
+        )
+        resumed = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="work_progress.updated",
+                payload={"status": "waiting_user"},
+            )
+        )
+        waiting_user = queue.session_status.get("web:browser-1")
+
+        await queue._set_session_status_from_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                run_id="run-1",
+                event_type="run_finished",
+            )
+        )
+        idle = queue.session_status.get("web:browser-1")
+        return thinking, streaming, tool_running, waiting_permission, resumed, waiting_user, idle
+
+    thinking, streaming, tool_running, waiting_permission, resumed, waiting_user, idle = asyncio.run(scenario())
+
+    assert thinking.status == "thinking"
+    assert thinking.metadata["run_id"] == "run-1"
+    assert streaming.status == "streaming"
+    assert tool_running.status == "tool_running"
+    assert tool_running.metadata["tool_name"] == "demo"
+    assert waiting_permission.status == "waiting_permission"
+    assert waiting_permission.metadata["request_id"] == "perm-1"
+    assert resumed.status == "thinking"
+    assert waiting_user.status == "waiting_user"
+    assert idle.status == "idle"
 
 
 def test_message_queue_cancel_session_requests_active_run_cancel_first():

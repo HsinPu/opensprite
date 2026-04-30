@@ -92,10 +92,16 @@ async def _run_web_roundtrip():
                     "created_at": 123.0,
                 }
 
+                auto_status_frame = await ws.receive_json(timeout=2)
+                assert auto_status_frame["type"] == "session_status"
+                assert auto_status_frame["session_id"] == session_frame["session_id"]
+                assert auto_status_frame["status"] == "thinking"
+                assert auto_status_frame["metadata"]["run_id"] == "run-test"
+
                 await queue.bus.publish_session_status(
                     SessionStatusEvent(
                         session_id=session_frame["session_id"],
-                        status="busy",
+                        status="thinking",
                         metadata={"channel": "web", "external_chat_id": session_frame["external_chat_id"]},
                         updated_at=124.0,
                     )
@@ -105,7 +111,7 @@ async def _run_web_roundtrip():
                     "type": "session_status",
                     "channel": "web",
                     "session_id": session_frame["session_id"],
-                    "status": "busy",
+                    "status": "thinking",
                     "updated_at": 124.0,
                     "metadata": {"channel": "web", "external_chat_id": session_frame["external_chat_id"]},
                 }
@@ -642,7 +648,7 @@ async def _run_web_sessions_api():
     agent = EchoAgent()
     agent.storage = storage
     queue = MessageQueue(agent)
-    queue.session_status.set("web:browser-new", "busy", {"channel": "web", "external_chat_id": "browser-new"})
+    queue.session_status.set("web:browser-new", "thinking", {"channel": "web", "external_chat_id": "browser-new"})
     adapter = WebAdapter(
         mq=queue,
         config={
@@ -711,7 +717,7 @@ async def _run_web_sessions_api():
         assert telegram_payload["channel"] == "telegram"
         assert payload["sessions"][0]["status"] == {
             "session_id": "web:browser-new",
-            "status": "busy",
+            "status": "thinking",
             "updated_at": payload["sessions"][0]["status"]["updated_at"],
             "metadata": {"channel": "web", "external_chat_id": "browser-new"},
         }

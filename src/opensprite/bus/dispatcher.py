@@ -660,6 +660,43 @@ class MessageQueue:
                 updated_at=item.updated_at,
             )
         )
+
+    async def _set_session_status_from_run_event(self, event: RunEvent) -> None:
+        """Reflect run lifecycle details into the transient session status."""
+        event_type = str(event.event_type or "")
+        payload = dict(event.payload or {})
+        current = self.session_status.get(event.session_id)
+        if current.status == "idle" and event_type not in {"run_started", "run_finished", "run_failed", "run_cancelled"}:
+            return
+
+        metadata = {
+            "channel": event.channel,
+            "external_chat_id": event.external_chat_id,
+            "run_id": event.run_id,
+            "event_type": event_type,
+        }
+        if event_type == "run_started":
+            await self._set_session_status(event.session_id, "thinking", metadata)
+        elif event_type in {"run_part_delta", "message_part_delta"}:
+            await self._set_session_status(event.session_id, "streaming", metadata)
+        elif event_type == "tool_started":
+            await self._set_session_status(
+                event.session_id,
+                "tool_running",
+                {**metadata, "tool_name": payload.get("tool_name")},
+            )
+        elif event_type == "permission_requested":
+            await self._set_session_status(
+                event.session_id,
+                "waiting_permission",
+                {**metadata, "request_id": payload.get("request_id"), "tool_name": payload.get("tool_name")},
+            )
+        elif event_type in {"permission_granted", "permission_denied", "tool_result"}:
+            await self._set_session_status(event.session_id, "thinking", metadata)
+        elif str(payload.get("status") or payload.get("state") or "") == "waiting_user":
+            await self._set_session_status(event.session_id, "waiting_user", metadata)
+        elif event_type in {"run_finished", "run_failed", "run_cancelled"}:
+            await self._set_session_status(event.session_id, "idle")
     
     async def enqueue(self, user_message: UserMessage) -> None:
         """
@@ -783,7 +820,7 @@ class MessageQueue:
         suppress_outbound = bool(metadata.pop("_suppress_outbound", False))
         await self._set_session_status(
             session_id,
-            "busy",
+            "thinking",
             {
                 "channel": inbound.channel,
                 "external_chat_id": external_chat_id,
@@ -910,6 +947,7 @@ class MessageQueue:
                     timeout=1.0,
                 )
                 normalized_channel = self.normalize_channel(event.channel)
+                await self._set_session_status_from_run_event(event)
                 handler = self._run_event_handlers.get(normalized_channel)
                 if handler is None:
                     continue
@@ -962,6 +1000,15 @@ class MessageQueue:
                 session_id = inbound.session_id or self.build_session_id(inbound.channel, inbound.external_chat_id)
 
                 previous_task = self._session_tails.get(session_id)
+                if previous_task is not None and not previous_task.done():
+                    await self._set_session_status(
+                        session_id,
+                        "queued",
+                        {
+                            "channel": inbound.channel,
+                            "external_chat_id": inbound.external_chat_id,
+                        },
+                    )
                 task = asyncio.create_task(self._run_session_message(inbound, session_id, previous_task))
                 self._session_tails[session_id] = task
 

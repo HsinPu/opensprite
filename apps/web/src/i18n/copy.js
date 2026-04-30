@@ -84,6 +84,15 @@ export const DISPLAY_COPY = {
     },
     run: {
       statusLabels: {
+        idle: "閒置",
+        queued: "排隊中",
+        thinking: "思考中",
+        streaming: "回覆中",
+        tool_running: "工具執行中",
+        waiting_permission: "等待權限",
+        waiting_user: "等待使用者",
+        cancelling: "取消中",
+        retry: "重試中",
         running: "執行中",
         completed: "完成",
         failed: "失敗",
@@ -679,6 +688,15 @@ export const DISPLAY_COPY = {
     },
     run: {
       statusLabels: {
+        idle: "Idle",
+        queued: "Queued",
+        thinking: "Thinking",
+        streaming: "Streaming",
+        tool_running: "Running tool",
+        waiting_permission: "Waiting for permission",
+        waiting_user: "Waiting for user",
+        cancelling: "Cancelling",
+        retry: "Retrying",
         running: "Running",
         completed: "Complete",
         failed: "Failed",
