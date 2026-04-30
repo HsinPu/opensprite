@@ -363,6 +363,56 @@ function isTerminalRunStatus(status) {
   return TERMINAL_RUN_STATUSES.has(status);
 }
 
+function getActiveRun(session) {
+  if (!session?.runs?.length) {
+    return null;
+  }
+  return session.runs.find((run) => run.runId === session.activeRunId) || session.runs[0];
+}
+
+function shouldLoadRunSummary({ showRunSummary }, run) {
+  return Boolean(
+    showRunSummary
+    && run
+    && isTerminalRunStatus(run.status)
+    && !run.summary
+    && !run.summaryLoading
+    && !run.summaryError
+    && coerceNonNegativeInteger(run.summaryNotFoundAttempts) < RUN_SUMMARY_NOT_FOUND_RETRY_LIMIT,
+  );
+}
+
+function shouldLoadRunTrace(run) {
+  if (!run || run.traceLoading) {
+    return false;
+  }
+  const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !(run.summary?.fileChanges || []).length;
+  return !(run.traceLoaded && hasNeededFileChanges);
+}
+
+function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
+  return {
+    runId,
+    sessionId,
+    status,
+    createdAt,
+    updatedAt,
+    finishedAt,
+    events: [],
+    rawEvents: [],
+    parts: [],
+    artifacts: [],
+    fileChanges: [],
+    summary: null,
+    summaryLoading: false,
+    summaryError: "",
+    summaryNotFoundAttempts: 0,
+    traceLoaded: false,
+    traceLoading: false,
+    traceError: "",
+  };
+}
+
 function buildRunSummaryPath(runId, sessionId) {
   return `/api/runs/${encodeURIComponent(runId)}/summary?session_id=${encodeURIComponent(sessionId)}`;
 }
@@ -774,11 +824,7 @@ export function useChatClient() {
   const currentRunsError = computed(() => currentSession.value?.runsError || "");
 
   const currentRun = computed(() => {
-    const session = currentSession.value;
-    if (!session?.runs?.length) {
-      return null;
-    }
-    return session.runs.find((run) => run.runId === session.activeRunId) || session.runs[0];
+    return getActiveRun(currentSession.value);
   });
 
   const currentRunTimeline = computed(() => {
@@ -1016,25 +1062,11 @@ export function useChatClient() {
   function findOrCreateRun(session, runId, createdAt) {
     let run = session.runs.find((entry) => entry.runId === runId);
     if (!run) {
-      run = {
+      run = createRunViewState({
         runId,
         sessionId: session.sessionId,
-        status: "running",
         createdAt,
-        updatedAt: createdAt,
-        events: [],
-        rawEvents: [],
-        parts: [],
-        artifacts: [],
-        fileChanges: [],
-        summary: null,
-        summaryLoading: false,
-        summaryError: "",
-        summaryNotFoundAttempts: 0,
-        traceLoaded: false,
-        traceLoading: false,
-        traceError: "",
-      };
+      });
       session.runs.unshift(run);
     }
     run.sessionId = run.sessionId || session.sessionId;
@@ -1570,33 +1602,16 @@ export function useChatClient() {
   }
 
   function maybeLoadRunSummaryForSession(session) {
-    if (!state.showRunSummary || !session?.runs?.length) {
-      return;
-    }
-    const run = session.runs.find((entry) => entry.runId === session.activeRunId) || session.runs[0];
-    if (
-      !run
-      || !isTerminalRunStatus(run.status)
-      || run.summary
-      || run.summaryLoading
-      || run.summaryError
-      || coerceNonNegativeInteger(run.summaryNotFoundAttempts) >= RUN_SUMMARY_NOT_FOUND_RETRY_LIMIT
-    ) {
+    const run = getActiveRun(session);
+    if (!shouldLoadRunSummary(state, run)) {
       return;
     }
     scheduleRunSummaryFetch(session, run);
   }
 
   function maybeLoadRunTraceForSession(session) {
-    if (!session?.runs?.length) {
-      return;
-    }
-    const run = session.runs.find((entry) => entry.runId === session.activeRunId) || session.runs[0];
-    if (!run || run.traceLoading) {
-      return;
-    }
-    const hasNeededFileChanges = (run.fileChanges || []).length > 0 || !(run.summary?.fileChanges || []).length;
-    if (run.traceLoaded && hasNeededFileChanges) {
+    const run = getActiveRun(session);
+    if (!shouldLoadRunTrace(run)) {
       return;
     }
     void loadRunTrace(session, run);
@@ -1846,26 +1861,14 @@ export function useChatClient() {
       return null;
     }
     const finishedAt = Number(payload?.finished_at ?? payload?.finishedAt);
-    return {
+    return createRunViewState({
       runId,
       sessionId: String(payload?.session_id || payload?.sessionId || "").trim(),
       status: String(payload?.status || "running").trim() || "running",
       createdAt: normalizeEventTimestamp(payload?.created_at ?? payload?.createdAt),
       updatedAt: normalizeEventTimestamp(payload?.updated_at ?? payload?.updatedAt),
       finishedAt: Number.isFinite(finishedAt) && finishedAt > 0 ? normalizeEventTimestamp(finishedAt) : null,
-      events: [],
-      rawEvents: [],
-      parts: [],
-      artifacts: [],
-      fileChanges: [],
-      summary: null,
-      summaryLoading: false,
-      summaryError: "",
-      summaryNotFoundAttempts: 0,
-      traceLoaded: false,
-      traceLoading: false,
-      traceError: "",
-    };
+    });
   }
 
   function mergeSessionRuns(session, runs) {
