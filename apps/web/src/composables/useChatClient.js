@@ -297,6 +297,21 @@ function normalizeTraceEventCounts(counts, events = []) {
   };
 }
 
+function updateLiveTraceEventCounts(run, event) {
+  const previous = normalizeTraceEventCounts(run?.eventCounts, run?.rawEvents || []);
+  const textTotal = previous.textTotal + (isTextRunEvent(event) ? 1 : 0);
+  const textReturned = (run.rawEvents || []).filter(isTextRunEvent).length;
+  run.eventCounts = {
+    total: previous.total + 1,
+    returned: (run.rawEvents || []).length,
+    compacted: Math.max(0, previous.total + 1 - (run.rawEvents || []).length),
+    textTotal,
+    textReturned,
+    maxEvents: MAX_RUN_EVENTS,
+    maxTextEvents: MAX_RUN_TEXT_EVENTS,
+  };
+}
+
 function normalizeRunArtifact(artifact, fallback = {}) {
   if (!artifact || typeof artifact !== "object") {
     return null;
@@ -1428,7 +1443,7 @@ export function useChatClient() {
     const run = findOrCreateRun(session, runId, createdAt);
     applyWorkStateFromRunEvent(session, eventType, eventPayload, createdAt);
     const nextStatus = statusFromRunEvent(eventType, eventPayload, eventStatus);
-    run.rawEvents.push({
+    const rawEvent = {
       id: `${runId}-raw-${eventType}-${createdAt}-${randomToken()}`,
       eventType,
       kind: eventKind,
@@ -1436,8 +1451,10 @@ export function useChatClient() {
       createdAt,
       payload: eventPayload,
       artifact: eventArtifact,
-    });
+    };
+    run.rawEvents.push(rawEvent);
     run.rawEvents = compactRunEvents(run.rawEvents);
+    updateLiveTraceEventCounts(run, rawEvent);
 
     if (nextStatus) {
       run.status = nextStatus;
