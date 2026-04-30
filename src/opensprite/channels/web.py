@@ -742,6 +742,46 @@ class WebAdapter(MessageAdapter):
             "timed_out": request.timed_out,
         }
 
+    def _question_request_id(self, state: Any) -> str:
+        updated_at = int(float(getattr(state, "updated_at", 0) or 0) * 1000)
+        return f"work:{state.session_id}:{updated_at}"
+
+    def _serialize_question_request(self, state: Any) -> dict[str, Any]:
+        blockers = [str(item).strip() for item in getattr(state, "blockers", ()) if str(item).strip()]
+        question = blockers[0] if blockers else str(getattr(state, "last_next_action", "") or "").strip()
+        return {
+            "request_id": self._question_request_id(state),
+            "session_id": state.session_id,
+            "channel": self._channel_from_session(state.session_id),
+            "external_chat_id": self._external_chat_id_from_session(state.session_id),
+            "question": question,
+            "status": "pending",
+            "objective": str(getattr(state, "objective", "") or ""),
+            "created_at": float(getattr(state, "created_at", 0) or 0),
+            "updated_at": float(getattr(state, "updated_at", 0) or 0),
+        }
+
+    async def _pending_question_states(self) -> list[Any]:
+        storage = self._require_storage()
+        get_work_state = getattr(storage, "get_work_state", None)
+        if not callable(get_work_state):
+            return []
+
+        states = []
+        for session_id in await storage.get_all_sessions():
+            state = await get_work_state(session_id)
+            if state is None or getattr(state, "status", "") != "waiting_user":
+                continue
+            if self._serialize_question_request(state)["question"]:
+                states.append(state)
+        return sorted(states, key=lambda item: float(getattr(item, "updated_at", 0) or 0), reverse=True)
+
+    async def _find_pending_question_state(self, request_id: str) -> Any | None:
+        for state in await self._pending_question_states():
+            if self._question_request_id(state) == request_id:
+                return state
+        return None
+
     def _require_storage(self) -> Any:
         storage = self._get_storage()
         if storage is None:
@@ -1057,6 +1097,64 @@ class WebAdapter(MessageAdapter):
         if permission is None:
             raise web.HTTPNotFound(text="Permission request not found")
         return web.json_response({"ok": True, "permission": self._serialize_permission_request(permission)})
+
+    async def _handle_questions(self, request: web.Request) -> web.Response:
+        questions = [self._serialize_question_request(state) for state in await self._pending_question_states()]
+        return web.json_response({"questions": questions})
+
+    async def _handle_question_reply(self, request: web.Request) -> web.Response:
+        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
+        if request_id is None:
+            raise web.HTTPBadRequest(text="request_id is required")
+
+        state = await self._find_pending_question_state(request_id)
+        if state is None:
+            raise web.HTTPNotFound(text="Question request not found")
+
+        body = await self._read_json_body(request)
+        answer = self._coerce_optional_text(body.get("answer"))
+        if answer is None:
+            answers = body.get("answers")
+            if isinstance(answers, list):
+                answer = "\n".join(str(item).strip() for item in answers if str(item).strip()) or None
+        if answer is None:
+            raise web.HTTPBadRequest(text="answer is required")
+
+        external_chat_id = self._external_chat_id_from_session(state.session_id) or state.session_id
+        await self.mq.enqueue(
+            UserMessage(
+                text=answer,
+                channel=self._channel_from_session(state.session_id),
+                external_chat_id=external_chat_id,
+                session_id=state.session_id,
+                sender_id="web-question",
+                sender_name="Web inspector",
+                metadata={"question_request_id": request_id},
+            )
+        )
+        return web.json_response({"ok": True, "question": self._serialize_question_request(state)})
+
+    async def _handle_question_reject(self, request: web.Request) -> web.Response:
+        request_id = self._coerce_optional_text(request.match_info.get("request_id"))
+        if request_id is None:
+            raise web.HTTPBadRequest(text="request_id is required")
+        state = await self._find_pending_question_state(request_id)
+        if state is None:
+            raise web.HTTPNotFound(text="Question request not found")
+        answer = "I cannot answer that question right now. Please continue with the safest available assumption or explain what you need next."
+        external_chat_id = self._external_chat_id_from_session(state.session_id) or state.session_id
+        await self.mq.enqueue(
+            UserMessage(
+                text=answer,
+                channel=self._channel_from_session(state.session_id),
+                external_chat_id=external_chat_id,
+                session_id=state.session_id,
+                sender_id="web-question",
+                sender_name="Web inspector",
+                metadata={"question_request_id": request_id, "question_rejected": True},
+            )
+        )
+        return web.json_response({"ok": True, "question": self._serialize_question_request(state)})
 
     async def _handle_settings_providers(self, request: web.Request) -> web.Response:
         try:
@@ -1476,6 +1574,9 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/permissions", self._handle_permissions)
         self.app.router.add_post("/api/permissions/{request_id}/approve", self._handle_permission_approve)
         self.app.router.add_post("/api/permissions/{request_id}/deny", self._handle_permission_deny)
+        self.app.router.add_get("/api/questions", self._handle_questions)
+        self.app.router.add_post("/api/questions/{request_id}/reply", self._handle_question_reply)
+        self.app.router.add_post("/api/questions/{request_id}/reject", self._handle_question_reject)
         self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
         self.app.router.add_post("/api/settings/channels", self._handle_settings_channel_create)
         self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)

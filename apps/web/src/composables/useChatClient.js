@@ -811,6 +811,13 @@ export function useChatClient() {
     requests: [],
     resolvingIds: {},
   });
+  const questionState = reactive({
+    loading: false,
+    error: "",
+    requests: [],
+    replyingIds: {},
+    answers: {},
+  });
 
   let activeSocket = null;
   let colorSchemeMediaQuery = null;
@@ -912,6 +919,24 @@ export function useChatClient() {
       session.transportExternalChatId,
     ].filter(Boolean));
     return permissionState.requests.filter((request) => {
+      if (request.status && request.status !== "pending") {
+        return false;
+      }
+      return !request.sessionId || sessionIds.has(request.sessionId) || sessionIds.has(request.externalChatId);
+    });
+  });
+
+  const currentQuestionRequests = computed(() => {
+    const session = currentSession.value;
+    if (!session) {
+      return questionState.requests;
+    }
+    const sessionIds = new Set([
+      session.sessionId,
+      session.externalChatId,
+      session.transportExternalChatId,
+    ].filter(Boolean));
+    return questionState.requests.filter((request) => {
       if (request.status && request.status !== "pending") {
         return false;
       }
@@ -1575,6 +1600,89 @@ export function useChatClient() {
       void loadPermissionRequests();
     } finally {
       delete permissionState.resolvingIds[request.requestId];
+    }
+  }
+
+  function normalizeQuestionRequest(payload) {
+    const requestId = String(payload?.request_id || payload?.requestId || "").trim();
+    if (!requestId) {
+      return null;
+    }
+    return {
+      requestId,
+      sessionId: String(payload?.session_id || payload?.sessionId || "").trim(),
+      externalChatId: String(payload?.external_chat_id || payload?.externalChatId || "").trim(),
+      channel: String(payload?.channel || "").trim(),
+      question: String(payload?.question || "").trim(),
+      objective: String(payload?.objective || "").trim(),
+      status: String(payload?.status || "pending").trim() || "pending",
+      createdAt: normalizeEventTimestamp(payload?.created_at ?? payload?.createdAt),
+      updatedAt: normalizeEventTimestamp(payload?.updated_at ?? payload?.updatedAt),
+    };
+  }
+
+  async function loadQuestionRequests() {
+    questionState.loading = true;
+    questionState.error = "";
+    try {
+      const payload = await requestSettingsJson("/api/questions");
+      questionState.requests = Array.isArray(payload?.questions)
+        ? payload.questions.map(normalizeQuestionRequest).filter(Boolean)
+        : [];
+    } catch (error) {
+      questionState.error = error?.message || copy.value.questions.loadFailed;
+    } finally {
+      questionState.loading = false;
+    }
+  }
+
+  function setQuestionAnswer(requestId, value) {
+    questionState.answers[requestId] = value;
+  }
+
+  async function replyToQuestion(request) {
+    if (!request?.requestId) {
+      return;
+    }
+    const answer = String(questionState.answers[request.requestId] || "").trim();
+    if (!answer) {
+      setNotice(copy.value.questions.answerRequired, "warning");
+      return;
+    }
+    questionState.replyingIds[request.requestId] = true;
+    try {
+      await requestSettingsJson(`/api/questions/${encodeURIComponent(request.requestId)}/reply`, {
+        method: "POST",
+        body: JSON.stringify({ answer }),
+      });
+      delete questionState.answers[request.requestId];
+      questionState.requests = questionState.requests.filter((entry) => entry.requestId !== request.requestId);
+      setNotice(copy.value.questions.replied, "success");
+      void loadSessionHistory();
+    } catch (error) {
+      setNotice(error?.message || copy.value.questions.replyFailed, "error");
+      void loadQuestionRequests();
+    } finally {
+      delete questionState.replyingIds[request.requestId];
+    }
+  }
+
+  async function rejectQuestion(request) {
+    if (!request?.requestId) {
+      return;
+    }
+    questionState.replyingIds[request.requestId] = true;
+    try {
+      await requestSettingsJson(`/api/questions/${encodeURIComponent(request.requestId)}/reject`, { method: "POST" });
+      delete questionState.answers[request.requestId];
+      questionState.requests = questionState.requests.filter((entry) => entry.requestId !== request.requestId);
+      setNotice(copy.value.questions.rejected, "warning");
+      void loadSessionHistory();
+    } catch (error) {
+      setNotice(error?.message || copy.value.questions.replyFailed, "error");
+      void loadQuestionRequests();
+    } finally {
+      delete questionState.replyingIds[request.requestId];
     }
   }
 
@@ -2813,6 +2921,7 @@ export function useChatClient() {
         return;
       }
       addMessage(session.externalChatId, makeMessage("assistant", payload.text || "", payload.session_id || "OpenSprite"));
+      void loadQuestionRequests();
       scrollMessagesToBottom();
       return;
     }
@@ -3050,6 +3159,7 @@ export function useChatClient() {
       return;
     }
     void loadPermissionRequests();
+    void loadQuestionRequests();
     persistActiveSession();
     connectSocket();
   }
@@ -3109,6 +3219,7 @@ export function useChatClient() {
     settingsForm,
     settingsState,
     permissionState,
+    questionState,
     currentMessages,
     currentWorkState,
     currentRuns,
@@ -3118,6 +3229,7 @@ export function useChatClient() {
     currentRunTimeline,
     currentRunSummary,
     currentPermissionRequests,
+    currentQuestionRequests,
     settingsTitle,
     sessionMeta,
     runtimeHint,
@@ -3177,6 +3289,9 @@ export function useChatClient() {
     createNewChat,
     cancelRun,
     resolvePermissionRequest,
+    setQuestionAnswer,
+    replyToQuestion,
+    rejectQuestion,
     toggleSettingsConnection,
     submitMessage,
     handleComposerKeydown,

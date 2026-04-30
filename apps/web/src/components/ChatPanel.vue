@@ -80,6 +80,54 @@
           </article>
         </section>
 
+        <section v-if="questionRequests.length || questionState.loading || questionState.error" class="question-panel" aria-live="polite">
+          <div class="question-panel__header">
+            <div>
+              <span>{{ copy.questions.eyebrow }}</span>
+              <strong>{{ copy.questions.title }}</strong>
+            </div>
+            <small v-if="questionState.loading">{{ copy.questions.loading }}</small>
+          </div>
+
+          <p v-if="questionState.error" class="question-panel__error">{{ questionState.error }}</p>
+
+          <article v-for="request in questionRequests" :key="request.requestId" class="question-card">
+            <div class="question-card__body">
+              <strong>{{ request.question }}</strong>
+              <p v-if="request.objective">{{ request.objective }}</p>
+              <code>{{ request.requestId }}</code>
+            </div>
+            <label class="question-card__answer">
+              <span>{{ copy.questions.answerLabel }}</span>
+              <textarea
+                :value="questionState.answers[request.requestId] || ''"
+                :placeholder="copy.questions.answerPlaceholder"
+                :disabled="Boolean(questionState.replyingIds[request.requestId])"
+                rows="3"
+                @input="$emit('set-question-answer', request.requestId, $event.target.value)"
+              ></textarea>
+            </label>
+            <div class="question-card__actions">
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="Boolean(questionState.replyingIds[request.requestId])"
+                @click="$emit('reject-question', request)"
+              >
+                {{ copy.questions.reject }}
+              </button>
+              <button
+                class="primary-button"
+                type="button"
+                :disabled="Boolean(questionState.replyingIds[request.requestId])"
+                @click="$emit('reply-question', request)"
+              >
+                {{ questionState.replyingIds[request.requestId] ? copy.questions.sending : copy.questions.reply }}
+              </button>
+            </div>
+          </article>
+        </section>
+
         <section v-if="runs.length > 1 || runsLoading || runsError" class="run-history" aria-live="polite">
           <div class="run-history__title">
             <span>{{ copy.runHistory.title }}</span>
@@ -205,6 +253,14 @@ const props = defineProps({
     type: Array,
     required: true,
   },
+  questionState: {
+    type: Object,
+    required: true,
+  },
+  questionRequests: {
+    type: Array,
+    required: true,
+  },
   showRunTimeline: {
     type: Boolean,
     required: true,
@@ -280,6 +336,9 @@ defineEmits([
   "submit-message",
   "cancel-run",
   "resolve-permission",
+  "set-question-answer",
+  "reply-question",
+  "reject-question",
   "select-run",
 ]);
 

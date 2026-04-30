@@ -991,6 +991,110 @@ def test_web_adapter_exposes_permissions_api():
     asyncio.run(_run_web_permissions_api())
 
 
+async def _run_web_questions_api():
+    storage = MemoryStorage()
+    await storage.upsert_work_state(
+        StoredWorkState(
+            session_id="web:browser-1",
+            objective="clarify deployment target",
+            kind="implementation",
+            status="waiting_user",
+            blockers=("Which environment should I deploy to?",),
+            created_at=100.0,
+            updated_at=123.0,
+        )
+    )
+    await storage.upsert_work_state(
+        StoredWorkState(
+            session_id="telegram:42",
+            objective="wait for external answer",
+            kind="general",
+            status="active",
+            blockers=("ignored",),
+            created_at=100.0,
+            updated_at=124.0,
+        )
+    )
+
+    agent = EchoAgent()
+    agent.storage = storage
+    queue = MessageQueue(agent)
+    processor = asyncio.create_task(queue.process_queue())
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/questions") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+
+            assert payload == {
+                "questions": [
+                    {
+                        "request_id": "work:web:browser-1:123000",
+                        "session_id": "web:browser-1",
+                        "channel": "web",
+                        "external_chat_id": "browser-1",
+                        "question": "Which environment should I deploy to?",
+                        "status": "pending",
+                        "objective": "clarify deployment target",
+                        "created_at": 100.0,
+                        "updated_at": 123.0,
+                    }
+                ]
+            }
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/questions/work:web:browser-1:123000/reply",
+                json={"answer": "Deploy to staging."},
+            ) as resp:
+                assert resp.status == 200
+                reply_payload = await resp.json()
+            assert reply_payload["ok"] is True
+
+            for _ in range(20):
+                if agent.seen_messages:
+                    break
+                await asyncio.sleep(0.05)
+            assert agent.seen_messages[0].text == "Deploy to staging."
+            assert agent.seen_messages[0].session_id == "web:browser-1"
+            assert agent.seen_messages[0].metadata["question_request_id"] == "work:web:browser-1:123000"
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/questions/missing/reject",
+            ) as resp:
+                assert resp.status == 404
+    finally:
+        adapter_task.cancel()
+        processor.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await processor
+        except asyncio.CancelledError:
+            pass
+
+
+def test_web_adapter_exposes_questions_api():
+    asyncio.run(_run_web_questions_api())
+
+
 async def _run_web_settings_provider_api(tmp_path: Path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
