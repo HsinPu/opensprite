@@ -53,6 +53,7 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..run_schema import (
     RUN_SCHEMA_VERSION,
     serialize_file_change,
+    serialize_run_artifacts,
     serialize_run_event,
     serialize_run_part,
 )
@@ -733,78 +734,7 @@ class WebAdapter(MessageAdapter):
         return serialize_file_change(change)
 
     def _serialize_run_artifacts(self, trace: Any) -> list[dict[str, Any]]:
-        artifacts_by_key: dict[str, dict[str, Any]] = {}
-        candidates: list[dict[str, Any]] = []
-
-        def upsert_artifact(item: dict[str, Any]) -> None:
-            key = str(item.get("artifact_id") or f"{item.get('source')}:{item.get('source_id')}")
-            existing = artifacts_by_key.get(key)
-            if existing is None:
-                artifacts_by_key[key] = item
-                return
-            sources = list(existing.get("sources") or [existing.get("source")])
-            source = item.get("source")
-            if source and source not in sources:
-                sources.append(source)
-            artifacts_by_key[key] = {**existing, **item, "sources": [entry for entry in sources if entry]}
-
-        for event in trace.events or []:
-            serialized = self._serialize_run_event(event)
-            artifact = serialized.get("artifact")
-            if not isinstance(artifact, dict):
-                continue
-            candidates.append(
-                {
-                    **artifact,
-                    "source": "event",
-                    "source_id": serialized.get("event_id"),
-                    "event_type": serialized.get("event_type"),
-                    "created_at": serialized.get("created_at"),
-                }
-            )
-        for part in trace.parts or []:
-            serialized = self._serialize_run_part(part)
-            artifact = serialized.get("artifact")
-            if not isinstance(artifact, dict):
-                continue
-            candidates.append(
-                {
-                    **artifact,
-                    "source": "part",
-                    "source_id": serialized.get("part_id"),
-                    "part_type": serialized.get("part_type"),
-                    "created_at": serialized.get("created_at"),
-                }
-            )
-        for change in trace.file_changes or []:
-            serialized = self._serialize_file_change(change)
-            artifact = serialized.get("artifact")
-            if not isinstance(artifact, dict):
-                continue
-            candidates.append(
-                {
-                    **artifact,
-                    "source": "file_change",
-                    "source_id": serialized.get("change_id"),
-                    "created_at": serialized.get("created_at"),
-                }
-            )
-        candidates.sort(
-            key=lambda item: (
-                float(item.get("created_at") or 0),
-                str(item.get("artifact_id") or item.get("source_id") or ""),
-            )
-        )
-        for candidate in candidates:
-            upsert_artifact(candidate)
-        artifacts = list(artifacts_by_key.values())
-        artifacts.sort(
-            key=lambda item: (
-                float(item.get("created_at") or 0),
-                str(item.get("artifact_id") or item.get("source_id") or ""),
-            )
-        )
-        return artifacts
+        return serialize_run_artifacts(trace)
 
     @staticmethod
     def _latest_event_payload(events: list[Any], event_type: str) -> dict[str, Any] | None:
