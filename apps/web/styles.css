@@ -1657,6 +1657,42 @@ button:disabled {
   font-size: 0.72rem;
 }
 
+.run-summary-card__sandbox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.run-summary-card__sandbox-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.run-summary-card__sandbox-body strong {
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.run-summary-card__sandbox-body span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-summary-card__sandbox-body small {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+}
+
 .run-summary-card__report-fallback {
   display: grid;
   gap: 8px;

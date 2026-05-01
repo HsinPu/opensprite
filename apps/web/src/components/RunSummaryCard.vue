@@ -99,6 +99,22 @@
           </div>
         </div>
 
+        <div v-if="worktreeSandbox" class="run-summary-card__sandbox">
+          <div class="run-summary-card__sandbox-body">
+            <strong>{{ copy.runSummary.worktreeSandbox }}</strong>
+            <span>{{ worktreeSandbox.sandboxPath }}</span>
+            <small v-if="worktreeSandbox.status">{{ worktreeSandbox.status }}</small>
+          </div>
+          <button
+            class="run-summary-card__copy"
+            type="button"
+            :disabled="!canCleanupWorktree || worktreeSandbox.cleanupPending"
+            @click="$emit('cleanup-worktree', run)"
+          >
+            {{ worktreeSandbox.cleanupPending ? copy.runSummary.cleanupRunning : cleanupButtonLabel }}
+          </button>
+        </div>
+
         <div v-if="summary.tools.length" class="run-summary-card__chips">
           <span>{{ copy.runSummary.tools }}</span>
           <code v-for="tool in visibleTools" :key="tool.name">{{ tool.name }} x{{ tool.count }}</code>
@@ -160,7 +176,7 @@ const props = defineProps({
   },
 });
 
-defineEmits(["inspect-file"]);
+defineEmits(["inspect-file", "cleanup-worktree"]);
 
 const summary = computed(() => props.run.summary || null);
 const expanded = ref(false);
@@ -232,6 +248,17 @@ const diffActionEntries = computed(() => Object.entries(diffSummary.value?.actio
 const visibleDiffPaths = computed(() => (diffSummary.value?.paths || []).slice(0, 4));
 
 const hiddenDiffPathCount = computed(() => Math.max(0, (diffSummary.value?.paths?.length || 0) - visibleDiffPaths.value.length));
+
+const worktreeSandbox = computed(() => props.run.worktreeSandbox || null);
+
+const canCleanupWorktree = computed(() => Boolean(worktreeSandbox.value?.sandboxPath && worktreeSandbox.value?.cleanupSupported));
+
+const cleanupButtonLabel = computed(() => {
+  if (worktreeSandbox.value?.cleanupResult?.ok || worktreeSandbox.value?.status === "removed") {
+    return props.copy.runSummary.cleanupDone;
+  }
+  return props.copy.runSummary.cleanupSandbox;
+});
 
 const copyButtonLabel = computed(() => {
   if (copyState.value === "copying") {

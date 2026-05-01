@@ -64,6 +64,7 @@
       @cancel-run="cancelRun"
       @resolve-permission="resolvePermissionRequest"
       @revert-file-change="revertRunFileChange"
+      @cleanup-worktree="cleanupWorktreeSandbox"
       @select-run="selectRun"
     />
   </div>
@@ -191,6 +192,7 @@ const {
   cancelRun,
   resolvePermissionRequest,
   revertRunFileChange,
+  cleanupWorktreeSandbox,
   toggleSettingsConnection,
   submitMessage,
   handleComposerKeydown,

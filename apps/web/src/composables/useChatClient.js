@@ -384,6 +384,42 @@ function normalizeDiffSummary(payload) {
   };
 }
 
+function normalizeWorktreeSandbox(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const metadata = payload.metadata && typeof payload.metadata === "object" ? payload.metadata : payload;
+  const sandboxPath = String(metadata.sandbox_path || metadata.sandboxPath || "").trim();
+  if (!sandboxPath) {
+    return null;
+  }
+  return {
+    sandboxPath,
+    status: String(metadata.status || payload.status || "").trim(),
+    reason: String(metadata.reason || "").trim(),
+    cleanupSupported: coerceBoolean(metadata.cleanup_supported ?? metadata.cleanupSupported),
+    repositoryRoot: String(metadata.repository_root || metadata.repositoryRoot || "").trim(),
+    baseBranch: String(metadata.base_branch || metadata.baseBranch || "").trim(),
+    baseCommit: String(metadata.base_commit || metadata.baseCommit || "").trim(),
+    cleanupPending: false,
+    cleanupResult: null,
+  };
+}
+
+function findWorktreeSandbox(parts = [], artifacts = []) {
+  for (const part of parts) {
+    if (part?.partType === "worktree_sandbox") {
+      return normalizeWorktreeSandbox(part.metadata);
+    }
+  }
+  for (const artifact of artifacts) {
+    if (artifact?.artifactType === "worktree_sandbox" || artifact?.kind === "work") {
+      return normalizeWorktreeSandbox(artifact);
+    }
+  }
+  return null;
+}
+
 function normalizeWorkState(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -522,6 +558,7 @@ function createRunViewState({ runId, sessionId, status = "running", createdAt, u
     artifacts: [],
     fileChanges: [],
     diffSummary: null,
+    worktreeSandbox: null,
     summary: null,
     summaryLoading: false,
     summaryError: "",
@@ -542,6 +579,10 @@ function buildRunTracePath(runId, sessionId) {
 
 function buildRunFileChangeRevertPath(runId, sessionId, changeId) {
   return `/api/runs/${encodeURIComponent(runId)}/file-changes/${encodeURIComponent(changeId)}/revert?session_id=${encodeURIComponent(sessionId)}`;
+}
+
+function buildWorktreeCleanupPath() {
+  return "/api/worktrees/cleanup";
 }
 
 function buildRunsPath(sessionId) {
@@ -1976,6 +2017,7 @@ export function useChatClient() {
       run.artifacts.forEach((artifact) => applyToolArtifactToParts(run, artifact));
       run.fileChanges = fileChanges;
       run.diffSummary = normalizeDiffSummary(payload?.diff_summary || payload?.diffSummary);
+      run.worktreeSandbox = findWorktreeSandbox(parts, run.artifacts);
       run.traceLoaded = true;
     } catch (error) {
       run.traceError = error?.message || copy.value.notices.runTraceLoadFailed;
@@ -3254,6 +3296,36 @@ export function useChatClient() {
     }
   }
 
+  async function cleanupWorktreeSandbox(run) {
+    const sandbox = run?.worktreeSandbox;
+    if (!sandbox?.sandboxPath || !sandbox.cleanupSupported) {
+      setNotice(copy.value.notices.worktreeCleanupUnavailable, "warning");
+      return null;
+    }
+
+    sandbox.cleanupPending = true;
+    try {
+      const payload = await requestSettingsJson(buildWorktreeCleanupPath(), {
+        method: "POST",
+        body: JSON.stringify({ sandbox_path: sandbox.sandboxPath }),
+      });
+      sandbox.cleanupResult = payload?.cleanup || null;
+      if (!payload?.ok) {
+        setNotice(payload?.cleanup?.reason || copy.value.notices.worktreeCleanupFailed, "warning");
+        return sandbox.cleanupResult;
+      }
+      sandbox.status = payload.cleanup?.status || "removed";
+      sandbox.cleanupSupported = false;
+      setNotice(copy.value.notices.worktreeCleanupApplied, "success");
+      return sandbox.cleanupResult;
+    } catch (error) {
+      setNotice(error?.message || copy.value.notices.worktreeCleanupFailed, "error");
+      return null;
+    } finally {
+      sandbox.cleanupPending = false;
+    }
+  }
+
   function submitMessage(event) {
     event.preventDefault();
     const text = messageText.value.trim();
@@ -3443,6 +3515,7 @@ export function useChatClient() {
     createNewChat,
     cancelRun,
     revertRunFileChange,
+    cleanupWorktreeSandbox,
     resolvePermissionRequest,
     toggleSettingsConnection,
     submitMessage,

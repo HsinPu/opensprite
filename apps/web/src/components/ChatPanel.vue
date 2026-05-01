@@ -120,6 +120,7 @@
           :copy="copy"
           :run="currentRun"
           @inspect-file="selectedFileChange = $event"
+          @cleanup-worktree="$emit('cleanup-worktree', $event)"
         />
 
         <RunTimeline
@@ -304,6 +305,7 @@ defineEmits([
   "cancel-run",
   "resolve-permission",
   "revert-file-change",
+  "cleanup-worktree",
   "select-run",
 ]);
 
