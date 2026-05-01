@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.tools.approval import PermissionRequestManager
+from opensprite.tools.approval import PermissionRequestManager, classify_permission_request
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
@@ -159,6 +159,28 @@ def test_approval_required_policy_waits_for_approval_in_ask_mode():
     assert events[0][2] == "pending"
     assert events[1][2] == "approved"
     assert pending == []
+
+
+def test_permission_request_classification_fields():
+    edit = classify_permission_request("apply_patch", {"path": "src/app.py"})
+    assert edit == {
+        "action_type": "edit",
+        "risk_level": "medium",
+        "risk_levels": ["write"],
+        "resource": "src/app.py",
+        "preview": "src/app.py",
+        "recommended_decision": "approve",
+    }
+
+    push = classify_permission_request("exec", {"command": "git push"})
+    assert push["action_type"] == "push"
+    assert push["risk_level"] == "high"
+    assert push["recommended_decision"] == "approve"
+
+    destructive = classify_permission_request("exec", {"command": "git reset --hard HEAD"})
+    assert destructive["action_type"] == "destructive"
+    assert destructive["risk_level"] == "high"
+    assert destructive["recommended_decision"] == "deny"
 
 
 def test_approval_required_policy_denies_pending_request_in_ask_mode():

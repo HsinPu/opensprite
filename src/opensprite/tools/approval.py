@@ -9,7 +9,69 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from ..utils.log import logger
-from .permissions import PermissionApprovalResult
+from .permissions import PermissionApprovalResult, ToolPermissionPolicy
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _param_value(params: Any, *names: str) -> str:
+    if not isinstance(params, dict):
+        return ""
+    for name in names:
+        value = params.get(name)
+        if value is not None:
+            return _text(value)
+    return ""
+
+
+def _preview_params(params: Any, *, max_chars: int = 240) -> str:
+    if isinstance(params, dict):
+        for key in ("path", "file_path", "command", "cmd", "query", "url", "name"):
+            value = _param_value(params, key)
+            if value:
+                return value[:max_chars]
+    return _text(params)[:max_chars]
+
+
+def classify_permission_request(tool_name: str, params: Any) -> dict[str, Any]:
+    """Classify one tool approval request for safer user-facing decisions."""
+    risks = sorted(ToolPermissionPolicy.risk_levels_for_tool(tool_name))
+    command = _param_value(params, "command", "cmd")
+    lowered_command = command.lower()
+    action_type = "external_message"
+    if "read" in risks and not any(risk in risks for risk in ("write", "execute", "external_side_effect")):
+        action_type = "read"
+    elif "write" in risks:
+        action_type = "edit"
+    elif "execute" in risks:
+        action_type = "shell"
+    elif tool_name == "cron":
+        action_type = "schedule"
+    if any(token in lowered_command for token in ("git commit", "git add")):
+        action_type = "commit"
+    if "git push" in lowered_command:
+        action_type = "push"
+    if any(token in lowered_command for token in ("rm -rf", "del /", "rmdir", "git reset --hard", "drop table")):
+        action_type = "destructive"
+
+    if action_type in {"destructive", "push"}:
+        risk_level = "high"
+    elif action_type in {"edit", "shell", "commit", "external_message", "schedule"}:
+        risk_level = "medium"
+    else:
+        risk_level = "low"
+
+    resource = _param_value(params, "path", "file_path", "url", "command", "cmd", "query", "name")
+    return {
+        "action_type": action_type,
+        "risk_level": risk_level,
+        "risk_levels": risks,
+        "resource": resource,
+        "preview": _preview_params(params),
+        "recommended_decision": "deny" if action_type == "destructive" else "approve",
+    }
 
 
 @dataclass
@@ -26,6 +88,12 @@ class PermissionRequest:
     run_id: str | None = None
     channel: str | None = None
     external_chat_id: str | None = None
+    action_type: str = "external_message"
+    risk_level: str = "medium"
+    risk_levels: list[str] = field(default_factory=list)
+    resource: str = ""
+    preview: str = ""
+    recommended_decision: str = "approve"
     status: str = "pending"
     resolved_at: float | None = None
     resolution_reason: str = ""
@@ -70,6 +138,7 @@ class PermissionRequestManager:
     ) -> PermissionApprovalResult:
         """Create a pending request and wait until it is approved, denied, or timed out."""
         created_at = time.time()
+        classification = classify_permission_request(tool_name, params)
         request = PermissionRequest(
             request_id=f"perm_{uuid4().hex}",
             tool_name=tool_name,
@@ -81,6 +150,7 @@ class PermissionRequestManager:
             external_chat_id=external_chat_id,
             created_at=created_at,
             expires_at=created_at + self.timeout_seconds,
+            **classification,
         )
         async with self._lock:
             self._requests[request.request_id] = request

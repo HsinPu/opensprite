@@ -57,6 +57,24 @@
             <div class="permission-card__body">
               <strong>{{ request.toolName }}</strong>
               <p>{{ request.reason || copy.permissions.noReason }}</p>
+              <dl class="permission-card__meta">
+                <div v-if="request.actionType">
+                  <dt>{{ copy.permissions.actionType }}</dt>
+                  <dd>{{ request.actionType }}</dd>
+                </div>
+                <div v-if="request.riskLevel">
+                  <dt>{{ copy.permissions.riskLevel }}</dt>
+                  <dd>{{ request.riskLevel }}</dd>
+                </div>
+                <div v-if="request.resource">
+                  <dt>{{ copy.permissions.resource }}</dt>
+                  <dd>{{ request.resource }}</dd>
+                </div>
+                <div v-if="request.preview">
+                  <dt>{{ copy.permissions.preview }}</dt>
+                  <dd>{{ request.preview }}</dd>
+                </div>
+              </dl>
               <code>{{ request.requestId }}</code>
             </div>
             <div class="permission-card__actions">

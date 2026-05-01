@@ -52,6 +52,7 @@ from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..run_schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..session_entries import serialize_session_entries
+from ..tools.approval import classify_permission_request
 from ..utils.log import logger
 from .web_api import WebApiHandlers
 
@@ -731,12 +732,19 @@ class WebAdapter(MessageAdapter):
         }
 
     def _serialize_permission_request(self, request: Any) -> dict[str, Any]:
+        classification = classify_permission_request(getattr(request, "tool_name", ""), getattr(request, "params", {}))
         return {
             "request_id": request.request_id,
             "tool_name": request.tool_name,
             "params": self._json_safe(request.params),
             "reason": request.reason,
             "status": request.status,
+            "action_type": getattr(request, "action_type", None) or classification["action_type"],
+            "risk_level": getattr(request, "risk_level", None) or classification["risk_level"],
+            "risk_levels": list(getattr(request, "risk_levels", None) or classification["risk_levels"]),
+            "resource": getattr(request, "resource", None) or classification["resource"],
+            "preview": getattr(request, "preview", None) or classification["preview"],
+            "recommended_decision": getattr(request, "recommended_decision", None) or classification["recommended_decision"],
             "session_id": request.session_id,
             "run_id": request.run_id,
             "channel": request.channel,
