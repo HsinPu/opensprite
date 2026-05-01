@@ -2424,6 +2424,23 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.run-trace__code-nav-error {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid rgba(217, 45, 32, 0.18);
+  border-radius: var(--radius-sm);
+  color: #9b241c;
+  background: #fff3f1;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.run-trace__code-nav-more {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
 .run-trace__section-head {
   display: flex;
   align-items: center;

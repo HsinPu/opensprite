@@ -121,6 +121,7 @@
               <strong>{{ codeNavigationActionLabel(result) }}</strong>
               <span>{{ result.count }} {{ copy.trace.results }}</span>
             </div>
+            <p v-if="result.error" class="run-trace__code-nav-error">{{ result.error }}</p>
             <div v-if="result.items.length" class="run-trace__code-nav-items">
               <div v-for="item in result.items" :key="`${item.path}:${item.line}:${item.name || item.preview}`" class="run-trace__code-nav-item">
                 <code>{{ formatCodeLocation(item) }}</code>
@@ -128,8 +129,9 @@
                 <span v-if="item.kind">{{ item.kind }}</span>
                 <p v-if="item.preview">{{ item.preview }}</p>
               </div>
+              <small v-if="result.hiddenCount > 0" class="run-trace__code-nav-more">{{ copy.trace.moreResults(result.hiddenCount) }}</small>
             </div>
-            <p v-else class="run-trace__empty">{{ copy.trace.noCodeNavigationResults }}</p>
+            <p v-else-if="!result.error" class="run-trace__empty">{{ copy.trace.noCodeNavigationResults }}</p>
           </article>
         </div>
       </section>
@@ -416,8 +418,15 @@ function normalizeCodeNavigationResult(part) {
   let payload = null;
   try {
     payload = JSON.parse(part.content || "{}");
-  } catch {
-    return null;
+  } catch (error) {
+    return {
+      id: part.partId || `parse-error:${part.createdAt}`,
+      action: "parse_error",
+      count: 0,
+      items: [],
+      hiddenCount: 0,
+      error: error?.message || props.copy.trace.codeNavigationParseFailed,
+    };
   }
   const action = String(payload.action || "").trim();
   const items = Array.isArray(payload.symbols)
@@ -433,6 +442,8 @@ function normalizeCodeNavigationResult(part) {
     action,
     count: items.length,
     items: normalizedItems,
+    hiddenCount: Math.max(0, items.length - normalizedItems.length),
+    error: "",
   };
 }
 
@@ -455,7 +466,8 @@ function normalizeCodeNavigationItem(item) {
 }
 
 function codeNavigationActionLabel(result) {
-  return result.action || props.copy.trace.codeNavigation;
+  const labels = props.copy.trace.codeNavigationActions || {};
+  return labels[result.action] || result.action || props.copy.trace.codeNavigation;
 }
 
 function formatCodeLocation(item) {
