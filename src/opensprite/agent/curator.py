@@ -21,6 +21,26 @@ SessionRunner = Callable[[str], Awaitable[None]]
 RunEventEmitter = Callable[[str, str, str, dict[str, Any], str | None, str | None], Awaitable[None]]
 SkillReviewDecider = Callable[[ExecutionResult], bool]
 CURATOR_STATE_SCHEMA_VERSION = 1
+CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile", "active_task")
+CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
+
+
+def _ordered_maintenance_job_keys(job_keys: tuple[str, ...] | list[str] | set[str]) -> tuple[str, ...]:
+    requested = {str(item or "").strip() for item in job_keys if str(item or "").strip()}
+    return tuple(job_key for job_key in CURATOR_MAINTENANCE_JOB_KEYS if job_key in requested)
+
+
+def resolve_curator_scope(scope: str | None) -> tuple[tuple[str, ...], bool]:
+    normalized = str(scope or "").strip().lower()
+    if not normalized:
+        return CURATOR_MAINTENANCE_JOB_KEYS, True
+    if normalized == "maintenance":
+        return CURATOR_MAINTENANCE_JOB_KEYS, False
+    if normalized == "skills":
+        return (), True
+    if normalized in CURATOR_MAINTENANCE_JOB_KEYS:
+        return (normalized,), False
+    raise ValueError(f"Unknown curator scope: {normalized}")
 
 
 @dataclass(frozen=True)
@@ -32,7 +52,7 @@ class CuratorRequest:
     channel: str | None = None
     external_chat_id: str | None = None
     result: ExecutionResult | None = None
-    run_maintenance: bool = False
+    maintenance_job_keys: tuple[str, ...] = ()
     run_skill_review: bool = False
 
 
@@ -225,7 +245,10 @@ class CuratorService:
             channel=incoming.channel or current.channel,
             external_chat_id=incoming.external_chat_id or current.external_chat_id,
             result=incoming.result or current.result,
-            run_maintenance=current.run_maintenance or incoming.run_maintenance,
+            maintenance_job_keys=_ordered_maintenance_job_keys([
+                *current.maintenance_job_keys,
+                *incoming.maintenance_job_keys,
+            ]),
             run_skill_review=current.run_skill_review or incoming.run_skill_review,
         )
 
@@ -246,7 +269,7 @@ class CuratorService:
                 channel=channel,
                 external_chat_id=external_chat_id,
                 result=result,
-                run_maintenance=True,
+                maintenance_job_keys=CURATOR_MAINTENANCE_JOB_KEYS,
                 run_skill_review=self._should_run_skill_review(result),
             )
         )
@@ -266,7 +289,7 @@ class CuratorService:
                 run_id=run_id,
                 channel=channel,
                 external_chat_id=external_chat_id,
-                run_maintenance=True,
+                maintenance_job_keys=CURATOR_MAINTENANCE_JOB_KEYS,
             )
         )
 
@@ -300,16 +323,18 @@ class CuratorService:
         run_id: str | None = None,
         channel: str | None = None,
         external_chat_id: str | None = None,
+        scope: str | None = None,
     ) -> bool:
         """Schedule a manual full curator pass for one session."""
+        maintenance_job_keys, run_skill_review = resolve_curator_scope(scope)
         return self._schedule(
             CuratorRequest(
                 session_id=session_id,
                 run_id=run_id,
                 channel=channel,
                 external_chat_id=external_chat_id,
-                run_maintenance=True,
-                run_skill_review=True,
+                maintenance_job_keys=maintenance_job_keys,
+                run_skill_review=run_skill_review,
             )
         )
 
@@ -341,8 +366,7 @@ class CuratorService:
         request = active_request if running else pending_request
         jobs: list[str] = []
         if request is not None:
-            if request.run_maintenance:
-                jobs.extend(job.key for job in self._maintenance_jobs)
+            jobs.extend(request.maintenance_job_keys)
             if request.run_skill_review:
                 jobs.append(self._skill_job.key)
         state = "running" if running else "queued" if queued else "paused" if paused else "idle"
@@ -413,8 +437,9 @@ class CuratorService:
                 return
 
             selected_jobs: list[CuratorJob] = []
-            if request.run_maintenance:
-                selected_jobs.extend(self._maintenance_jobs)
+            selected_jobs.extend(
+                job for job in self._maintenance_jobs if job.key in request.maintenance_job_keys
+            )
             if request.run_skill_review:
                 selected_jobs.append(self._skill_job)
             if not selected_jobs:

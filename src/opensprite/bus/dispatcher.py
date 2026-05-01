@@ -32,6 +32,7 @@ from .session_commands import (
     resolve_session_command,
 )
 from .session_status import SessionStatusService, SessionStatusType
+from ..agent.curator import CURATOR_SCOPE_CHOICES
 from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
 from ..cron.types import CronSchedule
@@ -686,9 +687,17 @@ class MessageQueue:
             return self._format_curator_status(status)
 
         if action == "run":
+            if len(_args) > 1:
+                return self.messages.curator.error_run_usage
+            scope = str(_args[0] or "").strip().lower() if _args else None
+            if scope and scope not in CURATOR_SCOPE_CHOICES:
+                return self.messages.curator.invalid_scope.format(scope=scope, scopes=", ".join(CURATOR_SCOPE_CHOICES))
             if not callable(run_now):
                 return self.messages.curator.unavailable
-            status = await run_now(session_id, channel=channel, external_chat_id=external_chat_id)
+            try:
+                status = await run_now(session_id, scope=scope, channel=channel, external_chat_id=external_chat_id)
+            except ValueError:
+                return self.messages.curator.invalid_scope.format(scope=scope or "", scopes=", ".join(CURATOR_SCOPE_CHOICES))
             if status is None:
                 return self.messages.curator.unavailable
             scheduled = bool(status.get("scheduled"))

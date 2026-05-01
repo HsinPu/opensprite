@@ -58,11 +58,16 @@ class WebApiHandlers:
             channel = adapter._channel_from_session(session_id)
             if channel == "unknown":
                 raise web.HTTPBadRequest(text="session_id must include a channel prefix")
-            status = await method(
-                session_id,
-                channel=channel,
-                external_chat_id=adapter._external_chat_id_from_session(session_id),
-            )
+            scope = adapter._coerce_optional_text(request.query.get("scope"))
+            try:
+                status = await method(
+                    session_id,
+                    scope=scope,
+                    channel=channel,
+                    external_chat_id=adapter._external_chat_id_from_session(session_id),
+                )
+            except ValueError as exc:
+                raise web.HTTPBadRequest(text=str(exc)) from exc
         elif action == "pause":
             method = getattr(agent, "pause_curator", None) if agent is not None else None
             if not callable(method):

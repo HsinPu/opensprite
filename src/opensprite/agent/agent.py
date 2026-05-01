@@ -1410,6 +1410,7 @@ class AgentLoop:
         self,
         session_id: str,
         *,
+        scope: str | None = None,
         channel: str | None = None,
         external_chat_id: str | None = None,
     ) -> dict[str, Any] | None:
@@ -1420,6 +1421,7 @@ class AgentLoop:
         scheduled = self.curator.schedule_manual_run(
             session_id=session_id,
             run_id=latest_run.run_id if latest_run is not None else None,
+            scope=scope,
             channel=channel,
             external_chat_id=external_chat_id,
         )

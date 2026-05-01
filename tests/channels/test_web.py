@@ -221,8 +221,10 @@ async def _run_web_curator_api():
                 "last_run_summary": "No curator changes.",
             }
 
-        async def run_curator_now(self, session_id, *, channel=None, external_chat_id=None):
-            self.curator_calls.append(("run", session_id, channel, external_chat_id))
+        async def run_curator_now(self, session_id, *, scope=None, channel=None, external_chat_id=None):
+            if scope not in {None, "memory"}:
+                raise ValueError(f"Unknown curator scope: {scope}")
+            self.curator_calls.append(("run", session_id, scope, channel, external_chat_id))
             return {
                 "session_id": session_id,
                 "state": "queued",
@@ -276,6 +278,15 @@ async def _run_web_curator_api():
                 assert payload["action"] == "run"
                 assert payload["status"]["scheduled"] is True
 
+            async with session.post(f"http://127.0.0.1:{port}/api/curator/run?session_id={session_id}&scope=memory") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["status"]["scheduled"] is True
+
+            async with session.post(f"http://127.0.0.1:{port}/api/curator/run?session_id={session_id}&scope=nope") as resp:
+                assert resp.status == 400
+                assert "Unknown curator scope: nope" in await resp.text()
+
             telegram_session_id = "telegram:chat-1"
             async with session.post(f"http://127.0.0.1:{port}/api/curator/run?session_id={telegram_session_id}") as resp:
                 assert resp.status == 200
@@ -294,8 +305,9 @@ async def _run_web_curator_api():
 
         assert agent.curator_calls == [
             ("status", session_id),
-            ("run", session_id, "web", "browser-1"),
-            ("run", telegram_session_id, "telegram", "chat-1"),
+            ("run", session_id, None, "web", "browser-1"),
+            ("run", session_id, "memory", "web", "browser-1"),
+            ("run", telegram_session_id, None, "telegram", "chat-1"),
             ("pause", session_id),
             ("resume", session_id),
         ]

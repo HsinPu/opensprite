@@ -202,7 +202,7 @@ def test_message_queue_help_overview_lists_curator_command():
     responses = asyncio.run(scenario())
 
     assert responses
-    assert "/curator <status|run|pause|resume|help>" in responses[0]
+    assert "/curator <status|run [scope]|pause|resume|help>" in responses[0]
 
 
 def test_curator_status_command_replies_immediately_without_running_agent_loop():
@@ -301,7 +301,8 @@ def test_curator_status_command_includes_current_job_and_last_changed_when_avail
 
 def test_curator_run_command_replies_immediately_without_running_agent_loop():
     class CuratorAgent(FakeAgent):
-        async def run_curator_now(self, session_id, *, channel=None, external_chat_id=None):
+        async def run_curator_now(self, session_id, *, scope=None, channel=None, external_chat_id=None):
+            assert scope is None
             return {
                 "session_id": session_id,
                 "state": "running",
@@ -342,6 +343,78 @@ def test_curator_run_command_replies_immediately_without_running_agent_loop():
             "telegram:same-chat",
             "已排入背景整理。\n\nCurator 狀態:\n- 狀態: running\n- 已暫停: no\n- 執行次數: 0\n- 上次執行: never\n- 上次摘要: none\n- 待補跑: no\n- 工作: memory, recent_summary, user_profile, active_task, skills\n- 關聯 run: run-123",
         )
+    ]
+
+
+def test_curator_run_command_accepts_scope_argument():
+    class CuratorAgent(FakeAgent):
+        async def run_curator_now(self, session_id, *, scope=None, channel=None, external_chat_id=None):
+            assert scope == "memory"
+            return {
+                "session_id": session_id,
+                "state": "queued",
+                "running": False,
+                "queued": True,
+                "rerun_pending": False,
+                "jobs": ["memory"],
+                "run_id": "run-456",
+                "scheduled": True,
+            }
+
+    async def scenario():
+        agent = CuratorAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, external_chat_id):
+            responses.append(message.text)
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="/curator run memory", external_chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(event.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses
+
+    responses = asyncio.run(scenario())
+
+    assert responses
+    assert "- 工作: memory" in responses[0]
+
+
+def test_curator_run_command_rejects_invalid_scope():
+    async def scenario():
+        agent = FakeAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, external_chat_id):
+            responses.append(message.text)
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="/curator run nope", external_chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(event.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses, agent.seen_messages
+
+    responses, seen_messages = asyncio.run(scenario())
+
+    assert seen_messages == []
+    assert responses == [
+        "Unknown curator scope: nope. Valid scopes: maintenance, skills, memory, recent_summary, user_profile, active_task"
     ]
 
 
@@ -439,7 +512,8 @@ def test_curator_resume_command_replies_immediately_without_running_agent_loop()
 
 def test_curator_run_command_reports_paused_status_when_manual_run_is_blocked():
     class CuratorAgent(FakeAgent):
-        async def run_curator_now(self, session_id, *, channel=None, external_chat_id=None):
+        async def run_curator_now(self, session_id, *, scope=None, channel=None, external_chat_id=None):
+            assert scope is None
             return {
                 "session_id": session_id,
                 "state": "paused",

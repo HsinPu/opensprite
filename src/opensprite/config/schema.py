@@ -227,12 +227,14 @@ class CuratorMessagesConfig(BaseModel):
     help_text: str = (
         "背景整理命令:\n"
         "/curator status\n"
-        "/curator run\n"
+        "/curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]\n"
         "/curator pause\n"
         "/curator resume\n"
         "/curator help"
     )
     unavailable: str = "背景整理功能目前不可用。"
+    error_run_usage: str = "Usage: /curator run [maintenance|skills|memory|recent_summary|user_profile|active_task]"
+    invalid_scope: str = "Unknown curator scope: {scope}. Valid scopes: {scopes}"
     run_scheduled: str = "已排入背景整理。"
     run_rerun_scheduled: str = "背景整理目前執行中，已排入下一輪。"
     run_paused: str = "背景整理目前已暫停，請先恢復。"

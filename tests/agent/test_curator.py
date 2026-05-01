@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from opensprite.agent.curator import CuratorService
 from opensprite.agent.execution import ExecutionResult
 
@@ -258,6 +260,175 @@ def test_curator_service_persists_run_metadata(tmp_path):
     assert status["last_run_jobs"] == ["memory", "recent_summary", "user_profile", "active_task", "skills"]
     assert status["last_run_changed"] == ["memory"]
     assert status["last_error"] is None
+
+
+def test_curator_service_manual_run_scope_runs_only_requested_maintenance_job():
+    async def scenario():
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        calls = []
+
+        async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
+            return None
+
+        async def update_memory(_session_id):
+            calls.append("memory")
+            state["memory"] = "changed"
+
+        async def noop(_session_id):
+            return None
+
+        service = CuratorService(
+            maybe_consolidate_memory=update_memory,
+            maybe_update_recent_summary=noop,
+            maybe_update_user_profile=noop,
+            maybe_update_active_task=noop,
+            run_skill_review=noop,
+            should_run_skill_review=lambda result: False,
+            read_memory_snapshot=lambda _session_id: state["memory"],
+            read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
+            read_user_profile_snapshot=lambda _session_id: state["user_profile"],
+            read_active_task_snapshot=lambda _session_id: state["active_task"],
+            read_skill_snapshot=lambda _session_id: state["skills"],
+            emit_run_event=emit_run_event,
+        )
+
+        scheduled = service.schedule_manual_run(session_id="web:browser-1", run_id="run-1", scope="memory")
+        await service.wait()
+        return scheduled, calls, service.status("web:browser-1")
+
+    scheduled, calls, status = asyncio.run(scenario())
+
+    assert scheduled is True
+    assert calls == ["memory"]
+    assert status["last_run_jobs"] == ["memory"]
+    assert status["last_run_changed"] == ["memory"]
+    assert status["last_run_summary"] == "Updated memory."
+
+
+def test_curator_service_manual_run_scope_runs_only_skill_review():
+    async def scenario():
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        calls = []
+
+        async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
+            return None
+
+        async def update_skills(_session_id):
+            calls.append("skills")
+            state["skills"] = "changed"
+
+        async def noop(_session_id):
+            return None
+
+        service = CuratorService(
+            maybe_consolidate_memory=noop,
+            maybe_update_recent_summary=noop,
+            maybe_update_user_profile=noop,
+            maybe_update_active_task=noop,
+            run_skill_review=update_skills,
+            should_run_skill_review=lambda result: False,
+            read_memory_snapshot=lambda _session_id: state["memory"],
+            read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
+            read_user_profile_snapshot=lambda _session_id: state["user_profile"],
+            read_active_task_snapshot=lambda _session_id: state["active_task"],
+            read_skill_snapshot=lambda _session_id: state["skills"],
+            emit_run_event=emit_run_event,
+        )
+
+        scheduled = service.schedule_manual_run(session_id="web:browser-1", run_id="run-1", scope="skills")
+        await service.wait()
+        return scheduled, calls, service.status("web:browser-1")
+
+    scheduled, calls, status = asyncio.run(scenario())
+
+    assert scheduled is True
+    assert calls == ["skills"]
+    assert status["last_run_jobs"] == ["skills"]
+    assert status["last_run_changed"] == ["skills"]
+    assert status["last_run_summary"] == "Updated skills."
+
+
+def test_curator_service_manual_scope_rerun_unions_pending_jobs():
+    async def scenario():
+        state = {"memory": "", "recent_summary": "", "user_profile": "", "active_task": "", "skills": ""}
+        calls = []
+        memory_started = asyncio.Event()
+        release_memory = asyncio.Event()
+
+        async def emit_run_event(session_id, run_id, event_type, payload, channel, external_chat_id):
+            return None
+
+        async def update_memory(_session_id):
+            calls.append("memory")
+            memory_started.set()
+            await release_memory.wait()
+            state["memory"] = "changed"
+
+        async def update_recent_summary(_session_id):
+            calls.append("recent_summary")
+            state["recent_summary"] = "changed"
+
+        async def update_skills(_session_id):
+            calls.append("skills")
+            state["skills"] = "changed"
+
+        async def noop(_session_id):
+            return None
+
+        service = CuratorService(
+            maybe_consolidate_memory=update_memory,
+            maybe_update_recent_summary=update_recent_summary,
+            maybe_update_user_profile=noop,
+            maybe_update_active_task=noop,
+            run_skill_review=update_skills,
+            should_run_skill_review=lambda result: False,
+            read_memory_snapshot=lambda _session_id: state["memory"],
+            read_recent_summary_snapshot=lambda _session_id: state["recent_summary"],
+            read_user_profile_snapshot=lambda _session_id: state["user_profile"],
+            read_active_task_snapshot=lambda _session_id: state["active_task"],
+            read_skill_snapshot=lambda _session_id: state["skills"],
+            emit_run_event=emit_run_event,
+        )
+
+        service.schedule_manual_run(session_id="web:browser-1", run_id="run-1", scope="memory")
+        await asyncio.wait_for(memory_started.wait(), timeout=2)
+        scheduled_recent_summary = service.schedule_manual_run(session_id="web:browser-1", run_id="run-2", scope="recent_summary")
+        scheduled_skills = service.schedule_manual_run(session_id="web:browser-1", run_id="run-3", scope="skills")
+        release_memory.set()
+        await service.wait()
+        return scheduled_recent_summary, scheduled_skills, calls
+
+    scheduled_recent_summary, scheduled_skills, calls = asyncio.run(scenario())
+
+    assert scheduled_recent_summary is False
+    assert scheduled_skills is False
+    assert calls == ["memory", "recent_summary", "skills"]
+
+
+def test_curator_service_manual_run_rejects_unknown_scope():
+    async def noop(_session_id):
+        return None
+
+    async def emit_run_event(*_args, **_kwargs):
+        return None
+
+    service = CuratorService(
+        maybe_consolidate_memory=noop,
+        maybe_update_recent_summary=noop,
+        maybe_update_user_profile=noop,
+        maybe_update_active_task=noop,
+        run_skill_review=noop,
+        should_run_skill_review=lambda result: False,
+        read_memory_snapshot=lambda _session_id: "",
+        read_recent_summary_snapshot=lambda _session_id: "",
+        read_user_profile_snapshot=lambda _session_id: "",
+        read_active_task_snapshot=lambda _session_id: "",
+        read_skill_snapshot=lambda _session_id: "",
+        emit_run_event=emit_run_event,
+    )
+
+    with pytest.raises(ValueError, match="Unknown curator scope: nope"):
+        service.schedule_manual_run(session_id="web:browser-1", scope="nope")
 
 
 def test_curator_service_rerun_uses_pending_request_jobs_only():
