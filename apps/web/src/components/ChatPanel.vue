@@ -161,8 +161,21 @@
             {{ curatorStatus?.last_run_summary || copy.curator.noSummary }}
           </p>
           <p v-if="curatorStatus?.last_error" class="curator-card__error">{{ copy.curator.lastError }}: {{ curatorStatus.last_error }}</p>
+          <label class="curator-card__scope">
+            <span>{{ copy.curator.scope }}</span>
+            <select v-model="selectedCuratorScope" :disabled="Boolean(curatorState.action || curatorState.loading)">
+              <option v-for="option in curatorScopeOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
           <div class="curator-card__actions">
-            <button class="secondary-button" type="button" :disabled="curatorActionsDisabled" @click="$emit('run-curator-action', 'run')">
+            <button
+              class="secondary-button"
+              type="button"
+              :disabled="curatorActionsDisabled"
+              @click="$emit('run-curator-action', { action: 'run', scope: selectedCuratorScope === 'all' ? '' : selectedCuratorScope })"
+            >
               {{ curatorState.action === 'run' ? copy.curator.running : copy.curator.run }}
             </button>
             <button class="secondary-button" type="button" :disabled="curatorActionsDisabled || curatorStatus?.paused" @click="$emit('run-curator-action', 'pause')">
@@ -386,8 +399,21 @@ defineEmits([
 ]);
 
 const selectedFileChange = ref(null);
+const selectedCuratorScope = ref("all");
 const curatorActionsDisabled = computed(() => {
   return Boolean(props.curatorState.action || props.curatorState.loading || props.curatorState.error || !props.curatorStatus);
+});
+const curatorScopeOptions = computed(() => {
+  const labels = props.copy.curator.scopes || {};
+  return [
+    { value: "all", label: labels.all || "all" },
+    { value: "maintenance", label: labels.maintenance || "maintenance" },
+    { value: "skills", label: labels.skills || "skills" },
+    { value: "memory", label: labels.memory || "memory" },
+    { value: "recent_summary", label: labels.recent_summary || "recent_summary" },
+    { value: "user_profile", label: labels.user_profile || "user_profile" },
+    { value: "active_task", label: labels.active_task || "active_task" },
+  ];
 });
 const currentCuratorJobLabel = computed(() => {
   return String(props.curatorStatus?.current_job_label || props.curatorStatus?.current_job || "").trim() || props.copy.curator.none;

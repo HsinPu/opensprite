@@ -135,6 +135,7 @@
 :root[data-color-scheme="dark"] .permission-card,
 :root[data-color-scheme="dark"] .question-card,
 :root[data-color-scheme="dark"] .run-history__select select,
+:root[data-color-scheme="dark"] .curator-card__scope select,
 :root[data-color-scheme="dark"] .curator-card__grid div,
 :root[data-color-scheme="dark"] .curator-card__summary,
 :root[data-color-scheme="dark"] .work-state-card__status,
@@ -1193,6 +1194,29 @@ button:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.curator-card__scope {
+  display: grid;
+  gap: 6px;
+}
+
+.curator-card__scope span {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.curator-card__scope select {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  color: var(--text);
+  background: #ffffff;
+  font-size: 0.8rem;
+  font-weight: 650;
 }
 
 .work-state-card__header {

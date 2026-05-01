@@ -621,8 +621,12 @@ function buildCuratorStatusPath(sessionId) {
   return `/api/curator/status?session_id=${encodeURIComponent(sessionId)}`;
 }
 
-function buildCuratorActionPath(action, sessionId) {
-  return `/api/curator/${encodeURIComponent(action)}?session_id=${encodeURIComponent(sessionId)}`;
+function buildCuratorActionPath(action, sessionId, scope = "") {
+  const params = new URLSearchParams({ session_id: sessionId });
+  if (scope) {
+    params.set("scope", scope);
+  }
+  return `/api/curator/${encodeURIComponent(action)}?${params.toString()}`;
 }
 
 function buildRunsPath(sessionId) {
@@ -1915,17 +1919,25 @@ export function useChatClient() {
   }
 
   async function runCuratorAction(action) {
-    const normalizedAction = String(action || "").trim();
+    const normalizedAction = typeof action === "object" && action !== null
+      ? String(action.action || "").trim()
+      : String(action || "").trim();
+    const scope = typeof action === "object" && action !== null
+      ? String(action.scope || "").trim()
+      : "";
     const sessionId = getCuratorSessionId(currentSession.value);
     if (!normalizedAction || !sessionId) {
       return null;
     }
-    const actionToken = `${sessionId}\0${normalizedAction}\0${Date.now().toString(36)}-${randomToken()}`;
+    const actionToken = `${sessionId}\0${normalizedAction}\0${scope}\0${Date.now().toString(36)}-${randomToken()}`;
     curatorActionToken = actionToken;
     curatorState.action = normalizedAction;
     curatorState.error = "";
     try {
-      const payload = await requestSettingsJson(buildCuratorActionPath(normalizedAction, sessionId), { method: "POST" });
+      const payload = await requestSettingsJson(
+        buildCuratorActionPath(normalizedAction, sessionId, normalizedAction === "run" ? scope : ""),
+        { method: "POST" },
+      );
       const status = payload?.status || null;
       if (isCurrentCuratorSessionId(sessionId)) {
         curatorState.status = status;
