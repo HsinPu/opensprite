@@ -46,6 +46,15 @@ class StreamingProvider:
         return LLMResponse(content=self.content, model="fake-model")
 
 
+class ToolInputStreamingProvider:
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        callback = kwargs.get("tool_input_delta_callback")
+        if callback is not None:
+            await callback("call-1", "demo_tool", '{"value"', 1)
+            await callback("call-1", "demo_tool", ':"abc"}', 2)
+        return LLMResponse(content="done", model="fake-model")
+
+
 class OverflowThenSuccessProvider:
     def __init__(self, final_response: str = "done"):
         self.final_response = final_response
@@ -223,6 +232,27 @@ def test_execution_engine_projects_final_response_as_deltas():
     assert result.content == "hello streaming world"
     assert "".join(item[1] for item in deltas) == "hello streaming world"
     assert deltas == [("assistant:chat-1:1", "hello streaming world", "completed", 1)]
+
+
+def test_execution_engine_forwards_tool_input_deltas():
+    provider = ToolInputStreamingProvider()
+    engine = _make_engine(provider, ToolRegistry(), [])
+    deltas = []
+
+    async def on_tool_input(call_id, tool_name, delta, sequence):
+        deltas.append((call_id, tool_name, delta, sequence))
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="hi")],
+            allow_tools=False,
+            on_tool_input_delta=on_tool_input,
+        )
+    )
+
+    assert result.content == "done"
+    assert deltas == [("call-1", "demo_tool", '{"value"', 1), ("call-1", "demo_tool", ':"abc"}', 2)]
 
 
 def test_execution_engine_marks_provider_streamed_response_completed():

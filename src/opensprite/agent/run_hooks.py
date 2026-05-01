@@ -336,3 +336,40 @@ class RunHookService:
             )
 
         return _hook
+
+    def make_tool_input_delta_hook(
+        self,
+        *,
+        channel: str | None,
+        external_chat_id: str | None,
+        session_id: str,
+        run_id: str | None,
+        enabled: bool,
+    ) -> Callable[[str, str, str, int], Awaitable[None]] | None:
+        """Publish streamed tool-call argument chunks into the run event stream."""
+        if not enabled or run_id is None:
+            return None
+        ch = channel
+        tid = str(external_chat_id) if external_chat_id is not None else None
+        sid = session_id
+        rid = run_id
+
+        async def _hook(tool_call_id: str, tool_name: str, delta: str, sequence: int = 0) -> None:
+            text = str(delta or "")
+            if not text:
+                return
+            await self._emit_run_event(
+                sid,
+                rid,
+                "tool_input_delta",
+                {
+                    "tool_call_id": str(tool_call_id or ""),
+                    "tool_name": str(tool_name or ""),
+                    "input_delta": text,
+                    "sequence": int(sequence),
+                },
+                channel=ch,
+                external_chat_id=tid,
+            )
+
+        return _hook

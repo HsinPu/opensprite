@@ -99,16 +99,20 @@ def test_openai_streams_and_assembles_tool_calls():
         async def on_delta(delta):
             deltas.append(delta)
 
+        async def on_tool_input(call_id, tool_name, delta, sequence):
+            deltas.append((call_id, tool_name, delta, sequence))
+
         return await llm.chat(
             [ChatMessage(role="user", content="hi")],
             tools=[{"type": "function", "function": {"name": "demo", "parameters": {}}}],
             response_delta_callback=on_delta,
+            tool_input_delta_callback=on_tool_input,
         )
 
     response = asyncio.run(scenario())
 
     assert response.content == "Checking done"
-    assert deltas == ["Checking ", "done"]
+    assert deltas == ["Checking ", ("call-1", "demo", '{"value"', 1), ("call-1", "demo", ':"abc"}', 2), "done"]
     assert completions.calls[0]["stream"] is True
     assert len(response.tool_calls) == 1
     assert response.tool_calls[0].id == "call-1"

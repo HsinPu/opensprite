@@ -380,6 +380,42 @@ def test_llm_delta_hook_emits_empty_completion_marker():
     assert calls[0][4] == {"channel": "web", "external_chat_id": "browser-1"}
 
 
+def test_tool_input_delta_hook_emits_tool_input_events():
+    calls = []
+
+    async def emit_run_event(session_id, run_id, event_type, payload, **kwargs):
+        calls.append((session_id, run_id, event_type, payload, kwargs))
+
+    service = RunHookService(
+        message_bus_getter=lambda: None,
+        add_run_part=lambda *args, **kwargs: None,
+        emit_run_event=emit_run_event,
+        format_log_preview=lambda text, max_chars=200: str(text)[:max_chars],
+    )
+    hook = service.make_tool_input_delta_hook(
+        channel="web",
+        external_chat_id="browser-1",
+        session_id="web:browser-1",
+        run_id="run-1",
+        enabled=True,
+    )
+
+    async def scenario():
+        await hook("call-1", "demo", '{"value"', 1)
+
+    asyncio.run(scenario())
+
+    assert calls == [
+        (
+            "web:browser-1",
+            "run-1",
+            "tool_input_delta",
+            {"tool_call_id": "call-1", "tool_name": "demo", "input_delta": '{"value"', "sequence": 1},
+            {"channel": "web", "external_chat_id": "browser-1"},
+        )
+    ]
+
+
 def test_serialize_run_part_builds_stable_artifact_shape():
     part = SimpleNamespace(
         part_id=7,

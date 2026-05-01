@@ -35,6 +35,7 @@ _EVENT_KINDS = {
     "permission_denied": "permission",
     "run_part_delta": "text",
     "message_part_delta": "text",
+    "tool_input_delta": "tool",
 }
 
 

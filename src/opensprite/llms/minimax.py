@@ -148,11 +148,13 @@ class MiniMaxLLM(LLMProvider):
         presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 MiniMax Chat Completions API
         """
         _ = response_delta_callback
+        _ = tool_input_delta_callback
         # 轉換成 OpenAI 格式
         api_messages = []
         for m in messages:

@@ -355,7 +355,7 @@ function eventSummary(event) {
   }
   const payload = event.payload || {};
   if (payload.tool_name) {
-    return payload.tool_name;
+    return [payload.tool_name, payload.input_delta].filter(Boolean).join(" · ");
   }
   if (payload.action) {
     return payload.action;

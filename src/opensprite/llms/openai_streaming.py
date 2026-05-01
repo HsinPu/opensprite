@@ -45,6 +45,7 @@ async def collect_openai_compatible_stream(
     provider_name: str,
     default_model: str,
     response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+    tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
 ) -> LLMResponse:
     """Collect text and tool-call chunks from an OpenAI-compatible async stream."""
     content_parts: list[str] = []
@@ -83,7 +84,18 @@ async def collect_openai_compatible_stream(
                 buffer.name = str(name)
             arguments = _get_attr_or_item(function, "arguments")
             if arguments:
-                buffer.arguments_parts.append(str(arguments))
+                argument_delta = str(arguments)
+                buffer.arguments_parts.append(argument_delta)
+                if tool_input_delta_callback is not None:
+                    try:
+                        await tool_input_delta_callback(
+                            buffer.id or f"tool_call_{index + 1}",
+                            buffer.name,
+                            argument_delta,
+                            len(buffer.arguments_parts),
+                        )
+                    except Exception as cb_err:
+                        logger.warning("{} tool_input_delta_callback failed; continuing stream: {}", provider_name, cb_err)
 
     tool_calls = []
     for position, buffer in enumerate(sorted(tool_buffers.values(), key=lambda item: item.index), start=1):

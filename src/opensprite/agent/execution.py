@@ -907,6 +907,7 @@ Output exactly these sections when applicable:
         on_tool_after_execute: Callable[..., Awaitable[None]] | None = None,
         on_llm_status: Callable[[str], Awaitable[None]] | None = None,
         on_response_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        on_tool_input_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         refresh_system_prompt: Callable[[], str] | None = None,
         max_tool_iterations: int | None = None,
         should_cancel: Callable[[], bool] | None = None,
@@ -1026,6 +1027,7 @@ Output exactly these sections when applicable:
                         presence_penalty=dec_pres,
                         status_callback=on_llm_status,
                         response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
+                        tool_input_delta_callback=on_tool_input_delta,
                     )
                     duration_ms = int((time.perf_counter() - started_at) * 1000)
                     usage = dict(getattr(response, "usage", {}) or {})

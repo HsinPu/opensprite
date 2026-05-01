@@ -673,6 +673,14 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
+  if (eventType === "tool_input_delta") {
+    return {
+      label: `${copy.trace.filters.tool}: ${payload.tool_name || copy.run.unknownTool}`,
+      detail: payload.input_delta || "",
+      tone: "running",
+    };
+  }
+
   if (eventType === "permission_requested") {
     return {
       label: `${copy.trace.filters.permission}: ${payload.tool_name || copy.run.unknownTool}`,
