@@ -102,6 +102,7 @@ class LLMProvider(ABC):
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         發送對話請求到 LLM
@@ -118,6 +119,7 @@ class LLMProvider(ABC):
             status_callback: 長時間等待或重試時對使用者顯示的短訊息（可選，由實作決定是否呼叫）
             response_delta_callback: 可選的可見文字增量 callback；provider 支援 streaming 時呼叫
             tool_input_delta_callback: 可選的工具參數增量 callback；provider 支援 streaming tool calls 時呼叫
+            reasoning_delta_callback: 可選的 reasoning 增量 callback；只應用於 inspector trace，不應發到外部 channel
         
         回傳：
             LLMResponse: 包含回覆內容和使用的模型

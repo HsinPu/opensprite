@@ -208,6 +208,9 @@ function inferRunEventKind(eventType) {
   if (normalized.startsWith("llm_")) {
     return "llm";
   }
+  if (normalized === "reasoning_delta") {
+    return "llm";
+  }
   if (normalized.startsWith("tool_")) {
     return "tool";
   }
@@ -677,6 +680,14 @@ function describeRunEvent(eventType, payload, copy) {
     return {
       label: `${copy.trace.filters.tool}: ${payload.tool_name || copy.run.unknownTool}`,
       detail: payload.input_delta || "",
+      tone: "running",
+    };
+  }
+
+  if (eventType === "reasoning_delta") {
+    return {
+      label: copy.trace.filters.llm,
+      detail: payload.content_delta || "",
       tone: "running",
     };
   }

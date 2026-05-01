@@ -43,6 +43,7 @@ class LlmCallService:
         make_llm_status_hook: Callable[..., Callable[[str], Awaitable[None]] | None],
         make_llm_delta_hook: Callable[..., Callable[[str, str, str, int], Awaitable[None]] | None],
         make_tool_input_delta_hook: Callable[..., Callable[[str, str, str, int], Awaitable[None]] | None],
+        make_reasoning_delta_hook: Callable[..., Callable[[str, int], Awaitable[None]] | None],
         execute_messages: Callable[..., Awaitable[ExecutionResult]],
     ):
         self.config = config
@@ -69,6 +70,7 @@ class LlmCallService:
         self._make_llm_status_hook = make_llm_status_hook
         self._make_llm_delta_hook = make_llm_delta_hook
         self._make_tool_input_delta_hook = make_tool_input_delta_hook
+        self._make_reasoning_delta_hook = make_reasoning_delta_hook
         self._execute_messages = execute_messages
 
     async def call_llm(
@@ -225,6 +227,21 @@ class LlmCallService:
             run_id=run_id,
             enabled=emit_tool_progress,
         )
+        reasoning_delta_count = 0
+
+        reasoning_hook = self._make_reasoning_delta_hook(
+            channel=channel,
+            external_chat_id=external_chat_id,
+            session_id=session_id,
+            run_id=run_id,
+            enabled=emit_tool_progress,
+        )
+
+        async def on_reasoning_delta(delta: str) -> None:
+            nonlocal reasoning_delta_count
+            reasoning_delta_count += 1
+            if reasoning_hook is not None:
+                await reasoning_hook(delta, reasoning_delta_count)
         execute_kwargs = {
             "allow_tools": allow_tools,
             "tool_result_session_id": session_id if allow_tools else None,
@@ -233,6 +250,7 @@ class LlmCallService:
             "on_llm_status": on_llm_status,
             "on_response_delta": on_response_delta,
             "on_tool_input_delta": on_tool_input_delta,
+            "on_reasoning_delta": on_reasoning_delta if reasoning_hook is not None else None,
             "refresh_system_prompt": lambda: self._build_system_prompt(session_id),
             "should_cancel": lambda: self._should_cancel_run(session_id, run_id),
             "work_state_summary": work_state_summary,
@@ -248,10 +266,12 @@ class LlmCallService:
                 and "should_cancel" not in message
                 and "on_response_delta" not in message
                 and "on_tool_input_delta" not in message
+                and "on_reasoning_delta" not in message
             ):
                 raise
             execute_kwargs.pop("work_state_summary", None)
             execute_kwargs.pop("should_cancel", None)
             execute_kwargs.pop("on_response_delta", None)
             execute_kwargs.pop("on_tool_input_delta", None)
+            execute_kwargs.pop("on_reasoning_delta", None)
             return await self._execute_messages(session_id, chat_messages, **execute_kwargs)

@@ -232,6 +232,24 @@ class AgentLoop:
             enabled=enabled,
         )
 
+    def _make_reasoning_delta_hook(
+        self,
+        *,
+        channel: str | None,
+        external_chat_id: str | None,
+        session_id: str,
+        run_id: str | None,
+        enabled: bool,
+    ) -> Callable[[str, int], Awaitable[None]] | None:
+        """Publish provider reasoning chunks into the run event stream only."""
+        return self.run_hooks.make_reasoning_delta_hook(
+            channel=channel,
+            external_chat_id=external_chat_id,
+            session_id=session_id,
+            run_id=run_id,
+            enabled=enabled,
+        )
+
     async def _create_run(
         self,
         session_id: str,
@@ -649,6 +667,7 @@ class AgentLoop:
             make_llm_status_hook=lambda *args, **kwargs: self._make_llm_status_hook(*args, **kwargs),
             make_llm_delta_hook=lambda *args, **kwargs: self._make_llm_delta_hook(*args, **kwargs),
             make_tool_input_delta_hook=lambda *args, **kwargs: self._make_tool_input_delta_hook(*args, **kwargs),
+            make_reasoning_delta_hook=lambda *args, **kwargs: self._make_reasoning_delta_hook(*args, **kwargs),
             execute_messages=lambda *args, **kwargs: self._execute_messages(*args, **kwargs),
         )
 

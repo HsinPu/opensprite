@@ -18,6 +18,7 @@ _EVENT_KINDS = {
     "run_cancelled": "run",
     "run_cancel_requested": "run",
     "llm_status": "llm",
+    "reasoning_delta": "llm",
     "task_intent.detected": "work",
     "work_plan.created": "work",
     "work_progress.updated": "work",

@@ -28,10 +28,10 @@ class FakeCompletions:
         return self.response
 
 
-def _chunk(text, model="gpt-test"):
+def _chunk(text, model="gpt-test", reasoning=None):
     return SimpleNamespace(
         model=model,
-        choices=[SimpleNamespace(delta=SimpleNamespace(content=text))],
+        choices=[SimpleNamespace(delta=SimpleNamespace(content=text, reasoning_content=reasoning))],
     )
 
 
@@ -118,3 +118,27 @@ def test_openai_streams_and_assembles_tool_calls():
     assert response.tool_calls[0].id == "call-1"
     assert response.tool_calls[0].name == "demo"
     assert response.tool_calls[0].arguments == {"value": "abc"}
+
+
+def test_openai_streams_reasoning_deltas_without_visible_output():
+    completions = FakeCompletions(AsyncChunkStream([_chunk("", reasoning="think "), _chunk("done", reasoning="more")]))
+    llm = _make_llm(completions)
+    reasoning = []
+
+    async def scenario():
+        async def on_delta(delta):
+            pass
+
+        async def on_reasoning(delta):
+            reasoning.append(delta)
+
+        return await llm.chat(
+            [ChatMessage(role="user", content="hi")],
+            response_delta_callback=on_delta,
+            reasoning_delta_callback=on_reasoning,
+        )
+
+    response = asyncio.run(scenario())
+
+    assert response.content == "done"
+    assert reasoning == ["think ", "more"]

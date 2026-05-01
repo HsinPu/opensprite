@@ -26,6 +26,14 @@ def _coerce_content(content: Any) -> str:
     return str(content)
 
 
+def _coerce_reasoning(delta_payload: Any) -> str:
+    for name in ("reasoning_content", "reasoning", "reasoning_text"):
+        value = _get_attr_or_item(delta_payload, name)
+        if value:
+            return _coerce_content(value)
+    return ""
+
+
 def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
     if isinstance(value, dict):
         return value.get(name, default)
@@ -46,6 +54,7 @@ async def collect_openai_compatible_stream(
     default_model: str,
     response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+    reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
 ) -> LLMResponse:
     """Collect text and tool-call chunks from an OpenAI-compatible async stream."""
     content_parts: list[str] = []
@@ -69,6 +78,13 @@ async def collect_openai_compatible_stream(
                     await response_delta_callback(piece)
                 except Exception as cb_err:
                     logger.warning("{} response_delta_callback failed; continuing stream: {}", provider_name, cb_err)
+
+        reasoning_piece = _coerce_reasoning(delta_payload)
+        if reasoning_piece and reasoning_delta_callback is not None:
+            try:
+                await reasoning_delta_callback(reasoning_piece)
+            except Exception as cb_err:
+                logger.warning("{} reasoning_delta_callback failed; continuing stream: {}", provider_name, cb_err)
 
         for tool_delta in _iter_tool_call_deltas(delta_payload):
             index = int(_get_attr_or_item(tool_delta, "index", len(tool_buffers)) or 0)

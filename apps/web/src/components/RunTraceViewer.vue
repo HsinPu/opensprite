@@ -333,6 +333,9 @@ function eventCategory(eventType) {
   if (eventType.startsWith("llm_")) {
     return "llm";
   }
+  if (eventType === "reasoning_delta") {
+    return "llm";
+  }
   if (eventType.startsWith("tool_")) {
     return "tool";
   }
@@ -365,6 +368,9 @@ function eventSummary(event) {
   }
   if (payload.message) {
     return payload.message;
+  }
+  if (payload.content_delta) {
+    return previewText(payload.content_delta);
   }
   if (payload.error) {
     return payload.error;

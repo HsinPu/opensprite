@@ -91,6 +91,7 @@ class OpenAILLM(LLMProvider):
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenAI Chat Completions API
@@ -149,6 +150,7 @@ class OpenAILLM(LLMProvider):
                 default_model=model or self.default_model,
                 response_delta_callback=response_delta_callback,
                 tool_input_delta_callback=tool_input_delta_callback,
+                reasoning_delta_callback=reasoning_delta_callback,
             )
 
         # 呼叫 API

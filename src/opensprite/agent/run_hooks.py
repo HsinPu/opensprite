@@ -373,3 +373,39 @@ class RunHookService:
             )
 
         return _hook
+
+    def make_reasoning_delta_hook(
+        self,
+        *,
+        channel: str | None,
+        external_chat_id: str | None,
+        session_id: str,
+        run_id: str | None,
+        enabled: bool,
+    ) -> Callable[[str, int], Awaitable[None]] | None:
+        """Publish provider reasoning chunks into inspector-only run events."""
+        if not enabled or run_id is None:
+            return None
+        ch = channel
+        tid = str(external_chat_id) if external_chat_id is not None else None
+        sid = session_id
+        rid = run_id
+
+        async def _hook(delta: str, sequence: int = 0) -> None:
+            text = str(delta or "")
+            if not text:
+                return
+            await self._emit_run_event(
+                sid,
+                rid,
+                "reasoning_delta",
+                {
+                    "content_delta": text,
+                    "sequence": int(sequence),
+                    "inspector_only": True,
+                },
+                channel=ch,
+                external_chat_id=tid,
+            )
+
+        return _hook

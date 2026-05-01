@@ -55,6 +55,15 @@ class ToolInputStreamingProvider:
         return LLMResponse(content="done", model="fake-model")
 
 
+class ReasoningStreamingProvider:
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        callback = kwargs.get("reasoning_delta_callback")
+        if callback is not None:
+            await callback("think ")
+            await callback("more")
+        return LLMResponse(content="done", model="fake-model")
+
+
 class OverflowThenSuccessProvider:
     def __init__(self, final_response: str = "done"):
         self.final_response = final_response
@@ -253,6 +262,27 @@ def test_execution_engine_forwards_tool_input_deltas():
 
     assert result.content == "done"
     assert deltas == [("call-1", "demo_tool", '{"value"', 1), ("call-1", "demo_tool", ':"abc"}', 2)]
+
+
+def test_execution_engine_forwards_reasoning_deltas():
+    provider = ReasoningStreamingProvider()
+    engine = _make_engine(provider, ToolRegistry(), [])
+    deltas = []
+
+    async def on_reasoning(delta):
+        deltas.append(delta)
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="hi")],
+            allow_tools=False,
+            on_reasoning_delta=on_reasoning,
+        )
+    )
+
+    assert result.content == "done"
+    assert deltas == ["think ", "more"]
 
 
 def test_execution_engine_marks_provider_streamed_response_completed():
