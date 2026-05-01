@@ -76,6 +76,17 @@ export const DISPLAY_COPY = {
     message: {
       userAvatar: "你",
       assistantAvatar: "OS",
+      artifactTypes: {
+        tool: "工具",
+        file: "檔案",
+        task: "任務",
+        permission: "權限",
+        verification: "驗證",
+        llm_step: "LLM",
+        compaction: "Context",
+        system: "系統",
+        work: "工作",
+      },
     },
     session: {
       newChat: "新對話",
@@ -689,6 +700,17 @@ export const DISPLAY_COPY = {
     message: {
       userAvatar: "You",
       assistantAvatar: "OS",
+      artifactTypes: {
+        tool: "Tool",
+        file: "File",
+        task: "Task",
+        permission: "Permission",
+        verification: "Verification",
+        llm_step: "LLM",
+        compaction: "Context",
+        system: "System",
+        work: "Work",
+      },
     },
     session: {
       newChat: "New chat",

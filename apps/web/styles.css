@@ -991,8 +991,41 @@ button:disabled {
   gap: 6px;
   padding: 12px 14px;
   border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--text-soft);
   border-radius: var(--radius-md);
   background: var(--surface-muted);
+}
+
+.message__artifact[data-type="tool"] {
+  border-left-color: #3b82f6;
+}
+
+.message__artifact[data-type="file"] {
+  border-left-color: var(--accent);
+}
+
+.message__artifact[data-type="verification"] {
+  border-left-color: #8b5cf6;
+}
+
+.message__artifact[data-type="permission"] {
+  border-left-color: var(--warning);
+}
+
+.message__artifact[data-type="task"] {
+  border-left-color: #0ea5e9;
+}
+
+.message__artifact[data-status="failed"],
+.message__artifact[data-status="error"] {
+  border-left-color: var(--danger);
+}
+
+.message__artifact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .message__artifact-type {
@@ -1001,6 +1034,38 @@ button:disabled {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.message__artifact-status {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.72);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.message__artifact[data-status="completed"] .message__artifact-status,
+.message__artifact[data-status="complete"] .message__artifact-status {
+  border-color: rgba(16, 163, 127, 0.22);
+  color: #08634e;
+  background: #effaf6;
+}
+
+.message__artifact[data-status="running"] .message__artifact-status,
+.message__artifact[data-status="streaming"] .message__artifact-status {
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.message__artifact[data-status="failed"] .message__artifact-status,
+.message__artifact[data-status="error"] .message__artifact-status {
+  border-color: rgba(217, 45, 32, 0.2);
+  color: #9b241c;
+  background: #fff3f1;
 }
 
 .message__artifact strong {

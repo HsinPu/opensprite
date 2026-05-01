@@ -16,8 +16,11 @@
           <template v-for="part in message.content" :key="part.id">
             <div v-if="part.type === 'text'" class="message__bubble">{{ part.text || part.detail }}</div>
             <div v-else class="message__artifact" :data-type="part.type" :data-status="part.status || undefined">
-              <span class="message__artifact-type">{{ part.type }}</span>
-              <strong>{{ part.title || part.type }}</strong>
+              <div class="message__artifact-header">
+                <span class="message__artifact-type">{{ artifactTypeLabel(part.type) }}</span>
+                <small v-if="part.status" class="message__artifact-status">{{ artifactStatusLabel(part.status) }}</small>
+              </div>
+              <strong>{{ part.title || artifactTypeLabel(part.type) }}</strong>
               <p v-if="part.detail">{{ part.detail }}</p>
             </div>
           </template>
@@ -65,4 +68,14 @@ const messages = computed(() => {
     content: [],
   }));
 });
+
+function artifactTypeLabel(type) {
+  const labels = props.copy.message.artifactTypes || {};
+  return labels[type] || type;
+}
+
+function artifactStatusLabel(status) {
+  const labels = props.copy.run?.statusLabels || {};
+  return labels[status] || status;
+}
 </script>
