@@ -2260,18 +2260,103 @@ button:disabled {
 }
 
 .run-trace__artifacts,
+.run-trace__code-nav,
 .run-trace__parts,
 .run-trace__debug {
   display: grid;
   gap: 8px;
 }
 
+.run-trace__code-nav,
 .run-trace__parts,
 .run-trace__debug {
   padding: 10px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
   background: rgba(255, 255, 255, 0.54);
+}
+
+.run-trace__code-nav-list {
+  display: grid;
+  gap: 8px;
+}
+
+.run-trace__code-nav-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.run-trace__code-nav-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.run-trace__code-nav-head strong {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.run-trace__code-nav-head span {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.run-trace__code-nav-items {
+  display: grid;
+  gap: 6px;
+}
+
+.run-trace__code-nav-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.2fr) minmax(0, 0.8fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.run-trace__code-nav-item code,
+.run-trace__code-nav-item strong,
+.run-trace__code-nav-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-trace__code-nav-item code {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.run-trace__code-nav-item strong {
+  color: var(--text);
+  font-size: 0.76rem;
+}
+
+.run-trace__code-nav-item span {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.run-trace__code-nav-item p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .run-trace__section-head {

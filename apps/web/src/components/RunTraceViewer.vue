@@ -109,6 +109,31 @@
         <p v-else class="run-trace__empty">{{ copy.trace.noArtifacts }}</p>
       </div>
 
+      <section v-if="codeNavigationResults.length" class="run-trace__code-nav" aria-label="Code navigation results">
+        <div class="run-trace__section-head">
+          <strong>{{ copy.trace.codeNavigation }}</strong>
+          <span>{{ codeNavigationResults.length }} {{ copy.trace.results }}</span>
+        </div>
+
+        <div class="run-trace__code-nav-list">
+          <article v-for="result in codeNavigationResults" :key="result.id" class="run-trace__code-nav-card">
+            <div class="run-trace__code-nav-head">
+              <strong>{{ codeNavigationActionLabel(result) }}</strong>
+              <span>{{ result.count }} {{ copy.trace.results }}</span>
+            </div>
+            <div v-if="result.items.length" class="run-trace__code-nav-items">
+              <div v-for="item in result.items" :key="`${item.path}:${item.line}:${item.name || item.preview}`" class="run-trace__code-nav-item">
+                <code>{{ formatCodeLocation(item) }}</code>
+                <strong v-if="item.name">{{ item.name }}</strong>
+                <span v-if="item.kind">{{ item.kind }}</span>
+                <p v-if="item.preview">{{ item.preview }}</p>
+              </div>
+            </div>
+            <p v-else class="run-trace__empty">{{ copy.trace.noCodeNavigationResults }}</p>
+          </article>
+        </div>
+      </section>
+
       <section class="run-trace__parts" aria-label="Message parts">
         <div class="run-trace__section-head">
           <button class="run-trace__section-toggle" type="button" :aria-expanded="partsExpanded" @click="partsExpanded = !partsExpanded">
@@ -219,6 +244,7 @@ const events = computed(() => props.run?.rawEvents || props.run?.events || []);
 const artifacts = computed(() => props.run?.artifacts || []);
 const parts = computed(() => props.run?.parts || []);
 const visibleParts = computed(() => parts.value.slice(-8));
+const codeNavigationResults = computed(() => parts.value.map(normalizeCodeNavigationResult).filter(Boolean));
 
 const filteredEvents = computed(() => {
   if (selectedFilter.value === "all") {
@@ -381,6 +407,62 @@ function eventSummary(event) {
 function partSummary(part) {
   const values = [part.toolName, previewText(part.content), part.artifact?.detail].filter(Boolean);
   return values[0] || "";
+}
+
+function normalizeCodeNavigationResult(part) {
+  if (part?.toolName !== "code_navigation" || part?.partType !== "tool_result") {
+    return null;
+  }
+  let payload = null;
+  try {
+    payload = JSON.parse(part.content || "{}");
+  } catch {
+    return null;
+  }
+  const action = String(payload.action || "").trim();
+  const items = Array.isArray(payload.symbols)
+    ? payload.symbols
+    : Array.isArray(payload.definitions)
+      ? payload.definitions
+      : Array.isArray(payload.references)
+        ? payload.references
+        : [];
+  const normalizedItems = items.map(normalizeCodeNavigationItem).filter(Boolean).slice(0, 12);
+  return {
+    id: part.partId || `${action}:${part.createdAt}`,
+    action,
+    count: items.length,
+    items: normalizedItems,
+  };
+}
+
+function normalizeCodeNavigationItem(item) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+  const path = String(item.path || "").trim();
+  const line = Number(item.line || 0);
+  if (!path && !item.name && !item.preview) {
+    return null;
+  }
+  return {
+    path,
+    line: Number.isFinite(line) && line > 0 ? line : null,
+    name: String(item.name || "").trim(),
+    kind: String(item.kind || "").trim(),
+    preview: String(item.preview || "").trim(),
+  };
+}
+
+function codeNavigationActionLabel(result) {
+  return result.action || props.copy.trace.codeNavigation;
+}
+
+function formatCodeLocation(item) {
+  if (item.path && item.line) {
+    return `${item.path}:${item.line}`;
+  }
+  return item.path || props.copy.trace.unknownArtifact;
 }
 
 function partStateLabel(part) {
