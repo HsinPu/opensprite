@@ -114,6 +114,7 @@
             <strong>{{ copy.runSummary.worktreeSandbox }}</strong>
             <span>{{ worktreeSandbox.sandboxPath }}</span>
             <small v-if="worktreeSandbox.status">{{ worktreeSandbox.status }}</small>
+            <small v-if="worktreeCleanupDetail">{{ worktreeCleanupDetail }}</small>
           </div>
           <button
             class="run-summary-card__copy"
@@ -273,6 +274,14 @@ const cleanupButtonLabel = computed(() => {
     return props.copy.runSummary.cleanupDone;
   }
   return props.copy.runSummary.cleanupSandbox;
+});
+
+const worktreeCleanupDetail = computed(() => {
+  const result = worktreeSandbox.value?.cleanupResult;
+  if (!result) {
+    return "";
+  }
+  return result.reason || result.repository_root || result.repositoryRoot || result.status || "";
 });
 
 const copyButtonLabel = computed(() => {

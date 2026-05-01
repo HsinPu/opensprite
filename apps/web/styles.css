@@ -1778,6 +1778,7 @@ button:disabled {
 }
 
 .run-summary-card__sandbox-body small {
+  overflow-wrap: anywhere;
   color: var(--text-soft);
   font-size: 0.72rem;
 }

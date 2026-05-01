@@ -3302,6 +3302,9 @@ export function useChatClient() {
       setNotice(copy.value.notices.worktreeCleanupUnavailable, "warning");
       return null;
     }
+    if (typeof window !== "undefined" && !window.confirm(copy.value.runSummary.confirmCleanupSandbox(sandbox.sandboxPath))) {
+      return null;
+    }
 
     sandbox.cleanupPending = true;
     try {
@@ -3317,6 +3320,9 @@ export function useChatClient() {
       sandbox.status = payload.cleanup?.status || "removed";
       sandbox.cleanupSupported = false;
       setNotice(copy.value.notices.worktreeCleanupApplied, "success");
+      if (currentSession.value) {
+        await loadRunTrace(currentSession.value, run);
+      }
       return sandbox.cleanupResult;
     } catch (error) {
       setNotice(error?.message || copy.value.notices.worktreeCleanupFailed, "error");
