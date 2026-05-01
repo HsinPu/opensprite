@@ -65,6 +65,40 @@
           <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
 
+        <div v-if="hasDiffSummary" class="run-summary-card__diff">
+          <div class="run-summary-card__diff-header">
+            <strong>{{ copy.runSummary.diffSummary }}</strong>
+            <span>+{{ diffSummary.additions }} / -{{ diffSummary.deletions }}</span>
+          </div>
+          <dl class="run-summary-card__diff-metrics">
+            <div>
+              <dt>{{ copy.runSummary.changedFiles }}</dt>
+              <dd>{{ diffSummary.changedFiles }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.runSummary.changes }}</dt>
+              <dd>{{ diffSummary.changeCount }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.runSummary.additions }}</dt>
+              <dd>+{{ diffSummary.additions }}</dd>
+            </div>
+            <div>
+              <dt>{{ copy.runSummary.deletions }}</dt>
+              <dd>-{{ diffSummary.deletions }}</dd>
+            </div>
+          </dl>
+          <div v-if="diffActionEntries.length" class="run-summary-card__chips">
+            <span>{{ copy.runSummary.actions }}</span>
+            <code v-for="[action, count] in diffActionEntries" :key="action">{{ action }} x{{ count }}</code>
+          </div>
+          <div v-if="visibleDiffPaths.length" class="run-summary-card__paths">
+            <span>{{ copy.runSummary.paths }}</span>
+            <code v-for="path in visibleDiffPaths" :key="path">{{ path }}</code>
+            <small v-if="hiddenDiffPathCount > 0">{{ copy.runSummary.moreFiles(hiddenDiffPathCount) }}</small>
+          </div>
+        </div>
+
         <div v-if="summary.tools.length" class="run-summary-card__chips">
           <span>{{ copy.runSummary.tools }}</span>
           <code v-for="tool in visibleTools" :key="tool.name">{{ tool.name }} x{{ tool.count }}</code>
@@ -183,6 +217,22 @@ const verificationTone = computed(() => {
   return summary.value.verification.passed ? "success" : "warning";
 });
 
+const diffSummary = computed(() => summary.value?.diffSummary || props.run.diffSummary || null);
+
+const hasDiffSummary = computed(() => {
+  const diff = diffSummary.value;
+  if (!diff) {
+    return false;
+  }
+  return diff.changedFiles > 0 || diff.changeCount > 0 || diff.additions > 0 || diff.deletions > 0 || diff.paths.length > 0;
+});
+
+const diffActionEntries = computed(() => Object.entries(diffSummary.value?.actions || {}).slice(0, 4));
+
+const visibleDiffPaths = computed(() => (diffSummary.value?.paths || []).slice(0, 4));
+
+const hiddenDiffPathCount = computed(() => Math.max(0, (diffSummary.value?.paths?.length || 0) - visibleDiffPaths.value.length));
+
 const copyButtonLabel = computed(() => {
   if (copyState.value === "copying") {
     return props.copy.runSummary.copyingReport;
@@ -257,6 +307,10 @@ function buildRunReport() {
     lines.push(`- ${data.verification.summary}`);
   }
 
+  if (hasDiffSummary.value) {
+    lines.push("", `## ${props.copy.runSummary.diffSummary}`, ...formatDiffSummary(diffSummary.value));
+  }
+
   lines.push("", `## ${props.copy.runSummary.files}`, ...formatFileChanges(data.fileChanges));
 
   if (data.nextAction) {
@@ -295,6 +349,23 @@ function formatFileChanges(fileChanges) {
     }
     return lines;
   });
+}
+
+function formatDiffSummary(diff) {
+  const actions = Object.entries(diff.actions || {});
+  const lines = [
+    `- ${props.copy.runSummary.changedFiles}: ${diff.changedFiles}`,
+    `- ${props.copy.runSummary.changes}: ${diff.changeCount}`,
+    `- ${props.copy.runSummary.additions}: ${diff.additions}`,
+    `- ${props.copy.runSummary.deletions}: ${diff.deletions}`,
+  ];
+  if (actions.length) {
+    lines.push(`- ${props.copy.runSummary.actions}: ${actions.map(([action, count]) => `${action} x${count}`).join(", ")}`);
+  }
+  if (diff.paths.length) {
+    lines.push(`- ${props.copy.runSummary.paths}: ${diff.paths.join(", ")}`);
+  }
+  return lines;
 }
 
 function downloadReport() {

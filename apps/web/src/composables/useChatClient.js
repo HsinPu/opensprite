@@ -361,6 +361,29 @@ function normalizeRunArtifact(artifact, fallback = {}) {
   };
 }
 
+function normalizeDiffSummary(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const actions = payload.actions && typeof payload.actions === "object" ? payload.actions : {};
+  const paths = Array.isArray(payload.paths)
+    ? payload.paths.map((path) => String(path || "").trim()).filter(Boolean)
+    : [];
+  return {
+    schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
+    changedFiles: coerceNonNegativeInteger(payload.changed_files ?? payload.changedFiles ?? paths.length),
+    changeCount: coerceNonNegativeInteger(payload.change_count ?? payload.changeCount),
+    additions: coerceNonNegativeInteger(payload.additions),
+    deletions: coerceNonNegativeInteger(payload.deletions),
+    paths,
+    actions: Object.fromEntries(
+      Object.entries(actions)
+        .map(([action, count]) => [String(action || "unknown").trim() || "unknown", coerceNonNegativeInteger(count)])
+        .filter(([action, count]) => action && count > 0),
+    ),
+  };
+}
+
 function normalizeWorkState(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -498,6 +521,7 @@ function createRunViewState({ runId, sessionId, status = "running", createdAt, u
     parts: [],
     artifacts: [],
     fileChanges: [],
+    diffSummary: null,
     summary: null,
     summaryLoading: false,
     summaryError: "",
@@ -598,6 +622,7 @@ function normalizeRunSummary(payload) {
           }))
           .filter((change) => change.path)
       : [],
+    diffSummary: normalizeDiffSummary(payload.diff_summary || payload.diffSummary),
     verification: {
       attempted: coerceBoolean(verification.attempted),
       passed: coerceBoolean(verification.passed),
@@ -1950,6 +1975,7 @@ export function useChatClient() {
           ].slice(-MAX_RUN_ARTIFACTS);
       run.artifacts.forEach((artifact) => applyToolArtifactToParts(run, artifact));
       run.fileChanges = fileChanges;
+      run.diffSummary = normalizeDiffSummary(payload?.diff_summary || payload?.diffSummary);
       run.traceLoaded = true;
     } catch (error) {
       run.traceError = error?.message || copy.value.notices.runTraceLoadFailed;
