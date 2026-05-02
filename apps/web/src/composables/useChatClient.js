@@ -48,6 +48,10 @@ const TIMELINE_EVENT_TYPES = new Set([
   "permission_requested",
   "permission_granted",
   "permission_denied",
+  "subagent.started",
+  "subagent.completed",
+  "subagent.failed",
+  "subagent.cancelled",
   "curator.started",
   "curator.completed",
   "curator.failed",
@@ -445,6 +449,29 @@ function findWorktreeSandbox(parts = [], artifacts = []) {
   return null;
 }
 
+function normalizeDelegatedTask(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const taskId = String(payload.task_id || payload.taskId || "").trim();
+  if (!taskId) {
+    return null;
+  }
+  return {
+    taskId,
+    promptType: String(payload.prompt_type || payload.promptType || "").trim() || null,
+    status: String(payload.status || "unknown").trim() || "unknown",
+    selected: coerceBoolean(payload.selected),
+    summary: String(payload.summary || "").trim(),
+    error: String(payload.error || "").trim(),
+    childSessionId: String(payload.child_session_id || payload.childSessionId || "").trim() || null,
+    lastChildRunId: String(payload.last_child_run_id || payload.lastChildRunId || "").trim() || null,
+    metadata: payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    createdAt: normalizeEventTimestamp(payload.created_at ?? payload.createdAt),
+    updatedAt: normalizeEventTimestamp(payload.updated_at ?? payload.updatedAt),
+  };
+}
+
 function normalizeWorkState(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -453,6 +480,10 @@ function normalizeWorkState(payload) {
   if (!objective) {
     return null;
   }
+  const delegatedTasks = Array.isArray(payload.delegated_tasks || payload.delegatedTasks)
+    ? (payload.delegated_tasks || payload.delegatedTasks).map(normalizeDelegatedTask).filter(Boolean)
+    : [];
+  const selectedDelegatedTask = delegatedTasks.find((task) => task.selected) || null;
   return {
     sessionId: String(payload.session_id || payload.sessionId || "").trim() || null,
     objective,
@@ -478,8 +509,9 @@ function normalizeWorkState(payload) {
     verificationAttempted: coerceBoolean(payload.verification_attempted ?? payload.verificationAttempted),
     verificationPassed: coerceBoolean(payload.verification_passed ?? payload.verificationPassed),
     lastNextAction: String(payload.last_next_action || payload.lastNextAction || "").trim(),
-    activeDelegateTaskId: String(payload.active_delegate_task_id || payload.activeDelegateTaskId || "").trim() || null,
-    activeDelegatePromptType: String(payload.active_delegate_prompt_type || payload.activeDelegatePromptType || "").trim() || null,
+    delegatedTasks,
+    activeDelegateTaskId: String(payload.active_delegate_task_id || payload.activeDelegateTaskId || "").trim() || selectedDelegatedTask?.taskId || null,
+    activeDelegatePromptType: String(payload.active_delegate_prompt_type || payload.activeDelegatePromptType || "").trim() || selectedDelegatedTask?.promptType || null,
     updatedAt: normalizeEventTimestamp(payload.updated_at ?? payload.updatedAt),
   };
 }
@@ -671,6 +703,10 @@ function formatRunFinishDetail(payload, copy) {
   return parts.join(" · ");
 }
 
+function formatSubagentDetail(payload) {
+  return [payload.prompt_type || payload.promptType, payload.task_id || payload.taskId].filter(Boolean).join(" · ");
+}
+
 function normalizeRunSummary(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -822,6 +858,38 @@ function describeRunEvent(eventType, payload, copy) {
       label: `${copy.trace.filters.permission}: ${payload.tool_name || copy.run.unknownTool}`,
       detail: payload.resolution_reason || payload.status || "",
       tone: granted ? "success" : "error",
+    };
+  }
+
+  if (eventType === "subagent.started") {
+    return {
+      label: copy.run.subagentStarted,
+      detail: payload.message || formatSubagentDetail(payload),
+      tone: "running",
+    };
+  }
+
+  if (eventType === "subagent.completed") {
+    return {
+      label: copy.run.subagentCompleted,
+      detail: payload.summary || formatSubagentDetail(payload),
+      tone: "success",
+    };
+  }
+
+  if (eventType === "subagent.failed") {
+    return {
+      label: copy.run.subagentFailed,
+      detail: payload.error || formatSubagentDetail(payload),
+      tone: "error",
+    };
+  }
+
+  if (eventType === "subagent.cancelled") {
+    return {
+      label: copy.run.cancelled,
+      detail: payload.error || formatSubagentDetail(payload),
+      tone: "warning",
     };
   }
 

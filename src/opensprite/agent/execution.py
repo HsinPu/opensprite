@@ -12,6 +12,7 @@ from ..config import DocumentLlmConfig, ToolsConfig
 from ..llms import ChatMessage, LLMProvider
 from ..llms.retry import retry_delay_from_error
 from ..search.base import SearchStore
+from ..storage.base import StoredDelegatedTask
 from ..tools import ToolRegistry
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
@@ -73,6 +74,7 @@ class ExecutionResult:
     executed_tool_calls: int = 0
     file_change_count: int = 0
     touched_paths: tuple[str, ...] = ()
+    delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
     active_delegate_task_id: str | None = None
     active_delegate_prompt_type: str | None = None
     used_configure_skill: bool = False
@@ -928,6 +930,7 @@ Output exactly these sections when applicable:
         executed_tool_calls = 0
         used_configure_skill = False
         had_tool_error = False
+        delegated_tasks: list[StoredDelegatedTask] = []
         active_delegate_task_id: str | None = None
         active_delegate_prompt_type: str | None = None
         verification_attempted = False
@@ -1187,6 +1190,7 @@ Output exactly these sections when applicable:
                             executed_tool_calls=executed_tool_calls,
                             used_configure_skill=used_configure_skill,
                             had_tool_error=had_tool_error,
+                            delegated_tasks=tuple(delegated_tasks),
                             active_delegate_task_id=active_delegate_task_id,
                             active_delegate_prompt_type=active_delegate_prompt_type,
                             verification_attempted=verification_attempted,
@@ -1207,6 +1211,7 @@ Output exactly these sections when applicable:
                         executed_tool_calls=executed_tool_calls,
                         used_configure_skill=used_configure_skill,
                         had_tool_error=had_tool_error,
+                        delegated_tasks=tuple(delegated_tasks),
                         active_delegate_task_id=active_delegate_task_id,
                         active_delegate_prompt_type=active_delegate_prompt_type,
                         verification_attempted=verification_attempted,
@@ -1313,6 +1318,16 @@ Output exactly these sections when applicable:
                             active_delegate_task_id = delegate_task_id
                         if delegate_prompt_type:
                             active_delegate_prompt_type = delegate_prompt_type
+                        if delegate_task_id:
+                            delegated_tasks.append(
+                                StoredDelegatedTask(
+                                    task_id=delegate_task_id,
+                                    prompt_type=delegate_prompt_type,
+                                    status="completed",
+                                    selected=True,
+                                    updated_at=time.time(),
+                                )
+                            )
                     if tool_name == "configure_skill" and tool_args.get("action") in ("add", "upsert"):
                         used_configure_skill = True
                     logger.info(
@@ -1365,6 +1380,7 @@ Output exactly these sections when applicable:
                                 executed_tool_calls=executed_tool_calls,
                                 used_configure_skill=used_configure_skill,
                                 had_tool_error=had_tool_error,
+                                delegated_tasks=tuple(delegated_tasks),
                                 active_delegate_task_id=active_delegate_task_id,
                                 active_delegate_prompt_type=active_delegate_prompt_type,
                                 verification_attempted=verification_attempted,
@@ -1447,6 +1463,7 @@ Output exactly these sections when applicable:
                     executed_tool_calls=executed_tool_calls,
                     used_configure_skill=used_configure_skill,
                     had_tool_error=had_tool_error,
+                    delegated_tasks=tuple(delegated_tasks),
                     active_delegate_task_id=active_delegate_task_id,
                     active_delegate_prompt_type=active_delegate_prompt_type,
                     verification_attempted=verification_attempted,
@@ -1467,6 +1484,7 @@ Output exactly these sections when applicable:
                 executed_tool_calls=executed_tool_calls,
                 used_configure_skill=used_configure_skill,
                 had_tool_error=had_tool_error,
+                delegated_tasks=tuple(delegated_tasks),
                 active_delegate_task_id=active_delegate_task_id,
                 active_delegate_prompt_type=active_delegate_prompt_type,
                 verification_attempted=verification_attempted,
@@ -1498,6 +1516,7 @@ Output exactly these sections when applicable:
             executed_tool_calls=executed_tool_calls,
             used_configure_skill=used_configure_skill,
             had_tool_error=had_tool_error,
+            delegated_tasks=tuple(delegated_tasks),
             active_delegate_task_id=active_delegate_task_id,
             active_delegate_prompt_type=active_delegate_prompt_type,
             verification_attempted=verification_attempted,

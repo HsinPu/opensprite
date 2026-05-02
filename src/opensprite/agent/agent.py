@@ -21,13 +21,14 @@ opensprite/agent.py - Agent Loop
 """
 
 from contextvars import ContextVar
+import time
 from pathlib import Path
 import shutil
 from typing import Any, Awaitable, Callable
 
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage, create_llm
-from ..storage import StorageProvider
+from ..storage import StorageProvider, StoredDelegatedTask
 from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store
 from ..context.builder import ContextBuilder
@@ -372,6 +373,51 @@ class AgentLoop:
             external_chat_id=external_chat_id,
         )
 
+    def _record_delegated_task_update(self, run_id: str | None, task: StoredDelegatedTask) -> None:
+        """Track delegated child-task updates for the active parent run."""
+        if run_id is None:
+            return
+        task_id = str(task.task_id or "").strip()
+        if not task_id:
+            return
+        bucket = self._delegated_task_updates.setdefault(run_id, {})
+        previous = bucket.pop(task_id, None)
+        now = time.time()
+        bucket[task_id] = StoredDelegatedTask(
+            task_id=task_id,
+            prompt_type=task.prompt_type or (previous.prompt_type if previous is not None else None),
+            status=str(task.status or (previous.status if previous is not None else "unknown")).strip() or "unknown",
+            selected=bool(task.selected),
+            summary=str(task.summary or (previous.summary if previous is not None else "")).strip(),
+            error=(
+                str(task.error or "").strip()
+                if str(task.error or "").strip()
+                else ""
+                if str(task.status or "").strip() and str(task.status or "").strip() != "failed"
+                else previous.error if previous is not None else ""
+            ),
+            child_session_id=task.child_session_id or (previous.child_session_id if previous is not None else None),
+            last_child_run_id=task.last_child_run_id or (previous.last_child_run_id if previous is not None else None),
+            metadata={**(previous.metadata if previous is not None else {}), **dict(task.metadata or {})},
+            created_at=(
+                previous.created_at
+                if previous is not None and previous.created_at
+                else float(task.created_at or now)
+            ),
+            updated_at=float(task.updated_at or now),
+        )
+
+    def _consume_delegated_task_updates(self, run_id: str) -> tuple[StoredDelegatedTask, ...]:
+        """Return and clear delegated child-task updates captured for one run."""
+        bucket = self._delegated_task_updates.pop(run_id, None)
+        if not bucket:
+            return ()
+        return tuple(bucket.values())
+
+    def _clear_delegated_task_updates(self, run_id: str) -> None:
+        """Drop delegated child-task updates for one run without returning them."""
+        self._delegated_task_updates.pop(run_id, None)
+
     def pending_permission_requests(self) -> list[PermissionRequest]:
         """Return permission requests waiting for an external decision."""
         return self.permissions.pending_requests()
@@ -524,6 +570,7 @@ class AgentLoop:
         self._maintenance_tasks: dict[str, Any] = {}
         self._maintenance_rerun: set[str] = set()
         self._run_skill_reads: dict[str, set[str]] = {}
+        self._delegated_task_updates: dict[str, dict[str, StoredDelegatedTask]] = {}
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
         self.permission_requests = PermissionRequestManager(
@@ -590,6 +637,8 @@ class AgentLoop:
                 result,
             ),
             finalize_learning_reuse=lambda session_id, run_id, success: self._finalize_learning_reuse(session_id, run_id, success),
+            consume_delegated_task_updates=self._consume_delegated_task_updates,
+            clear_delegated_task_updates=self._clear_delegated_task_updates,
             worktree_sandbox_enabled=lambda: self.config.worktree_sandbox_enabled,
             workspace_root=lambda: Path(self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())),
         )
@@ -640,11 +689,18 @@ class AgentLoop:
             app_home_getter=lambda: self.app_home,
             workspace_getter=self._get_current_workspace,
             current_session_id_getter=self._get_current_session_id,
+            current_run_id_getter=self.turn_context.current_run_id,
+            current_channel_getter=self.turn_context.current_channel,
+            current_external_chat_id_getter=self.turn_context.current_external_chat_id,
+            should_cancel_parent_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),
             skills_loader_getter=lambda: getattr(self._context_builder, "skills_loader", None),
             save_message=self._save_message,
             execute_messages=self._execute_messages,
             log_prepared_messages=self._log_prepared_messages,
             format_log_preview=self._format_log_preview,
+            run_trace=self.run_trace,
+            run_hooks=self.run_hooks,
+            record_delegated_task_update=self._record_delegated_task_update,
         )
         self.prompt_budget = PromptBudgetService(
             context_builder=self._context_builder,
@@ -1246,6 +1302,7 @@ class AgentLoop:
             workspace_resolver=self._get_current_workspace,
             get_session_id=self._get_current_session_id,
             run_subagent=self.run_subagent,
+            run_subagents_many=self.run_subagents_many,
             config_path_resolver=self._get_config_path,
             reload_mcp=self.reload_mcp_from_config,
             app_home=self.app_home,
@@ -1602,6 +1659,14 @@ class AgentLoop:
     ) -> str:
         """Run or resume a delegated subagent task through a child storage session."""
         return await self.subagents.run(task, prompt_type=prompt_type, task_id=task_id)
+
+    async def run_subagents_many(
+        self,
+        tasks: list[dict[str, Any]],
+        max_parallel: int | None = None,
+    ) -> str:
+        """Run multiple read-only or research child tasks concurrently."""
+        return await self.subagents.run_many(tasks, max_parallel=max_parallel)
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

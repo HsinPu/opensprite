@@ -16,7 +16,7 @@ from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfi
 from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
-from opensprite.storage import MemoryStorage
+from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -1102,8 +1102,15 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
             return ExecutionResult(
                 content="Delegated the implementation task.",
                 executed_tool_calls=1,
-                active_delegate_task_id="task_abc12345",
-                active_delegate_prompt_type="implementer",
+                delegated_tasks=(
+                    StoredDelegatedTask(
+                        task_id="task_abc12345",
+                        prompt_type="implementer",
+                        status="completed",
+                        selected=True,
+                        summary="Delegated the implementation task.",
+                    ),
+                ),
             )
 
         agent.call_llm = fake_call_llm
@@ -1140,6 +1147,7 @@ def test_agent_process_persists_work_state_with_delegate_task(tmp_path):
     assert work_state.objective == "Finish the refactor"
     assert work_state.active_delegate_task_id == "task_abc12345"
     assert work_state.active_delegate_prompt_type == "implementer"
+    assert [task.task_id for task in work_state.delegated_tasks] == ["task_abc12345"]
     assert work_state.resume_hint == "Resume at current step: 2. change"
 
 

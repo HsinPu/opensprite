@@ -20,9 +20,20 @@ from ..search.indexing import (
 )
 from ..utils.json_safe import json_safe_value as json_safe
 from ..utils.log import logger
-from .base import StorageProvider, StoredMessage, StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredWorkState
+from .base import (
+    StorageProvider,
+    StoredMessage,
+    StoredRun,
+    StoredRunEvent,
+    StoredRunFileChange,
+    StoredRunPart,
+    StoredWorkState,
+    coerce_stored_delegated_tasks,
+    legacy_delegated_tasks,
+    selected_delegated_task,
+)
 
-SQLITE_SCHEMA_VERSION = 10
+SQLITE_SCHEMA_VERSION = 11
 
 SCHEMA_SCRIPT = """
 CREATE TABLE IF NOT EXISTS chats (
@@ -145,6 +156,7 @@ CREATE TABLE IF NOT EXISTS work_states (
     verification_attempted INTEGER NOT NULL DEFAULT 0,
     verification_passed INTEGER NOT NULL DEFAULT 0,
     last_next_action TEXT NOT NULL DEFAULT '',
+    delegated_tasks_json TEXT NOT NULL DEFAULT '[]',
     active_delegate_task_id TEXT,
     active_delegate_prompt_type TEXT,
     metadata_json TEXT NOT NULL DEFAULT '{}',
@@ -326,6 +338,7 @@ def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
             "verification_targets_json": "TEXT NOT NULL DEFAULT '[]'",
             "resume_hint": "TEXT NOT NULL DEFAULT ''",
             "last_progress_signals_json": "TEXT NOT NULL DEFAULT '[]'",
+            "delegated_tasks_json": "TEXT NOT NULL DEFAULT '[]'",
         }
         for column_name, column_type in required_work_state_columns.items():
             if column_name in work_state_columns:
@@ -785,6 +798,10 @@ class SQLiteStorage(StorageProvider):
             return None
         metadata = _load_metadata(row["metadata_json"])
         legacy_workboard = _load_legacy_workboard(metadata)
+        delegated_tasks = coerce_stored_delegated_tasks(_load_json_list_or_fallback(row, "delegated_tasks_json"))
+        if not delegated_tasks:
+            delegated_tasks = legacy_delegated_tasks(row["active_delegate_task_id"], row["active_delegate_prompt_type"])
+        selected_task = selected_delegated_task(delegated_tasks)
         return StoredWorkState(
             session_id=str(row["session_id"]),
             objective=str(row["objective"] or ""),
@@ -814,8 +831,11 @@ class SQLiteStorage(StorageProvider):
             verification_attempted=bool(row["verification_attempted"]),
             verification_passed=bool(row["verification_passed"]),
             last_next_action=str(row["last_next_action"] or ""),
-            active_delegate_task_id=row["active_delegate_task_id"],
-            active_delegate_prompt_type=row["active_delegate_prompt_type"],
+            delegated_tasks=delegated_tasks,
+            active_delegate_task_id=selected_task.task_id if selected_task is not None else row["active_delegate_task_id"],
+            active_delegate_prompt_type=(
+                selected_task.prompt_type if selected_task is not None else row["active_delegate_prompt_type"]
+            ),
             metadata=metadata,
             created_at=float(row["created_at"] or 0),
             updated_at=float(row["updated_at"] or 0),
@@ -1094,6 +1114,11 @@ class SQLiteStorage(StorageProvider):
             try:
                 created_at = float(state.created_at or time.time())
                 updated_at = float(state.updated_at or time.time())
+                delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
+                    state.active_delegate_task_id,
+                    state.active_delegate_prompt_type,
+                )
+                selected_task = selected_delegated_task(delegated_tasks)
                 ensure_chat_row(conn, state.session_id, created_at=created_at, updated_at=updated_at)
                 existing = conn.execute(
                     "SELECT created_at FROM work_states WHERE session_id = ?",
@@ -1128,13 +1153,14 @@ class SQLiteStorage(StorageProvider):
                         verification_attempted,
                         verification_passed,
                         last_next_action,
+                        delegated_tasks_json,
                         active_delegate_task_id,
                         active_delegate_prompt_type,
                         metadata_json,
                         created_at,
                         updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(session_id) DO UPDATE SET
                         objective = excluded.objective,
                         kind = excluded.kind,
@@ -1159,6 +1185,7 @@ class SQLiteStorage(StorageProvider):
                         verification_attempted = excluded.verification_attempted,
                         verification_passed = excluded.verification_passed,
                         last_next_action = excluded.last_next_action,
+                        delegated_tasks_json = excluded.delegated_tasks_json,
                         active_delegate_task_id = excluded.active_delegate_task_id,
                         active_delegate_prompt_type = excluded.active_delegate_prompt_type,
                         metadata_json = excluded.metadata_json,
@@ -1189,8 +1216,9 @@ class SQLiteStorage(StorageProvider):
                         int(bool(state.verification_attempted)),
                         int(bool(state.verification_passed)),
                         state.last_next_action,
-                        state.active_delegate_task_id,
-                        state.active_delegate_prompt_type,
+                        json.dumps(json_safe([task.to_payload() for task in delegated_tasks]), ensure_ascii=False),
+                        selected_task.task_id if selected_task is not None else None,
+                        selected_task.prompt_type if selected_task is not None else None,
                         json.dumps(json_safe(state.metadata or {}), ensure_ascii=False),
                         created_at,
                         updated_at,
@@ -1500,6 +1528,19 @@ def _load_string_list_or_fallback(row: sqlite3.Row, key: str, fallback: Any = No
     if isinstance(fallback, list):
         return [str(item) for item in fallback if str(item).strip()]
     return []
+
+
+def _load_json_list_or_fallback(row: sqlite3.Row, key: str, fallback: Any = None) -> list[Any]:
+    """Read one optional JSON list column, using fallback when absent or invalid."""
+    keys = row.keys() if hasattr(row, "keys") else []
+    if key in keys and row[key]:
+        try:
+            payload = json.loads(row[key])
+        except (TypeError, json.JSONDecodeError):
+            payload = None
+        if isinstance(payload, list):
+            return payload
+    return list(fallback) if isinstance(fallback, (list, tuple)) else []
 
 
 def _load_string_list(raw: str | None) -> list[str]:

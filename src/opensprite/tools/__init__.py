@@ -32,6 +32,7 @@ from .image import AnalyzeImageTool, OCRImageTool
 from .outbound_media import SendMediaTool
 from .run_trace import ListRunFileChangesTool, PreviewRunFileChangeRevertTool
 from .code_navigation import CodeNavigationTool
+from .delegate_many import DelegateManyTool
 
 __all__ = [
     "Tool",
@@ -69,4 +70,5 @@ __all__ = [
     "ListRunFileChangesTool",
     "PreviewRunFileChangeRevertTool",
     "CodeNavigationTool",
+    "DelegateManyTool",
 ]

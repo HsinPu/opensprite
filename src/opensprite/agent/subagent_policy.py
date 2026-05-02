@@ -85,6 +85,8 @@ TOOL_PROFILES_BY_NAME: dict[str, SubagentToolProfile] = {
     TESTING_PROFILE.name: TESTING_PROFILE,
 }
 
+PARALLEL_SAFE_PROFILE_NAMES = frozenset({READ_ONLY_PROFILE.name, RESEARCH_PROFILE.name})
+
 SUBAGENT_TOOL_PROFILES: dict[str, SubagentToolProfile] = {
     "implementer": IMPLEMENTATION_PROFILE,
     "debugger": IMPLEMENTATION_PROFILE,
@@ -204,3 +206,17 @@ def build_subagent_tool_registry(
     if "batch" in child_registry.tool_names:
         child_registry.register(BatchTool(registry_resolver=lambda: child_registry))
     return child_registry
+
+
+def supports_parallel_delegation(
+    prompt_type: str,
+    *,
+    app_home: Any = None,
+    session_workspace: Any = None,
+) -> bool:
+    """Return whether a subagent is safe for bounded parallel delegation."""
+    return profile_for_subagent(
+        prompt_type,
+        app_home=app_home,
+        session_workspace=session_workspace,
+    ).name in PARALLEL_SAFE_PROFILE_NAMES

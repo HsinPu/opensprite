@@ -2,7 +2,7 @@ import asyncio
 import json
 import sqlite3
 
-from opensprite.storage.base import StoredMessage, StoredWorkState
+from opensprite.storage.base import StoredDelegatedTask, StoredMessage, StoredWorkState
 from opensprite.storage.sqlite import SQLiteStorage
 
 
@@ -243,8 +243,15 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
                 verification_attempted=False,
                 verification_passed=False,
                 last_next_action="continue_verification",
-                active_delegate_task_id="task_abc12345",
-                active_delegate_prompt_type="implementer",
+                delegated_tasks=(
+                    StoredDelegatedTask(
+                        task_id="task_abc12345",
+                        prompt_type="implementer",
+                        status="completed",
+                        selected=True,
+                        summary="Delegated the implementation task.",
+                    ),
+                ),
                 metadata={"source": "test"},
                 created_at=9.0,
                 updated_at=13.0,
@@ -306,9 +313,54 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert loaded_work_state.constraints == ("Keep the API stable",)
     assert loaded_work_state.touched_paths == ("src/app.py",)
     assert loaded_work_state.active_delegate_prompt_type == "implementer"
+    assert [task.task_id for task in loaded_work_state.delegated_tasks] == ["task_abc12345"]
     assert loaded_work_state.pending_steps == ("2. change", "3. verify")
     assert loaded_work_state.verification_targets == ("tests pass",)
     assert loaded_work_state.resume_hint == "Resume at current step: 2. change"
     assert loaded_work_state.metadata == {"source": "test"}
     assert cleared_work_state is None
     assert chats == ["chat-1"]
+
+
+def test_sqlite_work_state_backfills_delegated_tasks_from_legacy_active_fields(tmp_path):
+    async def scenario():
+        storage = SQLiteStorage(tmp_path / "legacy-work-state.db")
+        await storage.upsert_work_state(
+            StoredWorkState(
+                session_id="chat-1",
+                objective="Finish the refactor",
+                kind="refactor",
+                status="active",
+                steps=("1. inspect",),
+                metadata={"source": "test"},
+                created_at=1.0,
+                updated_at=2.0,
+            )
+        )
+        async with storage._lock:
+            conn = storage._get_conn()
+            try:
+                conn.execute(
+                    """
+                    UPDATE work_states
+                    SET delegated_tasks_json = '[]',
+                        active_delegate_task_id = ?,
+                        active_delegate_prompt_type = ?
+                    WHERE session_id = ?
+                    """,
+                    ("task_legacy123", "implementer", "chat-1"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return await storage.get_work_state("chat-1")
+
+    work_state = asyncio.run(scenario())
+
+    assert work_state is not None
+    assert work_state.active_delegate_task_id == "task_legacy123"
+    assert work_state.active_delegate_prompt_type == "implementer"
+    assert len(work_state.delegated_tasks) == 1
+    assert work_state.delegated_tasks[0].task_id == "task_legacy123"
+    assert work_state.delegated_tasks[0].prompt_type == "implementer"
+    assert work_state.delegated_tasks[0].selected is True

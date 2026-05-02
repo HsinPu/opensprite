@@ -95,6 +95,39 @@ class StoredRunTrace:
 
 
 @dataclass
+class StoredDelegatedTask:
+    """Persisted delegated child-task status for one parent session."""
+
+    task_id: str
+    prompt_type: str | None = None
+    status: str = "unknown"
+    selected: bool = False
+    summary: str = ""
+    error: str = ""
+    child_session_id: str | None = None
+    last_child_run_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    created_at: float = 0.0
+    updated_at: float = 0.0
+
+    def to_payload(self) -> dict[str, Any]:
+        """Return a JSON-serializable payload for storage and APIs."""
+        return {
+            "task_id": self.task_id,
+            "prompt_type": self.prompt_type,
+            "status": self.status,
+            "selected": self.selected,
+            "summary": self.summary,
+            "error": self.error,
+            "child_session_id": self.child_session_id,
+            "last_child_run_id": self.last_child_run_id,
+            "metadata": dict(self.metadata or {}),
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+
+@dataclass
 class StoredWorkState:
     """Persisted structured task state for one session."""
 
@@ -122,11 +155,104 @@ class StoredWorkState:
     verification_attempted: bool = False
     verification_passed: bool = False
     last_next_action: str = ""
+    delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
     active_delegate_task_id: str | None = None
     active_delegate_prompt_type: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     created_at: float = 0.0
     updated_at: float = 0.0
+
+
+def coerce_stored_delegated_task(value: Any) -> StoredDelegatedTask | None:
+    """Normalize one delegated-task payload into a StoredDelegatedTask."""
+    if isinstance(value, StoredDelegatedTask):
+        return StoredDelegatedTask(
+            task_id=str(value.task_id or "").strip(),
+            prompt_type=str(value.prompt_type).strip() if value.prompt_type else None,
+            status=str(value.status or "unknown").strip() or "unknown",
+            selected=bool(value.selected),
+            summary=str(value.summary or "").strip(),
+            error=str(value.error or "").strip(),
+            child_session_id=str(value.child_session_id).strip() if value.child_session_id else None,
+            last_child_run_id=str(value.last_child_run_id).strip() if value.last_child_run_id else None,
+            metadata=dict(value.metadata or {}),
+            created_at=float(value.created_at or 0),
+            updated_at=float(value.updated_at or 0),
+        )
+    if not isinstance(value, dict):
+        return None
+
+    task_id = str(value.get("task_id") or value.get("taskId") or "").strip()
+    if not task_id:
+        return None
+    prompt_type = str(value.get("prompt_type") or value.get("promptType") or "").strip() or None
+    status = str(value.get("status") or "unknown").strip() or "unknown"
+    child_session_id = str(value.get("child_session_id") or value.get("childSessionId") or "").strip() or None
+    last_child_run_id = str(value.get("last_child_run_id") or value.get("lastChildRunId") or "").strip() or None
+    metadata = value.get("metadata") if isinstance(value.get("metadata"), dict) else {}
+    try:
+        created_at = float(value.get("created_at") or value.get("createdAt") or 0)
+    except (TypeError, ValueError):
+        created_at = 0.0
+    try:
+        updated_at = float(value.get("updated_at") or value.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        updated_at = 0.0
+    return StoredDelegatedTask(
+        task_id=task_id,
+        prompt_type=prompt_type,
+        status=status,
+        selected=bool(value.get("selected")),
+        summary=str(value.get("summary") or "").strip(),
+        error=str(value.get("error") or "").strip(),
+        child_session_id=child_session_id,
+        last_child_run_id=last_child_run_id,
+        metadata=dict(metadata),
+        created_at=created_at,
+        updated_at=updated_at,
+    )
+
+
+def coerce_stored_delegated_tasks(values: Any) -> tuple[StoredDelegatedTask, ...]:
+    """Normalize one delegated-task collection while keeping first-seen order."""
+    if not isinstance(values, (list, tuple)):
+        return ()
+    items: list[StoredDelegatedTask] = []
+    seen: set[str] = set()
+    for value in values:
+        task = coerce_stored_delegated_task(value)
+        if task is None or task.task_id in seen:
+            continue
+        items.append(task)
+        seen.add(task.task_id)
+    return tuple(items)
+
+
+def legacy_delegated_tasks(
+    active_delegate_task_id: str | None,
+    active_delegate_prompt_type: str | None,
+) -> tuple[StoredDelegatedTask, ...]:
+    """Synthesize one delegated task from legacy active-delegate fields."""
+    task_id = str(active_delegate_task_id or "").strip()
+    if not task_id:
+        return ()
+    prompt_type = str(active_delegate_prompt_type or "").strip() or None
+    return (
+        StoredDelegatedTask(
+            task_id=task_id,
+            prompt_type=prompt_type,
+            status="unknown",
+            selected=True,
+        ),
+    )
+
+
+def selected_delegated_task(tasks: tuple[StoredDelegatedTask, ...]) -> StoredDelegatedTask | None:
+    """Return the selected delegated task, if any."""
+    for task in tasks:
+        if task.selected:
+            return task
+    return None
 
 
 class StorageProvider(ABC):

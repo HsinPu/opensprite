@@ -25,6 +25,10 @@ async def _fake_run_subagent(task: str, prompt_type: str | None, task_id: str | 
     return f"{prompt_type or 'writer'}:{task_id or 'new'}:{task}"
 
 
+async def _fake_run_subagents_many(tasks, max_parallel: int | None) -> str:
+    return f"parallel:{len(tasks)}:{max_parallel}"
+
+
 async def _fake_reload_mcp() -> str:
     return "reloaded"
 
@@ -45,6 +49,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         skills_loader=SkillsLoader(default_skills_dir=tmp_path / "skills"),
@@ -77,6 +82,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "analyze_video",
         "send_media",
         "delegate",
+        "delegate_many",
         "search_history",
         "search_knowledge",
         "cron",
@@ -97,6 +103,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
     )
@@ -124,6 +131,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "analyze_video",
         "send_media",
         "delegate",
+        "delegate_many",
         "cron",
         "batch",
     ]
@@ -137,6 +145,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         tools_config=ToolsConfig(
@@ -198,6 +207,7 @@ def test_register_default_tools_includes_run_trace_tools_when_storage_is_availab
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         storage=MemoryStorage(),
@@ -216,6 +226,7 @@ def test_register_default_tools_applies_permission_policy():
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         tools_config=ToolsConfig(
@@ -238,6 +249,7 @@ def test_search_and_web_tools_describe_retrieval_preference():
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         search_store=FakeSearchStore(),
@@ -264,6 +276,7 @@ def test_register_default_tools_applies_cron_default_timezone_from_tools_config(
         workspace_resolver=lambda: Path.cwd(),
         get_session_id=lambda: "chat-1",
         run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
         config_path_resolver=lambda: Path.cwd() / "opensprite.json",
         reload_mcp=_fake_reload_mcp,
         tools_config=ToolsConfig(**{"cron": {"default_timezone": "Asia/Taipei"}}),

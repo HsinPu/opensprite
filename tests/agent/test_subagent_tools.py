@@ -6,6 +6,8 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.run_schema import serialize_run_artifacts
+from opensprite.storage import MemoryStorage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -105,6 +107,7 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     registry.register(DummyTool("exec"))
     registry.register(DummyTool("process"))
     registry.register(DummyTool("delegate"))
+    registry.register(DummyTool("delegate_many"))
     registry.register(DummyTool("cron"))
     registry.register(DummyTool("configure_mcp"))
     registry.register(DummyTool("configure_skill"))
@@ -138,6 +141,7 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     assert "exec" in tool_names
     assert "process" in tool_names
     assert "delegate" not in tool_names
+    assert "delegate_many" not in tool_names
     assert "cron" not in tool_names
     assert "configure_mcp" not in tool_names
     assert "configure_skill" not in tool_names
@@ -204,7 +208,7 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
     registry = ToolRegistry()
-    for name in ["read_file", "apply_patch", "exec", "process", "delegate", "web_search"]:
+    for name in ["read_file", "apply_patch", "exec", "process", "delegate", "delegate_many", "web_search"]:
         registry.register(DummyTool(name))
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
@@ -231,6 +235,7 @@ def test_custom_subagent_tool_profile_controls_runtime_tools(tmp_path):
     assert "exec" in tool_names
     assert "process" in tool_names
     assert "delegate" not in tool_names
+    assert "delegate_many" not in tool_names
     assert "web_search" not in tool_names
 
 
@@ -489,6 +494,34 @@ class ResumeProvider:
         return "fake-model"
 
 
+class ParallelOutcomeProvider:
+    def __init__(self):
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools})
+        task_text = next(
+            str(message.content)
+            for message in reversed(messages)
+            if getattr(message, "role", None) == "user"
+        )
+        if "slow" in task_text:
+            await asyncio.sleep(0.05)
+        return LLMResponse(content=f"reply:{task_text}", model="fake-model")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
+class SlowParallelProvider:
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        await asyncio.sleep(0.2)
+        return LLMResponse(content="slow-done", model="fake-model")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
 def test_subagent_resume_uses_child_session_history(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
@@ -521,6 +554,231 @@ def test_subagent_resume_uses_child_session_history(tmp_path):
     child_session_id = f"telegram:user-a:subagent:{task_id}"
     stored_roles = [message.role for message in storage.messages[child_session_id]]
     assert stored_roles == ["user", "assistant", "user", "assistant"]
+
+
+def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
+    provider = FakeProvider()
+    storage = MemoryStorage()
+    registry = ToolRegistry()
+    registry.register(DummyTool("read_file"))
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=storage,
+        context_builder=FakeContextBuilder(tmp_path / "workspace"),
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent._current_run_id.set("run_parent")
+    agent._current_channel.set("telegram")
+    agent._current_external_chat_id.set("user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    asyncio.run(storage.create_run("telegram:user-a", "run_parent", metadata={"objective": "delegate work"}))
+
+    result = asyncio.run(agent.run_subagent("do the task", prompt_type="implementer"))
+
+    task_id = next(line.split(": ", 1)[1] for line in result.splitlines() if line.startswith("Task ID:"))
+    child_session_id = f"telegram:user-a:subagent:{task_id}"
+    child_runs = asyncio.run(storage.get_runs(child_session_id))
+    assert len(child_runs) == 1
+    child_run = child_runs[0]
+    assert child_run.metadata["kind"] == "subagent"
+    assert child_run.metadata["objective"] == "do the task"
+    assert child_run.metadata["task_id"] == task_id
+    assert child_run.metadata["prompt_type"] == "implementer"
+    assert child_run.metadata["parent_session_id"] == "telegram:user-a"
+    assert child_run.metadata["parent_run_id"] == "run_parent"
+    assert child_run.metadata["resume"] is False
+    assert child_run.metadata["child_session_id"] == child_session_id
+    assert child_run.metadata["child_run_id"] == child_run.run_id
+    assert child_run.metadata["summary"] == "done"
+
+    child_trace = asyncio.run(storage.get_run_trace(child_session_id, child_run.run_id))
+    assert child_trace is not None
+    child_event_types = [event.event_type for event in child_trace.events]
+    assert child_event_types[:3] == ["run_started", "tool_started", "tool_result"]
+    assert "run_part_delta" in child_event_types
+    assert child_event_types[-1] == "run_finished"
+    assert child_trace.events[0].payload["parent_run_id"] == "run_parent"
+    assert child_trace.events[-1].payload["summary"] == "done"
+    assert [part.part_type for part in child_trace.parts] == ["tool_call", "tool_result", "llm_step", "llm_step", "assistant_message"]
+    assert child_trace.parts[-1].metadata["task_id"] == task_id
+
+    parent_trace = asyncio.run(storage.get_run_trace("telegram:user-a", "run_parent"))
+    assert parent_trace is not None
+    assert [event.event_type for event in parent_trace.events] == ["subagent.started", "subagent.completed"]
+    artifacts = serialize_run_artifacts(parent_trace)
+    assert len(artifacts) == 1
+    assert artifacts[0]["artifact_id"] == f"subagent:{task_id}"
+    assert artifacts[0]["artifact_type"] == "subagent_task"
+    assert artifacts[0]["kind"] == "work"
+    assert artifacts[0]["status"] == "completed"
+    assert artifacts[0]["title"] == "Subagent: implementer"
+    assert artifacts[0]["detail"] == "done"
+    assert artifacts[0]["metadata"] == {
+        "status": "completed",
+        "task_id": task_id,
+        "prompt_type": "implementer",
+        "child_session_id": child_session_id,
+        "child_run_id": child_run.run_id,
+        "parent_session_id": "telegram:user-a",
+        "parent_run_id": "run_parent",
+        "resume": False,
+        "summary": "done",
+        "executed_tool_calls": 1,
+        "had_tool_error": False,
+        "verification_attempted": False,
+        "verification_passed": False,
+        "delegation_mode": "serial",
+    }
+    assert artifacts[0]["source"] == "event"
+    assert artifacts[0]["source_id"] == 2
+    assert artifacts[0]["sources"] == ["event"]
+
+
+def test_run_subagents_many_returns_ordered_results_and_parent_trace(tmp_path):
+    async def scenario():
+        provider = ParallelOutcomeProvider()
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=provider,
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(max_tool_iterations=3),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        agent._current_session_id.set("telegram:user-a")
+        agent._current_run_id.set("run_parent")
+        agent._current_channel.set("telegram")
+        agent._current_external_chat_id.set("user-a")
+        agent.app_home = tmp_path / "opensprite-home"
+        await storage.create_run("telegram:user-a", "run_parent", metadata={"objective": "parallel delegation"})
+
+        result = await agent.run_subagents_many(
+            [
+                {"task": "slow task", "prompt_type": "researcher"},
+                {"task": "fast task", "prompt_type": "code-reviewer"},
+            ],
+            max_parallel=2,
+        )
+        parent_trace = await storage.get_run_trace("telegram:user-a", "run_parent")
+        child_sessions = [session_id for session_id in await storage.get_all_sessions() if ":subagent:" in session_id]
+        child_statuses = [
+            (await storage.get_runs(session_id, limit=1))[0].status
+            for session_id in child_sessions
+        ]
+        return result, parent_trace, child_sessions, child_statuses
+
+    result, parent_trace, child_sessions, child_statuses = asyncio.run(scenario())
+
+    assert "Parallel delegation completed: 2 task(s), 0 failed." in result
+    assert result.index("[1] researcher") < result.index("[2] code-reviewer")
+    assert "reply:slow task" in result
+    assert "reply:fast task" in result
+    assert len(child_sessions) == 2
+    assert child_statuses == ["completed", "completed"]
+    assert parent_trace is not None
+    assert [event.event_type for event in parent_trace.events].count("subagent.started") == 2
+    assert [event.event_type for event in parent_trace.events].count("subagent.completed") == 2
+
+
+def test_run_subagents_many_rejects_write_capable_profiles(tmp_path):
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=ResumeProvider(),
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(tmp_path / "workspace"),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(
+        agent.run_subagents_many(
+            [{"task": "do the task", "prompt_type": "implementer"}],
+            max_parallel=2,
+        )
+    )
+
+    assert "parallel delegation only supports read-only or research subagents" in result
+
+
+def test_run_subagents_many_cancels_children_with_parent_cancel_request(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=SlowParallelProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(max_tool_iterations=3),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        agent._current_session_id.set("telegram:user-a")
+        agent._current_run_id.set("run_parent")
+        agent._current_channel.set("telegram")
+        agent._current_external_chat_id.set("user-a")
+        agent.app_home = tmp_path / "opensprite-home"
+        await storage.create_run("telegram:user-a", "run_parent", metadata={"objective": "parallel cancellation"})
+        agent.run_state.start("telegram:user-a", "run_parent")
+        task = asyncio.create_task(
+            agent.run_subagents_many(
+                [{"task": "slow task", "prompt_type": "researcher"}],
+                max_parallel=1,
+            )
+        )
+        try:
+            for _ in range(20):
+                if any(":subagent:" in session_id for session_id in await storage.get_all_sessions()):
+                    break
+                await asyncio.sleep(0.01)
+            agent.run_state.request_cancel("telegram:user-a", "run_parent")
+            try:
+                await task
+            except asyncio.CancelledError:
+                cancelled = True
+            else:
+                cancelled = False
+        finally:
+            agent.run_state.finish("telegram:user-a", "run_parent")
+        child_sessions = [session_id for session_id in await storage.get_all_sessions() if ":subagent:" in session_id]
+        child_statuses = [
+            (await storage.get_runs(session_id, limit=1))[0].status
+            for session_id in child_sessions
+        ]
+        parent_trace = await storage.get_run_trace("telegram:user-a", "run_parent")
+        return cancelled, child_statuses, parent_trace
+
+    cancelled, child_statuses, parent_trace = asyncio.run(scenario())
+
+    assert cancelled is True
+    assert child_statuses == ["cancelled"]
+    assert parent_trace is not None
+    assert "subagent.cancelled" in [event.event_type for event in parent_trace.events]
 
 
 def test_subagent_resume_rejects_prompt_type_switch(tmp_path):

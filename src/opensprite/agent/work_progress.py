@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
-from ..storage import StoredWorkState
+from ..storage import StoredDelegatedTask, StoredWorkState
+from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .task_intent import TaskIntent
@@ -27,6 +28,71 @@ _FOLLOW_UP_OBJECTIVES = {
     "修一下",
     "搞定",
 }
+
+
+def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
+    if state is None:
+        return ()
+    return coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
+        state.active_delegate_task_id,
+        state.active_delegate_prompt_type,
+    )
+
+
+def _merge_delegated_tasks(
+    existing_tasks: tuple[StoredDelegatedTask, ...],
+    updates: tuple[StoredDelegatedTask, ...],
+    *,
+    clear_selection: bool,
+) -> tuple[StoredDelegatedTask, ...]:
+    by_id: dict[str, StoredDelegatedTask] = {task.task_id: task for task in existing_tasks if task.task_id}
+    order = [task.task_id for task in existing_tasks if task.task_id]
+    normalized_updates = coerce_stored_delegated_tasks(updates)
+    now = time.time()
+
+    for update in normalized_updates:
+        previous = by_id.pop(update.task_id, None)
+        if update.task_id in order:
+            order.remove(update.task_id)
+        order.append(update.task_id)
+        by_id[update.task_id] = StoredDelegatedTask(
+            task_id=update.task_id,
+            prompt_type=update.prompt_type or (previous.prompt_type if previous is not None else None),
+            status=update.status or (previous.status if previous is not None else "unknown"),
+            selected=bool(update.selected),
+            summary=update.summary or (previous.summary if previous is not None else ""),
+            error=(
+                update.error
+                if update.error
+                else ""
+                if update.status and update.status != "failed"
+                else previous.error if previous is not None else ""
+            ),
+            child_session_id=(
+                update.child_session_id
+                or previous.child_session_id if previous is not None else None
+            ),
+            last_child_run_id=(
+                update.last_child_run_id
+                or previous.last_child_run_id if previous is not None else None
+            ),
+            metadata={**(previous.metadata if previous is not None else {}), **dict(update.metadata or {})},
+            created_at=(
+                previous.created_at
+                if previous is not None and previous.created_at
+                else update.created_at
+                or now
+            ),
+            updated_at=update.updated_at or now,
+        )
+
+    tasks = tuple(by_id[task_id] for task_id in order if task_id in by_id)
+    if clear_selection:
+        return tuple(replace(task, selected=False) for task in tasks)
+    if normalized_updates:
+        selected_task_id = next((task.task_id for task in reversed(normalized_updates) if task.selected), normalized_updates[-1].task_id)
+        return tuple(replace(task, selected=task.task_id == selected_task_id) for task in tasks)
+    return tasks
 
 
 @dataclass(frozen=True)
@@ -293,6 +359,7 @@ class WorkProgressService:
         work_plan: WorkPlan | None,
         progress: WorkProgressUpdate,
         completion_result: CompletionGateResult,
+        delegated_task_updates: tuple[StoredDelegatedTask, ...] = (),
         delegate_task_id: str | None = None,
         delegate_prompt_type: str | None = None,
     ) -> StoredWorkState | None:
@@ -326,11 +393,22 @@ class WorkProgressService:
         if progress.file_change_count > 0 and current.expects_verification and not progress.verification_passed:
             verification_passed = False
 
-        active_delegate_task_id = delegate_task_id or current.active_delegate_task_id
-        active_delegate_prompt_type = delegate_prompt_type or current.active_delegate_prompt_type
-        if completion_result.status == "complete":
-            active_delegate_task_id = None
-            active_delegate_prompt_type = None
+        if not delegated_task_updates and delegate_task_id:
+            delegated_task_updates = (
+                StoredDelegatedTask(
+                    task_id=delegate_task_id,
+                    prompt_type=delegate_prompt_type,
+                    status="unknown",
+                    selected=True,
+                    updated_at=time.time(),
+                ),
+            )
+        delegated_tasks = _merge_delegated_tasks(
+            _delegated_tasks_for_state(current),
+            delegated_task_updates,
+            clear_selection=completion_result.status == "complete",
+        )
+        selected_task = selected_delegated_task(delegated_tasks)
 
         metadata = dict(current.metadata or {})
         metadata.pop("workboard", None)
@@ -371,8 +449,9 @@ class WorkProgressService:
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,
             last_next_action=progress.next_action,
-            active_delegate_task_id=active_delegate_task_id,
-            active_delegate_prompt_type=active_delegate_prompt_type,
+            delegated_tasks=delegated_tasks,
+            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
+            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
             metadata=metadata,
             created_at=current.created_at or time.time(),
             updated_at=time.time(),
@@ -410,10 +489,14 @@ class WorkProgressService:
             lines.append(f"- Resume hint: {workboard.resume_hint}")
         if state.touched_paths:
             lines.extend(["- Touched paths:", *[f"  - {path}" for path in state.touched_paths[:12]]])
-        if state.active_delegate_task_id:
+        delegated_tasks = _delegated_tasks_for_state(state)
+        selected_task = selected_delegated_task(delegated_tasks)
+        if selected_task is not None:
             lines.append(
-                f"- Active delegate: {state.active_delegate_prompt_type or 'subagent'} ({state.active_delegate_task_id})"
+                f"- Active delegate: {selected_task.prompt_type or 'subagent'} ({selected_task.task_id})"
             )
+        elif delegated_tasks:
+            lines.append(f"- Delegated tasks tracked: {len(delegated_tasks)}")
         return "\n".join(lines)
 
     def evaluate(
@@ -476,6 +559,8 @@ class WorkProgressService:
         work_plan: WorkPlan,
     ) -> StoredWorkState:
         steps = tuple(existing_state.steps) or _numbered_steps(work_plan.steps)
+        delegated_tasks = _delegated_tasks_for_state(existing_state)
+        selected_task = selected_delegated_task(delegated_tasks)
         metadata = dict(existing_state.metadata or {})
         metadata.pop("workboard", None)
         existing_workboard = self.extract_workboard(existing_state)
@@ -504,8 +589,9 @@ class WorkProgressService:
             verification_attempted=bool(existing_state.verification_attempted),
             verification_passed=bool(existing_state.verification_passed),
             last_next_action=existing_state.last_next_action or "continue_work",
-            active_delegate_task_id=existing_state.active_delegate_task_id,
-            active_delegate_prompt_type=existing_state.active_delegate_prompt_type,
+            delegated_tasks=delegated_tasks,
+            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
+            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
             metadata=metadata,
             created_at=existing_state.created_at or time.time(),
             updated_at=time.time(),

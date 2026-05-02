@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 from typing import Awaitable, Callable
 from uuid import uuid4
@@ -16,7 +17,8 @@ from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
-from ..storage import StoredWorkState
+from ..storage import StoredDelegatedTask, StoredWorkState
+from ..storage.base import selected_delegated_task
 from .task_intent import TaskIntent, TaskIntentService
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
@@ -52,6 +54,8 @@ class AgentTurnRunner:
         apply_work_progress: Callable[[str, WorkProgressUpdate, StoredWorkState | None], Awaitable[None]],
         schedule_curator: Callable[[str, str, str | None, str | None, ExecutionResult], None],
         finalize_learning_reuse: Callable[[str, str, bool], None],
+        consume_delegated_task_updates: Callable[[str], tuple[StoredDelegatedTask, ...]],
+        clear_delegated_task_updates: Callable[[str], None],
         worktree_sandbox_enabled: Callable[[], bool],
         workspace_root: Callable[[], Path],
     ):
@@ -77,6 +81,8 @@ class AgentTurnRunner:
         self._apply_work_progress = apply_work_progress
         self._schedule_curator = schedule_curator
         self._finalize_learning_reuse = finalize_learning_reuse
+        self._consume_delegated_task_updates = consume_delegated_task_updates
+        self._clear_delegated_task_updates = clear_delegated_task_updates
         self._worktree_sandbox_enabled = worktree_sandbox_enabled
         self._workspace_root = workspace_root
 
@@ -222,6 +228,7 @@ class AgentTurnRunner:
                     )
                     raise
         finally:
+            self._clear_delegated_task_updates(run_id)
             self.run_state.finish(turn.session_id, run_id)
 
     async def run_media_only_turn(
@@ -309,6 +316,7 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
         execution_results: list[ExecutionResult] = []
+        collected_delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
         auto_continue_attempts = 0
         current_message = user_message.text
 
@@ -341,6 +349,14 @@ class AgentTurnRunner:
                 exec_result.llm_step_events,
             )
             aggregate_result = self._aggregate_execution_results(execution_results, content=response)
+            delegated_task_updates = self._consume_delegated_task_updates(run_id)
+            if delegated_task_updates:
+                collected_delegated_tasks = self._merge_delegated_task_updates(
+                    collected_delegated_tasks,
+                    delegated_task_updates,
+                )
+            if collected_delegated_tasks:
+                aggregate_result = self._with_delegated_tasks(aggregate_result, collected_delegated_tasks)
             completion_result = self.completion_gate.evaluate(
                 task_intent=task_intent,
                 response_text=response,
@@ -449,6 +465,7 @@ class AgentTurnRunner:
         completion_metadata["auto_continue_attempts"] = auto_continue_attempts
         response_metadata["completion_gate"] = completion_metadata
         status_metadata["completion_status"] = completion_result.status
+        response_metadata["delegated_tasks"] = [task.to_payload() for task in aggregate_result.delegated_tasks]
         response_metadata["active_delegate_task_id"] = aggregate_result.active_delegate_task_id
         response_metadata["active_delegate_prompt_type"] = aggregate_result.active_delegate_prompt_type
 
@@ -459,6 +476,7 @@ class AgentTurnRunner:
             work_plan=work_plan,
             progress=work_progress,
             completion_result=completion_result,
+            delegated_task_updates=aggregate_result.delegated_tasks,
             delegate_task_id=aggregate_result.active_delegate_task_id,
             delegate_prompt_type=aggregate_result.active_delegate_prompt_type,
         )
@@ -508,8 +526,68 @@ class AgentTurnRunner:
         )
 
     @staticmethod
+    def _with_delegated_tasks(
+        result: ExecutionResult,
+        delegated_tasks: tuple[StoredDelegatedTask, ...],
+    ) -> ExecutionResult:
+        selected_task = selected_delegated_task(delegated_tasks)
+        return replace(
+            result,
+            delegated_tasks=delegated_tasks,
+            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
+            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
+        )
+
+    @staticmethod
+    def _merge_delegated_task_updates(
+        existing: tuple[StoredDelegatedTask, ...],
+        updates: tuple[StoredDelegatedTask, ...],
+    ) -> tuple[StoredDelegatedTask, ...]:
+        if not updates:
+            return existing
+        by_id = {task.task_id: task for task in existing if task.task_id}
+        order = [task.task_id for task in existing if task.task_id]
+        for update in updates:
+            if not update.task_id:
+                continue
+            previous = by_id.pop(update.task_id, None)
+            if update.task_id in order:
+                order.remove(update.task_id)
+            order.append(update.task_id)
+            by_id[update.task_id] = StoredDelegatedTask(
+                task_id=update.task_id,
+                prompt_type=update.prompt_type or (previous.prompt_type if previous is not None else None),
+                status=update.status or (previous.status if previous is not None else "unknown"),
+                selected=bool(update.selected),
+                summary=update.summary or (previous.summary if previous is not None else ""),
+                error=(
+                    update.error
+                    if update.error
+                    else ""
+                    if update.status and update.status != "failed"
+                    else previous.error if previous is not None else ""
+                ),
+                child_session_id=update.child_session_id or (previous.child_session_id if previous is not None else None),
+                last_child_run_id=update.last_child_run_id or (previous.last_child_run_id if previous is not None else None),
+                metadata={**(previous.metadata if previous is not None else {}), **dict(update.metadata or {})},
+                created_at=(
+                    previous.created_at
+                    if previous is not None and previous.created_at
+                    else update.created_at
+                ),
+                updated_at=update.updated_at or (previous.updated_at if previous is not None else 0.0),
+            )
+        tasks = tuple(by_id[task_id] for task_id in order if task_id in by_id)
+        selected_task = selected_delegated_task(tuple(task for task in reversed(tasks)))
+        if selected_task is None:
+            return tasks
+        return tuple(replace(task, selected=task.task_id == selected_task.task_id) for task in tasks)
+
+    @staticmethod
     def _aggregate_execution_results(results: list[ExecutionResult], *, content: str) -> ExecutionResult:
         """Aggregate multi-pass execution telemetry while keeping the final response."""
+        delegated_tasks = tuple(task for result in results for task in result.delegated_tasks)
+        selected_task = selected_delegated_task(delegated_tasks)
         return ExecutionResult(
             content=content,
             executed_tool_calls=sum(result.executed_tool_calls for result in results),
@@ -521,13 +599,22 @@ class AgentTurnRunner:
                     for path in result.touched_paths
                 )
             ),
+            delegated_tasks=delegated_tasks,
             active_delegate_task_id=next(
-                (result.active_delegate_task_id for result in reversed(results) if result.active_delegate_task_id),
-                None,
+                (
+                    result.active_delegate_task_id
+                    for result in reversed(results)
+                    if result.active_delegate_task_id
+                ),
+                selected_task.task_id if selected_task is not None else None,
             ),
             active_delegate_prompt_type=next(
-                (result.active_delegate_prompt_type for result in reversed(results) if result.active_delegate_prompt_type),
-                None,
+                (
+                    result.active_delegate_prompt_type
+                    for result in reversed(results)
+                    if result.active_delegate_prompt_type
+                ),
+                selected_task.prompt_type if selected_task is not None else None,
             ),
             used_configure_skill=any(result.used_configure_skill for result in results),
             had_tool_error=any(result.had_tool_error for result in results),

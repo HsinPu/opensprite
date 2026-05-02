@@ -2,7 +2,7 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
-from opensprite.storage import StoredWorkState
+from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
 def test_work_progress_creates_coding_plan_from_intent():
@@ -224,8 +224,15 @@ def test_work_progress_updates_state_and_renders_summary():
             reason="required verification was not recorded",
             verification_required=True,
         ),
-        delegate_task_id="task_abc12345",
-        delegate_prompt_type="implementer",
+        delegated_task_updates=(
+            StoredDelegatedTask(
+                task_id="task_abc12345",
+                prompt_type="implementer",
+                status="completed",
+                selected=True,
+                summary="Delegated the implementation task.",
+            ),
+        ),
     )
 
     assert updated is not None
@@ -246,3 +253,68 @@ def test_work_progress_updates_state_and_renders_summary():
     assert "Pending steps:" in summary
     assert "Resume hint: Resume by running or fixing the required verification." in summary
     assert "src/agent.py" in summary
+
+
+def test_work_progress_merges_multiple_delegated_tasks_and_clears_selection_on_complete():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    plan = service.create_plan(intent)
+    state = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+    assert state is not None
+    state = StoredWorkState(
+        **{
+            **state.__dict__,
+            "delegated_tasks": (
+                StoredDelegatedTask(
+                    task_id="task_old",
+                    prompt_type="researcher",
+                    status="completed",
+                    selected=True,
+                    summary="Collected references.",
+                ),
+            ),
+            "active_delegate_task_id": "task_old",
+            "active_delegate_prompt_type": "researcher",
+        }
+    )
+
+    progress = service.evaluate(
+        task_intent=intent,
+        completion_result=CompletionGateResult(status="incomplete", reason="still working"),
+        execution_result=ExecutionResult(content="Still working."),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+    updated = service.update_state(
+        session_id="web:browser-1",
+        state=state,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(status="incomplete", reason="still working"),
+        delegated_task_updates=(
+            StoredDelegatedTask(task_id="task_new_a", prompt_type="implementer", status="completed", selected=True),
+            StoredDelegatedTask(task_id="task_new_b", prompt_type="code-reviewer", status="failed", selected=True, error="review failed"),
+        ),
+    )
+
+    assert updated is not None
+    assert [task.task_id for task in updated.delegated_tasks] == ["task_old", "task_new_a", "task_new_b"]
+    assert updated.active_delegate_task_id == "task_new_b"
+    assert updated.active_delegate_prompt_type == "code-reviewer"
+    assert [task.selected for task in updated.delegated_tasks] == [False, False, True]
+
+    completed = service.update_state(
+        session_id="web:browser-1",
+        state=updated,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(status="complete", reason="done"),
+    )
+
+    assert completed is not None
+    assert completed.active_delegate_task_id is None
+    assert completed.active_delegate_prompt_type is None
+    assert [task.task_id for task in completed.delegated_tasks] == ["task_old", "task_new_a", "task_new_b"]
+    assert all(task.selected is False for task in completed.delegated_tasks)

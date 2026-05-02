@@ -667,6 +667,22 @@ class WebAdapter(MessageAdapter):
             "verification_attempted": bool(state.verification_attempted),
             "verification_passed": bool(state.verification_passed),
             "last_next_action": state.last_next_action,
+            "delegated_tasks": [
+                {
+                    "task_id": task.task_id,
+                    "prompt_type": task.prompt_type,
+                    "status": task.status,
+                    "selected": bool(task.selected),
+                    "summary": task.summary,
+                    "error": task.error,
+                    "child_session_id": task.child_session_id,
+                    "last_child_run_id": task.last_child_run_id,
+                    "metadata": self._json_safe(dict(task.metadata or {})),
+                    "created_at": float(task.created_at or 0),
+                    "updated_at": float(task.updated_at or 0),
+                }
+                for task in list(state.delegated_tasks or ())
+            ],
             "active_delegate_task_id": state.active_delegate_task_id,
             "active_delegate_prompt_type": state.active_delegate_prompt_type,
             "metadata": self._json_safe(dict(state.metadata or {})),

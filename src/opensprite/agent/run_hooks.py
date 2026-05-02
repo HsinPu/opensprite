@@ -42,7 +42,7 @@ class RunHookService:
     @staticmethod
     def tool_warrants_progress_notice(tool_name: str) -> bool:
         """Whether to send a short interim message before this tool runs."""
-        if tool_name in {"read_skill", "delegate"}:
+        if tool_name in {"read_skill", "delegate", "delegate_many"}:
             return True
         return tool_name.startswith("mcp_")
 
@@ -59,6 +59,9 @@ class RunHookService:
             if task_id:
                 return f"正在續跑子代理任務（{task_id}）…"
             return f"正在委派子代理（{ptype}）…"
+        if tool_name == "delegate_many":
+            tasks = args.get("tasks") if isinstance(args.get("tasks"), list) else []
+            return f"正在平行委派 {max(1, len(tasks))} 個子代理任務…"
         if tool_name.startswith("mcp_"):
             tail = tool_name[4:] if tool_name.startswith("mcp_") else tool_name
             return f"正在呼叫 MCP：{tail}…"

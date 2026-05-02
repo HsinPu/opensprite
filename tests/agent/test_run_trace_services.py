@@ -381,6 +381,98 @@ def test_serialize_run_event_projects_curator_failed_artifact():
     }
 
 
+def test_serialize_run_event_projects_subagent_artifact():
+    event = SimpleNamespace(
+        event_id=47,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="subagent.completed",
+        payload={
+            "status": "completed",
+            "task_id": "task_abc12345",
+            "prompt_type": "implementer",
+            "child_session_id": "web:browser-1:subagent:task_abc12345",
+            "child_run_id": "run_child_1",
+            "parent_session_id": "web:browser-1",
+            "parent_run_id": "run-1",
+            "resume": False,
+            "summary": "Applied focused implementation changes.",
+        },
+        created_at=13.25,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "work"
+    assert payload["status"] == "completed"
+    assert payload["artifact"] == {
+        "schema_version": 1,
+        "artifact_id": "subagent:task_abc12345",
+        "artifact_type": "subagent_task",
+        "kind": "work",
+        "status": "completed",
+        "title": "Subagent: implementer",
+        "detail": "Applied focused implementation changes.",
+        "metadata": {
+            "status": "completed",
+            "task_id": "task_abc12345",
+            "prompt_type": "implementer",
+            "child_session_id": "web:browser-1:subagent:task_abc12345",
+            "child_run_id": "run_child_1",
+            "parent_session_id": "web:browser-1",
+            "parent_run_id": "run-1",
+            "resume": False,
+            "summary": "Applied focused implementation changes.",
+        },
+    }
+
+
+def test_serialize_run_event_projects_cancelled_subagent_artifact():
+    event = SimpleNamespace(
+        event_id=48,
+        run_id="run-1",
+        session_id="web:browser-1",
+        event_type="subagent.cancelled",
+        payload={
+            "status": "cancelled",
+            "task_id": "task_abc12345",
+            "prompt_type": "researcher",
+            "child_session_id": "web:browser-1:subagent:task_abc12345",
+            "child_run_id": "run_child_2",
+            "parent_session_id": "web:browser-1",
+            "parent_run_id": "run-1",
+            "resume": False,
+            "error": "cancelled",
+        },
+        created_at=13.5,
+    )
+
+    payload = serialize_run_event(event)
+
+    assert payload["kind"] == "work"
+    assert payload["status"] == "cancelled"
+    assert payload["artifact"] == {
+        "schema_version": 1,
+        "artifact_id": "subagent:task_abc12345",
+        "artifact_type": "subagent_task",
+        "kind": "work",
+        "status": "cancelled",
+        "title": "Subagent: researcher",
+        "detail": "cancelled",
+        "metadata": {
+            "status": "cancelled",
+            "task_id": "task_abc12345",
+            "prompt_type": "researcher",
+            "child_session_id": "web:browser-1:subagent:task_abc12345",
+            "child_run_id": "run_child_2",
+            "parent_session_id": "web:browser-1",
+            "parent_run_id": "run-1",
+            "resume": False,
+            "error": "cancelled",
+        },
+    }
+
+
 def test_serialize_run_event_classifies_part_delta_as_streaming_text():
     event = SimpleNamespace(
         event_id=44,

@@ -42,6 +42,7 @@ from ..tools import (
     ListRunFileChangesTool,
     PreviewRunFileChangeRevertTool,
     CodeNavigationTool,
+    DelegateManyTool,
 )
 from ..tools.delegate import DelegateTool
 from ..tools.permissions import ToolPermissionPolicy
@@ -305,6 +306,7 @@ def register_delegate_tools(
     registry: ToolRegistry,
     *,
     run_subagent: Callable[[str, str | None, str | None], Awaitable[str]],
+    run_subagents_many: Callable[[list[dict[str, Any]], int | None], Awaitable[str]] | None = None,
     app_home: Path | None = None,
     workspace_resolver: Callable[[], Path] | None = None,
 ) -> None:
@@ -316,6 +318,14 @@ def register_delegate_tools(
             workspace_resolver=workspace_resolver,
         )
     )
+    if run_subagents_many is not None:
+        registry.register(
+            DelegateManyTool(
+                run_subagents_many=run_subagents_many,
+                app_home=app_home,
+                workspace_resolver=workspace_resolver,
+            )
+        )
 
 
 def register_search_tools(
@@ -377,6 +387,7 @@ def register_default_tools(
     workspace_resolver: Callable[[], Path],
     get_session_id: Callable[[], str | None],
     run_subagent: Callable[[str, str | None, str | None], Awaitable[str]],
+    run_subagents_many: Callable[[list[dict[str, Any]], int | None], Awaitable[str]] | None = None,
     config_path_resolver: Callable[[], Path | None],
     reload_mcp: Callable[[], Awaitable[str]],
     app_home: Path | None = None,
@@ -456,6 +467,7 @@ def register_default_tools(
     register_delegate_tools(
         registry,
         run_subagent=run_subagent,
+        run_subagents_many=run_subagents_many,
         app_home=app_home,
         workspace_resolver=workspace_resolver,
     )

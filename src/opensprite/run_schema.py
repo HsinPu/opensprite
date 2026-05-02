@@ -29,6 +29,10 @@ _EVENT_KINDS = {
     "curator.job.skipped": "work",
     "curator.failed": "work",
     "curator.completed": "work",
+    "subagent.started": "work",
+    "subagent.completed": "work",
+    "subagent.failed": "work",
+    "subagent.cancelled": "work",
     "completion_gate.evaluated": "completion",
     "auto_continue.scheduled": "run",
     "auto_continue.completed": "run",
@@ -104,6 +108,14 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "failed"
     if normalized == "curator.job.skipped":
         return explicit or "skipped"
+    if normalized == "subagent.started":
+        return explicit or "running"
+    if normalized == "subagent.failed":
+        return explicit or "failed"
+    if normalized == "subagent.completed":
+        return explicit or "completed"
+    if normalized == "subagent.cancelled":
+        return explicit or "cancelled"
     if normalized == "run_finished":
         return explicit or "completed"
     if normalized == "run_failed":
@@ -236,6 +248,30 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "kind": "work",
             "status": status,
             "title": f"Curator job: {label}",
+            "detail": detail,
+            "metadata": data,
+        }
+
+    if normalized in {"subagent.started", "subagent.completed", "subagent.failed", "subagent.cancelled"}:
+        prompt_type = _text(data.get("prompt_type") or "subagent")
+        task_id = _text(data.get("task_id"))
+        child_run_id = _text(data.get("child_run_id"))
+        detail = _text(data.get("summary") or data.get("error") or data.get("message"))
+        if not detail and normalized == "subagent.started":
+            detail = f"Task {task_id or child_run_id or prompt_type} started."
+        if not detail and normalized == "subagent.completed":
+            detail = f"Task {task_id or child_run_id or prompt_type} completed."
+        if not detail and normalized == "subagent.failed":
+            detail = f"Task {task_id or child_run_id or prompt_type} failed."
+        if not detail and normalized == "subagent.cancelled":
+            detail = f"Task {task_id or child_run_id or prompt_type} cancelled."
+        return {
+            "schema_version": RUN_SCHEMA_VERSION,
+            "artifact_id": f"subagent:{task_id or child_run_id or prompt_type}",
+            "artifact_type": "subagent_task",
+            "kind": "work",
+            "status": status,
+            "title": f"Subagent: {prompt_type}",
             "detail": detail,
             "metadata": data,
         }

@@ -9,7 +9,18 @@ import time
 from collections import defaultdict
 from typing import Any
 
-from .base import StorageProvider, StoredMessage, StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredWorkState
+from .base import (
+    StorageProvider,
+    StoredMessage,
+    StoredRun,
+    StoredRunEvent,
+    StoredRunFileChange,
+    StoredRunPart,
+    StoredWorkState,
+    coerce_stored_delegated_tasks,
+    legacy_delegated_tasks,
+    selected_delegated_task,
+)
 
 
 class MemoryStorage(StorageProvider):
@@ -156,6 +167,11 @@ class MemoryStorage(StorageProvider):
     async def upsert_work_state(self, state: StoredWorkState) -> StoredWorkState:
         existing = self._work_states.get(state.session_id)
         created_at = existing.created_at if existing is not None and existing.created_at else float(state.created_at or time.time())
+        delegated_tasks = coerce_stored_delegated_tasks(state.delegated_tasks) or legacy_delegated_tasks(
+            state.active_delegate_task_id,
+            state.active_delegate_prompt_type,
+        )
+        selected_task = selected_delegated_task(delegated_tasks)
         updated = StoredWorkState(
             session_id=state.session_id,
             objective=state.objective,
@@ -181,8 +197,9 @@ class MemoryStorage(StorageProvider):
             verification_attempted=bool(state.verification_attempted),
             verification_passed=bool(state.verification_passed),
             last_next_action=state.last_next_action,
-            active_delegate_task_id=state.active_delegate_task_id,
-            active_delegate_prompt_type=state.active_delegate_prompt_type,
+            delegated_tasks=delegated_tasks,
+            active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
+            active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,
             metadata=dict(state.metadata or {}),
             created_at=created_at,
             updated_at=float(state.updated_at or time.time()),

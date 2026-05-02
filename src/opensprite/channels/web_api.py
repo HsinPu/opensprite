@@ -154,6 +154,7 @@ class WebApiHandlers:
         message_limit = adapter._coerce_limit(request.query.get("messages"), default=50, maximum=200)
         channel_filter = adapter._coerce_optional_text(request.query.get("channel"))
         session_ids = await storage.get_all_sessions()
+        session_ids = [session_id for session_id in session_ids if ":subagent:" not in session_id]
         if channel_filter is None:
             session_prefix = f"{adapter.channel_instance_id}:"
             session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]

@@ -12,7 +12,7 @@ from opensprite.channels.web import WebAdapter
 from opensprite.config import Config
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
-from opensprite.storage import MemoryStorage, StoredMessage, StoredWorkState
+from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
 
 
 class EchoAgent:
@@ -860,6 +860,19 @@ async def _run_web_sessions_api():
             touched_paths=("apps/web/src/App.vue",),
             verification_attempted=True,
             verification_passed=False,
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_abc12345",
+                    prompt_type="implementer",
+                    status="completed",
+                    selected=True,
+                    summary="Delegated the UI update.",
+                    child_session_id="web:browser-new:subagent:task_abc12345",
+                    last_child_run_id="run_child_1",
+                    created_at=195.0,
+                    updated_at=200.0,
+                ),
+            ),
             resume_hint="Continue with frontend validation.",
             created_at=190.0,
             updated_at=201.0,
@@ -891,6 +904,17 @@ async def _run_web_sessions_api():
         status="completed",
         metadata={"objective": "inspect telegram"},
         created_at=301.0,
+    )
+    await storage.add_message(
+        "web:browser-new:subagent:task_abc12345",
+        StoredMessage(role="user", content="hidden delegated task", timestamp=400.0),
+    )
+    await storage.create_run(
+        "web:browser-new:subagent:task_abc12345",
+        "run-subagent-latest",
+        status="completed",
+        metadata={"kind": "subagent", "objective": "hidden delegated task"},
+        created_at=401.0,
     )
 
     agent = EchoAgent()
@@ -957,6 +981,7 @@ async def _run_web_sessions_api():
             "web:browser-new",
             "web:browser-old",
         ]
+        assert all(":subagent:" not in item["session_id"] for item in all_payload["sessions"])
         assert all_payload["channel"] == "all"
         assert all_payload["sessions"][0]["channel"] == "telegram"
         assert all_payload["sessions"][0]["external_chat_id"] == "123"
@@ -1010,8 +1035,23 @@ async def _run_web_sessions_api():
             "verification_attempted": True,
             "verification_passed": False,
             "last_next_action": "",
-            "active_delegate_task_id": None,
-            "active_delegate_prompt_type": None,
+            "delegated_tasks": [
+                {
+                    "task_id": "task_abc12345",
+                    "prompt_type": "implementer",
+                    "status": "completed",
+                    "selected": True,
+                    "summary": "Delegated the UI update.",
+                    "error": "",
+                    "child_session_id": "web:browser-new:subagent:task_abc12345",
+                    "last_child_run_id": "run_child_1",
+                    "metadata": {},
+                    "created_at": 195.0,
+                    "updated_at": 200.0,
+                }
+            ],
+            "active_delegate_task_id": "task_abc12345",
+            "active_delegate_prompt_type": "implementer",
             "metadata": {},
             "todos": [
                 {

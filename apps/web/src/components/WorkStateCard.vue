@@ -37,6 +37,12 @@
       <span>{{ workState.resumeHint }}</span>
     </div>
 
+    <div v-if="delegatedTaskCount" class="work-state-card__note">
+      <strong>{{ copy.workState.delegatedTask }}</strong>
+      <span>{{ delegatedTaskSummary }}</span>
+      <small v-if="delegatedTaskCount > 1">{{ copy.workState.moreDelegates(delegatedTaskCount - 1) }}</small>
+    </div>
+
     <div v-if="visibleTouchedPaths.length" class="work-state-card__paths">
       <span>{{ copy.workState.touchedPaths }}</span>
       <code v-for="path in visibleTouchedPaths" :key="path">{{ path }}</code>
@@ -74,6 +80,20 @@ const verificationLabel = computed(() => {
     return props.copy.workState.verificationPending;
   }
   return props.copy.workState.verificationNotRequired;
+});
+
+const delegatedTasks = computed(() => Array.isArray(props.workState.delegatedTasks) ? props.workState.delegatedTasks : []);
+
+const selectedDelegatedTask = computed(() => delegatedTasks.value.find((task) => task.selected) || null);
+
+const delegatedTaskCount = computed(() => delegatedTasks.value.length);
+
+const delegatedTaskSummary = computed(() => {
+  if (selectedDelegatedTask.value) {
+    const promptType = selectedDelegatedTask.value.promptType || props.copy.workState.unknownDelegate;
+    return `${promptType} (${selectedDelegatedTask.value.taskId})`;
+  }
+  return props.copy.workState.delegateCount(delegatedTaskCount.value);
 });
 
 const visibleTouchedPaths = computed(() => props.workState.touchedPaths.slice(0, 3));

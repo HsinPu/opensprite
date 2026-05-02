@@ -543,6 +543,10 @@ function artifactSubtitle(artifact) {
   if (artifact.kind === "verification") {
     return artifact.title && artifact.title !== artifactTitle(artifact) ? artifact.title : "";
   }
+  if (artifact.artifactType === "subagent_task") {
+    const metadata = artifact.metadata || {};
+    return [metadata.task_id || metadata.taskId, metadata.child_run_id || metadata.childRunId].filter(Boolean).join(" · ");
+  }
   return artifact.artifactType || "";
 }
 
