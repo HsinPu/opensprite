@@ -31,7 +31,7 @@ from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
-from ..context.paths import get_session_skills_dir, get_session_workspace, get_recent_summary_state_file
+from ..context.paths import get_session_skills_dir, get_session_workspace
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store

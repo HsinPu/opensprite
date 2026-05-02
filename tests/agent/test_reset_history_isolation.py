@@ -33,7 +33,7 @@ def test_reset_history_only_clears_target_session(tmp_path):
             search_store=search_store,
         )
 
-        summary_store = RecentSummaryStore(agent.memory.memory_base)
+        summary_store = RecentSummaryStore(agent.memory.memory_base, app_home=agent.app_home, workspace_root=agent.tool_workspace)
         summary_store.write("telegram:user-a", "# Active Threads\n- stale context")
         summary_store.write("telegram:user-b", "# Active Threads\n- keep context")
         summary_store.set_processed_index("telegram:user-a", 5)

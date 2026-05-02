@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
 from ..context.paths import (
-    get_recent_summary_file,
-    get_recent_summary_state_file,
     get_session_recent_summary_file,
     get_session_recent_summary_state_file,
 )
@@ -39,20 +36,18 @@ class RecentSummaryStore:
     def __init__(
         self,
         memory_dir: Path,
-        state_file: Path | None = None,
         *,
         app_home: str | Path | None = None,
         workspace_root: str | Path | None = None,
     ):
         self.memory_dir = Path(memory_dir).expanduser()
         self.memory_dir.mkdir(parents=True, exist_ok=True)
-        self.state = JsonProgressStore(state_file or get_recent_summary_state_file(self.memory_dir))
         self.app_home = Path(app_home).expanduser() if app_home is not None else None
         self.workspace_root = Path(workspace_root).expanduser() if workspace_root is not None else None
-
-    def _get_session_summary_file(self, session_id: str) -> Path | None:
         if self.app_home is None and self.workspace_root is None:
-            return None
+            raise ValueError("RecentSummaryStore requires app_home or workspace_root for session-scoped paths")
+
+    def _get_summary_file(self, session_id: str) -> Path:
         summary_file = get_session_recent_summary_file(
             session_id,
             workspace_root=self.workspace_root,
@@ -61,23 +56,7 @@ class RecentSummaryStore:
         summary_file.parent.mkdir(parents=True, exist_ok=True)
         return summary_file
 
-    def _get_legacy_summary_file(self, session_id: str) -> Path:
-        summary_file = get_recent_summary_file(self.memory_dir, session_id)
-        summary_file.parent.mkdir(parents=True, exist_ok=True)
-        return summary_file
-
-    def _maybe_migrate_legacy_summary_file(self, session_id: str) -> Path | None:
-        summary_file = self._get_session_summary_file(session_id)
-        if summary_file is None or summary_file.exists():
-            return summary_file
-        legacy_summary_file = self._get_legacy_summary_file(session_id)
-        if legacy_summary_file.exists():
-            shutil.copy2(legacy_summary_file, summary_file)
-        return summary_file
-
     def _state_store(self, session_id: str) -> JsonProgressStore:
-        if self.app_home is None and self.workspace_root is None:
-            return self.state
         return JsonProgressStore(
             get_session_recent_summary_state_file(
                 session_id,
@@ -85,21 +64,6 @@ class RecentSummaryStore:
                 app_home=self.app_home,
             )
         )
-
-    def _maybe_migrate_legacy_state(self, session_id: str) -> JsonProgressStore:
-        store = self._state_store(session_id)
-        if store is self.state or store.state_file.exists():
-            return store
-        legacy_index = self.state.get_processed_index(session_id)
-        if legacy_index > 0:
-            store.set_processed_index(session_id, legacy_index)
-        return store
-
-    def _get_summary_file(self, session_id: str) -> Path:
-        summary_file = self._maybe_migrate_legacy_summary_file(session_id)
-        if summary_file is not None:
-            return summary_file
-        return self._get_legacy_summary_file(session_id)
 
     def read(self, session_id: str) -> str:
         summary_file = self._get_summary_file(session_id)
@@ -117,25 +81,16 @@ class RecentSummaryStore:
         return ""
 
     def get_processed_index(self, session_id: str) -> int:
-        return self._maybe_migrate_legacy_state(session_id).get_processed_index(session_id)
+        return self._state_store(session_id).get_processed_index(session_id)
 
     def set_processed_index(self, session_id: str, index: int) -> None:
-        self._maybe_migrate_legacy_state(session_id).set_processed_index(session_id, index)
+        self._state_store(session_id).set_processed_index(session_id, index)
 
     def clear(self, session_id: str) -> None:
         summary_file = self._get_summary_file(session_id)
         if summary_file.exists():
             summary_file.unlink()
-        self._maybe_migrate_legacy_state(session_id).set_processed_index(session_id, 0)
-
-        legacy_summary_file = self._get_legacy_summary_file(session_id)
-        if legacy_summary_file.exists() and legacy_summary_file != summary_file:
-            legacy_summary_file.unlink()
-
-        legacy_state = self.state.load_state()
-        if session_id in legacy_state:
-            legacy_state.pop(session_id, None)
-            self.state.save_state(legacy_state)
+        self._state_store(session_id).set_processed_index(session_id, 0)
 
 
 def _to_message_dict(message: StoredMessage | dict[str, Any]) -> dict[str, Any]:

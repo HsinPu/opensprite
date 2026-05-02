@@ -14,7 +14,6 @@ Path layout:
 - session workspace skills (mutable): ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}/skills/*/SKILL.md
 - session subagent overrides: ~/.opensprite/workspace/sessions/{channel}/{external_chat_id}/subagent_prompts/*.md
 - workspace root: ~/.opensprite/workspace
-- legacy shared memory root kept for migration: ~/.opensprite/memory/
 """
 
 import hashlib
@@ -270,22 +269,6 @@ def get_session_subagent_prompts_dir(
     return get_session_workspace(session_id, workspace_root=workspace_root, app_home=app_home) / SUBAGENT_PROMPTS_DIRNAME
 
 
-def get_memory_file(memory_dir: str | Path, session_id: str = "default") -> Path:
-    """Get the memory file path for a session without creating it."""
-    safe_session_id = _sanitize_path_segment(session_id, default="default", max_length=72)
-    return Path(memory_dir).expanduser() / safe_session_id / "MEMORY.md"
-
-
-def get_recent_summary_file(memory_dir: str | Path, session_id: str = "default") -> Path:
-    """Get the recent summary file path for a session without creating it."""
-    return get_memory_file(memory_dir, session_id).with_name("RECENT_SUMMARY.md")
-
-
-def get_recent_summary_state_file(memory_dir: str | Path) -> Path:
-    """Get the persisted state file for recent summary updates."""
-    return Path(memory_dir).expanduser() / RECENT_SUMMARY_STATE_FILENAME
-
-
 def _relative_path(path: Path, root: Path) -> str:
     try:
         return str(path.relative_to(root))
@@ -343,37 +326,6 @@ def migrate_legacy_bootstrap(app_home: str | Path | None = None, silent: bool = 
         logger.info("Migrated legacy bootstrap files: %s", migrated)
 
     return migrated
-
-
-def migrate_legacy_memory(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
-    """Copy legacy memory files into ~/.opensprite/memory/{session_id}/MEMORY.md."""
-    home = get_app_home(app_home)
-    memory_dir = get_memory_dir(home)
-    workspace_memory_dir = get_tool_workspace(home) / MEMORY_DIRNAME
-    migrated: list[str] = []
-
-    legacy_default_files = [
-        memory_dir / "MEMORY.md",
-        workspace_memory_dir / "MEMORY.md",
-    ]
-    default_memory_file = get_memory_file(memory_dir)
-    for source in legacy_default_files:
-        copied = _copy_missing_file(source, default_memory_file, home)
-        if copied:
-            migrated.append(copied)
-
-    if workspace_memory_dir.exists():
-        for item in workspace_memory_dir.iterdir():
-            if item.name == "MEMORY.md":
-                continue
-            migrated.extend(_copy_missing_tree(item, memory_dir / item.name, home))
-
-    if migrated and not silent:
-        logger.info("Migrated legacy memory files: %s", migrated)
-
-    return migrated
-
-
 def migrate_legacy_user_profiles(app_home: str | Path | None = None, silent: bool = False) -> list[str]:
     """Copy legacy ~/.opensprite/users/... profiles into workspace/sessions/... (same relative paths)."""
     home = get_app_home(app_home)
@@ -417,7 +369,6 @@ def sync_templates(app_home: str | Path | None = None, silent: bool = False) -> 
 
     changed: list[str] = []
     changed.extend(migrate_legacy_bootstrap(home, silent=True))
-    changed.extend(migrate_legacy_memory(home, silent=True))
     changed.extend(migrate_legacy_user_profiles(home, silent=True))
 
     try:
@@ -478,24 +429,3 @@ def load_bootstrap_files(bootstrap_dir: str | Path) -> dict[str, str]:
         file_path = base_dir / filename
         result[filename.removesuffix(".md")] = file_path.read_text(encoding="utf-8") if file_path.exists() else ""
     return result
-
-
-def load_memory(memory_dir: str | Path, session_id: str = "default") -> str:
-    """Load long-term memory for a session."""
-    target = get_memory_file(memory_dir, session_id)
-    if target.exists():
-        return target.read_text(encoding="utf-8")
-
-    if session_id == "default":
-        legacy_default = Path(memory_dir).expanduser() / "MEMORY.md"
-        if legacy_default.exists():
-            return legacy_default.read_text(encoding="utf-8")
-
-    return ""
-
-
-def save_memory(memory_dir: str | Path, content: str, session_id: str = "default") -> None:
-    """Save long-term memory for a session."""
-    memory_path = get_memory_file(memory_dir, session_id)
-    memory_path.parent.mkdir(parents=True, exist_ok=True)
-    memory_path.write_text(content, encoding="utf-8")
