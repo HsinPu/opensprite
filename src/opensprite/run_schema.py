@@ -798,6 +798,60 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
     }
 
 
+def _summarize_parallel_delegation(events: list[Any]) -> dict[str, Any]:
+    group_events: dict[str, dict[str, Any]] = {}
+    ordered_group_ids: list[str] = []
+    for event in events:
+        event_type = str(getattr(event, "event_type", "") or "")
+        if event_type not in {
+            "subagent.group.started",
+            "subagent.group.completed",
+            "subagent.group.failed",
+            "subagent.group.cancelled",
+        }:
+            continue
+        payload = dict(getattr(event, "payload", {}) or {})
+        group_id = _text(payload.get("group_id"))
+        if not group_id:
+            continue
+        created_at = getattr(event, "created_at", None)
+        if group_id not in group_events:
+            ordered_group_ids.append(group_id)
+        group_events[group_id] = {
+            "event_type": event_type,
+            "created_at": created_at,
+            "payload": payload,
+        }
+
+    groups: list[dict[str, Any]] = []
+    for group_id in ordered_group_ids:
+        entry = group_events.get(group_id)
+        if not entry:
+            continue
+        payload = entry["payload"]
+        tasks = payload.get("tasks") if isinstance(payload.get("tasks"), list) else []
+        groups.append(
+            {
+                "group_id": group_id,
+                "status": _text(payload.get("status") or run_event_status(entry["event_type"], payload)),
+                "total_tasks": _non_negative_int(payload.get("total_tasks")),
+                "max_parallel": _non_negative_int(payload.get("max_parallel")),
+                "completed_count": _non_negative_int(payload.get("completed_count")),
+                "failed_count": _non_negative_int(payload.get("failed_count")),
+                "cancelled_count": _non_negative_int(payload.get("cancelled_count")),
+                "summary": _text(payload.get("summary") or payload.get("error") or payload.get("message")),
+                "tasks": [json_safe_payload(item) for item in tasks if isinstance(item, dict)],
+                "created_at": entry["created_at"],
+            }
+        )
+
+    return {
+        "group_count": len(groups),
+        "task_count": sum(int(group.get("total_tasks") or 0) for group in groups),
+        "groups": groups,
+    }
+
+
 def serialize_run_summary(trace: Any) -> dict[str, Any]:
     """Serialize the compact run summary used by Web inspector cards."""
     run = trace.run
@@ -809,6 +863,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     completion = _latest_event_payload(events, "completion_gate.evaluated") or {}
     work_progress = _latest_work_progress(events) or {}
     verification = _summarize_verification(run_metadata, events)
+    parallel_delegation = _summarize_parallel_delegation(events)
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
     if had_tool_error:
@@ -838,6 +893,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         "file_changes": _summarize_file_changes(file_changes),
         "diff_summary": serialize_diff_summary(trace),
         "verification": verification,
+        "parallel_delegation": parallel_delegation,
         "artifact_counts": {
             "total": len(artifacts),
             "tool": sum(1 for artifact in artifacts if artifact.get("kind") == "tool"),

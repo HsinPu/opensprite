@@ -774,6 +774,11 @@ async def _run_web_run_events_api():
                     "name": None,
                     "summary": "",
                 },
+                "parallel_delegation": {
+                    "group_count": 0,
+                    "task_count": 0,
+                    "groups": [],
+                },
                 "artifact_counts": {
                     "total": 2,
                     "tool": 1,

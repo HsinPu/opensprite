@@ -728,6 +728,7 @@ function normalizeRunSummary(payload) {
   const verification = payload.verification && typeof payload.verification === "object" ? payload.verification : {};
   const counts = payload.counts && typeof payload.counts === "object" ? payload.counts : {};
   const artifactCounts = payload.artifact_counts && typeof payload.artifact_counts === "object" ? payload.artifact_counts : {};
+  const parallelDelegation = normalizeParallelDelegationSummary(payload.parallel_delegation || payload.parallelDelegation);
   return {
     schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
     runId: String(payload.run_id || payload.runId || "").trim(),
@@ -769,6 +770,7 @@ function normalizeRunSummary(payload) {
       name: String(verification.name || "").trim(),
       summary: String(verification.summary || "").trim(),
     },
+    parallelDelegation,
     completion: payload.completion && typeof payload.completion === "object" ? payload.completion : {},
     nextAction: String(payload.next_action || payload.nextAction || "").trim(),
     warnings: coerceStringList(payload.warnings),
@@ -784,6 +786,61 @@ function normalizeRunSummary(payload) {
       toolCalls: coerceNonNegativeInteger(counts.tool_calls ?? counts.toolCalls),
       fileChanges: coerceNonNegativeInteger(counts.file_changes ?? counts.fileChanges),
     },
+  };
+}
+
+function normalizeParallelDelegationSummary(payload) {
+  if (!payload || typeof payload !== "object") {
+    return { groupCount: 0, taskCount: 0, groups: [] };
+  }
+  const groups = Array.isArray(payload.groups)
+    ? payload.groups
+        .map((group) => {
+          if (!group || typeof group !== "object") {
+            return null;
+          }
+          const groupId = String(group.group_id || group.groupId || "").trim();
+          if (!groupId) {
+            return null;
+          }
+          const tasks = Array.isArray(group.tasks)
+            ? group.tasks
+                .map((task) => {
+                  if (!task || typeof task !== "object") {
+                    return null;
+                  }
+                  return {
+                    taskId: String(task.task_id || task.taskId || "").trim() || null,
+                    promptType: String(task.prompt_type || task.promptType || "").trim() || null,
+                    status: String(task.status || "unknown").trim() || "unknown",
+                    summary: String(task.summary || "").trim(),
+                    error: String(task.error || "").trim(),
+                    childSessionId: String(task.child_session_id || task.childSessionId || "").trim() || null,
+                    childRunId: String(task.child_run_id || task.childRunId || "").trim() || null,
+                    fanoutIndex: coerceNonNegativeInteger(task.fanout_index ?? task.fanoutIndex),
+                  };
+                })
+                .filter(Boolean)
+            : [];
+          return {
+            groupId,
+            status: String(group.status || "unknown").trim() || "unknown",
+            totalTasks: coerceNonNegativeInteger(group.total_tasks ?? group.totalTasks),
+            maxParallel: coerceNonNegativeInteger(group.max_parallel ?? group.maxParallel),
+            completedCount: coerceNonNegativeInteger(group.completed_count ?? group.completedCount),
+            failedCount: coerceNonNegativeInteger(group.failed_count ?? group.failedCount),
+            cancelledCount: coerceNonNegativeInteger(group.cancelled_count ?? group.cancelledCount),
+            summary: String(group.summary || "").trim(),
+            createdAt: normalizeEventTimestamp(group.created_at ?? group.createdAt),
+            tasks,
+          };
+        })
+        .filter(Boolean)
+    : [];
+  return {
+    groupCount: coerceNonNegativeInteger(payload.group_count ?? payload.groupCount ?? groups.length),
+    taskCount: coerceNonNegativeInteger(payload.task_count ?? payload.taskCount ?? groups.reduce((total, group) => total + (group.totalTasks || group.tasks.length), 0)),
+    groups,
   };
 }
 

@@ -65,6 +65,19 @@
           <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
 
+        <div v-if="parallelDelegation.groupCount > 0" class="run-summary-card__note" :data-tone="parallelDelegationTone">
+          <strong>{{ copy.runSummary.parallelDelegation }}</strong>
+          <span>{{ parallelDelegationLabel }}</span>
+          <small v-if="parallelDelegationDetail">{{ parallelDelegationDetail }}</small>
+        </div>
+
+        <div v-if="parallelDelegation.groups.length" class="run-summary-card__chips">
+          <span>{{ copy.runSummary.parallelDelegationGroups }}</span>
+          <code v-for="group in visibleParallelGroups" :key="group.groupId">
+            {{ parallelGroupChip(group) }}
+          </code>
+        </div>
+
         <div v-if="hasDiffSummary" class="run-summary-card__diff">
           <div class="run-summary-card__diff-header">
             <strong>{{ copy.runSummary.diffSummary }}</strong>
@@ -244,6 +257,44 @@ const verificationTone = computed(() => {
   return summary.value.verification.passed ? "success" : "warning";
 });
 
+const parallelDelegation = computed(() => summary.value?.parallelDelegation || { groupCount: 0, taskCount: 0, groups: [] });
+
+const visibleParallelGroups = computed(() => parallelDelegation.value.groups.slice(0, 4));
+
+const parallelDelegationTone = computed(() => {
+  if (!parallelDelegation.value.groupCount) {
+    return "neutral";
+  }
+  if (parallelDelegation.value.groups.some((group) => group.status === "failed" || group.status === "error")) {
+    return "warning";
+  }
+  if (parallelDelegation.value.groups.some((group) => group.status === "cancelled" || group.status === "cancelling")) {
+    return "warning";
+  }
+  if (parallelDelegation.value.groups.some((group) => group.status === "running")) {
+    return "neutral";
+  }
+  return "success";
+});
+
+const parallelDelegationLabel = computed(() => {
+  const data = parallelDelegation.value;
+  if (!data.groupCount) {
+    return "";
+  }
+  return props.copy.runSummary.parallelDelegationSummary(data.groupCount, data.taskCount);
+});
+
+const parallelDelegationDetail = computed(() => {
+  const firstSummary = parallelDelegation.value.groups.map((group) => group.summary).find(Boolean);
+  if (firstSummary) {
+    return firstSummary;
+  }
+  return parallelDelegation.value.groups
+    .map((group) => parallelGroupChip(group))
+    .join(" · ");
+});
+
 const diffSummary = computed(() => summary.value?.diffSummary || props.run.diffSummary || null);
 
 const hasDiffSummary = computed(() => {
@@ -362,6 +413,13 @@ function buildRunReport() {
     lines.push("", `## ${props.copy.runSummary.diffSummary}`, ...formatDiffSummary(diffSummary.value));
   }
 
+  if (data.parallelDelegation?.groupCount > 0) {
+    lines.push("", `## ${props.copy.runSummary.parallelDelegation}`,
+      `- ${props.copy.runSummary.parallelDelegationSummary(data.parallelDelegation.groupCount, data.parallelDelegation.taskCount)}`,
+      ...formatParallelDelegation(data.parallelDelegation),
+    );
+  }
+
   lines.push("", `## ${props.copy.runSummary.files}`, ...formatFileChanges(data.fileChanges));
 
   if (data.nextAction) {
@@ -417,6 +475,41 @@ function formatDiffSummary(diff) {
     lines.push(`- ${props.copy.runSummary.paths}: ${diff.paths.join(", ")}`);
   }
   return lines;
+}
+
+function formatParallelDelegation(data) {
+  return (data.groups || []).flatMap((group) => {
+    const lines = [
+      `### ${parallelGroupChip(group)}`,
+    ];
+    if (group.summary) {
+      lines.push(`- ${group.summary}`);
+    }
+    for (const task of group.tasks || []) {
+      const taskLabel = [task.promptType || props.copy.runSummary.parallelTaskFallback, task.taskId].filter(Boolean).join(" ");
+      const taskDetail = task.summary || task.error || task.status;
+      lines.push(`- ${taskLabel}: ${taskDetail}`);
+    }
+    return lines;
+  });
+}
+
+function parallelGroupChip(group) {
+  return `${parallelGroupLabel(group)} ${parallelStatusLabel(group.status)} ${group.completedCount}/${group.totalTasks || group.tasks.length}`;
+}
+
+function parallelGroupLabel(group) {
+  return props.copy.runSummary.parallelGroup(shortGroupId(group.groupId));
+}
+
+function parallelStatusLabel(status) {
+  const labels = props.copy.runSummary.parallelStatusLabels || {};
+  return labels[status] || status;
+}
+
+function shortGroupId(groupId) {
+  const normalized = String(groupId || "").replace(/^fanout_/, "");
+  return normalized.length > 8 ? normalized.slice(0, 8) : normalized || "group";
 }
 
 function downloadReport() {

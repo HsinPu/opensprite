@@ -851,6 +851,28 @@ def test_serialize_run_summary_builds_stable_card_payload():
                 payload={"status": "complete"},
                 created_at=15.0,
             ),
+            SimpleNamespace(
+                event_id=4,
+                run_id="run-1",
+                session_id="web:browser-1",
+                event_type="subagent.group.completed",
+                payload={
+                    "status": "completed",
+                    "group_id": "fanout_abc12345",
+                    "total_tasks": 2,
+                    "max_parallel": 2,
+                    "completed_count": 2,
+                    "failed_count": 0,
+                    "cancelled_count": 0,
+                    "task_ids": ["task_a", "task_b"],
+                    "tasks": [
+                        {"task_id": "task_a", "prompt_type": "researcher", "status": "completed", "summary": "ok:a"},
+                        {"task_id": "task_b", "prompt_type": "code-reviewer", "status": "completed", "summary": "ok:b"},
+                    ],
+                    "summary": "Completed 2/2 parallel subagent task(s).",
+                },
+                created_at=15.5,
+            ),
         ],
         parts=[
             SimpleNamespace(
@@ -891,7 +913,28 @@ def test_serialize_run_summary_builds_stable_card_payload():
     assert summary["duration_seconds"] == 6.5
     assert summary["tools"] == [{"name": "demo", "count": 1}]
     assert summary["verification"] == {"attempted": True, "passed": True, "status": "passed", "name": "pytest", "summary": "ok"}
-    assert summary["artifact_counts"] == {"total": 3, "tool": 1, "file": 1, "verification": 1}
+    assert summary["parallel_delegation"] == {
+        "group_count": 1,
+        "task_count": 2,
+        "groups": [
+            {
+                "group_id": "fanout_abc12345",
+                "status": "completed",
+                "total_tasks": 2,
+                "max_parallel": 2,
+                "completed_count": 2,
+                "failed_count": 0,
+                "cancelled_count": 0,
+                "summary": "Completed 2/2 parallel subagent task(s).",
+                "tasks": [
+                    {"task_id": "task_a", "prompt_type": "researcher", "status": "completed", "summary": "ok:a"},
+                    {"task_id": "task_b", "prompt_type": "code-reviewer", "status": "completed", "summary": "ok:b"},
+                ],
+                "created_at": 15.5,
+            }
+        ],
+    }
+    assert summary["artifact_counts"] == {"total": 4, "tool": 1, "file": 1, "verification": 1}
     assert summary["completion"] == {"status": "complete"}
     assert summary["warnings"] == []
-    assert summary["counts"] == {"events": 3, "parts": 1, "tool_calls": 1, "file_changes": 1}
+    assert summary["counts"] == {"events": 4, "parts": 1, "tool_calls": 1, "file_changes": 1}
