@@ -40,7 +40,8 @@
     <div v-if="delegatedTaskCount" class="work-state-card__note">
       <strong>{{ copy.workState.delegatedTask }}</strong>
       <span>{{ delegatedTaskSummary }}</span>
-      <small v-if="delegatedTaskCount > 1">{{ copy.workState.moreDelegates(delegatedTaskCount - 1) }}</small>
+      <small v-if="delegatedTaskDetail">{{ delegatedTaskDetail }}</small>
+      <small v-else-if="delegatedTaskCount > 1">{{ copy.workState.moreDelegates(delegatedTaskCount - 1) }}</small>
     </div>
 
     <div v-if="visibleTouchedPaths.length" class="work-state-card__paths">
@@ -88,12 +89,60 @@ const selectedDelegatedTask = computed(() => delegatedTasks.value.find((task) =>
 
 const delegatedTaskCount = computed(() => delegatedTasks.value.length);
 
+const parallelDelegationGroups = computed(() => {
+  const groups = new Map();
+  for (const task of delegatedTasks.value) {
+    const groupId = String(task?.metadata?.fanout_group_id || task?.metadata?.fanoutGroupId || "").trim();
+    if (!groupId) {
+      continue;
+    }
+    const current = groups.get(groupId) || { groupId, total: 0, items: [] };
+    current.items.push(task);
+    current.total = Math.max(
+      current.total,
+      Number(task?.metadata?.fanout_total ?? task?.metadata?.fanoutTotal ?? 0) || 0,
+      current.items.length,
+    );
+    groups.set(groupId, current);
+  }
+  return Array.from(groups.values()).sort((left, right) => {
+    const leftCreated = Math.min(...left.items.map((item) => item.createdAt || 0));
+    const rightCreated = Math.min(...right.items.map((item) => item.createdAt || 0));
+    return leftCreated - rightCreated;
+  });
+});
+
 const delegatedTaskSummary = computed(() => {
   if (selectedDelegatedTask.value) {
     const promptType = selectedDelegatedTask.value.promptType || props.copy.workState.unknownDelegate;
     return `${promptType} (${selectedDelegatedTask.value.taskId})`;
   }
+  if (parallelDelegationGroups.value.length === 1) {
+    const group = parallelDelegationGroups.value[0];
+    return props.copy.workState.parallelDelegation(group.total || group.items.length);
+  }
+  if (parallelDelegationGroups.value.length > 1) {
+    return props.copy.workState.parallelGroups(parallelDelegationGroups.value.length, delegatedTaskCount.value);
+  }
   return props.copy.workState.delegateCount(delegatedTaskCount.value);
+});
+
+const delegatedTaskDetail = computed(() => {
+  if (selectedDelegatedTask.value?.summary) {
+    return selectedDelegatedTask.value.summary;
+  }
+  if (!delegatedTaskCount.value) {
+    return "";
+  }
+  const counts = delegatedTasks.value.reduce((result, task) => {
+    const status = String(task.status || "unknown").trim() || "unknown";
+    result[status] = (result[status] || 0) + 1;
+    return result;
+  }, {});
+  return Object.entries(counts)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([status, count]) => `${delegateStatusLabel(status)} x${count}`)
+    .join(" · ");
 });
 
 const visibleTouchedPaths = computed(() => props.workState.touchedPaths.slice(0, 3));
@@ -105,5 +154,10 @@ const hiddenTouchedPathCount = computed(() => {
 function displayStep(value) {
   const text = String(value || "").trim();
   return text && text !== "not set" ? text : props.copy.workState.noStep;
+}
+
+function delegateStatusLabel(status) {
+  const labels = props.copy.workState.delegateStatusLabels || {};
+  return labels[status] || status;
 }
 </script>

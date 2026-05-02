@@ -159,6 +159,9 @@
 :root[data-color-scheme="dark"] .run-trace__summary span,
 :root[data-color-scheme="dark"] .run-trace__section-head small,
 :root[data-color-scheme="dark"] .run-trace__artifact-group,
+:root[data-color-scheme="dark"] .run-trace__parallel-group,
+:root[data-color-scheme="dark"] .run-trace__parallel-task,
+:root[data-color-scheme="dark"] .run-trace__parallel-group-chips code,
 :root[data-color-scheme="dark"] .run-trace__artifact-card,
 :root[data-color-scheme="dark"] .run-trace__tool-details div,
 :root[data-color-scheme="dark"] .run-trace__part,
@@ -1378,6 +1381,12 @@ button:disabled {
   color: var(--text);
   font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.work-state-card__note small {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
 .work-state-card__paths {
@@ -2747,6 +2756,94 @@ button:disabled {
 .run-trace__artifact-groups {
   display: grid;
   gap: 10px;
+}
+
+.run-trace__parallel-groups,
+.run-trace__parallel-task-list {
+  display: grid;
+  gap: 8px;
+}
+
+.run-trace__parallel-group {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--text-soft);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+
+.run-trace__parallel-group[data-status="running"],
+.run-trace__parallel-group[data-status="cancelling"] {
+  border-left-color: #b7791f;
+}
+
+.run-trace__parallel-group[data-status="completed"] {
+  border-left-color: #10a37f;
+}
+
+.run-trace__parallel-group[data-status="failed"],
+.run-trace__parallel-group[data-status="error"] {
+  border-left-color: #d92d20;
+}
+
+.run-trace__parallel-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.run-trace__parallel-group-head div {
+  display: grid;
+  gap: 3px;
+}
+
+.run-trace__parallel-group-head strong {
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.run-trace__parallel-group-head small {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+}
+
+.run-trace__parallel-group-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.run-trace__parallel-group-chips code {
+  padding: 3px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-soft);
+  background: rgba(255, 255, 255, 0.76);
+  font-size: 0.7rem;
+}
+
+.run-trace__parallel-task {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.run-trace__parallel-task strong {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.run-trace__parallel-task small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
 }
 
 .run-trace__artifact-group {

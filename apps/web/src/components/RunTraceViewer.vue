@@ -45,6 +45,54 @@
           <span>{{ artifactCount }} {{ copy.trace.artifacts }}</span>
         </div>
 
+        <section v-if="parallelDelegationGroups.length" class="run-trace__artifact-group">
+          <div class="run-trace__artifact-group-title">
+            <span>{{ copy.trace.parallelDelegation }}</span>
+            <small>{{ parallelDelegationGroups.length }}</small>
+          </div>
+
+          <div class="run-trace__parallel-groups">
+            <article
+              v-for="group in parallelDelegationGroups"
+              :key="group.groupId"
+              class="run-trace__parallel-group"
+              :data-status="group.status"
+            >
+              <div class="run-trace__parallel-group-head">
+                <div>
+                  <strong>{{ copy.trace.parallelGroup(group.shortId) }}</strong>
+                  <small>{{ parallelGroupCountLabel(group) }}</small>
+                </div>
+                <span class="run-trace__artifact-status">{{ parallelStatusLabel(group.status) }}</span>
+              </div>
+
+              <div v-if="parallelGroupStatusEntries(group).length" class="run-trace__parallel-group-chips">
+                <code
+                  v-for="entry in parallelGroupStatusEntries(group)"
+                  :key="entry.status"
+                  :data-status="entry.status"
+                >
+                  {{ entry.label }} x{{ entry.count }}
+                </code>
+              </div>
+
+              <div class="run-trace__parallel-task-list">
+                <article
+                  v-for="artifact in group.items"
+                  :key="artifact.artifactId"
+                  class="run-trace__parallel-task"
+                  :data-status="artifact.status"
+                >
+                  <span class="run-trace__artifact-status">{{ parallelStatusLabel(artifact.status) }}</span>
+                  <strong>{{ parallelTaskTitle(artifact) }}</strong>
+                  <small v-if="parallelTaskMeta(artifact)">{{ parallelTaskMeta(artifact) }}</small>
+                  <span v-if="artifactDetail(artifact)" class="run-trace__artifact-detail">{{ artifactDetail(artifact) }}</span>
+                </article>
+              </div>
+            </article>
+          </div>
+        </section>
+
         <div v-if="displayedArtifactCount" class="run-trace__artifact-groups">
           <section
             v-for="group in artifactGroups"
@@ -300,14 +348,64 @@ const retentionCounts = computed(() => {
 
 const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 || retentionCounts.value.textTotal > retentionCounts.value.textReturned);
 
+const parallelDelegationGroups = computed(() => {
+  const groups = new Map();
+  for (const artifact of artifacts.value) {
+    const groupId = parallelGroupId(artifact);
+    if (!groupId) {
+      continue;
+    }
+    const current = groups.get(groupId) || {
+      groupId,
+      shortId: shortenParallelGroupId(groupId),
+      total: 0,
+      items: [],
+      createdAt: artifact.createdAt,
+    };
+    current.items.push(artifact);
+    current.total = Math.max(current.total, parallelGroupTotal(artifact) || 0, current.items.length);
+    current.createdAt = Math.min(current.createdAt, artifact.createdAt || current.createdAt);
+    groups.set(groupId, current);
+  }
+  return Array.from(groups.values())
+    .map((group) => {
+      group.items.sort((left, right) => {
+        const leftIndex = parallelGroupIndex(left);
+        const rightIndex = parallelGroupIndex(right);
+        if (leftIndex !== rightIndex) {
+          return leftIndex - rightIndex;
+        }
+        return (left.createdAt || 0) - (right.createdAt || 0);
+      });
+      group.total = Math.max(group.total, group.items.length);
+      group.status = summarizeParallelGroupStatus(group.items);
+      group.statusCounts = countParallelStatuses(group.items.map((item) => item.status));
+      return group;
+    })
+    .sort((left, right) => left.createdAt - right.createdAt);
+});
+
+const groupedParallelArtifactIds = computed(() => new Set(
+  parallelDelegationGroups.value.flatMap((group) => group.items.map((item) => item.artifactId)),
+));
+
 const artifactGroups = computed(() => {
   const toolArtifacts = artifacts.value.filter((artifact) => artifact.kind === "tool");
   const fileArtifacts = artifacts.value.filter((artifact) => artifact.kind === "file" || artifact.path);
   const verificationArtifacts = artifacts.value.filter((artifact) => artifact.kind === "verification");
   const permissionArtifacts = artifacts.value.filter((artifact) => artifact.kind === "permission");
   const taskArtifacts = artifacts.value.filter((artifact) => artifact.kind === "task");
-  const workArtifacts = artifacts.value.filter((artifact) => artifact.kind === "work");
-  const grouped = new Set([...toolArtifacts, ...fileArtifacts, ...verificationArtifacts, ...permissionArtifacts, ...taskArtifacts, ...workArtifacts]);
+  const workArtifacts = artifacts.value.filter((artifact) => artifact.kind === "work" && !groupedParallelArtifactIds.value.has(artifact.artifactId));
+  const groupedParallelArtifacts = artifacts.value.filter((artifact) => groupedParallelArtifactIds.value.has(artifact.artifactId));
+  const grouped = new Set([
+    ...toolArtifacts,
+    ...fileArtifacts,
+    ...verificationArtifacts,
+    ...permissionArtifacts,
+    ...taskArtifacts,
+    ...workArtifacts,
+    ...groupedParallelArtifacts,
+  ]);
   const otherArtifacts = artifacts.value.filter((artifact) => !grouped.has(artifact));
 
   return [
@@ -349,7 +447,10 @@ const artifactGroups = computed(() => {
   ];
 });
 
-const displayedArtifactCount = computed(() => artifactGroups.value.reduce((total, group) => total + group.items.length, 0));
+const displayedArtifactCount = computed(() => {
+  const groupedCount = parallelDelegationGroups.value.reduce((total, group) => total + group.items.length, 0);
+  return groupedCount + artifactGroups.value.reduce((total, group) => total + group.items.length, 0);
+});
 
 const filterOptions = computed(() => [
   { value: "all", label: props.copy.trace.filters.all, count: events.value.length },
@@ -512,6 +613,82 @@ function previewText(value) {
     return "";
   }
   return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+}
+
+function parallelGroupId(artifact) {
+  const metadata = artifact?.metadata || {};
+  return String(metadata.fanout_group_id || metadata.fanoutGroupId || "").trim();
+}
+
+function parallelGroupIndex(artifact) {
+  const metadata = artifact?.metadata || {};
+  const value = Number(metadata.fanout_index ?? metadata.fanoutIndex ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : Number.MAX_SAFE_INTEGER;
+}
+
+function parallelGroupTotal(artifact) {
+  const metadata = artifact?.metadata || {};
+  const value = Number(metadata.fanout_total ?? metadata.fanoutTotal ?? 0);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function shortenParallelGroupId(groupId) {
+  const normalized = String(groupId || "").replace(/^fanout_/, "");
+  return normalized.length > 8 ? normalized.slice(0, 8) : normalized || props.copy.trace.unknownArtifact;
+}
+
+function countParallelStatuses(statuses) {
+  return statuses.reduce((counts, status) => {
+    const key = String(status || "unknown").trim() || "unknown";
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function summarizeParallelGroupStatus(items) {
+  const statuses = items.map((item) => String(item.status || "unknown").trim() || "unknown");
+  if (statuses.some((status) => status === "running" || status === "cancelling")) {
+    return statuses.includes("cancelling") ? "cancelling" : "running";
+  }
+  if (statuses.some((status) => status === "failed" || status === "error")) {
+    return "failed";
+  }
+  if (statuses.some((status) => status === "cancelled")) {
+    return "cancelled";
+  }
+  if (statuses.every((status) => status === "completed")) {
+    return "completed";
+  }
+  return "unknown";
+}
+
+function parallelStatusLabel(status) {
+  const labels = props.copy.trace.parallelStatusLabels || {};
+  return labels[status] || status || props.copy.trace.unknownArtifact;
+}
+
+function parallelGroupCountLabel(group) {
+  if (typeof props.copy.trace.parallelTasks === "function") {
+    return props.copy.trace.parallelTasks(group.items.length, group.total || group.items.length);
+  }
+  return `${group.items.length}/${group.total || group.items.length}`;
+}
+
+function parallelGroupStatusEntries(group) {
+  return Object.entries(group.statusCounts || {})
+    .filter(([, count]) => Number(count) > 0)
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([status, count]) => ({ status, count, label: parallelStatusLabel(status) }));
+}
+
+function parallelTaskTitle(artifact) {
+  const metadata = artifact?.metadata || {};
+  return String(metadata.prompt_type || metadata.promptType || artifact.title || props.copy.trace.unknownArtifact).trim();
+}
+
+function parallelTaskMeta(artifact) {
+  const metadata = artifact?.metadata || {};
+  return [metadata.task_id || metadata.taskId, metadata.child_run_id || metadata.childRunId].filter(Boolean).join(" · ");
 }
 
 function hasMetadata(part) {
