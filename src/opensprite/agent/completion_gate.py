@@ -110,6 +110,13 @@ class CompletionGateService:
         verification_passed = execution_result.verification_passed
         review = _review_evidence(execution_result.delegated_tasks)
         review_required = expects_code_change and execution_result.file_change_count > 0
+        workflow_gate = _workflow_gate_outcome(
+            task_intent=task_intent,
+            workflow_outcomes=execution_result.workflow_outcomes,
+            verification_required=verification_required,
+            verification_attempted=verification_attempted,
+            verification_passed=verification_passed,
+        )
 
         immediate_transition = infer_immediate_task_transition(
             response_text,
@@ -139,6 +146,23 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="incomplete",
                 reason="tool execution reported an error without a clear blocker handoff",
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
+        if workflow_gate is not None:
+            return CompletionGateResult(
+                status=workflow_gate["status"],
+                reason=workflow_gate["reason"],
+                active_task_status="done" if workflow_gate["status"] == "complete" else None,
+                should_update_active_task=workflow_gate["status"] == "complete" and task_intent.should_seed_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -341,3 +365,63 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         "prompt_types": tuple(dict.fromkeys(prompt_types)),
         "finding_count": finding_count,
     }
+
+
+def _workflow_gate_outcome(
+    *,
+    task_intent: TaskIntent,
+    workflow_outcomes: tuple[dict[str, Any], ...],
+    verification_required: bool,
+    verification_attempted: bool,
+    verification_passed: bool,
+) -> dict[str, str] | None:
+    completed_outcomes = [
+        outcome
+        for outcome in workflow_outcomes
+        if isinstance(outcome, dict) and str(outcome.get("status") or "") == "completed"
+    ]
+    if not completed_outcomes:
+        return None
+    workflow = completed_outcomes[-1]
+    workflow_id = str(workflow.get("workflow") or "").strip()
+    review_attempted = bool(workflow.get("review_attempted"))
+    review_passed = bool(workflow.get("review_passed"))
+    review_finding_count = int(workflow.get("review_finding_count") or 0)
+    workflow_verification_attempted = bool(workflow.get("verification_attempted"))
+    workflow_verification_passed = bool(workflow.get("verification_passed"))
+
+    if workflow_id == "research_then_outline":
+        return {
+            "status": "complete",
+            "reason": "workflow research_then_outline completed all required steps",
+        }
+
+    if verification_required and not (verification_passed or workflow_verification_passed):
+        return {
+            "status": "needs_verification",
+            "reason": "workflow completed but required verification evidence is still missing",
+        }
+
+    if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
+        if not review_attempted:
+            return {
+                "status": "needs_review",
+                "reason": f"workflow {workflow_id} completed but review evidence is missing",
+            }
+        if not review_passed or review_finding_count > 0:
+            return {
+                "status": "needs_review",
+                "reason": f"workflow {workflow_id} completed but review findings still require follow-up",
+            }
+        return {
+            "status": "complete",
+            "reason": f"workflow {workflow_id} completed with clean review evidence",
+        }
+
+    if task_intent.kind in {"analysis", "review"}:
+        return {
+            "status": "complete",
+            "reason": f"workflow {workflow_id} completed all required steps",
+        }
+
+    return None

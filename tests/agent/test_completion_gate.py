@@ -154,6 +154,71 @@ def test_completion_gate_requires_follow_up_when_review_reports_findings():
     assert result.review_finding_count == 1
 
 
+def test_completion_gate_allows_workflow_completion_with_clean_review():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow: implement_then_review\nStatus: completed",
+        execution_result=ExecutionResult(
+            content="Workflow: implement_then_review\nStatus: completed",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="completed",
+                    summary="No major findings.",
+                    metadata={"structured_output": {"status": "ok", "summary": "No major findings.", "finding_count": 0}},
+                ),
+            ),
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_abc123",
+                    "workflow": "implement_then_review",
+                    "status": "completed",
+                    "review_attempted": True,
+                    "review_passed": True,
+                    "review_finding_count": 0,
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "workflow implement_then_review completed with clean review evidence"
+
+
+def test_completion_gate_allows_research_then_outline_without_completion_phrase():
+    intent = TaskIntentService().classify("Help me research and outline this topic.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow result attached below.",
+        execution_result=ExecutionResult(
+            content="Workflow result attached below.",
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_outline",
+                    "workflow": "research_then_outline",
+                    "status": "completed",
+                    "review_attempted": False,
+                    "review_passed": False,
+                    "review_finding_count": 0,
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "workflow research_then_outline completed all required steps"
+
+
 def test_completion_gate_allows_review_without_code_changes():
     intent = TaskIntentService().classify("Please review the recent changes for regressions.")
 

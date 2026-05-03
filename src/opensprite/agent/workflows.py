@@ -146,6 +146,7 @@ class SubagentWorkflowService:
         run_subagent_task: Callable[[str, str], Awaitable[SubagentTaskOutcome]],
         emit_run_event: Callable[..., Awaitable[None]],
         format_log_preview: Callable[..., str],
+        record_workflow_outcome: Callable[[str | None, dict[str, Any]], None],
     ):
         self._current_session_id_getter = current_session_id_getter
         self._current_run_id_getter = current_run_id_getter
@@ -154,6 +155,7 @@ class SubagentWorkflowService:
         self._run_subagent_task = run_subagent_task
         self._emit_run_event = emit_run_event
         self._format_log_preview = format_log_preview
+        self._record_workflow_outcome = record_workflow_outcome
 
     @staticmethod
     def catalog() -> dict[str, str]:
@@ -292,6 +294,82 @@ class SubagentWorkflowService:
                 lines.extend(["Result:", outcome.content])
         return "\n".join(lines)
 
+    @staticmethod
+    def _review_outcome(outcomes: list[SubagentTaskOutcome]) -> dict[str, Any]:
+        review_outcomes = [
+            outcome
+            for outcome in outcomes
+            if outcome.prompt_type in {"code-reviewer", "security-reviewer", "async-concurrency-reviewer"}
+        ]
+        finding_count = sum(
+            int((outcome.structured_output or {}).get("finding_count") or 0)
+            for outcome in review_outcomes
+        )
+        attempted = any(outcome.status == "completed" for outcome in review_outcomes)
+        passed = False
+        summary = ""
+        for outcome in review_outcomes:
+            if outcome.summary and not summary:
+                summary = outcome.summary
+            if outcome.status != "completed":
+                continue
+            structured = outcome.structured_output or {}
+            if str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0:
+                passed = True
+                continue
+            lowered = (outcome.summary or outcome.content or "").lower()
+            if "no major findings" in lowered or "沒有重大發現" in lowered:
+                passed = True
+        return {
+            "attempted": attempted,
+            "passed": attempted and passed and finding_count == 0,
+            "finding_count": finding_count,
+            "summary": summary,
+        }
+
+    @staticmethod
+    def _verification_outcome(outcomes: list[SubagentTaskOutcome]) -> dict[str, Any]:
+        attempted = any(outcome.verification_attempted for outcome in outcomes)
+        passed = any(outcome.verification_passed for outcome in outcomes)
+        return {
+            "attempted": attempted,
+            "passed": passed,
+        }
+
+    def _build_workflow_outcome(
+        self,
+        *,
+        workflow_run_id: str,
+        spec: WorkflowSpec,
+        task_preview: str,
+        outcomes: list[SubagentTaskOutcome],
+        status: str,
+        error: str = "",
+    ) -> dict[str, Any]:
+        review = self._review_outcome(outcomes)
+        verification = self._verification_outcome(outcomes)
+        return {
+            "workflow_run_id": workflow_run_id,
+            "workflow": spec.workflow_id,
+            "status": status,
+            "task_preview": task_preview,
+            "total_steps": len(spec.steps),
+            "completed_steps": sum(1 for outcome in outcomes if outcome.status == "completed"),
+            "failed_steps": sum(1 for outcome in outcomes if outcome.status in {"failed", "error", "cancelled"}),
+            "summary": (
+                f"Completed {sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} workflow step(s)."
+                if status == "completed"
+                else f"Workflow stopped after {sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} completed step(s)."
+            ),
+            "review_attempted": review["attempted"],
+            "review_passed": review["passed"],
+            "review_finding_count": review["finding_count"],
+            "review_summary": review["summary"],
+            "verification_attempted": verification["attempted"],
+            "verification_passed": verification["passed"],
+            **({"error": error} if error else {}),
+        }
+
     async def run(self, workflow_id: str, task: str) -> str:
         workflow_key = str(workflow_id or "").strip()
         spec = WORKFLOW_SPECS.get(workflow_key)
@@ -335,6 +413,17 @@ class SubagentWorkflowService:
             try:
                 outcome = await self._run_subagent_task(step_task, step.prompt_type)
             except RunCancelledError:
+                self._record_workflow_outcome(
+                    self._current_run_id_getter(),
+                    self._build_workflow_outcome(
+                        workflow_run_id=workflow_run_id,
+                        spec=spec,
+                        task_preview=task_preview,
+                        outcomes=outcomes,
+                        status="cancelled",
+                        error="cancelled",
+                    ),
+                )
                 await self._emit_event(
                     "workflow.failed",
                     self._workflow_payload(
@@ -351,6 +440,17 @@ class SubagentWorkflowService:
             except Exception as exc:  # pragma: no cover - defensive guard
                 error_preview = self._format_log_preview(f"{type(exc).__name__}: {exc}", max_chars=240)
                 logger.warning("workflow.run.failed | workflow={} step={} error={}", spec.workflow_id, step.step_id, error_preview)
+                self._record_workflow_outcome(
+                    self._current_run_id_getter(),
+                    self._build_workflow_outcome(
+                        workflow_run_id=workflow_run_id,
+                        spec=spec,
+                        task_preview=task_preview,
+                        outcomes=outcomes,
+                        status="failed",
+                        error=error_preview,
+                    ),
+                )
                 await self._emit_event(
                     "workflow.step.failed",
                     self._step_payload(
@@ -397,6 +497,16 @@ class SubagentWorkflowService:
                 workflow_id=spec.workflow_id,
                 task_preview=task_preview,
                 steps=spec.steps,
+                outcomes=outcomes,
+                status="completed",
+            ),
+        )
+        self._record_workflow_outcome(
+            self._current_run_id_getter(),
+            self._build_workflow_outcome(
+                workflow_run_id=workflow_run_id,
+                spec=spec,
+                task_preview=task_preview,
                 outcomes=outcomes,
                 status="completed",
             ),

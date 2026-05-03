@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
@@ -56,6 +56,8 @@ class AgentTurnRunner:
         finalize_learning_reuse: Callable[[str, str, bool], None],
         consume_delegated_task_updates: Callable[[str], tuple[StoredDelegatedTask, ...]],
         clear_delegated_task_updates: Callable[[str], None],
+        consume_workflow_outcomes: Callable[[str], tuple[dict[str, Any], ...]],
+        clear_workflow_outcomes: Callable[[str], None],
         worktree_sandbox_enabled: Callable[[], bool],
         workspace_root: Callable[[], Path],
     ):
@@ -83,6 +85,8 @@ class AgentTurnRunner:
         self._finalize_learning_reuse = finalize_learning_reuse
         self._consume_delegated_task_updates = consume_delegated_task_updates
         self._clear_delegated_task_updates = clear_delegated_task_updates
+        self._consume_workflow_outcomes = consume_workflow_outcomes
+        self._clear_workflow_outcomes = clear_workflow_outcomes
         self._worktree_sandbox_enabled = worktree_sandbox_enabled
         self._workspace_root = workspace_root
 
@@ -229,6 +233,7 @@ class AgentTurnRunner:
                     raise
         finally:
             self._clear_delegated_task_updates(run_id)
+            self._clear_workflow_outcomes(run_id)
             self.run_state.finish(turn.session_id, run_id)
 
     async def run_media_only_turn(
@@ -317,6 +322,7 @@ class AgentTurnRunner:
         )
         execution_results: list[ExecutionResult] = []
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
+        collected_workflow_outcomes: tuple[dict[str, Any], ...] = ()
         auto_continue_attempts = 0
         current_message = user_message.text
 
@@ -355,8 +361,16 @@ class AgentTurnRunner:
                     collected_delegated_tasks,
                     delegated_task_updates,
                 )
+            workflow_outcomes = self._consume_workflow_outcomes(run_id)
+            if workflow_outcomes:
+                collected_workflow_outcomes = self._merge_workflow_outcomes(
+                    collected_workflow_outcomes,
+                    workflow_outcomes,
+                )
             if collected_delegated_tasks:
                 aggregate_result = self._with_delegated_tasks(aggregate_result, collected_delegated_tasks)
+            if collected_workflow_outcomes:
+                aggregate_result = self._with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
             completion_result = self.completion_gate.evaluate(
                 task_intent=task_intent,
                 response_text=response,
@@ -539,6 +553,13 @@ class AgentTurnRunner:
         )
 
     @staticmethod
+    def _with_workflow_outcomes(
+        result: ExecutionResult,
+        workflow_outcomes: tuple[dict[str, Any], ...],
+    ) -> ExecutionResult:
+        return replace(result, workflow_outcomes=workflow_outcomes)
+
+    @staticmethod
     def _merge_delegated_task_updates(
         existing: tuple[StoredDelegatedTask, ...],
         updates: tuple[StoredDelegatedTask, ...],
@@ -584,6 +605,33 @@ class AgentTurnRunner:
         return tuple(replace(task, selected=task.task_id == selected_task.task_id) for task in tasks)
 
     @staticmethod
+    def _merge_workflow_outcomes(
+        existing: tuple[dict[str, Any], ...],
+        updates: tuple[dict[str, Any], ...],
+    ) -> tuple[dict[str, Any], ...]:
+        by_id = {
+            str(item.get("workflow_run_id") or "").strip(): dict(item)
+            for item in existing
+            if isinstance(item, dict) and str(item.get("workflow_run_id") or "").strip()
+        }
+        order = [
+            str(item.get("workflow_run_id") or "").strip()
+            for item in existing
+            if isinstance(item, dict) and str(item.get("workflow_run_id") or "").strip()
+        ]
+        for update in updates:
+            if not isinstance(update, dict):
+                continue
+            workflow_run_id = str(update.get("workflow_run_id") or "").strip()
+            if not workflow_run_id:
+                continue
+            if workflow_run_id in order:
+                order.remove(workflow_run_id)
+            order.append(workflow_run_id)
+            by_id[workflow_run_id] = dict(update)
+        return tuple(by_id[workflow_run_id] for workflow_run_id in order if workflow_run_id in by_id)
+
+    @staticmethod
     def _aggregate_execution_results(results: list[ExecutionResult], *, content: str) -> ExecutionResult:
         """Aggregate multi-pass execution telemetry while keeping the final response."""
         delegated_tasks = tuple(task for result in results for task in result.delegated_tasks)
@@ -600,6 +648,7 @@ class AgentTurnRunner:
                 )
             ),
             delegated_tasks=delegated_tasks,
+            workflow_outcomes=tuple(outcome for result in results for outcome in result.workflow_outcomes),
             active_delegate_task_id=next(
                 (
                     result.active_delegate_task_id

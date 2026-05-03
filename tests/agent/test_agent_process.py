@@ -16,6 +16,7 @@ from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfi
 from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
+from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
 from opensprite.tools.base import Tool
@@ -62,6 +63,39 @@ def _extract_session_id(result: str) -> str:
 class FakeProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         raise AssertionError("provider.chat should not be called in this test")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
+class WorkflowAuthorityProvider:
+    def __init__(self):
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools})
+        latest_user_text = next(
+            (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
+            "",
+        )
+        tool_names = [tool.get("function", {}).get("name") for tool in (tools or []) if isinstance(tool, dict)]
+        if "run_workflow" in tool_names and not any(getattr(message, "role", None) == "tool" for message in messages):
+            return LLMResponse(
+                content="run workflow",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="run_workflow",
+                        arguments={"workflow": "implement_then_review", "task": latest_user_text},
+                    )
+                ],
+            )
+        if "run_workflow" in tool_names:
+            return LLMResponse(content="Here is the reviewed outcome.", model="fake-model")
+        if "Review the current workspace changes" in latest_user_text:
+            return LLMResponse(content="Review Findings\n- No major findings.", model="fake-model")
+        return LLMResponse(content="Implemented the requested change.", model="fake-model")
 
     def get_default_model(self) -> str:
         return "fake-model"
@@ -861,6 +895,48 @@ def test_agent_process_emits_completion_gate_needs_review_after_code_changes_wit
     assert completion_event.payload["reason"] == "delegated review was not recorded for code changes"
     assert completion_event.payload["review_required"] is True
     assert work_progress_event.payload["next_action"] == "continue_review"
+
+
+def test_agent_process_workflow_completion_authority_marks_complete_with_clean_review(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=WorkflowAuthorityProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
+
+        response = await agent.process(
+            UserMessage(
+                text="Implement a safe change.",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+
+        run = next(iter(storage._runs.values()))
+        events = await storage.get_run_events("web:browser-1", run.run_id)
+        return response, events
+
+    response, events = asyncio.run(scenario())
+
+    assert response.text == "Here is the reviewed outcome."
+    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
+    run_finished = next(event for event in events if event.event_type == "run_finished")
+    assert completion_event.payload["status"] == "complete"
+    assert completion_event.payload["reason"] == "workflow implement_then_review completed with clean review evidence"
+    assert run_finished.payload["completion_gate"]["status"] == "complete"
 
 
 def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_path):

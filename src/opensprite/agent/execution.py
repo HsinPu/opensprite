@@ -75,6 +75,7 @@ class ExecutionResult:
     file_change_count: int = 0
     touched_paths: tuple[str, ...] = ()
     delegated_tasks: tuple[StoredDelegatedTask, ...] = ()
+    workflow_outcomes: tuple[dict[str, Any], ...] = ()
     active_delegate_task_id: str | None = None
     active_delegate_prompt_type: str | None = None
     used_configure_skill: bool = False

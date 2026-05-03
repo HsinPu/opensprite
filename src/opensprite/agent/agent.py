@@ -419,6 +419,28 @@ class AgentLoop:
         """Drop delegated child-task updates for one run without returning them."""
         self._delegated_task_updates.pop(run_id, None)
 
+    def _record_workflow_outcome(self, run_id: str | None, outcome: dict[str, Any]) -> None:
+        """Track one completed or failed workflow outcome for the active run."""
+        if run_id is None or not isinstance(outcome, dict):
+            return
+        workflow_run_id = str(outcome.get("workflow_run_id") or "").strip()
+        if not workflow_run_id:
+            return
+        bucket = self._workflow_outcomes.setdefault(run_id, {})
+        bucket.pop(workflow_run_id, None)
+        bucket[workflow_run_id] = dict(outcome)
+
+    def _consume_workflow_outcomes(self, run_id: str) -> tuple[dict[str, Any], ...]:
+        """Return and clear workflow outcomes captured for one run."""
+        bucket = self._workflow_outcomes.pop(run_id, None)
+        if not bucket:
+            return ()
+        return tuple(bucket.values())
+
+    def _clear_workflow_outcomes(self, run_id: str) -> None:
+        """Drop workflow outcomes for one run without returning them."""
+        self._workflow_outcomes.pop(run_id, None)
+
     def pending_permission_requests(self) -> list[PermissionRequest]:
         """Return permission requests waiting for an external decision."""
         return self.permissions.pending_requests()
@@ -572,6 +594,7 @@ class AgentLoop:
         self._maintenance_rerun: set[str] = set()
         self._run_skill_reads: dict[str, set[str]] = {}
         self._delegated_task_updates: dict[str, dict[str, StoredDelegatedTask]] = {}
+        self._workflow_outcomes: dict[str, dict[str, dict[str, Any]]] = {}
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
         self.permission_requests = PermissionRequestManager(
@@ -640,6 +663,8 @@ class AgentLoop:
             finalize_learning_reuse=lambda session_id, run_id, success: self._finalize_learning_reuse(session_id, run_id, success),
             consume_delegated_task_updates=self._consume_delegated_task_updates,
             clear_delegated_task_updates=self._clear_delegated_task_updates,
+            consume_workflow_outcomes=self._consume_workflow_outcomes,
+            clear_workflow_outcomes=self._clear_workflow_outcomes,
             worktree_sandbox_enabled=lambda: self.config.worktree_sandbox_enabled,
             workspace_root=lambda: Path(self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())),
         )
@@ -711,6 +736,7 @@ class AgentLoop:
             run_subagent_task=lambda task, prompt_type: self.subagents.run_task(task, prompt_type),
             emit_run_event=self._emit_run_event,
             format_log_preview=self._format_log_preview,
+            record_workflow_outcome=self._record_workflow_outcome,
         )
         self.prompt_budget = PromptBudgetService(
             context_builder=self._context_builder,
