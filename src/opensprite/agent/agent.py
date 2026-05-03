@@ -68,6 +68,7 @@ from .permission_events import PermissionEventRecorder
 from .permission_flow import AgentPermissionService
 from .prompt_budget import PromptBudgetService
 from .prompt_logging import PromptLoggingService
+from .retrieval import ProactiveRetrievalService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
@@ -610,6 +611,7 @@ class AgentLoop:
             search_store=self.search_store,
             max_history_getter=lambda: self.config.max_history,
         )
+        self.retrieval = ProactiveRetrievalService(search_store=self.search_store)
         self._context_builder = self._setup_context_builder(context_builder)
         self.learning_ledger = self._setup_learning_ledger()
         self.history_reset = HistoryResetService(
@@ -828,6 +830,10 @@ class AgentLoop:
             build_system_prompt=lambda session_id: self._context_builder.build_system_prompt(session_id),
             log_prepared_messages=self._log_prepared_messages,
             get_work_state_summary=lambda session_id: self._get_work_state_summary(session_id),
+            build_proactive_retrieval_context=lambda session_id, current_message: self.retrieval.build_context(
+                session_id=session_id,
+                current_message=current_message,
+            ),
             get_tool_registry=lambda: self.tools,
             get_current_run_id=self.turn_context.current_run_id,
             should_cancel_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),

@@ -35,6 +35,7 @@ class LlmCallService:
         build_system_prompt: Callable[[str], str],
         log_prepared_messages: Callable[[str, list[dict[str, Any]]], None],
         get_work_state_summary: Callable[[str], Awaitable[str]],
+        build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
         get_current_run_id: Callable[[], str | None],
         should_cancel_run: Callable[[str, str | None], bool],
@@ -62,6 +63,7 @@ class LlmCallService:
         self._build_system_prompt = build_system_prompt
         self._log_prepared_messages = log_prepared_messages
         self._get_work_state_summary = get_work_state_summary
+        self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
         self._get_current_run_id = get_current_run_id
         self._should_cancel_run = should_cancel_run
@@ -165,6 +167,12 @@ class LlmCallService:
             session_id=session_id,
             tool_schema_tokens=tool_schema_tokens,
         )
+        proactive_retrieval_context = await self._build_proactive_retrieval_context(
+            session_id=session_id,
+            current_message=current_message,
+        )
+        if proactive_retrieval_context:
+            history_dicts = [{"role": "system", "content": proactive_retrieval_context}, *history_dicts]
         effective_context_budget = self._effective_context_token_budget()
         logger.info(
             f"[{session_id}] prompt.tokens | budget={effective_context_budget} "

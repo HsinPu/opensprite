@@ -22,6 +22,7 @@ from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse
+from opensprite.search.base import SearchHit
 from opensprite.storage.base import StoredMessage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
@@ -95,6 +96,46 @@ class _EmptyStorage:
 
     async def get_all_sessions(self):
         return []
+
+
+class _FakeSearchStore:
+    async def sync_from_storage(self, storage):
+        return None
+
+    async def index_message(self, session_id, role, content, tool_name=None, created_at=None):
+        return None
+
+    async def index_tool_result(self, session_id, tool_name, tool_args, result, created_at=None):
+        return None
+
+    async def search_history(self, session_id, query, limit=5):
+        return [
+            SearchHit(
+                id="history-1",
+                session_id=session_id,
+                source_type="history",
+                content="Earlier we fixed the failing cleanup path in src/cleanup.py.",
+                created_at=1.0,
+                role="assistant",
+            )
+        ]
+
+    async def search_knowledge(self, session_id, query, limit=5, **kwargs):
+        return [
+            SearchHit(
+                id="knowledge-1",
+                session_id=session_id,
+                source_type="web_fetch",
+                content="Stored docs mention the cleanup path requirement.",
+                created_at=2.0,
+                title="Cleanup docs",
+                url="https://example.com/docs",
+                summary="Cleanup path requirement.",
+            )
+        ]
+
+    async def clear_session(self, session_id):
+        return None
 
 
 def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(tmp_path: Path) -> None:
@@ -373,3 +414,58 @@ def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_pa
     assert result.content == "done"
     system_text = provider.calls[0][0].content
     assert "# Active Task" not in system_text
+
+
+def test_main_agent_call_llm_injects_proactive_retrieval_context_for_follow_up(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = CapturingProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_store=_FakeSearchStore(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    session_id = "telegram:room-1"
+
+    async def _run() -> str:
+        return await agent.call_llm(
+            session_id,
+            "Use the earlier fix again and compare it to what you found before.",
+            channel="telegram",
+            allow_tools=False,
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    llm_messages = provider.calls[0]
+    proactive_context = next(
+        message.content
+        for message in llm_messages
+        if getattr(message, "role", None) == "system" and "# Proactive Retrieval Context" in str(message.content or "")
+    )
+    assert "## Retrieved History" in proactive_context
+    assert "src/cleanup.py" in proactive_context
+    assert "## Retrieved Knowledge" in proactive_context
+    assert "Cleanup docs" in proactive_context
