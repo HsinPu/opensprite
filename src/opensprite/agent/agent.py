@@ -509,6 +509,7 @@ class AgentLoop:
         cron_manager: Any | None = None,
         media_router: MediaRouter | None = None,
         config_path: str | Path | None = None,
+        llm_config: Any | None = None,
         *,
         llm_chat_temperature: float,
         llm_chat_max_tokens: int,
@@ -582,6 +583,7 @@ class AgentLoop:
         self.app_home: Path | None = None
         self.tool_workspace: Path | None = None
         self.config_path: Path | None = Path(config_path).expanduser().resolve() if config_path is not None else None
+        self.llm_config = llm_config
         self.prompt_logging = PromptLoggingService(
             log_config=self.log_config,
             app_home_getter=lambda: self.app_home,
@@ -719,6 +721,7 @@ class AgentLoop:
             current_channel_getter=self.turn_context.current_channel,
             current_external_chat_id_getter=self.turn_context.current_external_chat_id,
             provider_getter=lambda: self.provider,
+            llm_config_getter=lambda: self.llm_config,
             should_cancel_parent_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),
             skills_loader_getter=lambda: getattr(self._context_builder, "skills_loader", None),
             save_message=self._save_message,

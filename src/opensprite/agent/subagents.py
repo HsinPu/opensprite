@@ -11,6 +11,7 @@ from typing import Any, Awaitable, Callable
 
 from ..llms import ChatMessage
 from ..llms.routed import ModelRoutedProvider
+from ..llms.registry import create_llm
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..subagent_output import parse_structured_subagent_output
@@ -95,6 +96,7 @@ class SubagentRunService:
         current_channel_getter: Callable[[], str | None],
         current_external_chat_id_getter: Callable[[], str | None],
         provider_getter: Callable[[], Any],
+        llm_config_getter: Callable[[], Any | None],
         should_cancel_parent_run: Callable[[str, str | None], bool],
         skills_loader_getter: Callable[[], Any],
         save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
@@ -115,6 +117,7 @@ class SubagentRunService:
         self._current_channel_getter = current_channel_getter
         self._current_external_chat_id_getter = current_external_chat_id_getter
         self._provider_getter = provider_getter
+        self._llm_config_getter = llm_config_getter
         self._should_cancel_parent_run = should_cancel_parent_run
         self._skills_loader_getter = skills_loader_getter
         self._save_message = save_message
@@ -193,6 +196,26 @@ class SubagentRunService:
             return False
         return self._should_cancel_parent_run(parent_session_id, parent_run_id)
 
+    @staticmethod
+    def _parse_optional_float(value: Any) -> float | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_optional_int(value: Any) -> int | None:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        try:
+            return int(text)
+        except (TypeError, ValueError):
+            return None
+
     def _resolve_provider_override(
         self,
         prompt_type: str,
@@ -201,17 +224,45 @@ class SubagentRunService:
         workspace: Path,
     ) -> Any | None:
         metadata = load_metadata(prompt_type, app_home=app_home, session_workspace=workspace)
+        llm_provider = str(metadata.get("llm_provider") or "").strip()
         llm_model = str(metadata.get("llm_model") or "").strip()
-        if not llm_model:
+        llm_temperature = self._parse_optional_float(metadata.get("llm_temperature"))
+        llm_max_tokens = self._parse_optional_int(metadata.get("llm_max_tokens"))
+        if not llm_provider and not llm_model and llm_temperature is None and llm_max_tokens is None:
             return None
+
         base_provider = self._provider_getter()
+        provider_override = base_provider
+        if llm_provider:
+            llm_config = self._llm_config_getter()
+            providers = getattr(llm_config, "providers", {}) if llm_config is not None else {}
+            provider_config = providers.get(llm_provider) if isinstance(providers, dict) else None
+            if provider_config is not None and getattr(provider_config, "enabled", True):
+                provider_override = create_llm(
+                    api_key=getattr(provider_config, "api_key", ""),
+                    model=getattr(provider_config, "model", ""),
+                    base_url=getattr(provider_config, "base_url", "") or "",
+                    provider_name=llm_provider,
+                    enabled=getattr(provider_config, "enabled", True),
+                )
+            else:
+                return None
+
         try:
-            current_model = str(base_provider.get_default_model() or "").strip()
+            current_model = str(provider_override.get_default_model() or "").strip()
         except Exception:
             current_model = ""
-        if llm_model == current_model:
+        if not llm_model:
+            llm_model = current_model
+
+        if llm_model == current_model and llm_temperature is None and llm_max_tokens is None:
             return None
-        return ModelRoutedProvider(base_provider, model=llm_model)
+        return ModelRoutedProvider(
+            provider_override,
+            model=llm_model,
+            temperature=llm_temperature,
+            max_tokens=llm_max_tokens,
+        )
 
     async def _prepare_task(
         self,

@@ -205,6 +205,7 @@ async def create_agent(config: Config):
         cron_manager=None,
         media_router=media_router,
         config_path=config.source_path,
+        llm_config=config.llm,
         llm_configured=config.is_llm_configured,
         messages_config=config.messages,
     )

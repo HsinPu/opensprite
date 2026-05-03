@@ -3,7 +3,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
+from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.run_schema import serialize_run_artifacts
@@ -591,7 +591,7 @@ class ModelRoutingProvider:
         self.calls = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        self.calls.append({"messages": list(messages), "tools": tools, "model": model})
+        self.calls.append({"messages": list(messages), "tools": tools, "model": model, "temperature": temperature, "max_tokens": max_tokens})
         return LLMResponse(content="routed result", model=model or "fake-model")
 
     def get_default_model(self) -> str:
@@ -943,6 +943,112 @@ def test_run_subagent_uses_prompt_model_override_when_present(tmp_path):
 
     assert "Subagent: custom-reviewer" in result
     assert provider.calls[0]["model"] == "review-model"
+
+
+def test_run_subagent_uses_prompt_decoding_overrides_when_present(tmp_path):
+    workspace = tmp_path / "workspace"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "custom-reviewer.md").write_text(
+        "---\n"
+        "name: custom-reviewer\n"
+        "description: Custom reviewer with routed decoding params.\n"
+        "tool_profile: read-only\n"
+        "llm_model: review-model\n"
+        "llm_temperature: 0.1\n"
+        "llm_max_tokens: 123\n"
+        "---\n"
+        "Review the requested task.\n",
+        encoding="utf-8",
+    )
+    provider = ModelRoutingProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(workspace),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
+
+    assert provider.calls[0]["model"] == "review-model"
+    assert provider.calls[0]["temperature"] == 0.1
+    assert provider.calls[0]["max_tokens"] == 123
+
+
+def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "custom-reviewer.md").write_text(
+        "---\n"
+        "name: custom-reviewer\n"
+        "description: Custom reviewer with provider override.\n"
+        "tool_profile: read-only\n"
+        "llm_provider: review\n"
+        "llm_model: review-model\n"
+        "---\n"
+        "Review the requested task.\n",
+        encoding="utf-8",
+    )
+    base_provider = ModelRoutingProvider()
+    routed_provider = ModelRoutingProvider()
+
+    def fake_create_llm(api_key: str, model: str, base_url: str = "", provider_name: str = "", enabled: bool = True):
+        assert provider_name == "review"
+        assert model == "provider-review-model"
+        return routed_provider
+
+    monkeypatch.setattr("opensprite.agent.subagents.create_llm", fake_create_llm)
+
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=base_provider,
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(workspace),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        llm_config=LLMsConfig(
+            temperature=0.7,
+            max_tokens=2048,
+            top_p=1.0,
+            frequency_penalty=0.0,
+            presence_penalty=0.0,
+            pass_decoding_params=True,
+            providers={
+                "review": ProviderConfig(
+                    api_key="review-key",
+                    model="provider-review-model",
+                    base_url="https://review.example/v1",
+                    enabled=True,
+                )
+            },
+            default="review",
+        ),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
+
+    assert base_provider.calls == []
+    assert routed_provider.calls[0]["model"] == "review-model"
 
 
 def test_run_subagent_strips_trailing_json_and_persists_structured_output(tmp_path):
