@@ -26,6 +26,27 @@ def test_auto_continue_allows_missing_verification_once():
     assert "Verification is required" in decision.prompt
 
 
+def test_auto_continue_allows_missing_review_once():
+    intent = TaskIntentService().classify("Please implement the cleanup.")
+    completion = CompletionGateResult(
+        status="needs_review",
+        reason="delegated review was not recorded for code changes",
+        review_required=True,
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Implemented the cleanup."),
+        attempts_used=0,
+        previous_response="Implemented the cleanup.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_needs_review"
+    assert "Review evidence is required" in decision.prompt
+
+
 def test_auto_continue_skips_waiting_and_blocked_statuses():
     intent = TaskIntentService().classify("Continue the task")
     service = AutoContinueService(max_auto_continues=1)

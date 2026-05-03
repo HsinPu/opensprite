@@ -997,6 +997,15 @@ def test_serialize_run_summary_builds_stable_card_payload():
     assert summary["duration_seconds"] == 6.5
     assert summary["tools"] == [{"name": "demo", "count": 1}]
     assert summary["verification"] == {"attempted": True, "passed": True, "status": "passed", "name": "pytest", "summary": "ok"}
+    assert summary["review"] == {
+        "required": False,
+        "attempted": False,
+        "passed": False,
+        "status": "not_required",
+        "summary": "",
+        "prompt_types": [],
+        "finding_count": 0,
+    }
     assert summary["structured_subagents"] == {
         "total": 0,
         "by_prompt_type": {},
@@ -1232,6 +1241,54 @@ def test_serialize_run_summary_marks_parallel_delegation_warnings():
 
     assert summary["parallel_delegation"]["group_count"] == 1
     assert summary["warnings"] == ["parallel_delegation_failed"]
+
+
+def test_serialize_run_summary_marks_review_warning_when_required_review_missing():
+    trace = SimpleNamespace(
+        run=SimpleNamespace(
+            run_id="run-review",
+            session_id="web:browser-review",
+            status="completed",
+            metadata={"objective": "Review-gated completion"},
+            created_at=10.0,
+            updated_at=12.0,
+            finished_at=13.0,
+        ),
+        events=[
+            SimpleNamespace(
+                event_id=1,
+                run_id="run-review",
+                session_id="web:browser-review",
+                event_type="completion_gate.evaluated",
+                payload={
+                    "status": "needs_review",
+                    "reason": "delegated review was not recorded for code changes",
+                    "review_required": True,
+                    "review_attempted": False,
+                    "review_passed": False,
+                    "review_summary": "",
+                    "review_prompt_types": [],
+                    "review_finding_count": 0,
+                },
+                created_at=12.5,
+            ),
+        ],
+        parts=[],
+        file_changes=[],
+    )
+
+    summary = serialize_run_summary(trace)
+
+    assert summary["review"] == {
+        "required": True,
+        "attempted": False,
+        "passed": False,
+        "status": "not_attempted",
+        "summary": "",
+        "prompt_types": [],
+        "finding_count": 0,
+    }
+    assert summary["warnings"] == ["review_not_passed"]
 
 
 def test_serialize_run_summary_includes_structured_subagents():

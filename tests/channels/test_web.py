@@ -774,6 +774,15 @@ async def _run_web_run_events_api():
                     "name": None,
                     "summary": "",
                 },
+                "review": {
+                    "required": False,
+                    "attempted": False,
+                    "passed": False,
+                    "status": "not_required",
+                    "summary": "",
+                    "prompt_types": [],
+                    "finding_count": 0,
+                },
                 "structured_subagents": {
                     "total": 0,
                     "by_prompt_type": {},

@@ -1,6 +1,7 @@
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_intent import TaskIntentService
+from opensprite.storage.base import StoredDelegatedTask
 
 
 def test_completion_gate_requires_requested_verification_before_completion():
@@ -63,6 +64,21 @@ def test_completion_gate_marks_explicit_task_completion_done():
             content="Implemented the final cleanup successfully.",
             file_change_count=1,
             touched_paths=("src/cleanup.py",),
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="completed",
+                    summary="No major findings.",
+                    metadata={
+                        "structured_output": {
+                            "status": "ok",
+                            "summary": "No major findings.",
+                            "finding_count": 0,
+                        }
+                    },
+                ),
+            ),
         ),
     )
 
@@ -82,6 +98,60 @@ def test_completion_gate_requires_recorded_code_changes_for_implementation():
 
     assert result.status == "incomplete"
     assert result.reason == "expected code changes were not recorded"
+
+
+def test_completion_gate_requires_review_for_code_changes_without_review_evidence():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Implemented the final cleanup successfully.",
+        execution_result=ExecutionResult(
+            content="Implemented the final cleanup successfully.",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.reason == "delegated review was not recorded for code changes"
+    assert result.review_required is True
+    assert result.review_attempted is False
+
+
+def test_completion_gate_requires_follow_up_when_review_reports_findings():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Implemented the final cleanup successfully.",
+        execution_result=ExecutionResult(
+            content="Implemented the final cleanup successfully.",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="completed",
+                    summary="One correctness risk found.",
+                    metadata={
+                        "structured_output": {
+                            "status": "ok",
+                            "summary": "One correctness risk found.",
+                            "finding_count": 1,
+                        }
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.reason == "delegated review reported findings that require follow-up"
+    assert result.review_attempted is True
+    assert result.review_passed is False
+    assert result.review_finding_count == 1
 
 
 def test_completion_gate_allows_review_without_code_changes():

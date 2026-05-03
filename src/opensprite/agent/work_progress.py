@@ -655,6 +655,8 @@ class WorkProgressService:
             return completion_result.status
         if completion_result.status == "needs_verification":
             return "verifying"
+        if completion_result.status == "needs_review":
+            return "reviewing"
         return "working"
 
     @staticmethod
@@ -675,6 +677,8 @@ class WorkProgressService:
             return "stop_no_progress"
         if completion_result.status == "needs_verification":
             return "continue_verification"
+        if completion_result.status == "needs_review":
+            return "continue_review"
         return "continue_work"
 
 
@@ -734,6 +738,8 @@ def _build_resume_hint(
         return f"Resolve blocker first: {blockers[0]}"
     if next_action == "continue_verification":
         return "Resume by running or fixing the required verification."
+    if next_action == "continue_review":
+        return "Resume by collecting review evidence or addressing delegated review findings."
     if current_step and current_step != "not set":
         return f"Resume at current step: {current_step}"
     if next_step and next_step != "not set":
@@ -783,6 +789,8 @@ def _state_steps(
         current = steps[-1] if steps else "not set"
         return current, "not set"
     if progress.next_action == "continue_verification":
+        return (steps[-1] if steps else "not set"), "not set"
+    if progress.next_action == "continue_review":
         return (steps[-1] if steps else "not set"), "not set"
     if expects_code_change and progress.file_change_count <= 0 and len(steps) >= 2:
         next_step = steps[2] if len(steps) > 2 else "not set"

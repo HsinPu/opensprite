@@ -740,6 +740,7 @@ function normalizeRunSummary(payload) {
   }
 
   const verification = payload.verification && typeof payload.verification === "object" ? payload.verification : {};
+  const review = payload.review && typeof payload.review === "object" ? payload.review : {};
   const counts = payload.counts && typeof payload.counts === "object" ? payload.counts : {};
   const artifactCounts = payload.artifact_counts && typeof payload.artifact_counts === "object" ? payload.artifact_counts : {};
   const parallelDelegation = normalizeParallelDelegationSummary(payload.parallel_delegation || payload.parallelDelegation);
@@ -785,6 +786,15 @@ function normalizeRunSummary(payload) {
       status: String(verification.status || "not_attempted").trim() || "not_attempted",
       name: String(verification.name || "").trim(),
       summary: String(verification.summary || "").trim(),
+    },
+    review: {
+      required: coerceBoolean(review.required),
+      attempted: coerceBoolean(review.attempted),
+      passed: coerceBoolean(review.passed),
+      status: String(review.status || "not_required").trim() || "not_required",
+      summary: String(review.summary || "").trim(),
+      promptTypes: coerceStringList(review.prompt_types || review.promptTypes),
+      findingCount: coerceNonNegativeInteger(review.finding_count ?? review.findingCount),
     },
     parallelDelegation,
     structuredSubagents,

@@ -65,6 +65,12 @@
           <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
 
+        <div v-if="summary.review.required" class="run-summary-card__note" :data-tone="reviewTone">
+          <strong>{{ copy.runSummary.review }}</strong>
+          <span>{{ reviewLabel }}</span>
+          <small v-if="reviewDetail">{{ reviewDetail }}</small>
+        </div>
+
         <div v-if="structuredSubagents.total > 0" class="run-summary-card__note" :data-tone="structuredSubagentsTone">
           <strong>{{ copy.runSummary.structuredSubagents }}</strong>
           <span>{{ structuredSubagentsLabel }}</span>
@@ -281,6 +287,36 @@ const verificationTone = computed(() => {
     return "neutral";
   }
   return summary.value.verification.passed ? "success" : "warning";
+});
+
+const reviewLabel = computed(() => {
+  const review = summary.value?.review || {};
+  if (!review.required) {
+    return props.copy.runSummary.reviewNotRequired;
+  }
+  if (review.passed) {
+    return props.copy.runSummary.reviewPassed;
+  }
+  if (review.attempted) {
+    return props.copy.runSummary.reviewFailed;
+  }
+  return props.copy.runSummary.reviewPending;
+});
+
+const reviewTone = computed(() => {
+  const review = summary.value?.review || {};
+  if (!review.required) {
+    return "neutral";
+  }
+  return review.passed ? "success" : "warning";
+});
+
+const reviewDetail = computed(() => {
+  const review = summary.value?.review || {};
+  const promptTypes = Array.isArray(review.promptTypes) ? review.promptTypes : [];
+  const promptTypeText = promptTypes.length ? promptTypes.join(", ") : "";
+  const findingText = review.findingCount > 0 ? props.copy.runSummary.reviewFindings(review.findingCount) : "";
+  return [review.summary, promptTypeText, findingText].filter(Boolean).join(" · ");
 });
 
 const structuredSubagents = computed(() => summary.value?.structuredSubagents || {
@@ -507,6 +543,13 @@ function buildRunReport() {
     `- ${verificationLabel.value}`,
   ];
 
+  if (data.review?.required) {
+    lines.push("", `## ${props.copy.runSummary.review}`, `- ${reviewLabel.value}`);
+    if (reviewDetail.value) {
+      lines.push(`- ${reviewDetail.value}`);
+    }
+  }
+
   if (data.verification.summary) {
     lines.push(`- ${data.verification.summary}`);
   }
@@ -547,7 +590,7 @@ function buildRunReport() {
   }
 
   if (data.warnings.length) {
-    lines.push("", `## ${props.copy.runSummary.warnings}`, ...data.warnings.map((warning) => `- ${warning}`));
+    lines.push("", `## ${props.copy.runSummary.warnings}`, ...warningLabels.value.map((warning) => `- ${warning}`));
   }
 
   return `${lines.join("\n").trim()}\n`;

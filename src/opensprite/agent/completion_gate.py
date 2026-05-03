@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..documents.active_task import infer_immediate_task_transition
+from ..storage.base import StoredDelegatedTask
 from .execution import ExecutionResult
 from .task_intent import TaskIntent
 
@@ -46,6 +47,7 @@ _INCOMPLETE_MARKERS = (
     "無法完成",
     "還需要",
 )
+_REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 
 
 @dataclass(frozen=True)
@@ -60,6 +62,12 @@ class CompletionGateResult:
     verification_required: bool = False
     verification_attempted: bool = False
     verification_passed: bool = False
+    review_required: bool = False
+    review_attempted: bool = False
+    review_passed: bool = False
+    review_summary: str = ""
+    review_prompt_types: tuple[str, ...] = ()
+    review_finding_count: int = 0
 
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe run event payload."""
@@ -71,6 +79,12 @@ class CompletionGateResult:
             "verification_required": self.verification_required,
             "verification_attempted": self.verification_attempted,
             "verification_passed": self.verification_passed,
+            "review_required": self.review_required,
+            "review_attempted": self.review_attempted,
+            "review_passed": self.review_passed,
+            "review_summary": self.review_summary,
+            "review_prompt_types": list(self.review_prompt_types),
+            "review_finding_count": self.review_finding_count,
         }
         if self.active_task_status:
             payload["active_task_status"] = self.active_task_status
@@ -94,6 +108,8 @@ class CompletionGateService:
         expects_code_change = task_intent.expects_code_change
         verification_attempted = execution_result.verification_attempted
         verification_passed = execution_result.verification_passed
+        review = _review_evidence(execution_result.delegated_tasks)
+        review_required = expects_code_change and execution_result.file_change_count > 0
 
         immediate_transition = infer_immediate_task_transition(
             response_text,
@@ -111,6 +127,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if execution_result.had_tool_error:
@@ -120,6 +142,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if expects_code_change and execution_result.file_change_count <= 0:
@@ -129,6 +157,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=False,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if verification_required and not verification_passed:
@@ -143,6 +177,32 @@ class CompletionGateService:
                 verification_required=True,
                 verification_attempted=verification_attempted,
                 verification_passed=False,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
+        if review_required and not review["passed"]:
+            reason = (
+                "delegated review reported findings that require follow-up"
+                if review["attempted"]
+                else "delegated review was not recorded for code changes"
+            )
+            return CompletionGateResult(
+                status="needs_review",
+                reason=reason,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=True,
+                review_attempted=review["attempted"],
+                review_passed=False,
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
@@ -152,6 +212,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if task_intent.kind in {"analysis", "review"} and response_text.strip() and not _looks_incomplete(response_text):
@@ -163,6 +229,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if task_intent.kind == "debug" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text):
@@ -174,6 +246,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         if _looks_complete(response_text):
@@ -185,6 +263,12 @@ class CompletionGateService:
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
             )
 
         return CompletionGateResult(
@@ -193,6 +277,12 @@ class CompletionGateService:
             verification_required=verification_required,
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,
+            review_required=review_required,
+            review_attempted=review["attempted"],
+            review_passed=review["passed"],
+            review_summary=review["summary"],
+            review_prompt_types=review["prompt_types"],
+            review_finding_count=review["finding_count"],
         )
 
 
@@ -212,3 +302,42 @@ def _looks_complete(response_text: str) -> bool:
 def _looks_incomplete(response_text: str) -> bool:
     lowered = re.sub(r"\s+", " ", (response_text or "").strip().lower())
     return any(marker in lowered for marker in _INCOMPLETE_MARKERS)
+
+
+def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:
+    prompt_types: list[str] = []
+    finding_count = 0
+    attempted = False
+    clean_review_recorded = False
+    problematic_review_recorded = False
+    summary = ""
+    for task in delegated_tasks:
+        prompt_type = str(task.prompt_type or "").strip()
+        if prompt_type not in _REVIEW_PROMPT_TYPES:
+            continue
+        prompt_types.append(prompt_type)
+        if str(task.status or "") != "completed":
+            continue
+        attempted = True
+        structured = task.metadata.get("structured_output") if isinstance(task.metadata, dict) else None
+        structured_status = str((structured or {}).get("status") or "").strip()
+        task_findings = int((structured or {}).get("finding_count") or 0)
+        finding_count += max(0, task_findings)
+        task_summary = str((structured or {}).get("summary") or task.summary or "").strip()
+        if task_summary and not summary:
+            summary = task_summary
+        if structured_status == "ok" and task_findings == 0:
+            clean_review_recorded = True
+            continue
+        lowered_summary = re.sub(r"\s+", " ", task_summary.lower())
+        if task_findings == 0 and ("no major findings" in lowered_summary or "沒有重大發現" in lowered_summary):
+            clean_review_recorded = True
+            continue
+        problematic_review_recorded = True
+    return {
+        "attempted": attempted,
+        "passed": attempted and clean_review_recorded and not problematic_review_recorded and finding_count == 0,
+        "summary": summary,
+        "prompt_types": tuple(dict.fromkeys(prompt_types)),
+        "finding_count": finding_count,
+    }

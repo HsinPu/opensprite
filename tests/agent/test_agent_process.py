@@ -812,6 +812,57 @@ def test_agent_process_emits_completion_gate_needs_verification_after_code_chang
     assert completion_event.payload["reason"] == "required verification was not recorded"
 
 
+def test_agent_process_emits_completion_gate_needs_review_after_code_changes_without_review_evidence(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_call_llm(*args, **kwargs):
+            return ExecutionResult(
+                content="Implemented the cleanup successfully.",
+                executed_tool_calls=0,
+                file_change_count=1,
+                touched_paths=("src/cleanup.py",),
+            )
+
+        agent.call_llm = fake_call_llm
+        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
+
+        await agent.process(
+            UserMessage(
+                text="Please implement the cleanup.",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+
+        run = next(iter(storage._runs.values()))
+        return await storage.get_run_events("web:browser-1", run.run_id)
+
+    events = asyncio.run(scenario())
+
+    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
+    work_progress_event = next(event for event in events if event.event_type == "work_progress.updated")
+    assert completion_event.payload["status"] == "needs_review"
+    assert completion_event.payload["reason"] == "delegated review was not recorded for code changes"
+    assert completion_event.payload["review_required"] is True
+    assert work_progress_event.payload["next_action"] == "continue_review"
+
+
 def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_path):
     async def scenario():
         storage = MemoryStorage()
@@ -876,15 +927,18 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "completion_gate.evaluated",
         "work_progress.updated",
         "auto_continue.completed",
+        "auto_continue.skipped",
         "task_checklist.updated",
         "run_finished",
     ]
     assert events[4].payload["status"] == "incomplete"
     assert events[4].payload["reason"] == "expected code changes were not recorded"
     assert events[5].payload["next_action"] == "continue_work"
-    assert events[7].payload["status"] == "complete"
-    assert events[8].payload["next_action"] == "finalize"
-    assert events[9].payload["completion_status"] == "complete"
+    assert events[7].payload["status"] == "needs_review"
+    assert events[7].payload["reason"] == "delegated review was not recorded for code changes"
+    assert events[8].payload["next_action"] == "continue_review"
+    assert events[9].payload["completion_status"] == "needs_review"
+    assert events[10].payload["reason"] == "review_evidence_still_missing"
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1
     assert assistant_part.metadata["verification_passed"] is True
@@ -988,6 +1042,21 @@ def test_agent_process_marks_active_task_done_when_completion_gate_completes(tmp
                 executed_tool_calls=0,
                 file_change_count=1,
                 touched_paths=("src/cleanup.py",),
+                delegated_tasks=(
+                    StoredDelegatedTask(
+                        task_id="task_review",
+                        prompt_type="code-reviewer",
+                        status="completed",
+                        summary="No major findings.",
+                        metadata={
+                            "structured_output": {
+                                "status": "ok",
+                                "summary": "No major findings.",
+                                "finding_count": 0,
+                            }
+                        },
+                    ),
+                ),
             )
 
         agent.call_llm = fake_call_llm

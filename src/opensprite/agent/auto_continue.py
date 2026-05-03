@@ -11,7 +11,7 @@ from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
 
-_CONTINUABLE_STATUSES = {"incomplete", "needs_verification"}
+_CONTINUABLE_STATUSES = {"incomplete", "needs_verification", "needs_review"}
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
 
 
@@ -73,6 +73,14 @@ class AutoContinueService:
                 max_attempts=max_attempts,
                 emit_event=False,
             )
+        if completion_result.status == "needs_review" and attempts_used > 0:
+            reason = "review_findings_require_follow_up" if completion_result.review_attempted else "review_evidence_still_missing"
+            return self._skip(
+                reason,
+                attempt=next_attempt,
+                max_attempts=max_attempts,
+                emit_event=True,
+            )
         if attempts_used >= max_attempts:
             return self._skip(
                 "max_auto_continues_reached",
@@ -133,6 +141,12 @@ class AutoContinueService:
                 "\n- Verification is required. Use available verification tools or clearly state the blocker "
                 "if verification cannot be run."
             )
+        review_instruction = ""
+        if completion_result.status == "needs_review":
+            review_instruction = (
+                "\n- Review evidence is required for the recorded code changes. Use delegated review workflows or review-focused subagents, "
+                "then summarize whether the review found issues that still need follow-up."
+            )
 
         return (
             "Continue the current task without asking the user unless you are blocked.\n"
@@ -140,6 +154,7 @@ class AutoContinueService:
             f"- Completion gate status: {completion_result.status}\n"
             f"- Completion gate reason: {completion_result.reason}"
             f"{verification_instruction}\n"
+            f"{review_instruction}\n"
             "- If the task is complete, provide the final answer with the evidence or verification result.\n"
             "- If the task cannot proceed, state the blocker clearly.\n\n"
             "Previous assistant response:\n"

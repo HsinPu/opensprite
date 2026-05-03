@@ -854,6 +854,34 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
     }
 
 
+def _summarize_review(completion: dict[str, Any]) -> dict[str, Any]:
+    required = bool(completion.get("review_required"))
+    attempted = bool(completion.get("review_attempted"))
+    passed = bool(completion.get("review_passed"))
+    status = "not_required"
+    if required:
+        if passed:
+            status = "passed"
+        elif attempted:
+            status = "failed"
+        else:
+            status = "not_attempted"
+    prompt_types = [
+        str(item).strip()
+        for item in (completion.get("review_prompt_types") if isinstance(completion.get("review_prompt_types"), list) else [])
+        if str(item).strip()
+    ]
+    return {
+        "required": required,
+        "attempted": attempted,
+        "passed": passed,
+        "status": status,
+        "summary": _text(completion.get("review_summary")),
+        "prompt_types": prompt_types,
+        "finding_count": _non_negative_int(completion.get("review_finding_count")),
+    }
+
+
 def _summarize_parallel_delegation(events: list[Any]) -> dict[str, Any]:
     group_events: dict[str, dict[str, Any]] = {}
     ordered_group_ids: list[str] = []
@@ -1032,6 +1060,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     completion = _latest_event_payload(events, "completion_gate.evaluated") or {}
     work_progress = _latest_work_progress(events) or {}
     verification = _summarize_verification(run_metadata, events)
+    review = _summarize_review(completion)
     parallel_delegation = _summarize_parallel_delegation(events)
     structured_subagents = _summarize_structured_subagents(events)
     workflows = _summarize_workflows(events)
@@ -1041,6 +1070,8 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         warnings.append("tool_error")
     if verification["attempted"] and not verification["passed"]:
         warnings.append("verification_not_passed")
+    if review["required"] and not review["passed"]:
+        warnings.append("review_not_passed")
     if any(str(group.get("status") or "") in {"failed", "error"} for group in parallel_delegation.get("groups", [])):
         warnings.append("parallel_delegation_failed")
     if any(str(group.get("status") or "") in {"cancelled", "cancelling"} for group in parallel_delegation.get("groups", [])):
@@ -1068,6 +1099,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         "file_changes": _summarize_file_changes(file_changes),
         "diff_summary": serialize_diff_summary(trace),
         "verification": verification,
+        "review": review,
         "parallel_delegation": parallel_delegation,
         "structured_subagents": structured_subagents,
         "workflows": workflows,
