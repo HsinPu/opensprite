@@ -201,6 +201,12 @@
           <span>{{ summary.nextAction }}</span>
         </div>
 
+        <div v-if="followUpTargetText" class="run-summary-card__note">
+          <strong>{{ copy.runSummary.followUpTarget }}</strong>
+          <span>{{ followUpTargetText }}</span>
+          <small v-if="followUpPromptText">{{ followUpPromptText }}</small>
+        </div>
+
         <div v-if="summary.warnings.length" class="run-summary-card__note" data-tone="warning">
           <strong>{{ copy.runSummary.warnings }}</strong>
           <span>{{ warningLabels.join(", ") }}</span>
@@ -433,6 +439,33 @@ const parallelDelegationDetail = computed(() => {
 
 const warningLabels = computed(() => (summary.value?.warnings || []).map((warning) => warningLabel(warning)));
 
+const followUpTarget = computed(() => {
+  const completion = summary.value?.completion || {};
+  const workflow = String(completion.followUpWorkflow || completion.follow_up_workflow || "").trim();
+  const stepLabel = String(
+    completion.followUpStepLabel
+      || completion.follow_up_step_label
+      || completion.followUpStepId
+      || completion.follow_up_step_id
+      || "",
+  ).trim();
+  const promptType = String(completion.followUpPromptType || completion.follow_up_prompt_type || "").trim();
+  return { workflow, stepLabel, promptType };
+});
+
+const followUpTargetText = computed(() => {
+  const { workflow, stepLabel } = followUpTarget.value;
+  if (workflow && stepLabel) {
+    return `${workflow} -> ${stepLabel}`;
+  }
+  return workflow || stepLabel;
+});
+
+const followUpPromptText = computed(() => {
+  const { promptType } = followUpTarget.value;
+  return promptType ? props.copy.runSummary.followUpPromptType(promptType) : "";
+});
+
 const diffSummary = computed(() => summary.value?.diffSummary || props.run.diffSummary || null);
 
 const hasDiffSummary = computed(() => {
@@ -587,6 +620,13 @@ function buildRunReport() {
 
   if (data.nextAction) {
     lines.push("", `## ${props.copy.runSummary.nextAction}`, `- ${data.nextAction}`);
+  }
+
+  if (followUpTargetText.value) {
+    lines.push("", `## ${props.copy.runSummary.followUpTarget}`, `- ${followUpTargetText.value}`);
+    if (followUpPromptText.value) {
+      lines.push(`- ${followUpPromptText.value}`);
+    }
   }
 
   if (data.warnings.length) {

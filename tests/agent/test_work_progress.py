@@ -319,6 +319,9 @@ def test_work_progress_resume_hint_changes_for_review_follow_up():
         completion_result=CompletionGateResult(
             status="needs_review",
             reason="delegated review reported findings that require follow-up",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="address_review_findings",
+            follow_up_step_label="Address review findings",
             review_required=True,
             review_attempted=True,
             review_finding_count=1,
@@ -342,6 +345,9 @@ def test_work_progress_resume_hint_changes_for_review_follow_up():
         completion_result=CompletionGateResult(
             status="needs_review",
             reason="delegated review reported findings that require follow-up",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="address_review_findings",
+            follow_up_step_label="Address review findings",
             review_required=True,
             review_attempted=True,
             review_finding_count=1,
@@ -351,7 +357,58 @@ def test_work_progress_resume_hint_changes_for_review_follow_up():
 
     assert updated is not None
     assert updated.pending_steps[0] == "Null handling bug: Empty input can raise an exception."
-    assert updated.resume_hint == "Resume by addressing the delegated review findings before treating the task as complete."
+    assert updated.resume_hint == "Resume by addressing the review findings for implement_then_review before rerunning review if needed."
+
+
+def test_work_progress_resume_hint_uses_follow_up_prompt_type_for_review_evidence():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Please implement the cleanup.")
+    plan = service.create_plan(intent)
+    initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+    assert initial is not None
+    progress = service.evaluate(
+        task_intent=intent,
+        completion_result=CompletionGateResult(
+            status="needs_review",
+            reason="workflow implement_then_review completed but review evidence is missing",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="review",
+            follow_up_step_label="Code review",
+            follow_up_prompt_type="code-reviewer",
+            review_required=True,
+            review_attempted=False,
+            active_task_detail="Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
+        ),
+        execution_result=ExecutionResult(
+            content="Implemented cleanup.",
+            executed_tool_calls=1,
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+        ),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+    updated = service.update_state(
+        session_id="web:browser-1",
+        state=initial,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(
+            status="needs_review",
+            reason="workflow implement_then_review completed but review evidence is missing",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="review",
+            follow_up_step_label="Code review",
+            follow_up_prompt_type="code-reviewer",
+            review_required=True,
+            review_attempted=False,
+            active_task_detail="Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
+        ),
+    )
+
+    assert updated is not None
+    assert updated.resume_hint == "Resume by running or rerunning the delegated code-reviewer step (Code review) for implement_then_review."
 
 
 def test_work_progress_uses_incomplete_follow_up_detail_as_pending_step():
@@ -366,6 +423,10 @@ def test_work_progress_uses_incomplete_follow_up_detail_as_pending_step():
         completion_result=CompletionGateResult(
             status="incomplete",
             reason="workflow implement_then_review did not complete successfully",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="review",
+            follow_up_step_label="Code review",
+            follow_up_prompt_type="code-reviewer",
             active_task_detail=detail,
         ),
         execution_result=ExecutionResult(
@@ -384,12 +445,17 @@ def test_work_progress_uses_incomplete_follow_up_detail_as_pending_step():
         completion_result=CompletionGateResult(
             status="incomplete",
             reason="workflow implement_then_review did not complete successfully",
+            follow_up_workflow="implement_then_review",
+            follow_up_step_id="review",
+            follow_up_step_label="Code review",
+            follow_up_prompt_type="code-reviewer",
             active_task_detail=detail,
         ),
     )
 
     assert updated is not None
     assert updated.pending_steps[0] == detail
+    assert updated.resume_hint == "Resume with the Code review step in implement_then_review."
 
 
 def test_work_progress_merges_multiple_delegated_tasks_and_clears_selection_on_complete():

@@ -631,6 +631,7 @@ class WorkProgressService:
                 next_step=next_step,
                 blockers=blockers,
                 next_action=progress.next_action,
+                completion_result=completion_result,
             ),
             last_progress_signals=progress.progress_signals,
         )
@@ -745,19 +746,33 @@ def _build_resume_hint(
     next_step: str,
     blockers: tuple[str, ...],
     next_action: str,
+    completion_result: CompletionGateResult | None = None,
 ) -> str:
     if status == "done":
         return "Task is complete; only continue if the user asks for follow-up work."
     if blockers:
         return f"Resolve blocker first: {blockers[0]}"
+    workflow = str(getattr(completion_result, "follow_up_workflow", "") or "").strip()
+    step_label = str(getattr(completion_result, "follow_up_step_label", "") or getattr(completion_result, "follow_up_step_id", "") or "").strip()
+    prompt_type = str(getattr(completion_result, "follow_up_prompt_type", "") or "").strip()
     if next_action == "continue_verification":
+        if workflow and step_label:
+            return f"Resume by finishing verification around the {step_label} step in {workflow}."
         return "Resume by running or fixing the required verification."
     if next_action == "collect_review_evidence":
+        if workflow and step_label and prompt_type:
+            return f"Resume by running or rerunning the delegated {prompt_type} step ({step_label}) for {workflow}."
+        if prompt_type:
+            return f"Resume by running or rerunning the delegated {prompt_type} step for the changed code."
         return "Resume by running or rerunning a delegated review step for the changed code."
     if next_action == "address_review_findings":
+        if workflow:
+            return f"Resume by addressing the review findings for {workflow} before rerunning review if needed."
         return "Resume by addressing the delegated review findings before treating the task as complete."
     if next_action == "continue_review":
         return "Resume by collecting review evidence or addressing delegated review findings."
+    if workflow and step_label:
+        return f"Resume with the {step_label} step in {workflow}."
     if current_step and current_step != "not set":
         return f"Resume at current step: {current_step}"
     if next_step and next_step != "not set":

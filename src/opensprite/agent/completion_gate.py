@@ -58,6 +58,10 @@ class CompletionGateResult:
     reason: str
     active_task_status: str | None = None
     active_task_detail: str | None = None
+    follow_up_workflow: str | None = None
+    follow_up_step_id: str | None = None
+    follow_up_step_label: str | None = None
+    follow_up_prompt_type: str | None = None
     should_update_active_task: bool = False
     verification_required: bool = False
     verification_attempted: bool = False
@@ -90,6 +94,14 @@ class CompletionGateResult:
             payload["active_task_status"] = self.active_task_status
         if self.active_task_detail:
             payload["active_task_detail"] = self.active_task_detail
+        if self.follow_up_workflow:
+            payload["follow_up_workflow"] = self.follow_up_workflow
+        if self.follow_up_step_id:
+            payload["follow_up_step_id"] = self.follow_up_step_id
+        if self.follow_up_step_label:
+            payload["follow_up_step_label"] = self.follow_up_step_label
+        if self.follow_up_prompt_type:
+            payload["follow_up_prompt_type"] = self.follow_up_prompt_type
         return payload
 
 
@@ -169,6 +181,10 @@ class CompletionGateService:
                 reason=workflow_gate["reason"],
                 active_task_status="done" if workflow_gate["status"] == "complete" else None,
                 active_task_detail=workflow_gate.get("detail") or None,
+                follow_up_workflow=_string_or_none(workflow_gate.get("workflow")),
+                follow_up_step_id=_string_or_none(workflow_gate.get("next_step_id")),
+                follow_up_step_label=_string_or_none(workflow_gate.get("next_step_label")),
+                follow_up_prompt_type=_string_or_none(workflow_gate.get("next_step_prompt_type")),
                 should_update_active_task=workflow_gate["status"] == "complete" and task_intent.should_seed_active_task,
                 verification_required=verification_required,
                 verification_attempted=workflow_verification_attempted,
@@ -404,13 +420,26 @@ def _workflow_gate_outcome(
     workflow_verification_passed = bool(workflow.get("verification_passed"))
     workflow_review_summary = str(workflow.get("review_summary") or "").strip()
     workflow_review_first_finding = str(workflow.get("review_first_finding") or "").strip()
+    next_step_id = str(workflow.get("next_step_id") or "").strip()
+    next_step_label = str(workflow.get("next_step_label") or "").strip()
+    next_step_prompt_type = str(workflow.get("next_step_prompt_type") or "").strip()
     metadata = {
+        "workflow": workflow_id,
         "review_attempted": review_attempted,
         "review_passed": review_passed,
         "review_finding_count": review_finding_count,
         "review_summary": workflow_review_summary,
         "verification_attempted": workflow_verification_attempted,
         "verification_passed": workflow_verification_passed,
+        **(
+            {
+                "next_step_id": next_step_id,
+                "next_step_label": next_step_label,
+                "next_step_prompt_type": next_step_prompt_type,
+            }
+            if next_step_id or next_step_label or next_step_prompt_type
+            else {}
+        ),
     }
 
     if workflow_status in {"failed", "cancelled"}:
@@ -439,11 +468,13 @@ def _workflow_gate_outcome(
 
     if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
         if not review_attempted:
+            review_step = _workflow_review_follow_up_fields(workflow_id)
             return {
                 **metadata,
                 "status": "needs_review",
                 "reason": f"workflow {workflow_id} completed but review evidence is missing",
                 "detail": "Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
+                **review_step,
             }
         if not review_passed or review_finding_count > 0:
             return {
@@ -453,6 +484,8 @@ def _workflow_gate_outcome(
                 "detail": workflow_review_first_finding
                 or workflow_review_summary
                 or str(workflow.get("summary") or "").strip(),
+                "next_step_id": "address_review_findings",
+                "next_step_label": "Address review findings",
             }
         return {
             **metadata,
@@ -527,3 +560,18 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
     if step_label:
         return f"Resolve the {step_label} step failure in {workflow_id}."
     return error or summary
+
+
+def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
+    if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
+        return {
+            "next_step_id": "review",
+            "next_step_label": "Code review",
+            "next_step_prompt_type": "code-reviewer",
+        }
+    return {}
+
+
+def _string_or_none(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None

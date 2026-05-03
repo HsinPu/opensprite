@@ -136,12 +136,25 @@ class AutoContinueService:
         """Build the synthetic continuation instruction for the next pass."""
         previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
         follow_up_detail = str(completion_result.active_task_detail or "").strip()
+        workflow_target = _workflow_follow_up_target(completion_result)
         follow_up_instruction = ""
         if follow_up_detail:
             follow_up_instruction = (
                 f"\n- Required follow-up: {follow_up_detail}"
                 "\n- Treat the required follow-up as the next concrete step instead of restarting the task broadly."
             )
+        workflow_instruction = ""
+        if workflow_target:
+            workflow_instruction = f"\n- Workflow follow-up target: {workflow_target}"
+            if completion_result.follow_up_prompt_type:
+                workflow_instruction += (
+                    f"\n- Prefer a delegated `{completion_result.follow_up_prompt_type}` step or an equivalent focused step "
+                    "before rerunning broader workflow work."
+                )
+            elif completion_result.follow_up_step_label:
+                workflow_instruction += (
+                    "\n- Prefer resuming this concrete workflow step instead of rerunning already completed workflow steps."
+                )
         verification_instruction = ""
         if completion_result.status == "needs_verification":
             verification_instruction = (
@@ -174,6 +187,7 @@ class AutoContinueService:
             f"{verification_instruction}\n"
             f"{review_instruction}\n"
             f"{incomplete_instruction}\n"
+            f"{workflow_instruction}\n"
             f"{follow_up_instruction}\n"
             "- If the task is complete, provide the final answer with the evidence or verification result.\n"
             "- If the task cannot proceed, state the blocker clearly.\n\n"
@@ -203,3 +217,11 @@ def _truncate(text: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _workflow_follow_up_target(completion_result: CompletionGateResult) -> str:
+    workflow = str(completion_result.follow_up_workflow or "").strip()
+    step_label = str(completion_result.follow_up_step_label or completion_result.follow_up_step_id or "").strip()
+    if workflow and step_label:
+        return f"{workflow} -> {step_label}"
+    return workflow or step_label

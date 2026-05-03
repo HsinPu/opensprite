@@ -1102,6 +1102,7 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
                             "summary": "Workflow stopped after 1/2 completed step(s).",
                             "next_step_id": "review",
                             "next_step_label": "Code review",
+                            "next_step_prompt_type": "code-reviewer",
                         },
                     ),
                 )
@@ -1143,6 +1144,8 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
     assert response.text == "Workflow finished successfully."
     assert len(calls) == 2
     assert "The missing work is already identified" in calls[1]
+    assert "Workflow follow-up target: implement_then_review -> Code review" in calls[1]
+    assert "Prefer a delegated `code-reviewer` step" in calls[1]
     assert "Required follow-up: Resume with the Code review step in implement_then_review." in calls[1]
 
 

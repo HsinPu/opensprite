@@ -1249,6 +1249,52 @@ def test_serialize_run_summary_collects_failed_workflow_follow_up_detail():
     }
 
 
+def test_serialize_run_summary_preserves_completion_follow_up_target():
+    trace = SimpleNamespace(
+        run=SimpleNamespace(
+            run_id="run-follow-up",
+            session_id="web:browser-follow-up",
+            status="completed",
+            metadata={"objective": "Workflow follow-up"},
+            created_at=40.0,
+            updated_at=45.0,
+            finished_at=46.0,
+        ),
+        events=[
+            SimpleNamespace(
+                event_id=1,
+                run_id="run-follow-up",
+                session_id="web:browser-follow-up",
+                event_type="completion_gate.evaluated",
+                payload={
+                    "status": "incomplete",
+                    "reason": "workflow implement_then_review did not complete successfully",
+                    "active_task_detail": "Resume with the Code review step in implement_then_review. Workflow stopped after 1/2 completed step(s).",
+                    "follow_up_workflow": "implement_then_review",
+                    "follow_up_step_id": "review",
+                    "follow_up_step_label": "Code review",
+                    "follow_up_prompt_type": "code-reviewer",
+                },
+                created_at=44.0,
+            ),
+        ],
+        parts=[],
+        file_changes=[],
+    )
+
+    summary = serialize_run_summary(trace)
+
+    assert summary["completion"] == {
+        "status": "incomplete",
+        "reason": "workflow implement_then_review did not complete successfully",
+        "active_task_detail": "Resume with the Code review step in implement_then_review. Workflow stopped after 1/2 completed step(s).",
+        "follow_up_workflow": "implement_then_review",
+        "follow_up_step_id": "review",
+        "follow_up_step_label": "Code review",
+        "follow_up_prompt_type": "code-reviewer",
+    }
+
+
 def test_serialize_run_summary_marks_parallel_delegation_warnings():
     trace = SimpleNamespace(
         run=SimpleNamespace(

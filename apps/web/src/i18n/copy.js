@@ -287,6 +287,8 @@ export const DISPLAY_COPY = {
       cleanupDone: "已清理",
       confirmCleanupSandbox: (path) => `確定要清理這個 OpenSprite worktree sandbox？\n\n${path}`,
       nextAction: "下一步",
+      followUpTarget: "後續目標",
+      followUpPromptType: (promptType) => `優先使用 ${promptType} 這類 focused step`,
       warnings: "警告",
       warningLabels: {
         tool_error: "工具執行有警告",
@@ -1072,6 +1074,8 @@ export const DISPLAY_COPY = {
       cleanupDone: "Cleaned up",
       confirmCleanupSandbox: (path) => `Clean up this OpenSprite worktree sandbox?\n\n${path}`,
       nextAction: "Next action",
+      followUpTarget: "Follow-up target",
+      followUpPromptType: (promptType) => `Prefer a focused ${promptType} step`,
       warnings: "Warnings",
       warningLabels: {
         tool_error: "Tool execution warning",
