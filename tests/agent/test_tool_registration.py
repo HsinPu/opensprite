@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 from opensprite.agent.tool_registration import register_default_tools
@@ -29,8 +30,8 @@ async def _fake_run_subagents_many(tasks, max_parallel: int | None) -> str:
     return f"parallel:{len(tasks)}:{max_parallel}"
 
 
-async def _fake_run_workflow(workflow: str, task: str) -> str:
-    return f"workflow:{workflow}:{task}"
+async def _fake_run_workflow(workflow: str, task: str, start_step: str | None = None) -> str:
+    return f"workflow:{workflow}:{start_step or 'start'}:{task}"
 
 
 async def _fake_reload_mcp() -> str:
@@ -306,3 +307,27 @@ def test_register_default_tools_applies_cron_default_timezone_from_tools_config(
 
     assert isinstance(cron_tool, CronTool)
     assert "Asia/Taipei" in cron_tool.description
+
+
+def test_workflow_tool_accepts_optional_start_step():
+    registry = ToolRegistry()
+
+    register_default_tools(
+        registry,
+        workspace_resolver=lambda: Path.cwd(),
+        get_session_id=lambda: "chat-1",
+        run_subagent=_fake_run_subagent,
+        run_subagents_many=_fake_run_subagents_many,
+        run_workflow=_fake_run_workflow,
+        workflow_catalog_getter=lambda: {"implement_then_review": "Run implementer then reviewer."},
+        config_path_resolver=lambda: Path.cwd() / "opensprite.json",
+        reload_mcp=_fake_reload_mcp,
+    )
+
+    tool = registry.get("run_workflow")
+
+    result = asyncio.run(
+        tool.execute(workflow="implement_then_review", task="Ship it", start_step="review")
+    )
+
+    assert result == "workflow:implement_then_review:review:Ship it"

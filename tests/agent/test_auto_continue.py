@@ -53,8 +53,9 @@ def test_auto_continue_uses_review_finding_detail_when_follow_up_is_needed():
         status="needs_review",
         reason="delegated review reported findings that require follow-up",
         follow_up_workflow="implement_then_review",
-        follow_up_step_id="address_review_findings",
-        follow_up_step_label="Address review findings",
+        follow_up_step_id="implement",
+        follow_up_step_label="Implement",
+        follow_up_prompt_type="implementer",
         review_required=True,
         review_attempted=True,
         review_finding_count=1,
@@ -70,7 +71,9 @@ def test_auto_continue_uses_review_finding_detail_when_follow_up_is_needed():
     )
 
     assert decision.should_continue is True
-    assert "Workflow follow-up target: implement_then_review -> Address review findings" in (decision.prompt or "")
+    assert "Workflow follow-up target: implement_then_review -> Implement" in (decision.prompt or "")
+    assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"implement\")" in (decision.prompt or "")
+    assert "Prefer a delegated `implementer` step" in (decision.prompt or "")
     assert "Review findings already exist" in (decision.prompt or "")
     assert "Required follow-up: src/foo.py: Null handling bug: Guard the null path before dereference." in (decision.prompt or "")
 
@@ -173,6 +176,7 @@ def test_auto_continue_uses_step_level_follow_up_for_incomplete_workflow():
     assert decision.should_continue is True
     assert "The missing work is already identified" in (decision.prompt or "")
     assert "Workflow follow-up target: implement_then_review -> Code review" in (decision.prompt or "")
+    assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"review\")" in (decision.prompt or "")
     assert "Prefer a delegated `code-reviewer` step" in (decision.prompt or "")
     assert "Required follow-up: Resume with the Code review step in implement_then_review." in (decision.prompt or "")
 

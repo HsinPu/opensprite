@@ -1718,9 +1718,9 @@ class AgentLoop:
         """Run multiple read-only or research child tasks concurrently."""
         return await self.subagents.run_many(tasks, max_parallel=max_parallel)
 
-    async def run_workflow(self, workflow: str, task: str) -> str:
+    async def run_workflow(self, workflow: str, task: str, start_step: str | None = None) -> str:
         """Run one fixed multi-step orchestration workflow."""
-        return await self.workflows.run(workflow, task)
+        return await self.workflows.run_from_step(workflow, task, start_step=start_step)
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
         """

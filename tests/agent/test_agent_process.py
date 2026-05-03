@@ -1145,6 +1145,7 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
     assert len(calls) == 2
     assert "The missing work is already identified" in calls[1]
     assert "Workflow follow-up target: implement_then_review -> Code review" in calls[1]
+    assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"review\")" in calls[1]
     assert "Prefer a delegated `code-reviewer` step" in calls[1]
     assert "Required follow-up: Resume with the Code review step in implement_then_review." in calls[1]
 

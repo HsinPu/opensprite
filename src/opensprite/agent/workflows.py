@@ -19,6 +19,7 @@ class WorkflowStepSpec:
     label: str
     prompt_type: str
     task_builder: Callable[[str, list[SubagentTaskOutcome]], str]
+    resume_task_builder: Callable[[str], str] | None = None
 
 
 @dataclass(frozen=True)
@@ -76,8 +77,9 @@ def _workflow_progress_fields(
     outcomes: list[SubagentTaskOutcome],
     *,
     status: str,
+    start_index: int = 0,
 ) -> dict[str, Any]:
-    completed_prefix = 0
+    completed_prefix = start_index
     for outcome in outcomes[: len(steps)]:
         if outcome.status != "completed":
             break
@@ -105,6 +107,32 @@ def _workflow_progress_fields(
     return payload
 
 
+def _resolve_start_index(spec: WorkflowSpec, start_step: str | None) -> tuple[int, WorkflowStepSpec | None, str | None]:
+    normalized = str(start_step or "").strip()
+    if not normalized:
+        return 0, None, None
+    for index, step in enumerate(spec.steps):
+        if step.step_id == normalized:
+            return index, step, None
+    available = ", ".join(step.step_id for step in spec.steps)
+    return 0, None, f"Error: unknown start_step '{normalized}' for workflow '{spec.workflow_id}'. Available: {available}"
+
+
+def _build_step_task(
+    step: WorkflowStepSpec,
+    *,
+    task_text: str,
+    outcomes: list[SubagentTaskOutcome],
+    resumed: bool,
+) -> str:
+    if resumed and not outcomes:
+        builder = step.resume_task_builder
+        if builder is None:
+            return step.task_builder(task_text, outcomes).strip()
+        return builder(task_text).strip()
+    return step.task_builder(task_text, outcomes).strip()
+
+
 def _implement_review_steps() -> tuple[WorkflowStepSpec, ...]:
     return (
         WorkflowStepSpec(
@@ -112,6 +140,7 @@ def _implement_review_steps() -> tuple[WorkflowStepSpec, ...]:
             label="Implement",
             prompt_type="implementer",
             task_builder=lambda task, _: task,
+            resume_task_builder=lambda task: task,
         ),
         WorkflowStepSpec(
             step_id="review",
@@ -122,6 +151,11 @@ def _implement_review_steps() -> tuple[WorkflowStepSpec, ...]:
                 "Inspect the actual files and report findings first.\n\n"
                 f"Original objective:\n{task}\n\n"
                 f"Implementation result:\n{_result_summary(results[0])}"
+            ),
+            resume_task_builder=lambda task: (
+                "Resume the code review step for the current workspace changes. "
+                "Inspect the actual files and report findings first.\n\n"
+                f"Original objective:\n{task}"
             ),
         ),
     )
@@ -134,6 +168,7 @@ def _research_outline_steps() -> tuple[WorkflowStepSpec, ...]:
             label="Research",
             prompt_type="researcher",
             task_builder=lambda task, _: task,
+            resume_task_builder=lambda task: task,
         ),
         WorkflowStepSpec(
             step_id="outline",
@@ -143,6 +178,12 @@ def _research_outline_steps() -> tuple[WorkflowStepSpec, ...]:
                 "Create a clear outline based on the research summary below.\n\n"
                 f"Original objective:\n{task}\n\n"
                 f"Research summary:\n{results[0].content}"
+            ),
+            resume_task_builder=lambda task: (
+                "Resume the outline step for the original objective below. "
+                "Use any already gathered research context available in the current session or workspace, "
+                "and clearly state missing inputs if the research context is insufficient.\n\n"
+                f"Original objective:\n{task}"
             ),
         ),
     )
@@ -155,6 +196,7 @@ def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
             label="Bug fix",
             prompt_type="bug-fixer",
             task_builder=lambda task, _: task,
+            resume_task_builder=lambda task: task,
         ),
         WorkflowStepSpec(
             step_id="tests",
@@ -164,6 +206,11 @@ def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
                 "Add the minimal effective tests for the bug fix below. Inspect the current workspace changes first.\n\n"
                 f"Original objective:\n{task}\n\n"
                 f"Bug-fix result:\n{_result_summary(results[0])}"
+            ),
+            resume_task_builder=lambda task: (
+                "Resume the tests step for the current workspace changes related to the bug fix below. "
+                "Inspect the actual files first and add the minimal effective tests.\n\n"
+                f"Original objective:\n{task}"
             ),
         ),
         WorkflowStepSpec(
@@ -176,6 +223,11 @@ def _bugfix_test_review_steps() -> tuple[WorkflowStepSpec, ...]:
                 f"Original objective:\n{task}\n\n"
                 f"Bug-fix result:\n{_result_summary(results[0])}\n\n"
                 f"Test result:\n{_result_summary(results[1])}"
+            ),
+            resume_task_builder=lambda task: (
+                "Resume the code review step for the current workspace changes after the bug fix and test additions. "
+                "Inspect the actual files and report findings first.\n\n"
+                f"Original objective:\n{task}"
             ),
         ),
     )
@@ -301,9 +353,10 @@ class SubagentWorkflowService:
         steps: tuple[WorkflowStepSpec, ...],
         outcomes: list[SubagentTaskOutcome],
         status: str,
+        start_index: int = 0,
         error: str = "",
     ) -> dict[str, Any]:
-        completed_steps = sum(1 for outcome in outcomes if outcome.status == "completed")
+        completed_steps = start_index + sum(1 for outcome in outcomes if outcome.status == "completed")
         failed_steps = sum(1 for outcome in outcomes if outcome.status in {"failed", "error"})
         summary = (
             f"Completed {completed_steps}/{len(steps)} workflow step(s)."
@@ -331,21 +384,32 @@ class SubagentWorkflowService:
                     "summary": outcome.summary,
                     "error": outcome.error,
                 }
-                for spec, outcome in zip(steps, outcomes)
+                for spec, outcome in zip(steps[start_index:], outcomes)
             ],
-            **_workflow_progress_fields(steps, outcomes, status=status),
+            **_workflow_progress_fields(steps, outcomes, status=status, start_index=start_index),
         }
+        if start_index > 0:
+            start_step = steps[start_index]
+            payload.update(
+                {
+                    "resumed": True,
+                    "start_step_id": start_step.step_id,
+                    "start_step_label": start_step.label,
+                }
+            )
         if error:
             payload["error"] = error
         return payload
 
     @staticmethod
-    def _format_result(workflow_id: str, outcomes: list[SubagentTaskOutcome], *, status: str) -> str:
+    def _format_result(workflow_id: str, outcomes: list[SubagentTaskOutcome], *, status: str, start_index: int = 0) -> str:
         lines = [
             f"Workflow: {workflow_id}",
             f"Status: {status}",
         ]
-        for index, outcome in enumerate(outcomes, start=1):
+        if start_index > 0:
+            lines.append(f"Resumed from step: {start_index + 1}")
+        for index, outcome in enumerate(outcomes, start=start_index + 1):
             lines.extend(
                 [
                     "",
@@ -416,6 +480,7 @@ class SubagentWorkflowService:
         task_preview: str,
         outcomes: list[SubagentTaskOutcome],
         status: str,
+        start_index: int = 0,
         error: str = "",
     ) -> dict[str, Any]:
         review = self._review_outcome(outcomes)
@@ -426,12 +491,12 @@ class SubagentWorkflowService:
             "status": status,
             "task_preview": task_preview,
             "total_steps": len(spec.steps),
-            "completed_steps": sum(1 for outcome in outcomes if outcome.status == "completed"),
+            "completed_steps": start_index + sum(1 for outcome in outcomes if outcome.status == "completed"),
             "failed_steps": sum(1 for outcome in outcomes if outcome.status in {"failed", "error", "cancelled"}),
             "summary": (
-                f"Completed {sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} workflow step(s)."
+                f"Completed {start_index + sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} workflow step(s)."
                 if status == "completed"
-                else f"Workflow stopped after {sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} completed step(s)."
+                else f"Workflow stopped after {start_index + sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} completed step(s)."
             ),
             "review_attempted": review["attempted"],
             "review_passed": review["passed"],
@@ -440,7 +505,16 @@ class SubagentWorkflowService:
             "review_first_finding": review["first_finding"],
             "verification_attempted": verification["attempted"],
             "verification_passed": verification["passed"],
-            **_workflow_progress_fields(spec.steps, outcomes, status=status),
+            **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
+            **(
+                {
+                    "resumed": True,
+                    "start_step_id": spec.steps[start_index].step_id,
+                    "start_step_label": spec.steps[start_index].label,
+                }
+                if start_index > 0
+                else {}
+            ),
             **({"error": error} if error else {}),
         }
 
@@ -455,8 +529,30 @@ class SubagentWorkflowService:
         if not task_text:
             return "Error: workflow task must be a non-empty string."
 
+        return await self.run_from_step(workflow_key, task_text)
+
+    async def run_from_step(self, workflow_id: str, task: str, start_step: str | None = None) -> str:
+        workflow_key = str(workflow_id or "").strip()
+        spec = WORKFLOW_SPECS.get(workflow_key)
+        if spec is None:
+            available = ", ".join(sorted(WORKFLOW_SPECS))
+            return f"Error: unknown workflow '{workflow_key}'. Available: {available}"
+
+        task_text = str(task or "").strip()
+        if not task_text:
+            return "Error: workflow task must be a non-empty string."
+
+        start_index, start_spec, start_error = _resolve_start_index(spec, start_step)
+        if start_error:
+            return start_error
+
         workflow_run_id = self._new_workflow_run_id()
         task_preview = self._format_log_preview(task_text, max_chars=240)
+        start_step_summary = (
+            f"Resumed workflow {spec.workflow_id} from step {start_spec.step_id} ({start_spec.label})."
+            if start_spec is not None
+            else f"Started workflow {spec.workflow_id} with {len(spec.steps)} step(s)."
+        )
         await self._emit_event(
             "workflow.started",
             {
@@ -465,13 +561,28 @@ class SubagentWorkflowService:
                 "status": "running",
                 "task_preview": task_preview,
                 "total_steps": len(spec.steps),
-                "summary": f"Started workflow {spec.workflow_id} with {len(spec.steps)} step(s).",
+                "summary": start_step_summary,
+                **(
+                    {
+                        "resumed": True,
+                        "start_step_id": start_spec.step_id,
+                        "start_step_label": start_spec.label,
+                        "start_step_prompt_type": start_spec.prompt_type,
+                    }
+                    if start_spec is not None
+                    else {}
+                ),
             },
         )
 
         outcomes: list[SubagentTaskOutcome] = []
-        for index, step in enumerate(spec.steps, start=1):
-            step_task = step.task_builder(task_text, outcomes).strip()
+        for index, step in enumerate(spec.steps[start_index:], start=start_index + 1):
+            step_task = _build_step_task(
+                step,
+                task_text=task_text,
+                outcomes=outcomes,
+                resumed=start_spec is not None and index == start_index + 1,
+            )
             step_preview = self._format_log_preview(step_task, max_chars=240)
             await self._emit_event(
                 "workflow.step.started",
@@ -495,6 +606,7 @@ class SubagentWorkflowService:
                         task_preview=task_preview,
                         outcomes=outcomes,
                         status="cancelled",
+                        start_index=start_index,
                         error="cancelled",
                     ),
                 )
@@ -507,6 +619,7 @@ class SubagentWorkflowService:
                         steps=spec.steps,
                         outcomes=outcomes,
                         status="cancelled",
+                        start_index=start_index,
                         error="cancelled",
                     ),
                 )
@@ -522,6 +635,7 @@ class SubagentWorkflowService:
                         task_preview=task_preview,
                         outcomes=outcomes,
                         status="failed",
+                        start_index=start_index,
                         error=error_preview,
                     ),
                 )
@@ -546,6 +660,7 @@ class SubagentWorkflowService:
                         steps=spec.steps,
                         outcomes=outcomes,
                         status="failed",
+                        start_index=start_index,
                         error=error_preview,
                     ),
                 )
@@ -573,6 +688,7 @@ class SubagentWorkflowService:
                 steps=spec.steps,
                 outcomes=outcomes,
                 status="completed",
+                start_index=start_index,
             ),
         )
         self._record_workflow_outcome(
@@ -583,6 +699,7 @@ class SubagentWorkflowService:
                 task_preview=task_preview,
                 outcomes=outcomes,
                 status="completed",
+                start_index=start_index,
             ),
         )
-        return self._format_result(spec.workflow_id, outcomes, status="completed")
+        return self._format_result(spec.workflow_id, outcomes, status="completed", start_index=start_index)

@@ -64,6 +64,9 @@ class RunHookService:
             return f"正在平行委派 {max(1, len(tasks))} 個子代理任務…"
         if tool_name == "run_workflow":
             workflow = args.get("workflow") or args.get("workflow_id") or "workflow"
+            start_step = args.get("start_step") or args.get("startStep")
+            if start_step:
+                return f"正在續跑固定工作流（{workflow}:{start_step}）…"
             return f"正在執行固定工作流（{workflow}）…"
         if tool_name.startswith("mcp_"):
             tail = tool_name[4:] if tool_name.startswith("mcp_") else tool_name

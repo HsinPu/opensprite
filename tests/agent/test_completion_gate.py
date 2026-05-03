@@ -272,8 +272,9 @@ def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_t
     assert result.reason == "workflow implement_then_review completed but review findings still require follow-up"
     assert result.active_task_detail == "src/foo.py: Null handling bug: Guard the null path before dereference."
     assert result.follow_up_workflow == "implement_then_review"
-    assert result.follow_up_step_id == "address_review_findings"
-    assert result.follow_up_step_label == "Address review findings"
+    assert result.follow_up_step_id == "implement"
+    assert result.follow_up_step_label == "Implement"
+    assert result.follow_up_prompt_type == "implementer"
     assert result.review_attempted is True
     assert result.review_finding_count == 1
 

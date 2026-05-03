@@ -146,6 +146,11 @@ class AutoContinueService:
         workflow_instruction = ""
         if workflow_target:
             workflow_instruction = f"\n- Workflow follow-up target: {workflow_target}"
+            if completion_result.follow_up_workflow and completion_result.follow_up_step_id:
+                workflow_instruction += (
+                    "\n- If the task still fits the workflow, prefer calling "
+                    f"`run_workflow(workflow=\"{completion_result.follow_up_workflow}\", task=<original objective>, start_step=\"{completion_result.follow_up_step_id}\")`."
+                )
             if completion_result.follow_up_prompt_type:
                 workflow_instruction += (
                     f"\n- Prefer a delegated `{completion_result.follow_up_prompt_type}` step or an equivalent focused step "

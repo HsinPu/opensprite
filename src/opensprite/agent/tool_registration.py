@@ -332,7 +332,7 @@ def register_delegate_tools(
 def register_workflow_tools(
     registry: ToolRegistry,
     *,
-    run_workflow: Callable[[str, str], Awaitable[str]] | None = None,
+    run_workflow: Callable[[str, str, str | None], Awaitable[str]] | None = None,
     workflow_catalog_getter: Callable[[], dict[str, str]] | None = None,
 ) -> None:
     """Register fixed orchestration workflow tools."""
@@ -406,7 +406,7 @@ def register_default_tools(
     get_session_id: Callable[[], str | None],
     run_subagent: Callable[[str, str | None, str | None], Awaitable[str]],
     run_subagents_many: Callable[[list[dict[str, Any]], int | None], Awaitable[str]] | None = None,
-    run_workflow: Callable[[str, str], Awaitable[str]] | None = None,
+    run_workflow: Callable[[str, str, str | None], Awaitable[str]] | None = None,
     workflow_catalog_getter: Callable[[], dict[str, str]] | None = None,
     config_path_resolver: Callable[[], Path | None],
     reload_mcp: Callable[[], Awaitable[str]],

@@ -477,6 +477,7 @@ def _workflow_gate_outcome(
                 **review_step,
             }
         if not review_passed or review_finding_count > 0:
+            fix_step = _workflow_fix_follow_up_fields(workflow_id)
             return {
                 **metadata,
                 "status": "needs_review",
@@ -484,8 +485,7 @@ def _workflow_gate_outcome(
                 "detail": workflow_review_first_finding
                 or workflow_review_summary
                 or str(workflow.get("summary") or "").strip(),
-                "next_step_id": "address_review_findings",
-                "next_step_label": "Address review findings",
+                **fix_step,
             }
         return {
             **metadata,
@@ -568,6 +568,22 @@ def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
             "next_step_id": "review",
             "next_step_label": "Code review",
             "next_step_prompt_type": "code-reviewer",
+        }
+    return {}
+
+
+def _workflow_fix_follow_up_fields(workflow_id: str) -> dict[str, str]:
+    if workflow_id == "implement_then_review":
+        return {
+            "next_step_id": "implement",
+            "next_step_label": "Implement",
+            "next_step_prompt_type": "implementer",
+        }
+    if workflow_id == "bugfix_then_test_then_review":
+        return {
+            "next_step_id": "bugfix",
+            "next_step_label": "Bug fix",
+            "next_step_prompt_type": "bug-fixer",
         }
     return {}
 

@@ -37,11 +37,11 @@ class WorkflowProvider:
             for message in reversed(messages)
             if getattr(message, "role", None) == "user"
         )
-        if "Review the current workspace changes" in task_text:
+        if "Review the current workspace changes" in task_text or "Resume the code review step" in task_text:
             return LLMResponse(content="Review Findings\n- No major findings.", model="fake-model")
-        if "Create a clear outline" in task_text:
+        if "Create a clear outline" in task_text or "Resume the outline step" in task_text:
             return LLMResponse(content="建議標題：Workflow Outline\n\n## 大綱\n1. Step one", model="fake-model")
-        if "Add the minimal effective tests" in task_text:
+        if "Add the minimal effective tests" in task_text or "Resume the tests step" in task_text:
             return LLMResponse(content="Added focused tests.", model="fake-model")
         return LLMResponse(content="Implemented the requested change.", model="fake-model")
 
@@ -116,6 +116,45 @@ def test_run_workflow_returns_error_for_unknown_workflow(tmp_path):
     result = asyncio.run(agent.run_workflow("unknown_flow", "Do work"))
 
     assert "unknown workflow 'unknown_flow'" in result
+
+
+def test_run_workflow_can_resume_from_specific_step(tmp_path):
+    async def scenario():
+        provider = WorkflowProvider()
+        agent = _make_agent(tmp_path, provider)
+        storage = agent.storage
+        agent._current_session_id.set("telegram:user-a")
+        agent._current_run_id.set("run_parent")
+        agent._current_channel.set("telegram")
+        agent._current_external_chat_id.set("user-a")
+        agent.app_home = tmp_path / "opensprite-home"
+        await storage.create_run("telegram:user-a", "run_parent", metadata={"objective": "workflow resume"})
+
+        result = await agent.run_workflow("implement_then_review", "Implement a safe change.", start_step="review")
+        trace = await storage.get_run_trace("telegram:user-a", "run_parent")
+        return result, trace, provider.calls
+
+    result, trace, calls = asyncio.run(scenario())
+
+    assert "Workflow: implement_then_review" in result
+    assert "Resumed from step: 2" in result
+    assert "[2] code-reviewer | completed" in result
+    assert trace is not None
+    started_event = next(event for event in trace.events if event.event_type == "workflow.started")
+    assert started_event.payload["resumed"] is True
+    assert started_event.payload["start_step_id"] == "review"
+    assert started_event.payload["start_step_label"] == "Code review"
+    assert any("Resume the code review step" in str(message.content) for call in calls for message in call["messages"])
+
+
+def test_run_workflow_returns_error_for_unknown_start_step(tmp_path):
+    agent = _make_agent(tmp_path, WorkflowProvider())
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(agent.run_workflow("implement_then_review", "Do work", start_step="nope"))
+
+    assert "unknown start_step 'nope'" in result
 
 
 def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
