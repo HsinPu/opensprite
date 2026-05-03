@@ -53,6 +53,59 @@ def test_work_progress_tracks_verification_and_next_action():
     assert update.continuation_budget == 3
 
 
+def test_work_progress_tracks_missing_review_and_follow_up_action():
+    intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    completion = CompletionGateResult(
+        status="needs_review",
+        reason="delegated review was not recorded for code changes",
+        review_required=True,
+    )
+
+    update = WorkProgressService().evaluate(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(
+            content="Implemented.",
+            executed_tool_calls=1,
+            file_change_count=1,
+            touched_paths=("src/agent.py",),
+        ),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+
+    assert update.status == "reviewing"
+    assert update.next_action == "collect_review_evidence"
+
+
+def test_work_progress_tracks_review_findings_and_follow_up_action():
+    intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    completion = CompletionGateResult(
+        status="needs_review",
+        reason="delegated review reported findings that require follow-up",
+        review_required=True,
+        review_attempted=True,
+        review_finding_count=1,
+        active_task_detail="Null handling bug: Empty input can raise an exception.",
+    )
+
+    update = WorkProgressService().evaluate(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(
+            content="Implemented.",
+            executed_tool_calls=1,
+            file_change_count=1,
+            touched_paths=("src/agent.py",),
+        ),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+
+    assert update.status == "reviewing"
+    assert update.next_action == "address_review_findings"
+
+
 def test_work_progress_stops_repeated_continuation_without_progress():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
     completion = CompletionGateResult(status="needs_verification", reason="required verification was not recorded")
@@ -253,6 +306,90 @@ def test_work_progress_updates_state_and_renders_summary():
     assert "Pending steps:" in summary
     assert "Resume hint: Resume by running or fixing the required verification." in summary
     assert "src/agent.py" in summary
+
+
+def test_work_progress_resume_hint_changes_for_review_follow_up():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    plan = service.create_plan(intent)
+    initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+    assert initial is not None
+    progress = service.evaluate(
+        task_intent=intent,
+        completion_result=CompletionGateResult(
+            status="needs_review",
+            reason="delegated review reported findings that require follow-up",
+            review_required=True,
+            review_attempted=True,
+            review_finding_count=1,
+            active_task_detail="Null handling bug: Empty input can raise an exception.",
+        ),
+        execution_result=ExecutionResult(
+            content="Refactor complete.",
+            executed_tool_calls=1,
+            file_change_count=2,
+            touched_paths=("src/agent.py", "tests/test_agent.py"),
+        ),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+    updated = service.update_state(
+        session_id="web:browser-1",
+        state=initial,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(
+            status="needs_review",
+            reason="delegated review reported findings that require follow-up",
+            review_required=True,
+            review_attempted=True,
+            review_finding_count=1,
+            active_task_detail="Null handling bug: Empty input can raise an exception.",
+        ),
+    )
+
+    assert updated is not None
+    assert updated.pending_steps[0] == "Null handling bug: Empty input can raise an exception."
+    assert updated.resume_hint == "Resume by addressing the delegated review findings before treating the task as complete."
+
+
+def test_work_progress_uses_incomplete_follow_up_detail_as_pending_step():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+    plan = service.create_plan(intent)
+    initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+    assert initial is not None
+    detail = "Finish the remaining workflow steps for implement_then_review. Workflow stopped after 1/2 completed step(s)."
+    progress = service.evaluate(
+        task_intent=intent,
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="workflow implement_then_review did not complete successfully",
+            active_task_detail=detail,
+        ),
+        execution_result=ExecutionResult(
+            content="Workflow cancelled.",
+            executed_tool_calls=1,
+        ),
+        auto_continue_attempts=0,
+        pass_index=1,
+    )
+    updated = service.update_state(
+        session_id="web:browser-1",
+        state=initial,
+        task_intent=intent,
+        work_plan=plan,
+        progress=progress,
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="workflow implement_then_review did not complete successfully",
+            active_task_detail=detail,
+        ),
+    )
+
+    assert updated is not None
+    assert updated.pending_steps[0] == detail
 
 
 def test_work_progress_merges_multiple_delegated_tasks_and_clears_selection_on_complete():

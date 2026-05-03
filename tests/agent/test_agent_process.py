@@ -894,7 +894,7 @@ def test_agent_process_emits_completion_gate_needs_review_after_code_changes_wit
     assert completion_event.payload["status"] == "needs_review"
     assert completion_event.payload["reason"] == "delegated review was not recorded for code changes"
     assert completion_event.payload["review_required"] is True
-    assert work_progress_event.payload["next_action"] == "continue_review"
+    assert work_progress_event.payload["next_action"] == "collect_review_evidence"
 
 
 def test_agent_process_workflow_completion_authority_marks_complete_with_clean_review(tmp_path):
@@ -1012,7 +1012,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[5].payload["next_action"] == "continue_work"
     assert events[7].payload["status"] == "needs_review"
     assert events[7].payload["reason"] == "delegated review was not recorded for code changes"
-    assert events[8].payload["next_action"] == "continue_review"
+    assert events[8].payload["next_action"] == "collect_review_evidence"
     assert events[9].payload["completion_status"] == "needs_review"
     assert events[10].payload["reason"] == "review_evidence_still_missing"
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")

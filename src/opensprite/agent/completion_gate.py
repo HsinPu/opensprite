@@ -162,6 +162,7 @@ class CompletionGateService:
                 status=workflow_gate["status"],
                 reason=workflow_gate["reason"],
                 active_task_status="done" if workflow_gate["status"] == "complete" else None,
+                active_task_detail=workflow_gate.get("detail") or None,
                 should_update_active_task=workflow_gate["status"] == "complete" and task_intent.should_seed_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -218,6 +219,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="needs_review",
                 reason=reason,
+                active_task_detail=_review_follow_up_detail(review),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -335,6 +337,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
     clean_review_recorded = False
     problematic_review_recorded = False
     summary = ""
+    first_finding = ""
     for task in delegated_tasks:
         prompt_type = str(task.prompt_type or "").strip()
         if prompt_type not in _REVIEW_PROMPT_TYPES:
@@ -350,6 +353,8 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         task_summary = str((structured or {}).get("summary") or task.summary or "").strip()
         if task_summary and not summary:
             summary = task_summary
+        if not first_finding:
+            first_finding = _first_review_finding(structured)
         if structured_status == "ok" and task_findings == 0:
             clean_review_recorded = True
             continue
@@ -364,6 +369,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         "summary": summary,
         "prompt_types": tuple(dict.fromkeys(prompt_types)),
         "finding_count": finding_count,
+        "first_finding": first_finding,
     }
 
 
@@ -375,20 +381,29 @@ def _workflow_gate_outcome(
     verification_attempted: bool,
     verification_passed: bool,
 ) -> dict[str, str] | None:
-    completed_outcomes = [
+    relevant_outcomes = [
         outcome
         for outcome in workflow_outcomes
-        if isinstance(outcome, dict) and str(outcome.get("status") or "") == "completed"
+        if isinstance(outcome, dict) and str(outcome.get("workflow") or "").strip()
     ]
-    if not completed_outcomes:
+    if not relevant_outcomes:
         return None
-    workflow = completed_outcomes[-1]
+    workflow = relevant_outcomes[-1]
     workflow_id = str(workflow.get("workflow") or "").strip()
+    workflow_status = str(workflow.get("status") or "").strip()
     review_attempted = bool(workflow.get("review_attempted"))
     review_passed = bool(workflow.get("review_passed"))
     review_finding_count = int(workflow.get("review_finding_count") or 0)
     workflow_verification_attempted = bool(workflow.get("verification_attempted"))
     workflow_verification_passed = bool(workflow.get("verification_passed"))
+
+    if workflow_status in {"failed", "cancelled"}:
+        detail = _workflow_follow_up_detail(workflow_id, workflow_status, workflow)
+        return {
+            "status": "blocked" if workflow_status == "failed" else "incomplete",
+            "reason": f"workflow {workflow_id} did not complete successfully",
+            "detail": detail,
+        }
 
     if workflow_id == "research_then_outline":
         return {
@@ -400,6 +415,7 @@ def _workflow_gate_outcome(
         return {
             "status": "needs_verification",
             "reason": "workflow completed but required verification evidence is still missing",
+            "detail": str(workflow.get("summary") or "").strip(),
         }
 
     if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
@@ -407,11 +423,13 @@ def _workflow_gate_outcome(
             return {
                 "status": "needs_review",
                 "reason": f"workflow {workflow_id} completed but review evidence is missing",
+                "detail": "Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
             }
         if not review_passed or review_finding_count > 0:
             return {
                 "status": "needs_review",
                 "reason": f"workflow {workflow_id} completed but review findings still require follow-up",
+                "detail": str(workflow.get("review_summary") or workflow.get("summary") or "").strip(),
             }
         return {
             "status": "complete",
@@ -425,3 +443,53 @@ def _workflow_gate_outcome(
         }
 
     return None
+
+
+def _first_review_finding(structured_output: Any) -> str:
+    sections = structured_output.get("sections") if isinstance(structured_output, dict) else None
+    if not isinstance(sections, list):
+        return ""
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        items = section.get("items")
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                detail = _format_review_finding(item)
+                if detail:
+                    return detail
+            elif isinstance(item, str) and item.strip():
+                return item.strip()
+    return ""
+
+
+def _format_review_finding(item: dict[str, Any]) -> str:
+    title = str(item.get("title") or "").strip()
+    path = str(item.get("path") or "").strip()
+    fix = str(item.get("fix") or "").strip()
+    why = str(item.get("why") or "").strip()
+    subject = f"{path}: {title}" if path and title else title or path
+    if fix:
+        return f"{subject}: {fix}" if subject else fix
+    if why:
+        return f"{subject}: {why}" if subject else why
+    return subject
+
+
+def _review_follow_up_detail(review: dict[str, Any]) -> str | None:
+    if not review.get("attempted"):
+        return "Run or rerun a delegated review step for the changed code before treating the task as complete."
+    detail = str(review.get("first_finding") or review.get("summary") or "").strip()
+    return detail or "Address the delegated review findings before treating the task as complete."
+
+
+def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow: dict[str, Any]) -> str:
+    error = str(workflow.get("error") or "").strip()
+    summary = str(workflow.get("summary") or "").strip()
+    if workflow_status == "cancelled":
+        if summary:
+            return f"Finish the remaining workflow steps for {workflow_id}. {summary}"
+        return f"Finish the remaining workflow steps for {workflow_id}."
+    return error or summary

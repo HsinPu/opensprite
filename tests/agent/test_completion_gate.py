@@ -117,6 +117,7 @@ def test_completion_gate_requires_review_for_code_changes_without_review_evidenc
     assert result.reason == "delegated review was not recorded for code changes"
     assert result.review_required is True
     assert result.review_attempted is False
+    assert "delegated review step" in (result.active_task_detail or "")
 
 
 def test_completion_gate_requires_follow_up_when_review_reports_findings():
@@ -152,6 +153,54 @@ def test_completion_gate_requires_follow_up_when_review_reports_findings():
     assert result.review_attempted is True
     assert result.review_passed is False
     assert result.review_finding_count == 1
+    assert "correctness risk" in (result.active_task_detail or "")
+
+
+def test_completion_gate_prefers_structured_review_fix_for_follow_up_detail():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Implemented the final cleanup successfully.",
+        execution_result=ExecutionResult(
+            content="Implemented the final cleanup successfully.",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="completed",
+                    summary="One high-risk bug found.",
+                    metadata={
+                        "structured_output": {
+                            "status": "ok",
+                            "summary": "One high-risk bug found.",
+                            "finding_count": 1,
+                            "sections": [
+                                {
+                                    "key": "findings",
+                                    "title": "Review Findings",
+                                    "type": "finding_list",
+                                    "items": [
+                                        {
+                                            "title": "Null handling bug",
+                                            "path": "src/foo.py",
+                                            "why": "Empty input can raise an exception.",
+                                            "fix": "Guard the null path before dereference.",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.active_task_detail == "src/foo.py: Null handling bug: Guard the null path before dereference."
 
 
 def test_completion_gate_allows_workflow_completion_with_clean_review():
@@ -190,6 +239,58 @@ def test_completion_gate_allows_workflow_completion_with_clean_review():
 
     assert result.status == "complete"
     assert result.reason == "workflow implement_then_review completed with clean review evidence"
+
+
+def test_completion_gate_marks_blocked_when_workflow_fails():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow failed.",
+        execution_result=ExecutionResult(
+            content="Workflow failed.",
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_abc123",
+                    "workflow": "implement_then_review",
+                    "status": "failed",
+                    "error": "review step failed",
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "blocked"
+    assert result.reason == "workflow implement_then_review did not complete successfully"
+    assert result.active_task_detail == "review step failed"
+
+
+def test_completion_gate_marks_incomplete_when_workflow_is_cancelled():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow cancelled.",
+        execution_result=ExecutionResult(
+            content="Workflow cancelled.",
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_abc123",
+                    "workflow": "implement_then_review",
+                    "status": "cancelled",
+                    "error": "cancelled",
+                    "summary": "Workflow stopped after 1/2 completed step(s).",
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "workflow implement_then_review did not complete successfully"
+    assert result.active_task_detail == (
+        "Finish the remaining workflow steps for implement_then_review. "
+        "Workflow stopped after 1/2 completed step(s)."
+    )
 
 
 def test_completion_gate_allows_research_then_outline_without_completion_phrase():
