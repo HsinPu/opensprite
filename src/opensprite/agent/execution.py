@@ -912,6 +912,7 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         allow_tools: bool,
+        provider_override: LLMProvider | None = None,
         tool_result_session_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
@@ -926,6 +927,50 @@ Output exactly these sections when applicable:
         work_state_summary: str = "",
     ) -> ExecutionResult:
         """Execute the prepared messages, including tool calls when enabled."""
+        original_provider = self.provider
+        active_provider = provider_override or original_provider
+        self.provider = active_provider
+        try:
+            return await self._execute_messages_with_provider(
+                log_id,
+                chat_messages,
+                allow_tools=allow_tools,
+                tool_result_session_id=tool_result_session_id,
+                tool_registry=tool_registry,
+                on_tool_before_execute=on_tool_before_execute,
+                on_tool_after_execute=on_tool_after_execute,
+                on_llm_status=on_llm_status,
+                on_response_delta=on_response_delta,
+                on_tool_input_delta=on_tool_input_delta,
+                on_reasoning_delta=on_reasoning_delta,
+                refresh_system_prompt=refresh_system_prompt,
+                max_tool_iterations=max_tool_iterations,
+                should_cancel=should_cancel,
+                work_state_summary=work_state_summary,
+            )
+        finally:
+            self.provider = original_provider
+
+    async def _execute_messages_with_provider(
+        self,
+        log_id: str,
+        chat_messages: list[ChatMessage],
+        *,
+        allow_tools: bool,
+        tool_result_session_id: str | None = None,
+        tool_registry: ToolRegistry | None = None,
+        on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
+        on_tool_after_execute: Callable[..., Awaitable[None]] | None = None,
+        on_llm_status: Callable[[str], Awaitable[None]] | None = None,
+        on_response_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        on_tool_input_delta: Callable[[str, str, str, int], Awaitable[None]] | None = None,
+        on_reasoning_delta: Callable[[str], Awaitable[None]] | None = None,
+        refresh_system_prompt: Callable[[], str] | None = None,
+        max_tool_iterations: int | None = None,
+        should_cancel: Callable[[], bool] | None = None,
+        work_state_summary: str = "",
+    ) -> ExecutionResult:
+        """Provider-bound execution body used by execute_messages()."""
         active_tools = tool_registry or self.tools
         tools = None
         if allow_tools and active_tools.tool_names:

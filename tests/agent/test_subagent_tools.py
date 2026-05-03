@@ -586,6 +586,18 @@ class StructuredReviewProvider:
         return "fake-model"
 
 
+class ModelRoutingProvider:
+    def __init__(self):
+        self.calls = []
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append({"messages": list(messages), "tools": tools, "model": model})
+        return LLMResponse(content="routed result", model=model or "fake-model")
+
+    def get_default_model(self) -> str:
+        return "fake-model"
+
+
 def test_subagent_resume_uses_child_session_history(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
@@ -893,6 +905,44 @@ def test_run_subagents_many_emits_group_failed_when_one_child_fails(tmp_path):
     assert child_statuses == ["completed", "failed"]
     assert parent_trace is not None
     assert "subagent.group.failed" in [event.event_type for event in parent_trace.events]
+
+
+def test_run_subagent_uses_prompt_model_override_when_present(tmp_path):
+    workspace = tmp_path / "workspace"
+    session_workspace = get_session_workspace("telegram:user-a", workspace_root=workspace)
+    prompt_dir = session_workspace / "subagent_prompts"
+    prompt_dir.mkdir(parents=True)
+    (prompt_dir / "custom-reviewer.md").write_text(
+        "---\n"
+        "name: custom-reviewer\n"
+        "description: Custom reviewer with a routed model.\n"
+        "tool_profile: read-only\n"
+        "llm_model: review-model\n"
+        "---\n"
+        "Review the requested task.\n",
+        encoding="utf-8",
+    )
+    provider = ModelRoutingProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=MemoryStorage(),
+        context_builder=FakeContextBuilder(workspace),
+        tools=ToolRegistry(),
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=3),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
+
+    assert "Subagent: custom-reviewer" in result
+    assert provider.calls[0]["model"] == "review-model"
 
 
 def test_run_subagent_strips_trailing_json_and_persists_structured_output(tmp_path):

@@ -10,10 +10,11 @@ from uuid import uuid4
 from typing import Any, Awaitable, Callable
 
 from ..llms import ChatMessage
+from ..llms.routed import ModelRoutedProvider
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..subagent_output import parse_structured_subagent_output
-from ..subagent_prompts import get_all_subagents
+from ..subagent_prompts import get_all_subagents, load_metadata
 from ..subagent_session import (
     build_child_subagent_session_id,
     extract_subagent_prompt_type,
@@ -49,6 +50,7 @@ class PreparedSubagentTask:
     workspace: Path
     subagent_tools: ToolRegistry
     subagent_profile_name: str
+    provider_override: Any | None = None
     group_id: str | None = None
     group_index: int | None = None
     group_total: int | None = None
@@ -92,6 +94,7 @@ class SubagentRunService:
         current_run_id_getter: Callable[[], str | None],
         current_channel_getter: Callable[[], str | None],
         current_external_chat_id_getter: Callable[[], str | None],
+        provider_getter: Callable[[], Any],
         should_cancel_parent_run: Callable[[str, str | None], bool],
         skills_loader_getter: Callable[[], Any],
         save_message: Callable[[str, str, str, str | None, dict[str, Any] | None], Awaitable[None]],
@@ -111,6 +114,7 @@ class SubagentRunService:
         self._current_run_id_getter = current_run_id_getter
         self._current_channel_getter = current_channel_getter
         self._current_external_chat_id_getter = current_external_chat_id_getter
+        self._provider_getter = provider_getter
         self._should_cancel_parent_run = should_cancel_parent_run
         self._skills_loader_getter = skills_loader_getter
         self._save_message = save_message
@@ -188,6 +192,26 @@ class SubagentRunService:
         if parent_run_id is None:
             return False
         return self._should_cancel_parent_run(parent_session_id, parent_run_id)
+
+    def _resolve_provider_override(
+        self,
+        prompt_type: str,
+        *,
+        app_home: Path | None,
+        workspace: Path,
+    ) -> Any | None:
+        metadata = load_metadata(prompt_type, app_home=app_home, session_workspace=workspace)
+        llm_model = str(metadata.get("llm_model") or "").strip()
+        if not llm_model:
+            return None
+        base_provider = self._provider_getter()
+        try:
+            current_model = str(base_provider.get_default_model() or "").strip()
+        except Exception:
+            current_model = ""
+        if llm_model == current_model:
+            return None
+        return ModelRoutedProvider(base_provider, model=llm_model)
 
     async def _prepare_task(
         self,
@@ -268,6 +292,11 @@ class SubagentRunService:
             workspace=workspace,
             subagent_tools=subagent_tools,
             subagent_profile_name=subagent_profile.name,
+            provider_override=self._resolve_provider_override(
+                effective_prompt_type,
+                app_home=app_home,
+                workspace=workspace,
+            ),
             group_id=group_id,
             group_index=group_index,
             group_total=group_total,
@@ -560,6 +589,7 @@ class SubagentRunService:
                 log_id,
                 chat_messages,
                 allow_tools=bool(prepared.subagent_tools.tool_names),
+                provider_override=prepared.provider_override,
                 tool_result_session_id=prepared.child_session_id,
                 tool_registry=prepared.subagent_tools,
                 on_tool_before_execute=tool_progress_hook,
