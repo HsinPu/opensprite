@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+import re
 from typing import Any
 
 from ..context.paths import (
@@ -113,3 +115,165 @@ class UserOverlayStateStore(JsonProgressStore):
 
     def __init__(self, overlay_id: str, *, app_home: str | Path | None = None):
         super().__init__(get_user_overlay_state_file(overlay_id, app_home=app_home))
+
+
+_SECTION_HEADING_RE = re.compile(r"^#+\s+(?P<title>.+?)\s*$")
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_bullets(lines: list[str]) -> list[str]:
+    items: list[str] = []
+    for line in lines:
+        stripped = str(line or "").strip()
+        if not stripped.startswith("-"):
+            continue
+        text = stripped[1:].strip()
+        if not text or text == "not set":
+            continue
+        if text not in items:
+            items.append(text)
+    return items
+
+
+def _section_block(markdown: str, heading: str) -> str:
+    current_heading = ""
+    collected: list[str] = []
+    for raw_line in str(markdown or "").splitlines():
+        heading_match = _SECTION_HEADING_RE.match(raw_line)
+        if heading_match:
+            current_heading = heading_match.group("title").strip().lower()
+            continue
+        if current_heading == heading.strip().lower():
+            collected.append(raw_line)
+    return "\n".join(collected)
+
+
+def _section_bullets(markdown: str, heading: str) -> list[str]:
+    return _normalize_bullets(_section_block(markdown, heading).splitlines())
+
+
+def _profile_bullets(profile_block: str) -> list[str]:
+    return _normalize_bullets(str(profile_block or "").splitlines())
+
+
+def _response_language(response_language_block: str) -> str | None:
+    items = _normalize_bullets(str(response_language_block or "").splitlines())
+    return items[0] if items else None
+
+
+def _render_overlay(preferences: list[str], stable_facts: list[str], response_language: str | None) -> str:
+    preference_lines = "\n".join(f"- {item}" for item in preferences) if preferences else "- "
+    fact_lines = "\n".join(f"- {item}" for item in stable_facts) if stable_facts else "- "
+    language_line = f"- {response_language}" if response_language else "- not set"
+    return (
+        "# Stable Preferences\n"
+        f"{preference_lines}\n\n"
+        "# Stable Facts\n"
+        f"{fact_lines}\n\n"
+        "# Response Language\n"
+        f"{language_line}\n"
+    )
+
+
+def _merge_stable_lists(existing: list[str], incoming: list[str]) -> list[str]:
+    merged: list[str] = []
+    for item in [*incoming, *existing]:
+        text = str(item or "").strip()
+        if text and text not in merged:
+            merged.append(text)
+    return merged
+
+
+def _slug(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", str(value or "").lower()).strip("-")
+    return normalized or "item"
+
+
+class UserOverlayPromotionService:
+    """Deterministically promote stable session profile/facts into a cross-session overlay."""
+
+    def __init__(self, *, overlay_store: UserOverlayStore, index_store: UserOverlayIndexStore):
+        self.overlay_store = overlay_store
+        self.index_store = index_store
+
+    def update_from_session_documents(
+        self,
+        overlay_id: str,
+        *,
+        profile_block: str,
+        response_language_block: str,
+        memory_text: str,
+        source_session_id: str,
+        source_run_id: str | None = None,
+    ) -> dict[str, Any]:
+        current_overlay = self.overlay_store.read(overlay_id)
+        existing_preferences = _section_bullets(current_overlay, "Stable Preferences")
+        existing_facts = _section_bullets(current_overlay, "Stable Facts")
+        existing_language = _response_language(_section_block(current_overlay, "Response Language"))
+
+        profile_preferences = _profile_bullets(profile_block)
+        memory_preferences = _section_bullets(memory_text, "User Preferences")
+        memory_facts = _section_bullets(memory_text, "Important Facts")
+
+        next_preferences = profile_preferences or memory_preferences or existing_preferences
+        next_facts = _merge_stable_lists(existing_facts, memory_facts)
+        next_language = _response_language(response_language_block) or existing_language
+
+        rendered = _render_overlay(next_preferences, next_facts, next_language)
+        changed = rendered.strip() != current_overlay.strip()
+        if changed or not current_overlay:
+            self.overlay_store.write(overlay_id, rendered)
+
+        now = _now_iso()
+        self.index_store.write(
+            overlay_id,
+            {
+                "schema_version": 1,
+                "overlay_id": overlay_id,
+                "updated_at": now,
+                "response_language": (
+                    {
+                        "text": next_language,
+                        "confidence": 0.95,
+                        "source_sessions": [source_session_id],
+                        **({"source_runs": [source_run_id]} if source_run_id else {}),
+                        "updated_at": now,
+                    }
+                    if next_language
+                    else None
+                ),
+                "preferences": [
+                    {
+                        "id": f"pref:{_slug(item)}",
+                        "text": item,
+                        "confidence": 0.9,
+                        "source_sessions": [source_session_id],
+                        **({"source_runs": [source_run_id]} if source_run_id else {}),
+                        "updated_at": now,
+                    }
+                    for item in next_preferences
+                ],
+                "stable_facts": [
+                    {
+                        "id": f"fact:{_slug(item)}",
+                        "text": item,
+                        "confidence": 0.85,
+                        "source_sessions": [source_session_id],
+                        **({"source_runs": [source_run_id]} if source_run_id else {}),
+                        "updated_at": now,
+                    }
+                    for item in next_facts
+                ],
+            },
+        )
+
+        return {
+            "changed": changed,
+            "overlay_id": overlay_id,
+            "preferences": next_preferences,
+            "stable_facts": next_facts,
+            "response_language": next_language,
+        }

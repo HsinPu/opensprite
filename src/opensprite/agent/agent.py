@@ -42,6 +42,7 @@ from ..context.paths import (
 from ..documents.recent_summary import RecentSummaryConsolidator, RecentSummaryStore
 from ..media import MediaRouter
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
+from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
@@ -635,6 +636,12 @@ class AgentLoop:
         self.auto_continue = AutoContinueService(max_auto_continues=1)
         self.work_progress = WorkProgressService()
         self.run_state = AgentRunStateService()
+        self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
+        self.user_overlay_index = UserOverlayIndexStore(app_home=self.app_home)
+        self.user_overlay_promotion = UserOverlayPromotionService(
+            overlay_store=self.user_overlay_store,
+            index_store=self.user_overlay_index,
+        )
         self.turn_runner = AgentTurnRunner(
             run_trace=self.run_trace,
             response_finalizer=self.response_finalizer,
@@ -899,6 +906,33 @@ class AgentLoop:
             return
         overlay_id = resolve_user_overlay_id(channel=channel, sender_id=sender_id, metadata=metadata)
         setter(session_id, overlay_id)
+
+    def _get_session_overlay_id(self, session_id: str) -> str | None:
+        getter = getattr(self._context_builder, "get_session_overlay_id", None)
+        if not callable(getter):
+            return None
+        value = getter(session_id)
+        text = str(value or "").strip()
+        return text or None
+
+    def _maybe_update_user_overlay(self, session_id: str) -> dict[str, Any] | None:
+        overlay_id = self._get_session_overlay_id(session_id)
+        if not overlay_id or self.app_home is None:
+            return None
+        bootstrap_dir = getattr(self._context_builder, "bootstrap_dir", None)
+        profile_store = create_user_profile_store(
+            self.app_home,
+            session_id,
+            bootstrap_dir=bootstrap_dir,
+            workspace_root=self.tool_workspace,
+        )
+        return self.user_overlay_promotion.update_from_session_documents(
+            overlay_id,
+            profile_block=profile_store.read_managed_block(),
+            response_language_block=profile_store.read_response_language_block(),
+            memory_text=self.memory.read(session_id),
+            source_session_id=session_id,
+        )
 
     def _setup_storage(self, storage: StorageProvider | None) -> StorageProvider:
         """Resolve the storage provider used by the agent."""
@@ -1828,10 +1862,12 @@ class AgentLoop:
             session_id: Internal session ID.
         """
         await self.memory_consolidation.maybe_consolidate(session_id)
+        self._maybe_update_user_overlay(session_id)
 
     async def _maybe_update_user_profile(self, session_id: str) -> None:
         """Check whether this session's USER.md should be refreshed."""
         await self.user_profile_update.maybe_update(session_id)
+        self._maybe_update_user_overlay(session_id)
 
     async def _maybe_update_active_task(self, session_id: str) -> None:
         """Check whether this session's ACTIVE_TASK.md should be refreshed."""

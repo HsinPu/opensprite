@@ -211,6 +211,10 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
             return
         self._session_overlay_ids[normalized_session_id] = normalized_overlay_id
 
+    def get_session_overlay_id(self, session_id: str) -> str | None:
+        """Return the currently resolved overlay identity for one session, if any."""
+        return self._session_overlay_ids.get(str(session_id or "default").strip() or "default")
+
     def get_session_workspace(self, session_id: str = "default") -> Path:
         """Resolve the current session's isolated workspace."""
         return get_session_workspace(session_id, workspace_root=self.tool_workspace)

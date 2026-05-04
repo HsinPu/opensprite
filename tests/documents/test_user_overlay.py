@@ -1,4 +1,12 @@
-from opensprite.documents.user_overlay import USER_OVERLAY_TEMPLATE, UserOverlayIndexStore, UserOverlayStore
+from opensprite.context.file_builder import FileContextBuilder
+from opensprite.context.paths import sync_templates
+from opensprite.documents.user_profile import create_user_profile_store
+from opensprite.documents.user_overlay import (
+    USER_OVERLAY_TEMPLATE,
+    UserOverlayIndexStore,
+    UserOverlayPromotionService,
+    UserOverlayStore,
+)
 
 
 def test_user_overlay_store_bootstraps_and_reads_overlay(tmp_path):
@@ -36,3 +44,61 @@ def test_user_overlay_index_store_roundtrips_payload(tmp_path):
 
 def test_user_overlay_template_stays_human_readable():
     assert USER_OVERLAY_TEMPLATE.startswith("# Stable Preferences")
+
+
+def test_user_overlay_promotion_service_merges_profile_and_memory(tmp_path):
+    overlay_store = UserOverlayStore(app_home=tmp_path / "home")
+    index_store = UserOverlayIndexStore(app_home=tmp_path / "home")
+    service = UserOverlayPromotionService(overlay_store=overlay_store, index_store=index_store)
+
+    result = service.update_from_session_documents(
+        "web:profile-a",
+        profile_block="- Prefers concise replies.\n- Works mostly in Python.",
+        response_language_block="- Traditional Chinese (Taiwan)",
+        memory_text="# User Preferences\n- Prefers concise replies.\n\n# Important Facts\n- Uses FastAPI for backend work.\n",
+        source_session_id="web:browser-1",
+        source_run_id="run_1",
+    )
+
+    overlay_text = overlay_store.read("web:profile-a")
+    index_payload = index_store.read("web:profile-a")
+
+    assert result["changed"] is True
+    assert "- Prefers concise replies." in overlay_text
+    assert "- Uses FastAPI for backend work." in overlay_text
+    assert "- Traditional Chinese (Taiwan)" in overlay_text
+    assert index_payload["response_language"]["text"] == "Traditional Chinese (Taiwan)"
+    assert index_payload["preferences"][0]["text"] == "Prefers concise replies."
+    assert index_payload["stable_facts"][0]["text"] == "Uses FastAPI for backend work."
+
+
+def test_second_session_can_read_promoted_overlay(tmp_path):
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+    overlay_store = UserOverlayStore(app_home=app_home)
+    index_store = UserOverlayIndexStore(app_home=app_home)
+    service = UserOverlayPromotionService(overlay_store=overlay_store, index_store=index_store)
+    service.update_from_session_documents(
+        "web:profile-a",
+        profile_block="- Prefers concise replies.",
+        response_language_block="- Traditional Chinese (Taiwan)",
+        memory_text="# Important Facts\n- Maintains OpenSprite.\n",
+        source_session_id="web:browser-1",
+    )
+
+    builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+        default_skills_dir=tmp_path / "skills",
+    )
+    profile = create_user_profile_store(app_home, "web:browser-2")
+    profile.write_managed_block("- Session-local note only.")
+    builder.set_session_overlay_id("web:browser-2", "web:profile-a")
+
+    prompt = builder.build_system_prompt("web:browser-2")
+
+    assert "- Prefers concise replies." in prompt
+    assert "- Maintains OpenSprite." in prompt
+    assert "- Session-local note only." in prompt
