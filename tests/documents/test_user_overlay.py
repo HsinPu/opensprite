@@ -5,6 +5,7 @@ from opensprite.documents.user_overlay import (
     USER_OVERLAY_TEMPLATE,
     UserOverlayIndexStore,
     UserOverlayPromotionService,
+    UserOverlayRetrievalPlanner,
     UserOverlayStore,
 )
 
@@ -102,3 +103,29 @@ def test_second_session_can_read_promoted_overlay(tmp_path):
     assert "- Prefers concise replies." in prompt
     assert "- Maintains OpenSprite." in prompt
     assert "- Session-local note only." in prompt
+
+
+def test_user_overlay_retrieval_planner_selects_relevant_items(tmp_path):
+    index_store = UserOverlayIndexStore(app_home=tmp_path / "home")
+    index_store.write(
+        "web:profile-a",
+        {
+            "updated_at": "2026-05-04T12:00:00Z",
+            "response_language": {"text": "Traditional Chinese (Taiwan)", "confidence": 0.95},
+            "preferences": [
+                {"id": "pref:concise", "text": "Prefer concise replies.", "confidence": 0.9, "updated_at": "2026-05-04T12:00:00Z"},
+            ],
+            "stable_facts": [
+                {"id": "fact:python", "text": "Works mostly on Python backend tasks.", "confidence": 0.85, "updated_at": "2026-05-04T12:00:00Z"},
+                {"id": "fact:frontend", "text": "Maintains frontend design systems.", "confidence": 0.7, "updated_at": "2026-05-04T12:00:00Z"},
+            ],
+        },
+    )
+    planner = UserOverlayRetrievalPlanner(index_store=index_store)
+
+    context = planner.build_context("web:profile-a", "Help me with this Python backend refactor.")
+
+    assert "# Relevant Stable User Overlay" in context
+    assert "Traditional Chinese (Taiwan)" in context
+    assert "Works mostly on Python backend tasks." in context
+    assert "Maintains frontend design systems." not in context

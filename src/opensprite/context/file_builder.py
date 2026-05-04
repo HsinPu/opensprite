@@ -32,7 +32,7 @@ from ..planning_mode import resolve_planning_mode
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_profile import create_user_profile_store
-from ..documents.user_overlay import UserOverlayStore
+from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrievalPlanner, UserOverlayStore
 from ..skills import SkillsLoader
 from ..subagent_prompts import get_all_subagents
 from ..agent.learning_ledger import LearningLedger
@@ -185,6 +185,8 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         self.memory_store = MemoryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
         self.recent_summary_store = RecentSummaryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
         self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
+        self.user_overlay_index = UserOverlayIndexStore(app_home=self.app_home)
+        self.user_overlay_planner = UserOverlayRetrievalPlanner(index_store=self.user_overlay_index)
         self._runtime_mcp_tools: list[tuple[str, str]] = []
         self._session_overlay_ids: dict[str, str] = {}
         self.learning_ledger = learning_ledger
@@ -268,6 +270,12 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
             return ""
         overlay_path = get_user_overlay_file(overlay_id, app_home=self.app_home).expanduser().resolve()
         return f"# Stable User Overlay\n\nLoaded from: `{overlay_path}`\n\n{content.strip()}"
+
+    def _build_relevant_user_overlay_context(self, session_id: str, current_message: str) -> str:
+        overlay_id = self.get_session_overlay_id(session_id)
+        if not overlay_id:
+            return ""
+        return self.user_overlay_planner.build_context(overlay_id, current_message)
 
     def _read_workspace_agents(self, session_id: str) -> str:
         """Load AGENTS.md from the active workspace when present."""
@@ -453,6 +461,9 @@ Be conservative only for actions with external side effects or boundaries outsid
         planning_mode_guidance = resolve_planning_mode(current_message).overlay
         if planning_mode_guidance:
             messages.append({"role": "system", "content": planning_mode_guidance})
+        relevant_user_overlay = self._build_relevant_user_overlay_context(session_id, current_message)
+        if relevant_user_overlay:
+            messages.append({"role": "system", "content": relevant_user_overlay})
         relevant_learning = self._build_relevant_learning_context(session_id, current_message)
         if relevant_learning:
             messages.append({"role": "system", "content": relevant_learning})

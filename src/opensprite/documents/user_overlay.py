@@ -118,6 +118,7 @@ class UserOverlayStateStore(JsonProgressStore):
 
 
 _SECTION_HEADING_RE = re.compile(r"^#+\s+(?P<title>.+?)\s*$")
+_TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{2,}|[\u4e00-\u9fff]{2,}")
 
 
 def _now_iso() -> str:
@@ -277,3 +278,72 @@ class UserOverlayPromotionService:
             "stable_facts": next_facts,
             "response_language": next_language,
         }
+
+
+class UserOverlayRetrievalPlanner:
+    """Select concise stable overlay context relevant to the current turn."""
+
+    def __init__(self, *, index_store: UserOverlayIndexStore, item_limit: int = 4):
+        self.index_store = index_store
+        self.item_limit = max(1, item_limit)
+
+    def build_context(self, overlay_id: str | None, current_message: str) -> str:
+        normalized_overlay_id = str(overlay_id or "").strip()
+        if not normalized_overlay_id:
+            return ""
+        payload = self.index_store.read(normalized_overlay_id)
+        tokens = self._tokenize(current_message)
+        response_language = payload.get("response_language") if isinstance(payload.get("response_language"), dict) else None
+        preferences = [dict(item) for item in payload.get("preferences", []) if isinstance(item, dict)]
+        stable_facts = [dict(item) for item in payload.get("stable_facts", []) if isinstance(item, dict)]
+
+        ranked_preferences = self._rank_entries(preferences, tokens)
+        ranked_facts = self._rank_entries(stable_facts, tokens)
+        selected_preferences = ranked_preferences[: min(2, self.item_limit)]
+        remaining = max(0, self.item_limit - len(selected_preferences))
+        selected_facts = ranked_facts[:remaining]
+
+        if not response_language and not selected_preferences and not selected_facts:
+            return ""
+
+        lines = ["# Relevant Stable User Overlay"]
+        if response_language and str(response_language.get("text") or "").strip():
+            lines.extend(["", "## Response Language", f"- {str(response_language.get('text') or '').strip()}"])
+        if selected_preferences:
+            lines.extend(["", "## Relevant Stable Preferences", *[f"- {item['text']}" for item in selected_preferences]])
+        if selected_facts:
+            lines.extend(["", "## Relevant Stable Facts", *[f"- {item['text']}" for item in selected_facts]])
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _tokenize(text: str) -> list[str]:
+        seen: list[str] = []
+        for token in _TOKEN_PATTERN.findall(str(text or "").lower()):
+            if token not in seen:
+                seen.append(token)
+        return seen
+
+    @staticmethod
+    def _score_entry(entry: dict[str, Any], tokens: list[str]) -> int:
+        haystack = str(entry.get("text") or "").lower()
+        score = 0
+        for token in tokens:
+            if token and token in haystack:
+                score += 5
+        score += int(float(entry.get("confidence") or 0) * 10)
+        return score
+
+    def _rank_entries(self, entries: list[dict[str, Any]], tokens: list[str]) -> list[dict[str, Any]]:
+        ranked = sorted(
+            entries,
+            key=lambda entry: (
+                self._score_entry(entry, tokens),
+                str(entry.get("updated_at") or ""),
+            ),
+            reverse=True,
+        )
+        if tokens:
+            matched = [entry for entry in ranked if self._score_entry(entry, tokens) > int(float(entry.get("confidence") or 0) * 10)]
+            if matched:
+                return matched
+        return ranked
