@@ -120,6 +120,21 @@ def test_save_memory_tool_returns_error_for_unsafe_content(tmp_path):
     assert result.startswith("Error: Blocked unsafe durable memory write")
 
 
+def test_save_memory_tool_reports_size_and_delta(tmp_path):
+    app_home = tmp_path / "home"
+    workspace_root = app_home / "workspace"
+    memory_dir = app_home / "memory"
+    store = memory_module.MemoryStore(memory_dir, app_home=app_home, workspace_root=workspace_root)
+    store.write("telegram:room-1", "old")
+    tool = SaveMemoryTool(store, lambda: "telegram:room-1")
+
+    result = asyncio.run(tool._execute("new memory"))
+    unchanged = asyncio.run(tool._execute("new memory"))
+
+    assert result == "Memory saved (10 chars; delta +7 chars)"
+    assert unchanged == "Memory unchanged (10 chars)"
+
+
 def test_save_memory_tool_describes_memory_boundaries():
     assert "chat-continuity" in SaveMemoryTool.description
     assert "USER.md" in SaveMemoryTool.description

@@ -86,8 +86,8 @@ class SaveMemoryTool(Tool):
                 self.memory_store.write(session_id, memory_update)
             except DurableMemorySafetyError as exc:
                 return f"Error: {exc}"
-            return f"Memory saved ({len(memory_update)} chars)"
-        return "Memory unchanged"
+            return f"Memory saved ({len(memory_update):,} chars; delta {len(memory_update) - len(current):+,} chars)"
+        return f"Memory unchanged ({len(current):,} chars)"
 
 
 def register_memory_tool(

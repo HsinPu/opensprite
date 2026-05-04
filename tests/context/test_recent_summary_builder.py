@@ -14,4 +14,6 @@ def test_file_builder_includes_recent_summary_in_system_prompt(tmp_path):
     prompt = builder.build_system_prompt("telegram:room-1")
 
     assert "# Recent Summary" in prompt
+    assert "Approx size:" in prompt
+    assert "Keep this document concise; use search tools for detailed past transcripts." in prompt
     assert "current refactor" in prompt

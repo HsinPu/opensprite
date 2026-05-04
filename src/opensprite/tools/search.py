@@ -43,7 +43,11 @@ class SearchHistoryTool(_BaseSearchTool):
 
     @property
     def description(self) -> str:
-        return "Search saved conversation history for the current session only. Prefer this before asking the user to restate earlier chat details."
+        return (
+            "Search saved conversation history for the current session only. Prefer this before asking the user "
+            "to restate earlier chat details, and use it for prior decisions, commands, errors, task outcomes, "
+            "or transcript-specific facts that should not be copied into MEMORY.md."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:
@@ -86,7 +90,12 @@ class SearchKnowledgeTool(_BaseSearchTool):
 
     @property
     def description(self) -> str:
-        return "Search stored web search and web fetch results for the current session only. Prefer this before repeating web_search or web_fetch on topics already researched in this session, especially when the user is following up on earlier research."
+        return (
+            "Search stored web_search and web_fetch results for the current session only. Prefer this before "
+            "repeating web_search or web_fetch on topics already researched in this session, especially when the "
+            "user is following up on earlier research. Use this for retrieved web knowledge; use search_history "
+            "for chat decisions, commands, and task outcomes."
+        )
 
     @property
     def parameters(self) -> dict[str, Any]:

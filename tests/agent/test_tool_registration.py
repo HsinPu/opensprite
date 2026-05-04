@@ -285,6 +285,7 @@ def test_search_and_web_tools_describe_retrieval_preference():
     assert "prefer search_knowledge first" in web_search_tool.description.lower()
     assert "stored web_fetch results" in web_fetch_tool.description.lower()
     assert "prefer this before repeating web_search or web_fetch" in search_knowledge_tool.description.lower()
+    assert "use search_history for chat decisions" in search_knowledge_tool.description.lower()
 
 
 def test_register_default_tools_applies_cron_default_timezone_from_tools_config():

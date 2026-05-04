@@ -271,6 +271,11 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         overlay_path = get_user_overlay_file(overlay_id, app_home=self.app_home).expanduser().resolve()
         return f"# Stable User Overlay\n\nLoaded from: `{overlay_path}`\n\n{content.strip()}"
 
+    @staticmethod
+    def _size_hint(content: str) -> str:
+        """Return a compact size hint for durable prompt documents."""
+        return f"Approx size: {len(str(content or '')):,} chars. Keep this document concise; use search tools for detailed past transcripts."
+
     def _build_relevant_user_overlay_context(self, session_id: str, current_message: str) -> str:
         overlay_id = self.get_session_overlay_id(session_id)
         if not overlay_id:
@@ -326,7 +331,10 @@ This request appears to be a workspace or project task. Use the active workspace
             return ""
         return """# Retrieval Guidance
 
-This message appears to depend on earlier conversation state or prior research. Before asking the user to repeat context, prefer `search_history` for prior chat details and `search_knowledge` for previously fetched web research in this session.
+This message appears to depend on earlier conversation state or prior research. Before asking the user to repeat context:
+- prefer `search_history` for prior chat details, decisions, commands, errors, task outcomes, and transcript-specific facts.
+- prefer `search_knowledge` for previously fetched web pages or web-search results in this session.
+- Do not copy detailed past transcripts into MEMORY.md just to make them easier to recall; keep MEMORY.md for compact durable chat continuity and retrieve details on demand.
 """
 
     def build_system_prompt(self, session_id: str = "default") -> str:
@@ -342,6 +350,8 @@ This message appears to depend on earlier conversation state or prior research. 
         for key, content in bootstrap.items():
             if content:
                 section = content.strip()
+                if key == "USER":
+                    section = f"{section}\n\n{self._size_hint(section)}"
                 if section.startswith("#"):
                     parts.append(section)
                 else:
@@ -379,11 +389,11 @@ To use a skill, read its SKILL.md file using the read_skill tool.
 
         memory = self.memory_store.read(session_id)
         if memory:
-            parts.append(f"# Memory\n\n{memory}")
+            parts.append(f"# Memory\n\n{self._size_hint(memory)}\n\n{memory}")
 
         recent_summary = self.recent_summary_store.read(session_id)
         if recent_summary:
-            parts.append(f"# Recent Summary\n\n{recent_summary}")
+            parts.append(f"# Recent Summary\n\n{self._size_hint(recent_summary)}\n\n{recent_summary}")
 
         return "\n\n---\n\n".join(parts)
 

@@ -87,3 +87,4 @@ def test_build_messages_adds_retrieval_guidance_for_follow_up_message(tmp_path):
     assert messages[2]["content"].startswith("# Retrieval Guidance")
     assert "prefer `search_history`" in messages[2]["content"]
     assert "`search_knowledge`" in messages[2]["content"]
+    assert "Do not copy detailed past transcripts into MEMORY.md" in messages[2]["content"]
