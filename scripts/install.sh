@@ -103,7 +103,7 @@ detect_os() {
   case "$(uname -s)" in
     Linux*) ;;
     *)
-      log_error "This installer currently supports Linux only. Clone the repo and use setup-opensprite.sh on other platforms."
+      log_error "This installer currently supports Linux only. Use the manual venv install steps on other platforms."
       exit 1
       ;;
   esac
