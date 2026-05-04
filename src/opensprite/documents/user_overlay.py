@@ -119,6 +119,12 @@ class UserOverlayStateStore(JsonProgressStore):
 
 _SECTION_HEADING_RE = re.compile(r"^#+\s+(?P<title>.+?)\s*$")
 _TOKEN_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{2,}|[\u4e00-\u9fff]{2,}")
+_PLACEHOLDER_BULLETS = {
+    "no learned communication preferences yet.",
+    "no learned work context yet.",
+    "no learned stable constraints yet.",
+    "no learned user profile details yet.",
+}
 
 
 def _now_iso() -> str:
@@ -132,7 +138,7 @@ def _normalize_bullets(lines: list[str]) -> list[str]:
         if not stripped.startswith("-"):
             continue
         text = stripped[1:].strip()
-        if not text or text == "not set":
+        if not text or text.lower() in _PLACEHOLDER_BULLETS or text == "not set":
             continue
         if text not in items:
             items.append(text)
@@ -181,7 +187,7 @@ def _render_overlay(preferences: list[str], stable_facts: list[str], response_la
 
 def _merge_stable_lists(existing: list[str], incoming: list[str]) -> list[str]:
     merged: list[str] = []
-    for item in [*incoming, *existing]:
+    for item in [*existing, *incoming]:
         text = str(item or "").strip()
         if text and text not in merged:
             merged.append(text)
@@ -219,7 +225,7 @@ class UserOverlayPromotionService:
         memory_preferences = _section_bullets(memory_text, "User Preferences")
         memory_facts = _section_bullets(memory_text, "Important Facts")
 
-        next_preferences = profile_preferences or memory_preferences or existing_preferences
+        next_preferences = _merge_stable_lists(existing_preferences, [*profile_preferences, *memory_preferences])
         next_facts = _merge_stable_lists(existing_facts, memory_facts)
         next_language = _response_language(response_language_block) or existing_language
 

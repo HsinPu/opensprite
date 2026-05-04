@@ -22,10 +22,17 @@ RL_END_MARKER = "<!-- OPENSPRITE:RESPONSE_LANGUAGE:END -->"
 DEFAULT_RESPONSE_LANGUAGE_CONTENT = "- not set"
 RESPONSE_LANGUAGE_INTRO = "This section is maintained by OpenSprite."
 
-AUTO_PROFILE_HEADER = "## Auto-managed Profile"
+AUTO_PROFILE_HEADER = "## Auto-managed User Context"
 START_MARKER = "<!-- OPENSPRITE:USER_PROFILE:START -->"
 END_MARKER = "<!-- OPENSPRITE:USER_PROFILE:END -->"
-DEFAULT_MANAGED_CONTENT = "- No learned user profile details yet."
+DEFAULT_MANAGED_CONTENT = """### Communication Preferences
+- No learned communication preferences yet.
+
+### Work Context
+- No learned work context yet.
+
+### Stable Constraints
+- No learned stable constraints yet."""
 AUTO_PROFILE_INTRO = "This section is maintained by OpenSprite."
 
 
@@ -202,25 +209,29 @@ async def consolidate_user_profile(
     if not transcript:
         return True
 
-    prompt = f"""Review this conversation and update this user's profile.
+    prompt = f"""Review this conversation and update this session's USER.md user context.
 
 Current auto-managed Response language block:
 {current_response_language or '(empty)'}
 
-Current auto-managed USER.md profile block:
+Current auto-managed USER.md user-context block:
 {current_profile or '(empty)'}
 
 Conversation to analyze:
 {transcript}
 
 Rules:
-- Capture only stable preferences, work context, or repeated habits in the profile block.
-- Update the Response language block when the user clearly states a preferred assistant language or consistently uses one language for requests (e.g. one bullet line: `- Traditional Chinese (Taiwan)` or `- English`). Use `- not set` when preference should follow each message's language.
+- Return the full replacement content for the managed user-context block using exactly these sections and order: `### Communication Preferences`, `### Work Context`, `### Stable Constraints`.
+- Capture only durable, user-focused context that helps future turns in this same session.
+- Put communication style, formatting, and collaboration preferences under Communication Preferences.
+- Put recurring user work background or long-lived user context under Work Context.
+- Put durable constraints that should shape future assistance under Stable Constraints.
+- Use one concise markdown bullet per item. If a section has no learned items, keep its default `- No learned ... yet.` bullet.
+- Update the Response language block only when the user explicitly states a durable assistant language preference. Do not infer a permanent language preference from the language used in a single message. Use `- not set` when response language should follow the user's current message.
 - Do not store secrets, API keys, access tokens, passwords, or private file contents.
-- Do not store one-off tasks or temporary requests.
-- Prefer explicit facts and durable preferences over guesses.
-- Return concise markdown bullets or short sections suitable for USER.md profile.
-- Write profile content in clear, concise English unless the user explicitly prefers another language for that block.
+- Do not store one-off tasks, task progress, project decisions, temporary requests, raw logs, or details that belong in MEMORY.md.
+- Prefer explicit facts and durable preferences over guesses. When uncertain, leave the block unchanged.
+- Write the user-context block in clear, concise English unless the user explicitly prefers another language for saved profile content.
 - If nothing meaningful changed in a block, return that block unchanged.
 """
 
@@ -231,8 +242,8 @@ Rules:
                 {
                     "role": "system",
                     "content": (
-                        "You maintain one user's USER.md for an assistant: the Response language block "
-                        "and the Auto-managed Profile block. "
+                        "You maintain one session's USER.md for an assistant: the Response language block "
+                        "and the Auto-managed User Context block. "
                         "Call save_user_profile with profile_update (required) and, when needed, "
                         "response_language_update for the Response language section only."
                     ),

@@ -27,9 +27,23 @@ class FakeProvider:
         prompt = messages[1]["content"]
         self.prompts.append(prompt)
         if "dark mode" in prompt:
-            profile_update = "- Prefers dark mode."
+            profile_update = """### Communication Preferences
+- Prefers dark mode.
+
+### Work Context
+- No learned work context yet.
+
+### Stable Constraints
+- No learned stable constraints yet."""
         else:
-            profile_update = "- Prefers light mode."
+            profile_update = """### Communication Preferences
+- Prefers light mode.
+
+### Work Context
+- No learned work context yet.
+
+### Stable Constraints
+- No learned stable constraints yet."""
 
         return LLMResponse(
             content="",
@@ -93,6 +107,7 @@ def test_user_profile_consolidator_writes_separate_profiles_per_session(tmp_path
     profile_a = create_user_profile_store(app_home, "telegram:user-a")
     profile_b = create_user_profile_store(app_home, "telegram:user-b")
 
-    assert profile_a.read_managed_block() == "- Prefers dark mode."
-    assert profile_b.read_managed_block() == "- Prefers light mode."
+    assert "### Communication Preferences" in profile_a.read_managed_block()
+    assert "- Prefers dark mode." in profile_a.read_managed_block()
+    assert "- Prefers light mode." in profile_b.read_managed_block()
     assert profile_a.user_profile_file != profile_b.user_profile_file

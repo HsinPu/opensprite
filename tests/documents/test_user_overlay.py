@@ -73,6 +73,41 @@ def test_user_overlay_promotion_service_merges_profile_and_memory(tmp_path):
     assert index_payload["stable_facts"][0]["text"] == "Uses FastAPI for backend work."
 
 
+def test_user_overlay_promotion_preserves_existing_preferences(tmp_path):
+    overlay_store = UserOverlayStore(app_home=tmp_path / "home")
+    index_store = UserOverlayIndexStore(app_home=tmp_path / "home")
+    service = UserOverlayPromotionService(overlay_store=overlay_store, index_store=index_store)
+    overlay_store.write(
+        "web:profile-a",
+        "# Stable Preferences\n- Prefers concise replies.\n\n# Stable Facts\n- Maintains OpenSprite.\n\n# Response Language\n- Traditional Chinese (Taiwan)\n",
+    )
+
+    result = service.update_from_session_documents(
+        "web:profile-a",
+        profile_block=(
+            "### Communication Preferences\n"
+            "- Prefers minimal diffs.\n\n"
+            "### Work Context\n"
+            "- No learned work context yet.\n\n"
+            "### Stable Constraints\n"
+            "- No learned stable constraints yet."
+        ),
+        response_language_block="- not set",
+        memory_text="# Important Facts\n- Uses FastAPI for backend work.\n",
+        source_session_id="web:browser-1",
+    )
+
+    overlay_text = overlay_store.read("web:profile-a")
+
+    assert result["changed"] is True
+    assert "- Prefers concise replies." in overlay_text
+    assert "- Prefers minimal diffs." in overlay_text
+    assert "- Maintains OpenSprite." in overlay_text
+    assert "- Uses FastAPI for backend work." in overlay_text
+    assert "No learned work context yet." not in overlay_text
+    assert "- Traditional Chinese (Taiwan)" in overlay_text
+
+
 def test_second_session_can_read_promoted_overlay(tmp_path):
     app_home = tmp_path / "home"
     sync_templates(app_home, silent=True)
