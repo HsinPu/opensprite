@@ -504,6 +504,8 @@ async def _run_web_frontend_unavailable_response(tmp_path: Path):
                 assert resp.status == 503
                 body = await resp.text()
                 assert "OpenSprite web frontend is not built yet" in body
+                assert "Node.js 20.19+ or 22.12+" in body
+                assert "run build" in body
     finally:
         adapter_task.cancel()
         try:

@@ -1272,10 +1272,12 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_frontend_index(self, request: web.Request) -> web.FileResponse:
         if self._frontend_dir is None:
+            npm_build = "npm.cmd run build" if os.name == "nt" else "npm run build"
             raise web.HTTPServiceUnavailable(
                 text=(
                     "OpenSprite web frontend is not built yet. "
-                    "Install Node.js/npm if needed, then restart the gateway or run `npm.cmd run build` in apps/web."
+                    "Install Node.js 20.19+ or 22.12+ and npm if needed, "
+                    f"then restart the gateway or run `{npm_build}` in apps/web."
                 )
             )
         return web.FileResponse(self._resolve_frontend_asset("index.html"))

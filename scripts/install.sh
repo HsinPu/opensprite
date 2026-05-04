@@ -16,6 +16,7 @@ BRANCH="${OPENSPRITE_BRANCH:-main}"
 INSTALL_DIR="${OPENSPRITE_INSTALL_DIR:-$HOME/.local/share/opensprite/opensprite}"
 APP_HOME="${OPENSPRITE_HOME:-$HOME/.opensprite}"
 PYTHON_VERSION_MIN="3.11"
+NODE_MAJOR=22
 INSTALL_DEV=0
 CREATE_LINK=1
 START_SERVICE=0
@@ -131,7 +132,75 @@ install_system_packages() {
   export NEEDRESTART_MODE=a
   log_info "Installing Debian/Ubuntu system packages"
   "${sudo_cmd[@]}" apt-get update
-  "${sudo_cmd[@]}" apt-get install -y git python3 python3-venv python3-pip nodejs npm
+  "${sudo_cmd[@]}" apt-get install -y git python3 python3-venv python3-pip ca-certificates curl gnupg
+}
+
+node_version_parts() {
+  if ! command -v node >/dev/null 2>&1; then
+    return 1
+  fi
+  local version
+  version="$(node --version 2>/dev/null || true)"
+  version="${version#v}"
+  IFS=. read -r major minor patch <<< "$version"
+  [[ "${major:-}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${minor:-}" =~ ^[0-9]+$ ]] || minor=0
+  printf '%s %s' "$major" "$minor"
+}
+
+node_version_is_usable() {
+  local major minor
+  read -r major minor < <(node_version_parts) || return 1
+  if [[ "$major" -eq 20 && "$minor" -ge 19 ]]; then
+    return 0
+  fi
+  if [[ "$major" -eq 22 && "$minor" -ge 12 ]]; then
+    return 0
+  fi
+  if [[ "$major" -gt 22 ]]; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_node() {
+  if node_version_is_usable; then
+    log_success "Node.js $(node --version) found"
+    return 0
+  fi
+
+  if [[ "$INSTALL_SYSTEM_PACKAGES" -ne 1 ]]; then
+    log_warn "Node.js 20.19+ or 22.12+ is required for the Web UI build."
+    log_info "Install Node.js 22 manually, then run: opensprite update --restart"
+    return 0
+  fi
+  if ! command -v apt-get >/dev/null 2>&1; then
+    log_warn "apt-get not found; install Node.js 20.19+ or 22.12+ manually for the Web UI build."
+    return 0
+  fi
+
+  local sudo_cmd=()
+  if [[ "$(id -u)" -ne 0 ]]; then
+    if ! command -v sudo >/dev/null 2>&1; then
+      log_warn "sudo not found; install Node.js 20.19+ or 22.12+ manually for the Web UI build."
+      return 0
+    fi
+    sudo_cmd=(sudo)
+  fi
+
+  if command -v node >/dev/null 2>&1; then
+    log_info "Node.js $(node --version) is too old for the Web UI; installing Node.js $NODE_MAJOR"
+  else
+    log_info "Node.js not found; installing Node.js $NODE_MAJOR"
+  fi
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | "${sudo_cmd[@]}" -E bash -
+  "${sudo_cmd[@]}" apt-get install -y nodejs
+
+  if ! node_version_is_usable; then
+    log_warn "Node.js is still too old or unavailable; Web UI build may fail."
+    return 0
+  fi
+  log_success "Node.js $(node --version) ready"
 }
 
 find_python() {
@@ -273,6 +342,7 @@ main() {
   log_info "OpenSprite installer"
   detect_os
   install_system_packages
+  ensure_node
   ensure_git
 
   local python_bin

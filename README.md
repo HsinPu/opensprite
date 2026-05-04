@@ -37,6 +37,8 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/inst
 curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash -s -- --no-system
 ```
 
+Web UI 需要 Node.js 20.19+ 或 22.12+。Installer 會在 apt-based Linux 上自動安裝或升級到可用的 Node.js 22。
+
 ## Manual Install
 
 Windows / macOS / development 可以手動建立 venv：
