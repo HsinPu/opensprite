@@ -80,6 +80,28 @@ python -m pip install .
 
 ### Linux one-command setup · Linux 一鍵安裝
 
+**English:** On a fresh Linux machine, install directly from GitHub:
+
+**中文：** 全新的 Linux 主機可直接從 GitHub 安裝：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash
+```
+
+Install and start the background gateway immediately:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.sh | bash -s -- --start
+```
+
+The installer keeps code and runtime data separate:
+
+```text
+~/.local/share/opensprite/opensprite   # cloned repository / 程式碼
+~/.opensprite                          # config, logs, memory / 設定與資料
+~/.local/bin/opensprite                # command symlink / 指令連結
+```
+
 **English:** From a cloned repository, run the setup script to create `.venv`, install OpenSprite, and link `opensprite` into `~/.local/bin`.
 
 **中文：** 在已 clone 的 repo 中執行安裝腳本，會建立 `.venv`、安裝 OpenSprite，並把 `opensprite` 連結到 `~/.local/bin`。
