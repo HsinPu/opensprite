@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from .run_schema import RUN_SCHEMA_VERSION, serialize_run_artifacts, serialize_run_part
-from .utils.json_safe import json_safe_payload
+from .schema import RUN_SCHEMA_VERSION, serialize_run_artifacts, serialize_run_part
+from ..utils.json_safe import json_safe_payload
 
 
 def _text(value: Any) -> str:

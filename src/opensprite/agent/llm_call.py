@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 
 from ..config import AgentConfig
 from ..llms import ChatMessage
-from ..planning_mode import resolve_planning_mode
+from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult

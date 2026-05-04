@@ -28,7 +28,7 @@ from .paths import (
     load_bootstrap_files,
 )
 from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
-from ..planning_mode import resolve_planning_mode
+from ..agent.planning_mode import resolve_planning_mode
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_profile import create_user_profile_store

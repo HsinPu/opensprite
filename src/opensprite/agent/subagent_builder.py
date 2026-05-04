@@ -3,7 +3,7 @@ from pathlib import Path
 from ..context.runtime import build_runtime_context
 from ..llms import ChatMessage
 from ..skills import SkillsLoader
-from ..subagent_output import build_structured_subagent_contract_instructions
+from .subagent_output import build_structured_subagent_contract_instructions
 from ..subagent_prompts import load_metadata, load_prompt
 
 

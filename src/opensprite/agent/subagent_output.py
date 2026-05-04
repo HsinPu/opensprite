@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any
 
-from .utils.json_safe import json_safe_value
+from ..utils.json_safe import json_safe_value
 
 STRUCTURED_SUBAGENT_SCHEMA_VERSION = 1
 READONLY_SUBAGENT_RESULT_CONTRACT = "readonly_subagent_result"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .utils.json_safe import json_safe_payload
+from ..utils.json_safe import json_safe_payload
 
 RUN_SCHEMA_VERSION = 1
 MAX_SERIALIZED_RUN_EVENTS = 80

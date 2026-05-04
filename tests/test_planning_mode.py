@@ -1,4 +1,4 @@
-from opensprite.planning_mode import resolve_planning_mode
+from opensprite.agent.planning_mode import resolve_planning_mode
 from opensprite.tools import Tool, ToolRegistry
 
 

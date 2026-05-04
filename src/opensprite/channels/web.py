@@ -50,8 +50,8 @@ from ..config.schedule_settings import (
 )
 from ..cron import CronJob, CronSchedule
 from ..cron.presentation import format_cron_timestamp, format_cron_timing
-from ..run_schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
-from ..session_entries import serialize_session_entries
+from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
+from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..utils.log import logger
 from .web_api import WebApiHandlers

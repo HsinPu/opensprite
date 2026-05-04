@@ -6,7 +6,7 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.run_schema import serialize_run_artifacts
+from opensprite.runs.schema import serialize_run_artifacts
 from opensprite.storage import MemoryStorage
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry

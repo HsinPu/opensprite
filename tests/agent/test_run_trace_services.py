@@ -7,7 +7,7 @@ from opensprite.agent.execution import LlmStepEvent
 from opensprite.agent.run_trace import RUN_PART_CONTENT_MAX_CHARS, RunEventSink, RunTraceRecorder, truncate_run_part_content
 from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
-from opensprite.run_schema import (
+from opensprite.runs.schema import (
     compact_run_events,
     serialize_file_change,
     serialize_run_artifacts,

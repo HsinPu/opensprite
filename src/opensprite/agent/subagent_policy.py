@@ -6,7 +6,7 @@ import fnmatch
 from dataclasses import dataclass
 from typing import Any
 
-from ..subagent_profiles import (
+from .subagent_profiles import (
     TOOL_PROFILE_METADATA_FIELD,
     allowed_tool_profile_names,
     normalize_metadata_value,

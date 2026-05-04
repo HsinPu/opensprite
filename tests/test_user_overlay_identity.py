@@ -1,4 +1,4 @@
-from opensprite.user_overlay import resolve_user_overlay_id
+from opensprite.documents.user_overlay_identity import resolve_user_overlay_id
 
 
 def test_resolve_user_overlay_id_prefers_web_overlay_profile_metadata():

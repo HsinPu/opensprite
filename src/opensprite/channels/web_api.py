@@ -7,7 +7,7 @@ from typing import Any
 from aiohttp import web
 
 from ..bus.session_commands import session_command_catalog
-from ..run_schema import (
+from ..runs.schema import (
     serialize_file_change,
     serialize_run_artifacts,
     serialize_run_event_counts,
@@ -16,7 +16,7 @@ from ..run_schema import (
     serialize_run_summary,
     serialize_diff_summary,
 )
-from ..session_entries import serialize_run_trace_entries
+from ..runs.session_entries import serialize_run_trace_entries
 
 
 class WebApiHandlers:

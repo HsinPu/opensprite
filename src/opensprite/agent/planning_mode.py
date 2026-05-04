@@ -7,7 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .tools import ToolRegistry
+    from ..tools import ToolRegistry
 
 
 PLANNING_ALLOWED_TOOLS = frozenset(
@@ -135,8 +135,8 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolRegistry":
     """Return a read-only registry used for explicit plan-only turns."""
-    from .tools import BatchTool
-    from .tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
+    from ..tools import BatchTool
+    from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
 
     planning_policy = ToolPermissionPolicy(
         allowed_tools=list(PLANNING_ALLOWED_TOOLS),

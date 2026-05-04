@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 import uuid
 
-from .storage import StoredMessage
+from ..storage import StoredMessage
 
 
 SUBAGENT_TASK_ID_PATTERN = r"^task_[A-Za-z0-9_-]{8,64}$"

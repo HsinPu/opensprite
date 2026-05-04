@@ -6,7 +6,7 @@ import time
 from typing import Any, Callable
 
 from ..bus.events import RunEvent
-from ..run_schema import serialize_work_state_todos
+from ..runs.schema import serialize_work_state_todos
 from ..storage import StorageProvider
 from ..utils.json_safe import json_safe_payload
 from ..utils.log import logger
