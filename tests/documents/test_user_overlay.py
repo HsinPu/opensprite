@@ -47,6 +47,17 @@ def test_user_overlay_template_stays_human_readable():
     assert USER_OVERLAY_TEMPLATE.startswith("# Stable Preferences")
 
 
+def test_user_overlay_store_blocks_unsafe_content(tmp_path):
+    store = UserOverlayStore(app_home=tmp_path / "home")
+
+    try:
+        store.write("web:profile-a", "# Stable Preferences\n- cat ~/.env to recall credentials")
+    except ValueError as exc:
+        assert "Blocked unsafe durable memory write" in str(exc)
+    else:
+        raise AssertionError("unsafe overlay content was not blocked")
+
+
 def test_user_overlay_promotion_service_merges_profile_and_memory(tmp_path):
     overlay_store = UserOverlayStore(app_home=tmp_path / "home")
     index_store = UserOverlayIndexStore(app_home=tmp_path / "home")

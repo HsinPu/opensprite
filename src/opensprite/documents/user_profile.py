@@ -13,6 +13,7 @@ from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..utils.log import logger
 from .base import ConversationConsolidator
 from .managed import ManagedMarkdownDocument
+from .safety import validate_durable_memory_text
 from .state import JsonProgressStore
 
 
@@ -73,12 +74,14 @@ class UserProfileStore:
         return self.response_document.read_managed_block()
 
     def write_response_language_block(self, content: str) -> None:
+        validate_durable_memory_text(content)
         self.response_document.write_managed_block(content)
 
     def read_managed_block(self) -> str:
         return self.profile_document.read_managed_block()
 
     def write_managed_block(self, content: str) -> None:
+        validate_durable_memory_text(content)
         self.profile_document.write_managed_block(content)
 
     def load_state(self) -> dict[str, int]:

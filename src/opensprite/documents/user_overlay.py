@@ -14,6 +14,7 @@ from ..context.paths import (
     get_user_overlay_state_file,
 )
 from .base import ConversationDocumentStore
+from .safety import validate_durable_memory_text
 from .state import JsonProgressStore
 
 
@@ -46,6 +47,7 @@ class UserOverlayStore(ConversationDocumentStore):
         return ""
 
     def write(self, overlay_id: str, content: str) -> None:
+        validate_durable_memory_text(content)
         self._overlay_file(overlay_id).write_text(str(content or "").strip() + "\n", encoding="utf-8")
 
     def ensure_exists(self, overlay_id: str) -> str:
