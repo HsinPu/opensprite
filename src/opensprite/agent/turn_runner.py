@@ -51,6 +51,7 @@ class AgentTurnRunner:
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
         format_log_preview: Callable[..., str],
+        set_session_overlay_id: Callable[[str, dict[str, Any] | None, str | None, str | None], None],
         get_work_state: Callable[[str], Awaitable[StoredWorkState | None]],
         save_work_state: Callable[[StoredWorkState | None], Awaitable[None]],
         apply_completion_gate_result: Callable[[str, CompletionGateResult], Awaitable[None]],
@@ -83,6 +84,7 @@ class AgentTurnRunner:
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
         self._format_log_preview = format_log_preview
+        self._set_session_overlay_id = set_session_overlay_id
         self._get_work_state = get_work_state
         self._save_work_state = save_work_state
         self._apply_completion_gate_result = apply_completion_gate_result
@@ -147,6 +149,7 @@ class AgentTurnRunner:
             videos=user_message.videos,
             metadata=user_message.metadata,
         )
+        self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
         existing_work_state = await self._get_work_state(turn.session_id)
         task_intent = self.work_progress.resolve_intent(task_intent, existing_work_state)
         await self._maybe_record_worktree_sandbox(turn.session_id, run_id, task_intent)

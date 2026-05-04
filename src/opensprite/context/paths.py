@@ -33,6 +33,7 @@ MEMORY_DIRNAME = "memory"
 SKILLS_DIRNAME = "skills"
 WORKSPACE_DIRNAME = "workspace"
 WORKSPACE_SESSIONS_DIRNAME = "sessions"
+USER_OVERLAYS_DIRNAME = "user_overlays"
 SESSION_MEMORY_DIRNAME = "memory"
 SESSION_STATE_DIRNAME = "state"
 LEGACY_USER_PROFILES_DIRNAME = "users"
@@ -43,6 +44,9 @@ CURATOR_STATE_FILENAME = ".curator_state.json"
 LEARNING_STATE_FILENAME = ".learning_state.json"
 ACTIVE_TASK_STATE_FILENAME = ".active_task_state.json"
 ACTIVE_TASK_EVENT_LOG_FILENAME = ".active_task_events.jsonl"
+USER_OVERLAY_FILENAME = "USER_OVERLAY.md"
+USER_OVERLAY_INDEX_FILENAME = "user_overlay_index.json"
+USER_OVERLAY_STATE_FILENAME = ".user_overlay_state.json"
 
 BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "AGENTS.md", "TOOLS.md", "USER.md"]
 
@@ -124,6 +128,11 @@ def get_skills_dir(app_home: str | Path | None = None) -> Path:
     return ensure_dir(get_app_home(app_home) / SKILLS_DIRNAME)
 
 
+def get_user_overlays_dir(app_home: str | Path | None = None) -> Path:
+    """Get the app-home directory for stable cross-session user overlays."""
+    return ensure_dir(get_app_home(app_home) / USER_OVERLAYS_DIRNAME)
+
+
 def get_tool_workspace(app_home: str | Path | None = None) -> Path:
     """Get the shared root directory that contains per-session workspaces."""
     return ensure_dir(get_app_home(app_home) / WORKSPACE_DIRNAME)
@@ -201,6 +210,43 @@ def get_session_workspace(
     safe_channel = _sanitize_path_segment(channel, default="default", max_length=32)
     safe_external_chat_id = _sanitize_path_segment(external_chat_id, default="default")
     return ensure_dir(root / WORKSPACE_SESSIONS_DIRNAME / safe_channel / safe_external_chat_id)
+
+
+def get_user_overlay_dir(
+    overlay_id: str | None,
+    *,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the stable overlay directory for one resolved user identity."""
+    safe_overlay_id = _sanitize_path_segment(str(overlay_id or "").strip(), default="default", max_length=48)
+    return ensure_dir(get_user_overlays_dir(app_home) / safe_overlay_id)
+
+
+def get_user_overlay_file(
+    overlay_id: str | None,
+    *,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the stable user overlay markdown file path."""
+    return get_user_overlay_dir(overlay_id, app_home=app_home) / USER_OVERLAY_FILENAME
+
+
+def get_user_overlay_state_file(
+    overlay_id: str | None,
+    *,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the persisted overlay progress state file path."""
+    return ensure_dir(get_user_overlay_dir(overlay_id, app_home=app_home) / SESSION_STATE_DIRNAME) / USER_OVERLAY_STATE_FILENAME
+
+
+def get_user_overlay_index_file(
+    overlay_id: str | None,
+    *,
+    app_home: str | Path | None = None,
+) -> Path:
+    """Get the structured overlay sidecar index path."""
+    return ensure_dir(get_user_overlay_dir(overlay_id, app_home=app_home) / SESSION_STATE_DIRNAME) / USER_OVERLAY_INDEX_FILENAME
 
 
 def get_session_memory_dir(

@@ -23,6 +23,7 @@ from .paths import (
     get_session_skills_dir,
     get_skills_dir,
     get_tool_workspace,
+    get_user_overlay_file,
     get_user_profile_file,
     load_bootstrap_files,
 )
@@ -31,6 +32,7 @@ from ..planning_mode import resolve_planning_mode
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_profile import create_user_profile_store
+from ..documents.user_overlay import UserOverlayStore
 from ..skills import SkillsLoader
 from ..subagent_prompts import get_all_subagents
 from ..agent.learning_ledger import LearningLedger
@@ -182,7 +184,9 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         self.workspace = self.tool_workspace
         self.memory_store = MemoryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
         self.recent_summary_store = RecentSummaryStore(self.memory_dir, app_home=self.app_home, workspace_root=self.tool_workspace)
+        self.user_overlay_store = UserOverlayStore(app_home=self.app_home)
         self._runtime_mcp_tools: list[tuple[str, str]] = []
+        self._session_overlay_ids: dict[str, str] = {}
         self.learning_ledger = learning_ledger
         self.skills_loader = skills_loader or SkillsLoader(
             default_skills_dir=default_skills_dir or get_skills_dir(self.app_home),
@@ -197,6 +201,15 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
     def set_runtime_mcp_tools(self, tools: list[tuple[str, str]]) -> None:
         """Store the connected MCP tool summary for prompt generation."""
         self._runtime_mcp_tools = list(tools)
+
+    def set_session_overlay_id(self, session_id: str, overlay_id: str | None) -> None:
+        """Record the stable overlay identity to use for one session's prompt build."""
+        normalized_session_id = str(session_id or "default").strip() or "default"
+        normalized_overlay_id = str(overlay_id or "").strip()
+        if not normalized_overlay_id:
+            self._session_overlay_ids.pop(normalized_session_id, None)
+            return
+        self._session_overlay_ids[normalized_session_id] = normalized_overlay_id
 
     def get_session_workspace(self, session_id: str = "default") -> Path:
         """Resolve the current session's isolated workspace."""
@@ -240,6 +253,17 @@ Ids and descriptions below are **merged**: this session's `subagent_prompts/<id>
         if not task_context:
             return ""
         return f"{task_context}\n\n---\n\n{build_active_task_execution_guidance(store.read_managed_block())}"
+
+    def _read_user_overlay(self, session_id: str) -> str:
+        """Load the stable cross-session overlay for this session when one is resolved."""
+        overlay_id = self._session_overlay_ids.get(str(session_id or "default").strip() or "default")
+        if not overlay_id:
+            return ""
+        content = self.user_overlay_store.read(overlay_id)
+        if not content:
+            return ""
+        overlay_path = get_user_overlay_file(overlay_id, app_home=self.app_home).expanduser().resolve()
+        return f"# Stable User Overlay\n\nLoaded from: `{overlay_path}`\n\n{content.strip()}"
 
     def _read_workspace_agents(self, session_id: str) -> str:
         """Load AGENTS.md from the active workspace when present."""
@@ -296,6 +320,10 @@ This message appears to depend on earlier conversation state or prior research. 
     def build_system_prompt(self, session_id: str = "default") -> str:
         """Build the system prompt from bootstrap files, skills, and memory."""
         parts = [self._build_session_context(session_id)]
+
+        user_overlay = self._read_user_overlay(session_id)
+        if user_overlay:
+            parts.append(user_overlay)
 
         bootstrap = load_bootstrap_files(self.bootstrap_dir)
         bootstrap["USER"] = self._read_user_profile(session_id)

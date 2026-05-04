@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   language: "opensprite:web:language",
   colorScheme: "opensprite:web:colorScheme",
   sidebarCollapsed: "opensprite:web:sidebarCollapsed",
+  overlayProfileId: "opensprite:web:overlayProfileId",
 };
 
 const DEFAULT_LANGUAGE = "zh-TW";
@@ -137,6 +138,10 @@ function randomToken() {
 
 function generateExternalChatId() {
   return `browser-${Date.now().toString(36)}-${randomToken()}`;
+}
+
+function generateOverlayProfileId() {
+  return `profile-${Date.now().toString(36)}-${randomToken()}`;
 }
 
 function externalChatIdFromSessionId(sessionId) {
@@ -1294,6 +1299,7 @@ export function formatEventTime(timestamp) {
 
 export function useChatClient() {
   const storedExternalChatId = readStoredValue(STORAGE_KEYS.activeExternalChatId, "");
+  const storedOverlayProfileId = readStoredValue(STORAGE_KEYS.overlayProfileId, "");
   const initialLanguage = readStoredChoice(STORAGE_KEYS.language, DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES);
   const initialColorScheme = readStoredChoice(STORAGE_KEYS.colorScheme, DEFAULT_COLOR_SCHEME, SUPPORTED_COLOR_SCHEMES);
   const initialCopy = getDisplayCopy(initialLanguage);
@@ -1322,6 +1328,9 @@ export function useChatClient() {
       error: "",
     },
   });
+
+  const overlayProfileId = ref(storedOverlayProfileId || generateOverlayProfileId());
+  writeStoredValue(STORAGE_KEYS.overlayProfileId, overlayProfileId.value);
 
   const copy = computed(() => getDisplayCopy(state.language));
   const prompts = computed(() => copy.value.prompts);
@@ -4089,13 +4098,17 @@ export function useChatClient() {
     }
 
     addMessage(session.externalChatId, makeMessage("user", text, state.displayName || "Local browser"));
+    const outgoingMetadata = {
+      overlay_profile_id: overlayProfileId.value,
+      ...(payload.metadata && typeof payload.metadata === "object" ? payload.metadata : {}),
+    };
     activeSocket.send(
       JSON.stringify({
         external_chat_id: session.externalChatId,
         ...(session.sessionId ? { session_id: session.sessionId } : {}),
         sender_name: state.displayName,
         text,
-        ...(Object.keys(payload.metadata || {}).length ? { metadata: payload.metadata } : {}),
+        metadata: outgoingMetadata,
       }),
     );
 

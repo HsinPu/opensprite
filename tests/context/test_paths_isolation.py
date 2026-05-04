@@ -8,6 +8,9 @@ from opensprite.context.paths import (
     get_session_skills_dir,
     get_session_state_dir,
     get_session_workspace,
+    get_user_overlay_file,
+    get_user_overlay_index_file,
+    get_user_overlay_state_file,
     get_user_profile_file,
 )
 
@@ -101,3 +104,19 @@ def test_session_curator_and_learning_state_files_live_under_session_state_dir(t
     assert curator_state.name == ".curator_state.json"
     assert learning_state.parent == state_dir
     assert learning_state.name == ".learning_state.json"
+
+
+def test_user_overlay_paths_are_stable_and_separate_overlay_ids(tmp_path):
+    app_home = tmp_path / "home"
+
+    overlay_a_file = get_user_overlay_file("web:profile-a", app_home=app_home)
+    overlay_a_index = get_user_overlay_index_file("web:profile-a", app_home=app_home)
+    overlay_a_state = get_user_overlay_state_file("web:profile-a", app_home=app_home)
+    overlay_b_file = get_user_overlay_file("web:profile-b", app_home=app_home)
+
+    assert overlay_a_file != overlay_b_file
+    assert overlay_a_file.parent != overlay_b_file.parent
+    assert overlay_a_file.name == "USER_OVERLAY.md"
+    assert overlay_a_index.name == "user_overlay_index.json"
+    assert overlay_a_state.name == ".user_overlay_state.json"
+    assert overlay_a_index.parent == overlay_a_state.parent

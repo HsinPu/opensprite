@@ -48,6 +48,7 @@ from ..tools.approval import PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.verify import classify_verification_result
+from ..user_overlay import resolve_user_overlay_id
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
@@ -654,6 +655,12 @@ class AgentLoop:
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             format_log_preview=self._format_log_preview,
+            set_session_overlay_id=lambda session_id, metadata, channel, sender_id: self._set_session_overlay_id(
+                session_id,
+                metadata,
+                channel,
+                sender_id,
+            ),
             get_work_state=lambda session_id: self._get_work_state(session_id),
             save_work_state=lambda state: self._save_work_state(state),
             apply_completion_gate_result=lambda session_id, result: self._maybe_apply_completion_gate_result(
@@ -878,6 +885,20 @@ class AgentLoop:
             allow_tools=allow_tools,
             tool_registry=tool_registry,
         )
+
+    def _set_session_overlay_id(
+        self,
+        session_id: str,
+        metadata: dict[str, Any] | None,
+        channel: str | None,
+        sender_id: str | None,
+    ) -> None:
+        """Propagate the resolved stable overlay identity into the context builder when supported."""
+        setter = getattr(self._context_builder, "set_session_overlay_id", None)
+        if not callable(setter):
+            return
+        overlay_id = resolve_user_overlay_id(channel=channel, sender_id=sender_id, metadata=metadata)
+        setter(session_id, overlay_id)
 
     def _setup_storage(self, storage: StorageProvider | None) -> StorageProvider:
         """Resolve the storage provider used by the agent."""
