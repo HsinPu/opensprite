@@ -60,7 +60,7 @@ def is_process_running(pid: int | None) -> bool:
 def resolve_gateway_python(python_executable: Path | None = None) -> Path:
     """Return the Python executable that should run the detached gateway."""
     if python_executable is not None:
-        return Path(python_executable).expanduser().resolve()
+        return Path(python_executable).expanduser().absolute()
 
     install_dir = Path(os.getenv("OPENSPRITE_INSTALL_DIR", "~/.local/share/opensprite/opensprite")).expanduser()
     for candidate in (
@@ -68,9 +68,9 @@ def resolve_gateway_python(python_executable: Path | None = None) -> Path:
         install_dir / ".venv" / "Scripts" / "python.exe",
     ):
         if candidate.exists():
-            return candidate.resolve()
+            return candidate.absolute()
 
-    return Path(sys.executable).expanduser().resolve()
+    return Path(sys.executable).expanduser().absolute()
 
 
 def _cleanup_stale_pid(pid_file: Path) -> None:

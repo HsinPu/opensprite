@@ -53,13 +53,13 @@ def test_resolve_gateway_python_prefers_installer_venv(tmp_path, monkeypatch):
     python_path.write_text("", encoding="utf-8")
     monkeypatch.setenv("OPENSPRITE_INSTALL_DIR", str(install_dir))
 
-    assert service_background.resolve_gateway_python() == python_path.resolve()
+    assert service_background.resolve_gateway_python() == python_path.absolute()
 
 
 def test_resolve_gateway_python_falls_back_to_current_interpreter(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENSPRITE_INSTALL_DIR", str(tmp_path / "missing"))
 
-    assert service_background.resolve_gateway_python() == Path(sys.executable).resolve()
+    assert service_background.resolve_gateway_python() == Path(sys.executable).absolute()
 
 
 def test_start_service_reports_early_gateway_exit(tmp_path):
