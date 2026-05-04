@@ -49,7 +49,9 @@ assertIncludes(curatorSettingsPage, "provider-row", "curator settings history la
 assertIncludes(settingsModal, "CuratorSettingsPage", "curator settings placement");
 assertIncludes(settingsModal, "section === 'curator'", "curator settings section");
 assertIncludes(settingsModal, "connectedCount", "multiple provider connection count");
+assertIncludes(settingsModal, "save-media-model", "media model settings action");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
+assertIncludes(chatClient, "/api/settings/media", "media model settings fetch");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");

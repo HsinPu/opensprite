@@ -379,7 +379,11 @@
           <p v-if="settingsState.modelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.modelsError }}
           </p>
+          <p v-if="settingsState.mediaError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.mediaError }}
+          </p>
 
+          <h3>{{ copy.settings.models.textTitle }}</h3>
           <div v-if="settingsState.models.providers.length === 0" class="settings-card">
             <div class="settings-row">
               <div>
@@ -442,6 +446,92 @@
                 type="button"
                 :disabled="settingsState.modelsLoading"
                 @click="$emit('select-model', provider.id, settingsState.customModels[provider.id])"
+              >
+                {{ copy.settings.models.useCustom }}
+              </button>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.models.mediaTitle }}</h3>
+          <div v-if="settingsState.media.providers.length === 0" class="settings-card">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.models.noProvidersTitle }}</strong>
+                <span>{{ copy.settings.models.mediaNoProvidersDescription }}</span>
+              </div>
+              <span class="settings-muted">{{ copy.settings.models.noProvidersBadge }}</span>
+            </div>
+          </div>
+
+          <div
+            v-for="category in mediaModelCategories"
+            :key="category.key"
+            class="settings-card model-provider-card"
+          >
+            <div class="model-provider-card__header">
+              <div class="provider-row__main">
+                <span class="provider-row__mark" aria-hidden="true">{{ category.mark }}</span>
+                <div>
+                  <div class="provider-row__title">
+                    <strong>{{ category.title }}</strong>
+                    <span v-if="settingsState.media.sections[category.key]?.enabled" class="provider-row__badge">{{ copy.settings.models.enabledBadge }}</span>
+                  </div>
+                  <span>{{ settingsState.media.sections[category.key]?.model || copy.settings.models.noModel }}</span>
+                </div>
+              </div>
+            </div>
+
+            <label class="settings-row">
+              <div>
+                <strong>{{ copy.settings.models.enableMediaModel }}</strong>
+                <span>{{ category.description }}</span>
+              </div>
+              <input v-model="settingsState.mediaSelections[category.key].enabled" class="switch" type="checkbox" />
+            </label>
+
+            <div class="model-select-row">
+              <label>
+                <span>{{ copy.settings.models.providerChoice }}</span>
+                <select v-model="settingsState.mediaSelections[category.key].providerId" :disabled="settingsState.mediaLoading || !settingsState.mediaSelections[category.key].enabled">
+                  <option v-for="provider in settingsState.media.providers" :key="`${category.key}:${provider.id}`" :value="provider.id">
+                    {{ provider.name }}
+                  </option>
+                </select>
+              </label>
+              <label>
+                <span>{{ copy.settings.models.modelChoice }}</span>
+                <select v-model="settingsState.mediaSelections[category.key].model" :disabled="settingsState.mediaLoading || !settingsState.mediaSelections[category.key].enabled">
+                  <option v-for="model in mediaProviderModels(category.key)" :key="`${category.key}:${model}`" :value="model">
+                    {{ model }}
+                  </option>
+                </select>
+              </label>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.mediaLoading || (settingsState.mediaSelections[category.key].enabled && !settingsState.mediaSelections[category.key].providerId)"
+                @click="$emit('save-media-model', category.key)"
+              >
+                {{ copy.settings.models.saveMediaModel }}
+              </button>
+            </div>
+
+            <div class="custom-model-row">
+              <label>
+                <span>{{ copy.settings.models.customModel }}</span>
+                <input
+                  v-model="settingsState.mediaCustomModels[category.key]"
+                  type="text"
+                  :placeholder="copy.settings.models.customPlaceholder"
+                  :disabled="settingsState.mediaLoading || !settingsState.mediaSelections[category.key].enabled"
+                  spellcheck="false"
+                />
+              </label>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.mediaLoading || !settingsState.mediaSelections[category.key].enabled"
+                @click="$emit('save-media-model', category.key, settingsState.mediaCustomModels[category.key])"
               >
                 {{ copy.settings.models.useCustom }}
               </button>
@@ -1102,6 +1192,38 @@ const scheduleTimezoneOptions = computed(() => {
   return uniqueOptions;
 });
 
+const mediaModelCategories = computed(() => [
+  {
+    key: "vision",
+    mark: "圖",
+    title: props.copy.settings.models.mediaCategories.vision.title,
+    description: props.copy.settings.models.mediaCategories.vision.description,
+  },
+  {
+    key: "speech",
+    mark: "音",
+    title: props.copy.settings.models.mediaCategories.speech.title,
+    description: props.copy.settings.models.mediaCategories.speech.description,
+  },
+  {
+    key: "video",
+    mark: "影",
+    title: props.copy.settings.models.mediaCategories.video.title,
+    description: props.copy.settings.models.mediaCategories.video.description,
+  },
+]);
+
+function mediaProviderModels(category) {
+  const providerId = props.settingsState.mediaSelections[category]?.providerId;
+  const provider = props.settingsState.media.providers.find((entry) => entry.id === providerId);
+  const models = Array.isArray(provider?.models) ? [...provider.models] : [];
+  const selected = String(props.settingsState.mediaSelections[category]?.model || "").trim();
+  if (selected && !models.includes(selected)) {
+    models.unshift(selected);
+  }
+  return models;
+}
+
 const mcpRuntimeStatus = computed(() => {
   const runtime = props.settingsState.mcp.runtime || {};
   if (runtime.connecting) {
@@ -1179,6 +1301,7 @@ defineEmits([
   "save-provider-connection",
   "disconnect-provider",
   "select-model",
+  "save-media-model",
   "begin-mcp-create",
   "save-mcp-server",
   "edit-mcp-server",

@@ -96,6 +96,7 @@
     @save-provider-connection="saveProviderConnection"
     @disconnect-provider="disconnectProvider"
     @select-model="selectModel"
+    @save-media-model="saveMediaModel"
     @begin-mcp-create="beginMcpCreate"
     @save-mcp-server="saveMcpServer"
     @edit-mcp-server="beginMcpEdit"
@@ -183,6 +184,7 @@ const {
   saveProviderConnection,
   disconnectProvider,
   selectModel,
+  saveMediaModel,
   beginMcpCreate,
   beginMcpEdit,
   cancelMcpEdit,

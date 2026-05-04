@@ -35,6 +35,7 @@ from ..config.mcp_settings import (
     MCPSettingsService,
     MCPSettingsValidationError,
 )
+from ..config.media_settings import MediaSettingsService
 from ..config.provider_settings import (
     ProviderSettingsConflict,
     ProviderSettingsError,
@@ -338,6 +339,9 @@ class WebAdapter(MessageAdapter):
 
     def _get_mcp_settings(self) -> MCPSettingsService:
         return MCPSettingsService(self._get_config_path())
+
+    def _get_media_settings(self) -> MediaSettingsService:
+        return MediaSettingsService(self._get_config_path())
 
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
@@ -1070,6 +1074,29 @@ class WebAdapter(MessageAdapter):
             self._raise_provider_settings_error(exc)
         return web.json_response(payload)
 
+    async def _handle_settings_media(self, request: web.Request) -> web.Response:
+        try:
+            payload = self._get_media_settings().list_media()
+        except ProviderSettingsError as exc:
+            self._raise_provider_settings_error(exc)
+        return web.json_response(payload)
+
+    async def _handle_settings_media_update(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        category = self._coerce_optional_text(body.get("category"))
+        if category is None:
+            raise web.HTTPBadRequest(text="category is required")
+        try:
+            payload = self._get_media_settings().update_media(
+                category,
+                enabled=bool(body.get("enabled")),
+                provider_id=self._coerce_optional_text(body.get("provider_id")),
+                model=self._coerce_optional_text(body.get("model")),
+            )
+        except ProviderSettingsError as exc:
+            self._raise_provider_settings_error(exc)
+        return web.json_response(payload)
+
     async def _handle_settings_model_select(self, request: web.Request) -> web.Response:
         body = await self._read_json_body(request)
         provider_id = self._coerce_optional_text(body.get("provider_id"))
@@ -1402,6 +1429,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
         self.app.router.add_get("/api/settings/models", self._handle_settings_models)
         self.app.router.add_post("/api/settings/models/select", self._handle_settings_model_select)
+        self.app.router.add_get("/api/settings/media", self._handle_settings_media)
+        self.app.router.add_put("/api/settings/media", self._handle_settings_media_update)
         self.app.router.add_get("/api/settings/schedule", self._handle_settings_schedule)
         self.app.router.add_put("/api/settings/schedule", self._handle_settings_schedule_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
