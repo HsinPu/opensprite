@@ -44,6 +44,7 @@ class AgentTurnRunner:
         save_message: Callable[..., Awaitable[None]],
         emit_run_event: Callable[..., Awaitable[None]],
         call_llm: Callable[..., Awaitable[ExecutionResult]],
+        run_workflow: Callable[[str, str, str | None], Awaitable[str]],
         get_queued_outbound_media: Callable[[], dict[str, list[str]]],
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
@@ -73,6 +74,7 @@ class AgentTurnRunner:
         self._save_message = save_message
         self._emit_run_event = emit_run_event
         self._call_llm = call_llm
+        self._run_workflow = run_workflow
         self._get_queued_outbound_media = get_queued_outbound_media
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
@@ -423,6 +425,50 @@ class AgentTurnRunner:
                 previous_response=response,
                 work_progress=work_progress,
             )
+            if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
+                await self._emit_run_event(
+                    turn.session_id,
+                    run_id,
+                    "auto_continue.scheduled",
+                    {
+                        **decision.to_metadata(),
+                        "completion_status": completion_result.status,
+                        "completion_reason": completion_result.reason,
+                    },
+                    channel=turn.channel,
+                    external_chat_id=turn.external_chat_id,
+                )
+                auto_continue_attempts += 1
+                workflow_result = await self._run_workflow(
+                    decision.direct_workflow,
+                    task_intent.objective,
+                    decision.direct_start_step,
+                )
+                direct_result = ExecutionResult(content=workflow_result, executed_tool_calls=1)
+                delegated_task_updates = self._consume_delegated_task_updates(run_id)
+                if delegated_task_updates:
+                    collected_delegated_tasks = self._merge_delegated_task_updates(
+                        collected_delegated_tasks,
+                        delegated_task_updates,
+                    )
+                workflow_outcomes = self._consume_workflow_outcomes(run_id)
+                if workflow_outcomes:
+                    collected_workflow_outcomes = self._merge_workflow_outcomes(
+                        collected_workflow_outcomes,
+                        workflow_outcomes,
+                    )
+                if collected_delegated_tasks:
+                    direct_result = self._with_delegated_tasks(direct_result, collected_delegated_tasks)
+                if collected_workflow_outcomes:
+                    direct_result = self._with_workflow_outcomes(direct_result, collected_workflow_outcomes)
+                execution_results.append(direct_result)
+                current_message = self.auto_continue.build_post_workflow_resume_prompt(
+                    task_intent=task_intent,
+                    completion_result=completion_result,
+                    previous_response=response,
+                    workflow_result=workflow_result,
+                )
+                continue
             if decision.should_continue and decision.prompt:
                 await self._emit_run_event(
                     turn.session_id,

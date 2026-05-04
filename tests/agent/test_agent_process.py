@@ -1087,6 +1087,7 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         calls = []
+        resumed = []
 
         async def fake_call_llm(session_id, current_message, **kwargs):
             calls.append(current_message)
@@ -1107,26 +1108,35 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
                     ),
                 )
             return ExecutionResult(
-                content="Workflow finished successfully.",
+                content="Here is the resumed workflow outcome.",
                 executed_tool_calls=1,
-                file_change_count=1,
-                touched_paths=("src/cleanup.py",),
-                workflow_outcomes=(
-                    {
-                        "workflow_run_id": "workflow_abc123",
-                        "workflow": "implement_then_review",
-                        "status": "completed",
-                        "review_attempted": True,
-                        "review_passed": True,
-                        "review_finding_count": 0,
-                        "review_summary": "No major findings.",
-                        "verification_attempted": False,
-                        "verification_passed": False,
-                    },
-                ),
             )
 
+        async def fake_run_workflow(workflow, task, start_step=None):
+            resumed.append((workflow, task, start_step))
+            run_id = agent.turn_context.current_run_id()
+            agent._record_workflow_outcome(
+                run_id,
+                {
+                    "workflow_run_id": "workflow_resume123",
+                    "workflow": workflow,
+                    "status": "completed",
+                    "completed_steps": 2,
+                    "failed_steps": 0,
+                    "total_steps": 2,
+                    "summary": "Completed 2/2 workflow step(s).",
+                    "review_attempted": True,
+                    "review_passed": True,
+                    "review_finding_count": 0,
+                    "review_summary": "No major findings.",
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                },
+            )
+            return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
+
         agent.call_llm = fake_call_llm
+        agent.turn_runner._run_workflow = fake_run_workflow
         agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
 
         response = await agent.process(
@@ -1137,17 +1147,21 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
                 session_id="web:browser-1",
             )
         )
-        return response, calls
+        run = next(iter(storage._runs.values()))
+        events = await storage.get_run_events("web:browser-1", run.run_id)
+        return response, calls, resumed, events
 
-    response, calls = asyncio.run(scenario())
+    response, calls, resumed, events = asyncio.run(scenario())
 
-    assert response.text == "Workflow finished successfully."
+    assert response.text == "Here is the resumed workflow outcome."
+    assert resumed == [("implement_then_review", "Please implement the cleanup.", "review")]
     assert len(calls) == 2
-    assert "The missing work is already identified" in calls[1]
+    assert "The runtime already resumed the workflow follow-up step for you." in calls[1]
     assert "Workflow follow-up target: implement_then_review -> Code review" in calls[1]
-    assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"review\")" in calls[1]
-    assert "Prefer a delegated `code-reviewer` step" in calls[1]
-    assert "Required follow-up: Resume with the Code review step in implement_then_review." in calls[1]
+    assert "Resumed workflow result:" in calls[1]
+    scheduled = next(event for event in events if event.event_type == "auto_continue.scheduled")
+    assert scheduled.payload["direct_workflow"] == "implement_then_review"
+    assert scheduled.payload["direct_start_step"] == "review"
 
 
 def test_agent_process_marks_active_task_done_when_completion_gate_completes(tmp_path):

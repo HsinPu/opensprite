@@ -646,6 +646,7 @@ class AgentLoop:
             save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
+            run_workflow=lambda workflow, task, start_step=None: self.run_workflow(workflow, task, start_step),
             get_queued_outbound_media=self._get_queued_outbound_media,
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,

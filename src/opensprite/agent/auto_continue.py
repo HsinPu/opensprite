@@ -24,6 +24,8 @@ class AutoContinueDecision:
     attempt: int
     max_attempts: int
     prompt: str | None = None
+    direct_workflow: str | None = None
+    direct_start_step: str | None = None
     emit_skipped_event: bool = False
 
     def to_metadata(self) -> dict[str, Any]:
@@ -37,6 +39,10 @@ class AutoContinueDecision:
         }
         if self.prompt:
             payload["prompt_len"] = len(self.prompt)
+        if self.direct_workflow:
+            payload["direct_workflow"] = self.direct_workflow
+        if self.direct_start_step:
+            payload["direct_start_step"] = self.direct_start_step
         return payload
 
 
@@ -114,6 +120,10 @@ class AutoContinueService:
                 emit_event=True,
             )
 
+        direct_workflow, direct_start_step = self._deterministic_workflow_resume_target(
+            completion_result,
+            attempts_used=attempts_used,
+        )
         return AutoContinueDecision(
             should_continue=True,
             reason=f"completion_gate_{completion_result.status}",
@@ -124,6 +134,8 @@ class AutoContinueService:
                 completion_result=completion_result,
                 previous_response=previous_response,
             ),
+            direct_workflow=direct_workflow,
+            direct_start_step=direct_start_step,
         )
 
     def build_prompt(
@@ -200,6 +212,30 @@ class AutoContinueService:
             f"{previous}"
         )
 
+    def build_post_workflow_resume_prompt(
+        self,
+        *,
+        task_intent: TaskIntent,
+        completion_result: CompletionGateResult,
+        previous_response: str,
+        workflow_result: str,
+    ) -> str:
+        previous = _truncate(previous_response, max_chars=800) or "(no previous visible response)"
+        workflow_output = _truncate(workflow_result, max_chars=2000) or "(workflow returned no visible result)"
+        workflow_target = _workflow_follow_up_target(completion_result)
+        return (
+            "The runtime already resumed the workflow follow-up step for you. Continue from that result instead of rerunning the same step unless you find a concrete reason.\n"
+            f"- Original objective: {task_intent.objective}\n"
+            f"- Prior completion gate status: {completion_result.status}\n"
+            f"- Prior completion gate reason: {completion_result.reason}\n"
+            f"- Workflow follow-up target: {workflow_target or 'workflow'}\n"
+            "- Use the resumed workflow result below to finish the task, summarize the result, or state any remaining blocker clearly.\n\n"
+            "Resumed workflow result:\n"
+            f"{workflow_output}\n\n"
+            "Previous assistant response:\n"
+            f"{previous}"
+        )
+
     def _skip(
         self,
         reason: str,
@@ -215,6 +251,22 @@ class AutoContinueService:
             max_attempts=self.max_auto_continues if max_attempts is None else max_attempts,
             emit_skipped_event=emit_event,
         )
+
+    @staticmethod
+    def _deterministic_workflow_resume_target(
+        completion_result: CompletionGateResult,
+        *,
+        attempts_used: int,
+    ) -> tuple[str | None, str | None]:
+        if attempts_used > 0:
+            return None, None
+        if completion_result.status not in {"incomplete", "needs_review"}:
+            return None, None
+        workflow = str(completion_result.follow_up_workflow or "").strip()
+        start_step = str(completion_result.follow_up_step_id or "").strip()
+        if not workflow or not start_step:
+            return None, None
+        return workflow, start_step
 
 
 def _truncate(text: str, *, max_chars: int) -> str:

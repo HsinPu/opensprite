@@ -71,6 +71,8 @@ def test_auto_continue_uses_review_finding_detail_when_follow_up_is_needed():
     )
 
     assert decision.should_continue is True
+    assert decision.direct_workflow == "implement_then_review"
+    assert decision.direct_start_step == "implement"
     assert "Workflow follow-up target: implement_then_review -> Implement" in (decision.prompt or "")
     assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"implement\")" in (decision.prompt or "")
     assert "Prefer a delegated `implementer` step" in (decision.prompt or "")
@@ -174,6 +176,8 @@ def test_auto_continue_uses_step_level_follow_up_for_incomplete_workflow():
     )
 
     assert decision.should_continue is True
+    assert decision.direct_workflow == "implement_then_review"
+    assert decision.direct_start_step == "review"
     assert "The missing work is already identified" in (decision.prompt or "")
     assert "Workflow follow-up target: implement_then_review -> Code review" in (decision.prompt or "")
     assert "run_workflow(workflow=\"implement_then_review\", task=<original objective>, start_step=\"review\")" in (decision.prompt or "")
