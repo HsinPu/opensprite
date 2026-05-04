@@ -30,6 +30,7 @@ export const DISPLAY_COPY = {
     settingsTitles: {
       general: "一般",
       shortcuts: "快速鍵",
+      curator: "背景整理",
       channels: "頻道",
       providers: "提供者",
       models: "模型",
@@ -824,6 +825,7 @@ export const DISPLAY_COPY = {
     settingsTitles: {
       general: "General",
       shortcuts: "Shortcuts",
+      curator: "Curator",
       channels: "Channels",
       providers: "Providers",
       models: "Models",

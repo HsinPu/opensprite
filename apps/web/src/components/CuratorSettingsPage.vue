@@ -1,94 +1,117 @@
 <template>
-  <section class="curator-card" aria-live="polite">
-    <div class="curator-card__header">
+  <p v-if="state.error" class="settings-inline-status settings-inline-status--error">{{ state.error }}</p>
+
+  <h3>{{ copy.curator.title }}</h3>
+  <div class="settings-card">
+    <div class="settings-row">
       <div>
+        <strong>{{ copy.curator.state }}</strong>
         <span>{{ copy.curator.eyebrow }}</span>
-        <strong>{{ copy.curator.title }}</strong>
+      </div>
+      <span class="provider-row__badge">{{ status?.state || copy.curator.unknown }}</span>
+    </div>
+
+    <div class="settings-row">
+      <div>
+        <strong>{{ copy.curator.paused }}</strong>
+        <span>{{ status?.paused ? copy.curator.yes : copy.curator.no }}</span>
       </div>
       <button class="ghost-button" type="button" :disabled="state.loading" @click="$emit('refresh-curator')">
         {{ state.loading ? copy.curator.loading : copy.curator.refresh }}
       </button>
     </div>
 
-    <p v-if="state.error" class="curator-card__error">{{ state.error }}</p>
-    <dl class="curator-card__grid">
+    <div class="settings-row">
       <div>
-        <dt>{{ copy.curator.state }}</dt>
-        <dd>{{ status?.state || copy.curator.unknown }}</dd>
+        <strong>{{ copy.curator.currentJob }}</strong>
+        <span :title="currentCuratorJobLabel">{{ currentCuratorJobLabel }}</span>
       </div>
+      <span>{{ copy.curator.runCount }}: {{ status?.run_count || 0 }}</span>
+    </div>
+
+    <div class="settings-row">
       <div>
-        <dt>{{ copy.curator.paused }}</dt>
-        <dd>{{ status?.paused ? copy.curator.yes : copy.curator.no }}</dd>
+        <strong>{{ copy.curator.lastRun }}</strong>
+        <span>{{ status?.last_run_at || copy.curator.never }}</span>
       </div>
+      <span :title="lastCuratorChangedLabel">{{ lastCuratorChangedLabel }}</span>
+    </div>
+  </div>
+
+  <h3>{{ copy.curator.scope }}</h3>
+  <div class="settings-card settings-card--form">
+    <label class="settings-row settings-row--field">
       <div>
-        <dt>{{ copy.curator.currentJob }}</dt>
-        <dd :title="currentCuratorJobLabel">{{ currentCuratorJobLabel }}</dd>
+        <strong>{{ copy.curator.scope }}</strong>
+        <span>{{ copy.curator.lastJobs }}: {{ lastCuratorJobsLabel }}</span>
       </div>
-      <div>
-        <dt>{{ copy.curator.runCount }}</dt>
-        <dd>{{ status?.run_count || 0 }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.curator.lastRun }}</dt>
-        <dd>{{ status?.last_run_at || copy.curator.never }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.curator.lastJobs }}</dt>
-        <dd :title="lastCuratorJobsLabel">{{ lastCuratorJobsLabel }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.curator.lastChanged }}</dt>
-        <dd :title="lastCuratorChangedLabel">{{ lastCuratorChangedLabel }}</dd>
-      </div>
-    </dl>
-    <p class="curator-card__summary">
-      {{ status?.last_run_summary || copy.curator.noSummary }}
-    </p>
-    <p v-if="status?.last_error" class="curator-card__error">{{ copy.curator.lastError }}: {{ status.last_error }}</p>
-    <label class="curator-card__scope">
-      <span>{{ copy.curator.scope }}</span>
       <select v-model="selectedCuratorScope" :disabled="Boolean(state.action || state.loading)">
         <option v-for="option in curatorScopeOptions" :key="option.value" :value="option.value">
           {{ option.label }}
         </option>
       </select>
     </label>
-    <div class="curator-card__actions">
+
+    <div class="settings-row">
+      <div>
+        <strong>{{ copy.curator.run }}</strong>
+        <span>{{ status?.last_run_summary || copy.curator.noSummary }}</span>
+      </div>
       <button
-        class="secondary-button"
+        class="primary-button"
         type="button"
         :disabled="actionsDisabled"
         @click="$emit('run-curator-action', { action: 'run', scope: selectedCuratorScope === 'all' ? '' : selectedCuratorScope })"
       >
         {{ state.action === 'run' ? copy.curator.running : copy.curator.run }}
       </button>
-      <button class="secondary-button" type="button" :disabled="actionsDisabled || status?.paused" @click="$emit('run-curator-action', 'pause')">
-        {{ state.action === 'pause' ? copy.curator.pausing : copy.curator.pause }}
-      </button>
-      <button class="secondary-button" type="button" :disabled="actionsDisabled || !status?.paused" @click="$emit('run-curator-action', 'resume')">
-        {{ state.action === 'resume' ? copy.curator.resuming : copy.curator.resume }}
-      </button>
     </div>
-    <section class="curator-card__history" aria-live="polite">
-      <div class="curator-card__history-head">
-        <strong>{{ copy.curator.historyTitle }}</strong>
-        <small v-if="state.historyLoading">{{ copy.curator.historyLoading }}</small>
+
+    <div class="settings-row">
+      <div>
+        <strong>{{ copy.curator.pause }} / {{ copy.curator.resume }}</strong>
+        <span>{{ status?.paused ? copy.curator.paused : copy.curator.state }}</span>
       </div>
-      <div v-if="curatorHistoryEntries.length" class="curator-card__history-list">
-        <article v-for="entry in curatorHistoryEntries" :key="entry.key" class="curator-card__history-entry">
-          <div class="curator-card__history-meta">
+      <div class="mcp-editor__toolbar">
+        <button class="secondary-button" type="button" :disabled="actionsDisabled || status?.paused" @click="$emit('run-curator-action', 'pause')">
+          {{ state.action === 'pause' ? copy.curator.pausing : copy.curator.pause }}
+        </button>
+        <button class="secondary-button" type="button" :disabled="actionsDisabled || !status?.paused" @click="$emit('run-curator-action', 'resume')">
+          {{ state.action === 'resume' ? copy.curator.resuming : copy.curator.resume }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <p v-if="status?.last_error" class="settings-inline-status settings-inline-status--error">
+    {{ copy.curator.lastError }}: {{ status.last_error }}
+  </p>
+
+  <h3>{{ copy.curator.historyTitle }}</h3>
+  <div class="settings-card provider-card" aria-live="polite">
+    <div v-if="state.historyLoading" class="provider-row provider-row--empty">
+      <span>{{ copy.curator.historyLoading }}</span>
+    </div>
+
+    <div v-else-if="curatorHistoryEntries.length === 0" class="provider-row provider-row--empty">
+      <span>{{ state.historyError || copy.curator.historyEmpty }}</span>
+    </div>
+
+    <template v-else>
+      <div v-for="entry in curatorHistoryEntries" :key="entry.key" class="provider-row provider-row--stacked">
+        <div class="provider-row__content">
+          <div class="provider-row__title">
             <strong>{{ entry.runAt }}</strong>
-            <span>{{ entry.statusLabel }}</span>
+            <span class="provider-row__badge">{{ entry.statusLabel }}</span>
           </div>
-          <p>{{ entry.summary }}</p>
+          <span>{{ entry.summary }}</span>
           <small>{{ copy.curator.lastJobs }}: {{ entry.jobs }}</small>
           <small v-if="entry.changed">{{ copy.curator.lastChanged }}: {{ entry.changed }}</small>
           <small v-if="entry.error">{{ copy.curator.lastError }}: {{ entry.error }}</small>
-        </article>
+        </div>
       </div>
-      <p v-else class="curator-card__history-empty">{{ state.historyError || copy.curator.historyEmpty }}</p>
-    </section>
-  </section>
+    </template>
+  </div>
 </template>
 
 <script setup>

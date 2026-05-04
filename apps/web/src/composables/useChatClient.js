@@ -3371,6 +3371,10 @@ export function useChatClient() {
     if (sectionName === "schedule") {
       loadScheduleSettings();
       loadCronJobs();
+      return;
+    }
+    if (sectionName === "curator") {
+      void refreshCuratorState();
     }
   }
 

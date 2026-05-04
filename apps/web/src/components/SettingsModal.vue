@@ -29,6 +29,15 @@
             <span aria-hidden="true">⌗</span>
             {{ copy.settingsTitles.shortcuts }}
           </button>
+          <button
+            class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'curator' }"
+            type="button"
+            @click="$emit('select-section', 'curator')"
+          >
+            <span aria-hidden="true">◌</span>
+            {{ copy.settingsTitles.curator }}
+          </button>
         </div>
 
         <div class="settings-nav__group">
@@ -188,7 +197,10 @@
             </div>
           </div>
 
-          <CuratorCard
+        </section>
+
+        <section v-show="section === 'curator'" class="settings-page">
+          <CuratorSettingsPage
             :copy="copy"
             :state="curatorState"
             :status="curatorStatus"
@@ -1002,7 +1014,7 @@
 
 <script setup>
 import { computed } from "vue";
-import CuratorCard from "./CuratorCard.vue";
+import CuratorSettingsPage from "./CuratorSettingsPage.vue";
 
 const props = defineProps({
   copy: {
