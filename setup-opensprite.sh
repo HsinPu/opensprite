@@ -2,9 +2,9 @@
 # Install OpenSprite from a checked-out repository on Linux.
 #
 # Usage:
-#   ./setup-opensprite.sh
-#   ./setup-opensprite.sh --dev
-#   ./setup-opensprite.sh --start
+#   bash setup-opensprite.sh
+#   bash setup-opensprite.sh --dev
+#   bash setup-opensprite.sh --start
 #
 # After install, use:
 #   opensprite service start
@@ -28,7 +28,7 @@ for arg in "$@"; do
       ;;
     -h|--help)
       cat <<'EOF'
-Usage: ./setup-opensprite.sh [options]
+Usage: bash setup-opensprite.sh [options]
 
 Options:
   --dev       Install development dependencies with -e ".[dev]".

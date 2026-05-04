@@ -85,7 +85,7 @@ python -m pip install .
 **中文：** 在已 clone 的 repo 中執行安裝腳本，會建立 `.venv`、安裝 OpenSprite，並把 `opensprite` 連結到 `~/.local/bin`。
 
 ```bash
-./setup-opensprite.sh
+bash setup-opensprite.sh
 ```
 
 Start the background gateway after setup:
@@ -98,8 +98,8 @@ opensprite service status
 Install dev dependencies or start immediately:
 
 ```bash
-./setup-opensprite.sh --dev
-./setup-opensprite.sh --start
+bash setup-opensprite.sh --dev
+bash setup-opensprite.sh --start
 ```
 
 ### Development install · 開發模式安裝
