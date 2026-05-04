@@ -57,6 +57,22 @@ def is_process_running(pid: int | None) -> bool:
     return True
 
 
+def resolve_gateway_python(python_executable: Path | None = None) -> Path:
+    """Return the Python executable that should run the detached gateway."""
+    if python_executable is not None:
+        return Path(python_executable).expanduser().resolve()
+
+    install_dir = Path(os.getenv("OPENSPRITE_INSTALL_DIR", "~/.local/share/opensprite/opensprite")).expanduser()
+    for candidate in (
+        install_dir / ".venv" / "bin" / "python",
+        install_dir / ".venv" / "Scripts" / "python.exe",
+    ):
+        if candidate.exists():
+            return candidate.resolve()
+
+    return Path(sys.executable).expanduser().resolve()
+
+
 def _cleanup_stale_pid(pid_file: Path) -> None:
     pid = _read_pid(pid_file)
     if pid is not None and is_process_running(pid):
@@ -87,7 +103,7 @@ def start_service(
     if is_process_running(existing_pid):
         raise RuntimeError(f"OpenSprite gateway is already running (PID {existing_pid}).")
 
-    python_path = Path(python_executable or sys.executable).expanduser().resolve()
+    python_path = resolve_gateway_python(python_executable)
     command = [str(python_path), "-m", "opensprite", "gateway"]
     if config_path is not None:
         command.extend(["--config", str(Path(config_path).expanduser().resolve())])
