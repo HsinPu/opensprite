@@ -331,6 +331,9 @@ class WebAdapter(MessageAdapter):
         config = Config.load(None)
         return Path(config.source_path or Path.home() / ".opensprite" / "opensprite.json").resolve()
 
+    def _get_app_home(self) -> Path:
+        return self._get_config_path().parent
+
     def _get_provider_settings(self) -> ProviderSettingsService:
         return ProviderSettingsService(self._get_config_path())
 
@@ -1001,6 +1004,58 @@ class WebAdapter(MessageAdapter):
             self._raise_provider_settings_error(exc)
         return web.json_response(payload)
 
+    async def _handle_settings_codex_auth_status(self, request: web.Request) -> web.Response:
+        from ..auth.codex import CodexAuthError, get_codex_status
+
+        try:
+            status = get_codex_status(self._get_app_home())
+        except CodexAuthError as exc:
+            return web.json_response(
+                {
+                    "provider": "openai-codex",
+                    "configured": False,
+                    "error": str(exc),
+                },
+                status=400,
+            )
+        return web.json_response(
+            {
+                "provider": "openai-codex",
+                "configured": status.configured,
+                "path": str(status.path),
+                "expires_at": status.expires_at,
+                "expired": status.expired,
+                "account_id": status.account_id,
+            }
+        )
+
+    async def _handle_settings_codex_auth_login(self, request: web.Request) -> web.Response:
+        command = f'opensprite auth login openai-codex --config "{self._get_config_path()}"'
+        return web.json_response(
+            {
+                "ok": True,
+                "provider": "openai-codex",
+                "mode": "cli_device_code",
+                "command": command,
+                "message": "Run this command in a terminal to complete OpenAI Codex device-code login.",
+            }
+        )
+
+    async def _handle_settings_codex_auth_logout(self, request: web.Request) -> web.Response:
+        from ..auth.codex import codex_auth_path, delete_codex_token
+
+        app_home = self._get_app_home()
+        path = codex_auth_path(app_home)
+        removed = delete_codex_token(app_home)
+        return web.json_response(
+            {
+                "ok": True,
+                "provider": "openai-codex",
+                "removed": removed,
+                "path": str(path),
+            }
+        )
+
     async def _handle_settings_channels(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_channel_settings().list_channels()
@@ -1554,6 +1609,9 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/channels/{channel_id}/connect", self._handle_settings_channel_connect)
         self.app.router.add_post("/api/settings/channels/{channel_id}/disconnect", self._handle_settings_channel_disconnect)
         self.app.router.add_get("/api/settings/providers", self._handle_settings_providers)
+        self.app.router.add_get("/api/settings/auth/openai-codex", self._handle_settings_codex_auth_status)
+        self.app.router.add_post("/api/settings/auth/openai-codex/login", self._handle_settings_codex_auth_login)
+        self.app.router.add_post("/api/settings/auth/openai-codex/logout", self._handle_settings_codex_auth_logout)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
         self.app.router.add_put("/api/settings/providers/{provider_id}/options", self._handle_settings_provider_options_update)

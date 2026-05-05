@@ -10,6 +10,7 @@ from opensprite.bus.events import RunEvent, SessionStatusEvent
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.web import WebAdapter
 from opensprite.config import Config
+from opensprite.auth.codex import CodexToken, save_codex_token
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
 from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
@@ -1685,6 +1686,38 @@ async def _run_web_settings_provider_api(tmp_path: Path):
 
             assert providers_payload["connected"] == []
             assert {provider["id"] for provider in providers_payload["available"]} >= {"openai", "openrouter", "minimax"}
+
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex") as resp:
+                assert resp.status == 200
+                codex_status = await resp.json()
+
+            assert codex_status["provider"] == "openai-codex"
+            assert codex_status["configured"] is False
+            assert codex_status["path"] == str(tmp_path / "auth" / "openai-codex.json")
+
+            save_codex_token(CodexToken(access_token="codex-token", account_id="acct-1"), tmp_path)
+
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex") as resp:
+                assert resp.status == 200
+                codex_configured_status = await resp.json()
+
+            assert codex_configured_status["configured"] is True
+            assert codex_configured_status["account_id"] == "acct-1"
+
+            async with session.post(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex/login") as resp:
+                assert resp.status == 200
+                codex_login_payload = await resp.json()
+
+            assert codex_login_payload["mode"] == "cli_device_code"
+            assert "opensprite auth login openai-codex" in codex_login_payload["command"]
+            assert str(config_path) in codex_login_payload["command"]
+
+            async with session.post(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex/logout") as resp:
+                assert resp.status == 200
+                codex_logout_payload = await resp.json()
+
+            assert codex_logout_payload["removed"] is True
+            assert not (tmp_path / "auth" / "openai-codex.json").exists()
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/providers/openai/connect",
