@@ -41,6 +41,19 @@ def test_log_config_does_not_print_full_reasoning_by_default():
     assert LogConfig().log_reasoning_details is False
 
 
+def test_provider_config_supports_codex_oauth_shape():
+    provider = ProviderConfig(
+        provider="openai-codex",
+        auth_type="openai_codex_oauth",
+        api_mode="responses",
+        model="gpt-5.1-codex",
+    )
+
+    assert provider.api_key == ""
+    assert provider.auth_type == "openai_codex_oauth"
+    assert provider.api_mode == "responses"
+
+
 def test_agent_config_requires_template_backed_values():
     with pytest.raises(ValidationError):
         AgentConfig()

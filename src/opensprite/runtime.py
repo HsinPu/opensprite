@@ -8,7 +8,7 @@ from .bus.message import UserMessage
 from .config import AgentConfig
 from .context.paths import split_session_id
 from .cron import CronManager, CronJob
-from .llms import create_llm
+from .llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from .media import (
     MediaRouter,
     OpenAICompatibleSpeechProvider,
@@ -178,19 +178,12 @@ async def create_agent(config: Config):
     """建立 Agent 和 Queue"""
     # 用 Registry 建立 LLM Provider
     cfg = config.llm.get_active()
-    llm = create_llm(
-        api_key=cfg.api_key,
-        model=cfg.model,
-        base_url=cfg.base_url or "",
+    llm_runtime = resolve_provider_runtime(
+        cfg,
         provider_name=cfg.provider or config.llm.default or "",
-        enabled=cfg.enabled if hasattr(cfg, 'enabled') else True,
-        reasoning_enabled=cfg.reasoning_enabled,
-        reasoning_effort=cfg.reasoning_effort,
-        reasoning_max_tokens=cfg.reasoning_max_tokens,
-        reasoning_exclude=cfg.reasoning_exclude,
-        provider_sort=cfg.provider_sort,
-        require_parameters=cfg.require_parameters,
+        app_home=config.source_path.parent if config.source_path is not None else None,
     )
+    llm = create_llm_from_runtime(llm_runtime)
     
     # 建立 Agent 設定
     agent_config = config.agent

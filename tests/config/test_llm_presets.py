@@ -4,8 +4,8 @@ from opensprite.config.llm_presets import load_llm_presets
 def test_load_llm_presets_has_expected_providers():
     presets = load_llm_presets()
     assert presets.version == 1
-    assert presets.provider_order == ("openrouter", "openai", "minimax", "minimax-cn")
-    assert set(presets.providers.keys()) == {"openrouter", "openai", "minimax", "minimax-cn"}
+    assert presets.provider_order == ("openrouter", "openai", "openai-codex", "minimax", "minimax-cn")
+    assert set(presets.providers.keys()) == {"openrouter", "openai", "openai-codex", "minimax", "minimax-cn"}
     assert presets.providers["openrouter"].model_choices[:30] == (
         "moonshotai/kimi-k2.6",
         "anthropic/claude-sonnet-4.6",
@@ -60,6 +60,9 @@ def test_load_llm_presets_has_expected_providers():
         "vision": ("gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-chat"),
         "ocr": ("gpt-5.5", "gpt-5.4", "gpt-5.4-mini"),
     }
+    assert presets.providers["openai-codex"].auth_type == "openai_codex_oauth"
+    assert presets.providers["openai-codex"].api_mode == "responses"
+    assert presets.providers["openai-codex"].default_base_url == "https://chatgpt.com/backend-api/codex"
     assert presets.providers["openrouter"].media_model_choices == {
         "vision": (
             "google/gemini-3-flash-preview",

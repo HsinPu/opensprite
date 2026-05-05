@@ -1005,7 +1005,15 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
     base_provider = ModelRoutingProvider()
     routed_provider = ModelRoutingProvider()
 
-    def fake_create_llm(api_key: str, model: str, base_url: str = "", provider_name: str = "", enabled: bool = True):
+    def fake_create_llm(
+        api_key: str,
+        model: str,
+        base_url: str = "",
+        provider_name: str = "",
+        enabled: bool = True,
+        **kwargs,
+    ):
+        _ = api_key, base_url, enabled, kwargs
         assert provider_name == "review"
         assert model == "provider-review-model"
         return routed_provider

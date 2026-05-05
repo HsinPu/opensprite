@@ -15,6 +15,8 @@ class ProviderPreset:
     default_base_url: str
     model_choices: tuple[str, ...]
     display_name: str | None = None
+    auth_type: str = "api_key"
+    api_mode: str | None = None
     media_model_choices: dict[str, tuple[str, ...]] | None = None
     model_capabilities: dict[str, dict[str, Any]] | None = None
 
@@ -41,6 +43,9 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
             raise ValueError(f'llm-presets: providers["{name}"].model_choices must be a string array')
         dn = entry.get("display_name")
         display = str(dn).strip() if isinstance(dn, str) and dn.strip() else None
+        auth_type = str(entry.get("auth_type") or "api_key").strip()
+        api_mode_raw = entry.get("api_mode")
+        api_mode = str(api_mode_raw).strip() if isinstance(api_mode_raw, str) and api_mode_raw.strip() else None
         raw_media_models = entry.get("media_model_choices", {})
         if raw_media_models is None:
             raw_media_models = {}
@@ -69,6 +74,8 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
             default_base_url=base.strip(),
             model_choices=tuple(models),
             display_name=display,
+            auth_type=auth_type,
+            api_mode=api_mode,
             media_model_choices=media_models or None,
             model_capabilities=capabilities or None,
         )

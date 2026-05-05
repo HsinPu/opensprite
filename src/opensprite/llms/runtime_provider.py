@@ -1,0 +1,119 @@
+"""Resolve configured LLM providers into runtime client settings."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from ..config import ProviderConfig
+
+
+OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+OPENAI_CODEX_AUTH_FILE = Path("auth") / "openai-codex.json"
+
+
+class ProviderRuntimeError(RuntimeError):
+    """Raised when a configured provider cannot be resolved for runtime use."""
+
+
+@dataclass(frozen=True)
+class ResolvedProviderRuntime:
+    provider_name: str
+    api_key: str
+    model: str
+    base_url: str
+    enabled: bool
+    api_mode: str | None = None
+    auth_type: str = "api_key"
+    reasoning_enabled: bool = False
+    reasoning_effort: str | None = None
+    reasoning_max_tokens: int | None = None
+    reasoning_exclude: bool = False
+    provider_sort: str | None = None
+    require_parameters: bool = False
+
+
+def default_app_home(config_path: str | Path | None = None) -> Path:
+    if config_path is not None:
+        return Path(config_path).expanduser().resolve().parent
+    return Path.home() / ".opensprite"
+
+
+def _load_codex_access_token(app_home: Path) -> str:
+    token_path = app_home / OPENAI_CODEX_AUTH_FILE
+    try:
+        raw = json.loads(token_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ProviderRuntimeError(
+            "OpenAI Codex OAuth is selected but no token is stored. "
+            "Run `opensprite auth login openai-codex` after the login flow is implemented."
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file is invalid: {token_path}") from exc
+
+    if not isinstance(raw, dict):
+        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file must contain a JSON object: {token_path}")
+    token = str(raw.get("access_token") or "").strip()
+    if not token:
+        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file is missing access_token: {token_path}")
+    return token
+
+
+def resolve_provider_runtime(
+    provider: ProviderConfig,
+    *,
+    provider_name: str,
+    app_home: str | Path | None = None,
+) -> ResolvedProviderRuntime:
+    """Resolve a ProviderConfig into the arguments needed by create_llm()."""
+    configured_provider = str(provider.provider or provider_name or "").strip()
+    auth_type = provider.auth_type
+    api_mode = provider.api_mode
+    base_url = str(provider.base_url or "").strip()
+    api_key = str(provider.api_key or "").strip()
+
+    if auth_type == "openai_codex_oauth":
+        configured_provider = configured_provider or "openai-codex"
+        api_mode = api_mode or "responses"
+        base_url = base_url or OPENAI_CODEX_BASE_URL
+        if not api_key:
+            api_key = _load_codex_access_token(Path(app_home) if app_home is not None else default_app_home())
+    elif api_mode is None:
+        api_mode = "chat_completions"
+
+    return ResolvedProviderRuntime(
+        provider_name=configured_provider,
+        api_key=api_key,
+        model=provider.model,
+        base_url=base_url,
+        enabled=provider.enabled,
+        api_mode=api_mode,
+        auth_type=auth_type,
+        reasoning_enabled=provider.reasoning_enabled,
+        reasoning_effort=provider.reasoning_effort,
+        reasoning_max_tokens=provider.reasoning_max_tokens,
+        reasoning_exclude=provider.reasoning_exclude,
+        provider_sort=provider.provider_sort,
+        require_parameters=provider.require_parameters,
+    )
+
+
+def create_llm_from_runtime(runtime: ResolvedProviderRuntime):
+    from .registry import create_llm
+
+    return create_llm(
+        api_key=runtime.api_key,
+        model=runtime.model,
+        base_url=runtime.base_url,
+        provider_name=runtime.provider_name,
+        enabled=runtime.enabled,
+        api_mode=runtime.api_mode,
+        auth_type=runtime.auth_type,
+        reasoning_enabled=runtime.reasoning_enabled,
+        reasoning_effort=runtime.reasoning_effort,
+        reasoning_max_tokens=runtime.reasoning_max_tokens,
+        reasoning_exclude=runtime.reasoning_exclude,
+        provider_sort=runtime.provider_sort,
+        require_parameters=runtime.require_parameters,
+    )

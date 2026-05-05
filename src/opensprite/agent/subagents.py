@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 from ..llms import ChatMessage
 from ..llms.routed import ModelRoutedProvider
 from ..llms.registry import create_llm
+from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from .subagent_output import parse_structured_subagent_output
@@ -238,19 +239,28 @@ class SubagentRunService:
             providers = getattr(llm_config, "providers", {}) if llm_config is not None else {}
             provider_config = providers.get(llm_provider) if isinstance(providers, dict) else None
             if provider_config is not None and getattr(provider_config, "enabled", True):
-                provider_override = create_llm(
-                    api_key=getattr(provider_config, "api_key", ""),
-                    model=getattr(provider_config, "model", ""),
-                    base_url=getattr(provider_config, "base_url", "") or "",
-                    provider_name=getattr(provider_config, "provider", None) or llm_provider,
-                    enabled=getattr(provider_config, "enabled", True),
-                    reasoning_enabled=getattr(provider_config, "reasoning_enabled", False),
-                    reasoning_effort=getattr(provider_config, "reasoning_effort", None),
-                    reasoning_max_tokens=getattr(provider_config, "reasoning_max_tokens", None),
-                    reasoning_exclude=getattr(provider_config, "reasoning_exclude", False),
-                    provider_sort=getattr(provider_config, "provider_sort", None),
-                    require_parameters=getattr(provider_config, "require_parameters", False),
-                )
+                if getattr(provider_config, "api_mode", None) or getattr(provider_config, "auth_type", "api_key") != "api_key":
+                    provider_override = create_llm_from_runtime(
+                        resolve_provider_runtime(
+                            provider_config,
+                            provider_name=getattr(provider_config, "provider", None) or llm_provider,
+                            app_home=self._app_home_getter(),
+                        )
+                    )
+                else:
+                    provider_override = create_llm(
+                        api_key=getattr(provider_config, "api_key", ""),
+                        model=getattr(provider_config, "model", ""),
+                        base_url=getattr(provider_config, "base_url", "") or "",
+                        provider_name=getattr(provider_config, "provider", None) or llm_provider,
+                        enabled=getattr(provider_config, "enabled", True),
+                        reasoning_enabled=getattr(provider_config, "reasoning_enabled", False),
+                        reasoning_effort=getattr(provider_config, "reasoning_effort", None),
+                        reasoning_max_tokens=getattr(provider_config, "reasoning_max_tokens", None),
+                        reasoning_exclude=getattr(provider_config, "reasoning_exclude", False),
+                        provider_sort=getattr(provider_config, "provider_sort", None),
+                        require_parameters=getattr(provider_config, "require_parameters", False),
+                    )
             else:
                 return None
 

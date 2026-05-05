@@ -27,7 +27,8 @@ import shutil
 from typing import Any, Awaitable, Callable
 
 from ..bus.message import UserMessage, AssistantMessage
-from ..llms import LLMProvider, ChatMessage, create_llm
+from ..llms import LLMProvider, ChatMessage
+from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..storage import StorageProvider, StoredDelegatedTask
 from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store
@@ -1252,19 +1253,12 @@ class AgentLoop:
     def reload_llm_from_config(self, config: Config) -> dict[str, Any]:
         """Reload the active chat LLM from an already persisted Config."""
         cfg = config.llm.get_active()
-        provider = create_llm(
-            api_key=cfg.api_key,
-            model=cfg.model,
-            base_url=cfg.base_url or "",
+        llm_runtime = resolve_provider_runtime(
+            cfg,
             provider_name=cfg.provider or config.llm.default or "",
-            enabled=cfg.enabled if hasattr(cfg, "enabled") else True,
-            reasoning_enabled=cfg.reasoning_enabled,
-            reasoning_effort=cfg.reasoning_effort,
-            reasoning_max_tokens=cfg.reasoning_max_tokens,
-            reasoning_exclude=cfg.reasoning_exclude,
-            provider_sort=cfg.provider_sort,
-            require_parameters=cfg.require_parameters,
+            app_home=config.source_path.parent if config.source_path is not None else self.app_home,
         )
+        provider = create_llm_from_runtime(llm_runtime)
 
         self.provider = provider
         self.llm_chat_temperature = config.llm.temperature

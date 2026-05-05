@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "provider_order": ["openrouter", "openai", "minimax", "minimax-cn"],
+  "provider_order": ["openrouter", "openai", "openai-codex", "minimax", "minimax-cn"],
   "providers": {
     "openrouter": {
       "display_name": "OpenRouter",
@@ -191,6 +191,16 @@
           "gpt-5.4-mini"
         ]
       }
+    },
+    "openai-codex": {
+      "display_name": "OpenAI Codex",
+      "default_base_url": "https://chatgpt.com/backend-api/codex",
+      "auth_type": "openai_codex_oauth",
+      "api_mode": "responses",
+      "model_choices": [
+        "gpt-5.1-codex",
+        "gpt-5.3-codex"
+      ]
     },
     "minimax": {
       "display_name": "MiniMax",

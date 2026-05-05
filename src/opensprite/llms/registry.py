@@ -6,6 +6,7 @@
 from dataclasses import dataclass
 from .base import LLMProvider
 from .openai import OpenAILLM
+from .openai_responses import OpenAIResponsesLLM
 from .openrouter import OpenRouterLLM
 from .minimax import MiniMaxLLM
 
@@ -56,6 +57,8 @@ def create_llm(
     base_url: str = "",
     provider_name: str = "",
     enabled: bool = True,
+    api_mode: str | None = None,
+    auth_type: str = "api_key",
     reasoning_enabled: bool = False,
     reasoning_effort: str | None = None,
     reasoning_max_tokens: int | None = None,
@@ -66,6 +69,9 @@ def create_llm(
     """建立 LLM Provider"""
     if not enabled:
         raise ValueError(f"Provider {provider_name} is disabled")
+
+    if api_mode == "responses" or auth_type == "openai_codex_oauth":
+        return OpenAIResponsesLLM(api_key=api_key, base_url=base_url, default_model=model)
     
     spec = find_provider(api_key, base_url, model, provider_name)
     

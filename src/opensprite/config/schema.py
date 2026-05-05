@@ -12,7 +12,9 @@ class ProviderConfig(BaseModel):
 
     provider: str | None = None
     name: str | None = None
-    api_key: str
+    auth_type: Literal["api_key", "openai_codex_oauth"] = "api_key"
+    api_mode: Literal["chat_completions", "responses"] | None = None
+    api_key: str = ""
     model: str = ""
     base_url: str | None = None
     enabled: bool = False

@@ -118,6 +118,9 @@ def ensure_provider_entry(
     existing.setdefault("api_key", "")
     existing.setdefault("model", "")
     existing.setdefault("base_url", preset.default_base_url)
+    existing.setdefault("auth_type", preset.auth_type)
+    if preset.api_mode:
+        existing.setdefault("api_mode", preset.api_mode)
     existing.setdefault("enabled", False)
     if not str(existing.get("base_url", "") or "").strip():
         existing["base_url"] = preset.default_base_url
@@ -170,6 +173,9 @@ def connect_provider_in_config(
     preset = presets.providers[preset_id]
     provider = ensure_provider_entry(providers, provider_id, preset)
     provider["provider"] = preset_id
+    provider["auth_type"] = preset.auth_type
+    if preset.api_mode:
+        provider["api_mode"] = preset.api_mode
     if preset_id == "openrouter":
         provider.setdefault("reasoning_enabled", True)
         provider.setdefault("reasoning_effort", "medium")
