@@ -74,6 +74,19 @@ def test_load_llm_presets_has_expected_providers():
             "qwen/qwen3.6-flash",
         ),
     }
+    assert presets.providers["openrouter"].model_capabilities["anthropic/claude-sonnet-4.6"] == {
+        "reasoning": True,
+        "vision": True,
+        "tools": True,
+        "recommended_options": {
+            "reasoning_enabled": True,
+            "reasoning_effort": "medium",
+        },
+    }
+    assert presets.providers["openrouter"].model_capabilities["openai/gpt-5.5-pro"]["recommended_options"] == {
+        "reasoning_enabled": True,
+        "reasoning_effort": "high",
+    }
     assert presets.providers["minimax"].model_choices[:3] == ("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1")
     assert presets.providers["minimax"].media_model_choices == {
         "vision": ("MiniMax-VL-01",),

@@ -455,6 +455,7 @@ class ProviderSettingsService:
                     "is_default": provider_id == loaded.llm.default,
                     "selected_model": provider.get("model") or "",
                     "models": choices,
+                    "model_capabilities": (preset.model_capabilities or {}) if preset else {},
                     "supports_custom_model": True,
                 }
             )

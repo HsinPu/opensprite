@@ -83,6 +83,11 @@ def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_pa
     assert providers["openai"]["enabled"] is False
     assert models["default_provider"] == "openrouter"
     assert models["active_model"] == "openai/gpt-4o-mini"
+    assert models["providers"][0]["model_capabilities"]["openai/gpt-5.5"]["reasoning"] is True
+    assert models["providers"][0]["model_capabilities"]["openai/gpt-5.5"]["recommended_options"] == {
+        "reasoning_enabled": True,
+        "reasoning_effort": "medium",
+    }
 
 
 def test_provider_settings_updates_openrouter_request_options(tmp_path):

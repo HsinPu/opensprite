@@ -16,6 +16,7 @@ class ProviderPreset:
     model_choices: tuple[str, ...]
     display_name: str | None = None
     media_model_choices: dict[str, tuple[str, ...]] | None = None
+    model_capabilities: dict[str, dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True)
@@ -54,11 +55,22 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
                     f'llm-presets: providers["{name}"].media_model_choices entries must be string arrays'
                 )
             media_models[category] = tuple(category_models)
+        raw_capabilities = entry.get("model_capabilities", {})
+        if raw_capabilities is None:
+            raw_capabilities = {}
+        if not isinstance(raw_capabilities, dict):
+            raise ValueError(f'llm-presets: providers["{name}"].model_capabilities must be an object')
+        capabilities: dict[str, dict[str, Any]] = {}
+        for model_name, capability in raw_capabilities.items():
+            if not isinstance(model_name, str) or not isinstance(capability, dict):
+                raise ValueError(f'llm-presets: providers["{name}"].model_capabilities entries must be objects')
+            capabilities[model_name] = dict(capability)
         out[name] = ProviderPreset(
             default_base_url=base.strip(),
             model_choices=tuple(models),
             display_name=display,
             media_model_choices=media_models or None,
+            model_capabilities=capabilities or None,
         )
     return out
 
