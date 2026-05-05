@@ -20,6 +20,14 @@ function assertRegex(content, pattern, label) {
   }
 }
 
+function assertOrder(content, firstNeedle, secondNeedle, label) {
+  const firstIndex = content.indexOf(firstNeedle);
+  const secondIndex = content.indexOf(secondNeedle);
+  if (firstIndex === -1 || secondIndex === -1 || firstIndex > secondIndex) {
+    throw new Error(`${label}: expected ${firstNeedle} before ${secondNeedle}`);
+  }
+}
+
 const [messageList, runSummaryCard, runTraceViewer, runDetailsPanel, chatComposer, toastStack, curatorSettingsPage, settingsModal, chatClient, copy] = await Promise.all([
   read("src/components/MessageList.vue"),
   read("src/components/RunSummaryCard.vue"),
@@ -52,6 +60,8 @@ assertIncludes(settingsModal, "connectedCount", "multiple provider connection co
 assertIncludes(settingsModal, "save-media-model", "media model settings action");
 assertIncludes(settingsModal, "textProviderModelGroups", "OpenRouter model grouping");
 assertIncludes(settingsModal, "<optgroup", "grouped model select rendering");
+assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot auth code rendering");
+assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(chatClient, "/api/settings/media", "media model settings fetch");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");

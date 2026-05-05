@@ -141,46 +141,6 @@
             </label>
           </div>
 
-          <h3>{{ copy.settings.providers.copilotAuth.title }}</h3>
-          <p v-if="settingsState.copilotAuthNotice" class="settings-inline-status">{{ settingsState.copilotAuthNotice }}</p>
-          <p v-if="settingsState.copilotAuthError" class="settings-inline-status settings-inline-status--error">
-            {{ settingsState.copilotAuthError }}
-          </p>
-          <div class="settings-card provider-card">
-            <div class="provider-row provider-row--stacked codex-auth-row">
-              <div class="provider-row__content">
-                <div class="provider-row__main">
-                  <span class="provider-row__mark" aria-hidden="true">Gh</span>
-                  <div>
-                    <div class="provider-row__title">
-                      <strong>{{ copy.settings.providers.copilotAuth.name }}</strong>
-                      <span class="provider-row__badge">{{ copilotAuthStatusLabel }}</span>
-                    </div>
-                    <span>{{ copilotAuthDescription }}</span>
-                  </div>
-                </div>
-                <div class="provider-row__actions">
-                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('refresh-copilot-auth')">
-                    {{ copy.settings.providers.copilotAuth.refresh }}
-                  </button>
-                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('start-copilot-auth-login')">
-                    {{ copy.settings.providers.copilotAuth.login }}
-                  </button>
-                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading || !settingsState.copilotAuth.configured" @click="$emit('logout-copilot-auth')">
-                    {{ copy.settings.providers.copilotAuth.logout }}
-                  </button>
-                </div>
-              </div>
-              <div v-if="settingsState.copilotAuth.userCode" class="codex-auth-command">
-                <span>{{ copy.settings.providers.copilotAuth.userCodeLabel }}</span>
-                <code>{{ settingsState.copilotAuth.userCode }}</code>
-                <a v-if="settingsState.copilotAuth.verificationUri" :href="settingsState.copilotAuth.verificationUri" target="_blank" rel="noreferrer">
-                  {{ copy.settings.providers.copilotAuth.openVerification }}
-                </a>
-              </div>
-            </div>
-          </div>
-
           <h3>{{ copy.settings.general.connectionTitle }}</h3>
           <div class="settings-card settings-card--form">
             <label class="settings-row settings-row--field">
@@ -428,6 +388,46 @@
                 <code>{{ settingsState.codexAuth.userCode }}</code>
                 <a v-if="settingsState.codexAuth.verificationUri" :href="settingsState.codexAuth.verificationUri" target="_blank" rel="noreferrer">
                   {{ copy.settings.providers.codexAuth.openVerification }}
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.providers.copilotAuth.title }}</h3>
+          <p v-if="settingsState.copilotAuthNotice" class="settings-inline-status">{{ settingsState.copilotAuthNotice }}</p>
+          <p v-if="settingsState.copilotAuthError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.copilotAuthError }}
+          </p>
+          <div class="settings-card provider-card">
+            <div class="provider-row provider-row--stacked codex-auth-row">
+              <div class="provider-row__content">
+                <div class="provider-row__main">
+                  <span class="provider-row__mark" aria-hidden="true">Gh</span>
+                  <div>
+                    <div class="provider-row__title">
+                      <strong>{{ copy.settings.providers.copilotAuth.name }}</strong>
+                      <span class="provider-row__badge">{{ copilotAuthStatusLabel }}</span>
+                    </div>
+                    <span>{{ copilotAuthDescription }}</span>
+                  </div>
+                </div>
+                <div class="provider-row__actions">
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('refresh-copilot-auth')">
+                    {{ copy.settings.providers.copilotAuth.refresh }}
+                  </button>
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('start-copilot-auth-login')">
+                    {{ copy.settings.providers.copilotAuth.login }}
+                  </button>
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading || !settingsState.copilotAuth.configured" @click="$emit('logout-copilot-auth')">
+                    {{ copy.settings.providers.copilotAuth.logout }}
+                  </button>
+                </div>
+              </div>
+              <div v-if="settingsState.copilotAuth.userCode" class="codex-auth-command">
+                <span>{{ copy.settings.providers.copilotAuth.userCodeLabel }}</span>
+                <code>{{ settingsState.copilotAuth.userCode }}</code>
+                <a v-if="settingsState.copilotAuth.verificationUri" :href="settingsState.copilotAuth.verificationUri" target="_blank" rel="noreferrer">
+                  {{ copy.settings.providers.copilotAuth.openVerification }}
                 </a>
               </div>
             </div>
