@@ -49,12 +49,12 @@ def test_minimax_image_provider_normalizes_cn_base_url():
     assert provider.endpoint == "https://api.minimaxi.com/v1/coding_plan/vlm"
 
 
-def test_create_image_analysis_provider_uses_minimax_provider_for_minimax_ids():
+def test_create_image_analysis_provider_uses_minimax_provider_for_minimax_id():
     provider = create_image_analysis_provider(
-        provider="minimax-cn",
+        provider="minimax",
         api_key="secret-key",
         default_model="MiniMax-VL-01",
-        base_url="https://api.minimaxi.com/v1",
+        base_url="https://api.minimax.io/v1",
     )
 
     assert isinstance(provider, MiniMaxImageProvider)

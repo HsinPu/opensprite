@@ -84,17 +84,17 @@ def test_media_settings_lists_openai_image_models_separately(tmp_path):
     }
 
 
-def test_media_settings_can_save_minimax_cn_vision_model(tmp_path):
+def test_media_settings_can_save_minimax_vision_model(tmp_path):
     config_path = _copy_config(tmp_path)
-    ProviderSettingsService(config_path).connect_provider("minimax-cn", api_key="secret-key")
+    ProviderSettingsService(config_path).connect_provider("minimax", api_key="secret-key")
     service = MediaSettingsService(config_path)
 
-    result = service.update_media("vision", enabled=True, provider_id="minimax-cn", model="MiniMax-VL-01")
+    result = service.update_media("vision", enabled=True, provider_id="minimax", model="MiniMax-VL-01")
 
     media = json.loads((tmp_path / "media.json").read_text(encoding="utf-8"))
-    assert media["vision"]["provider"] == "minimax-cn"
-    assert media["vision"]["base_url"] == "https://api.minimaxi.com/v1"
-    assert result["media"]["sections"]["vision"]["provider_id"] == "minimax-cn"
+    assert media["vision"]["provider"] == "minimax"
+    assert media["vision"]["base_url"] == "https://api.minimax.io/v1"
+    assert result["media"]["sections"]["vision"]["provider_id"] == "minimax"
 
 
 def test_media_settings_can_save_ocr_model_separately_from_vision(tmp_path):

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "provider_order": ["openrouter", "openai", "openai-codex", "minimax", "minimax-cn"],
+  "provider_order": ["openrouter", "openai", "openai-codex", "minimax"],
   "providers": {
     "openrouter": {
       "display_name": "OpenRouter",
@@ -205,15 +205,6 @@
     "minimax": {
       "display_name": "MiniMax",
       "default_base_url": "https://api.minimax.io/v1",
-      "model_choices": ["MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"],
-      "media_model_choices": {
-        "vision": ["MiniMax-VL-01"],
-        "ocr": ["MiniMax-VL-01"]
-      }
-    },
-    "minimax-cn": {
-      "display_name": "MiniMax CN",
-      "default_base_url": "https://api.minimaxi.com/v1",
       "model_choices": ["MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"],
       "media_model_choices": {
         "vision": ["MiniMax-VL-01"],
