@@ -7,7 +7,7 @@ OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
-from .openai_streaming import collect_openai_compatible_stream
+from .openai_streaming import collect_openai_compatible_stream, coerce_reasoning_details
 from .tool_args import parse_tool_arguments
 from ..utils.log import logger
 
@@ -116,12 +116,16 @@ class OpenRouterLLM(LLMProvider):
                     msg["tool_call_id"] = m["tool_call_id"]
                 if m.get("tool_calls"):
                     msg["tool_calls"] = m["tool_calls"]
+                if m.get("reasoning_details"):
+                    msg["reasoning_details"] = m["reasoning_details"]
             else:
                 msg = {"role": m.role, "content": m.content}
                 if m.tool_call_id:
                     msg["tool_call_id"] = m.tool_call_id
                 if m.tool_calls:
                     msg["tool_calls"] = m.tool_calls
+                if m.reasoning_details:
+                    msg["reasoning_details"] = m.reasoning_details
             api_messages.append(msg)
         
         params: dict[str, Any] = {
@@ -227,6 +231,10 @@ class OpenRouterLLM(LLMProvider):
                     name=getattr(function, "name", "") or "",
                     arguments=args
                 ))
+
+        reasoning_details = coerce_reasoning_details(getattr(message, "reasoning_details", None))
+        if reasoning_details:
+            logger.info("OpenRouter response reasoning_details count={}", len(reasoning_details))
         
         return LLMResponse(
             content=_coerce_content(getattr(message, "content", "")),
@@ -234,6 +242,7 @@ class OpenRouterLLM(LLMProvider):
             tool_calls=tool_calls,
             usage=_usage_payload(getattr(response, "usage", None)),
             finish_reason=str(getattr(choices[0], "finish_reason", "") or "") or None,
+            reasoning_details=reasoning_details,
         )
     
     def get_default_model(self) -> str:

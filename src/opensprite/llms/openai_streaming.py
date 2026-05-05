@@ -31,7 +31,33 @@ def _coerce_reasoning(delta_payload: Any) -> str:
         value = _get_attr_or_item(delta_payload, name)
         if value:
             return _coerce_content(value)
+    details = coerce_reasoning_details(_get_attr_or_item(delta_payload, "reasoning_details"))
+    if details:
+        return "".join(_coerce_content(item.get("text") or item.get("summary") or "") for item in details)
     return ""
+
+
+def json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): json_safe(item) for key, item in value.items()}
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return json_safe(model_dump())
+    return str(value)
+
+
+def coerce_reasoning_details(value: Any) -> list[dict[str, Any]] | None:
+    safe = json_safe(value)
+    if not isinstance(safe, list):
+        return None
+    details = [item for item in safe if isinstance(item, dict)]
+    return details or None
 
 
 def _get_attr_or_item(value: Any, name: str, default: Any = None) -> Any:
@@ -58,6 +84,7 @@ async def collect_openai_compatible_stream(
 ) -> LLMResponse:
     """Collect text and tool-call chunks from an OpenAI-compatible async stream."""
     content_parts: list[str] = []
+    reasoning_details: list[dict[str, Any]] = []
     tool_buffers: dict[int, _ToolCallBuffer] = {}
     model_name = default_model
 
@@ -80,6 +107,9 @@ async def collect_openai_compatible_stream(
                     logger.warning("{} response_delta_callback failed; continuing stream: {}", provider_name, cb_err)
 
         reasoning_piece = _coerce_reasoning(delta_payload)
+        delta_reasoning_details = coerce_reasoning_details(_get_attr_or_item(delta_payload, "reasoning_details"))
+        if delta_reasoning_details:
+            reasoning_details.extend(delta_reasoning_details)
         if reasoning_piece and reasoning_delta_callback is not None:
             try:
                 await reasoning_delta_callback(reasoning_piece)
@@ -130,4 +160,9 @@ async def collect_openai_compatible_stream(
             )
         )
 
-    return LLMResponse(content="".join(content_parts), model=model_name, tool_calls=tool_calls)
+    return LLMResponse(
+        content="".join(content_parts),
+        model=model_name,
+        tool_calls=tool_calls,
+        reasoning_details=reasoning_details or None,
+    )
