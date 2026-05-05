@@ -267,6 +267,7 @@ function serializeOpenRouterOptions(options = {}) {
 const DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS = {
   reasoning_enabled: true,
   reasoning_effort: "medium",
+  reasoning_exclude: false,
 };
 
 function normalizeRunKind(value, fallback = "other") {
@@ -3720,13 +3721,15 @@ export function useChatClient() {
     }
   }
 
-  function applyOpenRouterRecommendedOptions(providerId, model) {
+  async function applyOpenRouterRecommendedOptions(providerId, model) {
     const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
     const recommended = provider?.model_capabilities?.[model]?.recommended_options || DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS;
     settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions({
       ...serializeOpenRouterOptions(settingsState.openRouterOptions[providerId] || {}),
+      ...DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS,
       ...recommended,
     });
+    await saveOpenRouterOptions(providerId);
   }
 
   async function persistOpenRouterOptions(providerId, { silent = false } = {}) {
