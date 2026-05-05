@@ -536,16 +536,22 @@ def auth_logout(
 @auth_app.command("login")
 def auth_login(
     provider: str = typer.Argument("openai-codex", help="Provider id."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+    timeout_seconds: float = typer.Option(900.0, "--timeout", help="Maximum seconds to wait for browser authorization."),
 ) -> None:
-    """Start provider login. OpenAI Codex OAuth is not implemented yet."""
+    """Start provider login."""
+    from ..auth.codex import CodexAuthError, codex_device_login, codex_auth_path
+
     _require_codex_provider(provider)
-    typer.secho(
-        "OpenAI Codex OAuth login is not implemented yet. "
-        "This build can read stored tokens from auth/openai-codex.json for runtime testing.",
-        fg=typer.colors.YELLOW,
-        err=True,
-    )
-    raise typer.Exit(code=1)
+    app_home = _resolve_app_home(config)
+    typer.echo("Signing in to OpenAI Codex...")
+    try:
+        codex_device_login(app_home, timeout_seconds=timeout_seconds, announce=typer.echo)
+    except CodexAuthError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo("Login successful.")
+    typer.echo(f"Token file: {codex_auth_path(app_home)}")
 
 
 @search_app.command("rebuild")

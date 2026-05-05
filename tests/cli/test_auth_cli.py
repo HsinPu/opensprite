@@ -44,8 +44,23 @@ def test_auth_logout_removes_codex_token(tmp_path):
     assert "Removed OpenAI Codex credentials" in result.stdout
 
 
-def test_auth_login_placeholder_fails_clearly():
-    result = runner.invoke(app, ["auth", "login", "openai-codex"])
+def test_auth_login_runs_codex_device_flow(tmp_path, monkeypatch):
+    config_path = tmp_path / "opensprite.json"
+    calls = []
 
-    assert result.exit_code == 1
-    assert "not implemented yet" in result.stderr
+    def fake_login(app_home, *, timeout_seconds, announce):
+        calls.append((app_home, timeout_seconds))
+        announce("device message")
+        save_codex_token(CodexToken(access_token="access-token"), app_home)
+
+    monkeypatch.setattr("opensprite.auth.codex.codex_device_login", fake_login)
+
+    result = runner.invoke(
+        app,
+        ["auth", "login", "openai-codex", "--config", str(config_path), "--timeout", "12"],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [(tmp_path, 12.0)]
+    assert "Login successful" in result.stdout
+    assert "device message" in result.stdout

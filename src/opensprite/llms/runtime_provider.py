@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..auth.codex import CodexAuthError, load_codex_token
+from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..config import ProviderConfig
 
 
@@ -56,7 +56,9 @@ def resolve_provider_runtime(
         base_url = base_url or OPENAI_CODEX_BASE_URL
         if not api_key:
             try:
-                api_key = load_codex_token(Path(app_home) if app_home is not None else default_app_home()).access_token
+                api_key = load_or_refresh_codex_token(
+                    Path(app_home) if app_home is not None else default_app_home()
+                ).access_token
             except CodexAuthError as exc:
                 raise ProviderRuntimeError(str(exc)) from exc
     elif api_mode is None:
