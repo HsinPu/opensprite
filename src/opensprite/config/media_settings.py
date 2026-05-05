@@ -13,6 +13,7 @@ from .provider_settings import (
     get_model_choices,
     get_provider_choices,
     get_provider_preset_id,
+    fetch_openrouter_image_models,
     load_json_dict,
 )
 from .schema import Config, OcrConfig, SpeechConfig, VideoConfig, VisionConfig
@@ -24,6 +25,38 @@ MEDIA_SECTIONS = {
     "speech": SpeechConfig,
     "video": VideoConfig,
 }
+
+
+def _dedupe_media_models(models: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for model in models:
+        normalized = str(model or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
+
+
+def discover_media_model_choices(preset_id: str | None, preset: Any) -> tuple[dict[str, list[str]], str]:
+    fallback = {
+        category: list(models)
+        for category, models in (preset.media_model_choices or {}).items()
+    } if preset else {}
+    if preset_id != "openrouter":
+        return fallback, "preset"
+
+    live_image_models = fetch_openrouter_image_models()
+    if not live_image_models:
+        return fallback, "preset"
+
+    vision = _dedupe_media_models(live_image_models + fallback.get("vision", []))
+    ocr = _dedupe_media_models(fallback.get("ocr", []) + live_image_models)
+    media_models = dict(fallback)
+    media_models["vision"] = vision
+    media_models["ocr"] = ocr
+    return media_models, "live"
 
 
 class MediaSettingsService:
@@ -81,10 +114,7 @@ class MediaSettingsService:
                 str(provider.get("model") or "") or None,
                 model_choices=preset.model_choices if preset else (),
             )
-            media_models = {
-                category: list(models)
-                for category, models in (preset.media_model_choices or {}).items()
-            } if preset else {}
+            media_models, media_model_source = discover_media_model_choices(preset_id, preset)
             provider_choices.append(
                 {
                     "id": provider_id,
@@ -93,6 +123,7 @@ class MediaSettingsService:
                     "model": selected or "",
                     "models": choices,
                     "media_models": media_models,
+                    "media_model_source": media_model_source,
                 }
             )
 

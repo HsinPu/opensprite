@@ -1,8 +1,57 @@
 import json
 
+import pytest
+
 from opensprite.config import Config
+from opensprite.config import media_settings
 from opensprite.config.media_settings import MediaSettingsService
 from opensprite.config.provider_settings import ProviderSettingsService
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_media_discovery(monkeypatch):
+    monkeypatch.setattr(media_settings, "fetch_openrouter_image_models", lambda: [])
+
+
+def test_media_settings_uses_discovered_openrouter_image_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    monkeypatch.setattr(
+        media_settings,
+        "fetch_openrouter_image_models",
+        lambda: ["google/gemini-live-vision", "anthropic/claude-sonnet-4.6"],
+    )
+    ProviderSettingsService(config_path).connect_provider("openrouter", api_key="secret-key", name="OpenRouter")
+
+    payload = MediaSettingsService(config_path).list_media()
+    provider = next(entry for entry in payload["providers"] if entry["id"] == "openrouter")
+
+    assert provider["media_model_source"] == "live"
+    assert provider["media_models"]["vision"][:3] == [
+        "google/gemini-live-vision",
+        "anthropic/claude-sonnet-4.6",
+        "google/gemini-3-flash-preview",
+    ]
+    assert provider["media_models"]["ocr"][:3] == [
+        "baidu/qianfan-ocr-fast:free",
+        "google/gemini-3-flash-preview",
+        "openai/gpt-5.5",
+    ]
+    assert "google/gemini-live-vision" in provider["media_models"]["ocr"]
+
+
+def test_media_settings_falls_back_to_preset_image_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    monkeypatch.setattr(media_settings, "fetch_openrouter_image_models", lambda: [])
+    ProviderSettingsService(config_path).connect_provider("openrouter", api_key="secret-key", name="OpenRouter")
+
+    payload = MediaSettingsService(config_path).list_media()
+    provider = next(entry for entry in payload["providers"] if entry["id"] == "openrouter")
+
+    assert provider["media_model_source"] == "preset"
+    assert provider["media_models"]["vision"][:2] == [
+        "google/gemini-3-flash-preview",
+        "anthropic/claude-sonnet-4.6",
+    ]
 
 
 def _copy_config(tmp_path):

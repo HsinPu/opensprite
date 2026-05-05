@@ -13,6 +13,7 @@ from opensprite.config.provider_settings import (
 
 _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_settings.fetch_openai_compatible_models
 _ORIGINAL_FETCH_CODEX_MODELS = provider_settings.fetch_codex_models
+_ORIGINAL_FETCH_OPENROUTER_IMAGE_MODELS = provider_settings.fetch_openrouter_image_models
 
 
 @pytest.fixture(autouse=True)
@@ -187,6 +188,24 @@ def test_fetch_codex_models_filters_and_sorts(monkeypatch):
     )
 
     assert provider_settings.fetch_codex_models(object()) == ["earlier", "later"]
+
+
+def test_fetch_openrouter_image_models_filters_by_modality(monkeypatch):
+    def fake_read_json_url(url, *, headers=None):
+        return {
+            "data": [
+                {"id": "text-only", "architecture": {"input_modalities": ["text"]}},
+                {"id": "vision-one", "architecture": {"input_modalities": ["text", "image"]}},
+                {"id": "vision-one", "architecture": {"input_modalities": ["image"]}},
+                {"id": "missing-modalities", "architecture": {}},
+                {"id": "vision-two", "architecture": {"input_modalities": ["IMAGE", "text"]}},
+            ]
+        }
+
+    monkeypatch.setattr(provider_settings, "fetch_openrouter_image_models", _ORIGINAL_FETCH_OPENROUTER_IMAGE_MODELS)
+    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+
+    assert provider_settings.fetch_openrouter_image_models() == ["vision-one", "vision-two"]
 
 
 def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_path):

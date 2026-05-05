@@ -157,6 +157,25 @@ def fetch_openrouter_models() -> list[str]:
     return _dedupe_models(out)
 
 
+def fetch_openrouter_image_models() -> list[str]:
+    payload = _read_json_url("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"})
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        model_id = str(item.get("id") or "").strip()
+        architecture = item.get("architecture")
+        modalities = architecture.get("input_modalities") if isinstance(architecture, dict) else None
+        if not model_id or not isinstance(modalities, list):
+            continue
+        if "image" in {str(modality).strip().lower() for modality in modalities}:
+            out.append(model_id)
+    return _dedupe_models(out)
+
+
 def fetch_codex_models(app_home: str | Path | None = None) -> list[str]:
     try:
         from ..auth.codex import load_or_refresh_codex_token
