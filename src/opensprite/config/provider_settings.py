@@ -186,7 +186,7 @@ def connect_provider_in_config(
     normalized_key = str(api_key or "").strip()
     if normalized_key:
         provider["api_key"] = normalized_key
-    elif not str(provider.get("api_key", "") or "").strip():
+    elif preset.auth_type == "api_key" and not str(provider.get("api_key", "") or "").strip():
         raise ProviderSettingsValidationError("api_key is required when connecting a new provider")
 
     normalized_base_url = str(base_url or "").strip()
@@ -221,8 +221,10 @@ def select_model_in_config(
     preset_id = get_provider_preset_id(provider_id, provider, presets)
     if preset_id is None:
         raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
-    if require_api_key and not str(provider.get("api_key", "") or "").strip():
-        raise ProviderSettingsConflict("Provider must be connected before selecting a model")
+    if require_api_key and preset_id:
+        preset = presets.providers[preset_id]
+        if preset.auth_type == "api_key" and not str(provider.get("api_key", "") or "").strip():
+            raise ProviderSettingsConflict("Provider must be connected before selecting a model")
 
     preset = presets.providers[preset_id]
     if not str(provider.get("base_url", "") or "").strip():
@@ -245,6 +247,17 @@ def public_openrouter_options(provider: dict[str, Any]) -> dict[str, Any]:
         "provider_sort": provider.get("provider_sort"),
         "require_parameters": bool(provider.get("require_parameters", False)),
     }
+
+
+def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | None) -> bool:
+    """Return whether a provider instance is configured enough for model selection."""
+    if not isinstance(provider, dict):
+        return False
+    if not provider:
+        return False
+    if preset and preset.auth_type != "api_key":
+        return True
+    return bool(str(provider.get("api_key", "") or "").strip())
 
 
 def update_openrouter_options(provider: dict[str, Any], body: dict[str, Any]) -> None:
@@ -330,10 +343,10 @@ class ProviderSettingsService:
 
         for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
             provider = providers.get(provider_id, {})
-            if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
-                continue
             preset_id = get_provider_preset_id(provider_id, provider, presets)
             preset = presets.providers.get(preset_id) if preset_id else None
+            if not is_provider_connected(provider, preset):
+                continue
             connected.append(
                 {
                     "id": provider_id,
@@ -342,7 +355,9 @@ class ProviderSettingsService:
                     "preset_name": self._display_name(preset_id or provider_id, preset),
                     "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
                     "model": provider.get("model") or "",
-                    "api_key_configured": True,
+                    "api_key_configured": bool(provider.get("api_key")),
+                    "auth_type": provider.get("auth_type") or (preset.auth_type if preset else "api_key"),
+                    "requires_api_key": (preset.auth_type if preset else "api_key") == "api_key",
                     "is_default": provider_id == default_provider,
                     "enabled": bool(provider.get("enabled")),
                     "options": public_openrouter_options(provider) if preset_id == "openrouter" else {},
@@ -354,6 +369,9 @@ class ProviderSettingsService:
                 "id": provider_id,
                 "name": self._display_name(provider_id, presets.providers[provider_id]),
                 "default_base_url": presets.providers[provider_id].default_base_url,
+                "auth_type": presets.providers[provider_id].auth_type,
+                "api_mode": presets.providers[provider_id].api_mode,
+                "requires_api_key": presets.providers[provider_id].auth_type == "api_key",
                 "model_choices": list(presets.providers[provider_id].model_choices),
                 "connected_count": sum(1 for provider in connected if provider.get("provider") == provider_id),
             }
@@ -394,6 +412,8 @@ class ProviderSettingsService:
                 "base_url": provider.get("base_url") or preset.default_base_url,
                 "model": provider.get("model") or "",
                 "api_key_configured": bool(provider.get("api_key")),
+                "auth_type": provider.get("auth_type") or preset.auth_type,
+                "requires_api_key": preset.auth_type == "api_key",
                 "is_default": instance_id == loaded.llm.default,
                 "enabled": bool(provider.get("enabled")),
                 "options": public_openrouter_options(provider) if provider_id == "openrouter" else {},
@@ -405,10 +425,11 @@ class ProviderSettingsService:
         """Update optional request settings for a connected provider."""
         main_data, providers, _loaded = self._load_state()
         provider = providers.get(provider_id)
-        if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
-            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
         presets = load_llm_presets()
-        preset_id = get_provider_preset_id(provider_id, provider, presets)
+        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
+            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
         if preset_id != "openrouter":
             raise ProviderSettingsValidationError("OpenRouter request options are only available for OpenRouter providers")
 
@@ -425,7 +446,10 @@ class ProviderSettingsService:
         """Disconnect one provider, clearing the active model when needed."""
         main_data, providers, loaded = self._load_state()
         provider = providers.get(provider_id)
-        if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
+        presets = load_llm_presets()
+        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
             raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
 
         was_default = provider_id == loaded.llm.default
@@ -446,10 +470,10 @@ class ProviderSettingsService:
         out: list[dict[str, Any]] = []
         for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
             provider = providers.get(provider_id, {})
-            if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
-                continue
             preset_id = get_provider_preset_id(provider_id, provider, presets)
             preset = presets.providers.get(preset_id) if preset_id else None
+            if not is_provider_connected(provider, preset):
+                continue
             choices, _ = get_model_choices(
                 str(provider.get("model") or "") or None,
                 model_choices=preset.model_choices if preset else (),

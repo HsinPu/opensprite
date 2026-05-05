@@ -604,6 +604,7 @@ export const DISPLAY_COPY = {
         builtInBadge: "內建",
         connectedCount: (count) => `已設定 ${count} 個`,
         connect: "+ 連線",
+        connectOAuth: "OAuth 登入",
         codexAuth: {
           title: "OpenAI Codex OAuth",
           name: "OpenAI Codex",
@@ -835,6 +836,7 @@ export const DISPLAY_COPY = {
       worktreeCleanupFailed: "無法清理 worktree sandbox。",
       providerLoadFailed: "無法載入提供商設定。",
       providerConnected: "已連線，請到模型頁選擇使用的模型。",
+      codexProviderConnected: "OpenAI Codex 已加入提供者，請用下方指令完成 OAuth 登入。",
       providerConnectFailed: "無法連線提供商。",
       providerDisconnectFailed: "無法中斷提供商連線。",
       codexAuthLoadFailed: "無法讀取 OpenAI Codex 登入狀態。",
@@ -1498,6 +1500,7 @@ export const DISPLAY_COPY = {
         builtInBadge: "Built-in",
         connectedCount: (count) => `${count} configured`,
         connect: "+ Connect",
+        connectOAuth: "OAuth login",
         codexAuth: {
           title: "OpenAI Codex OAuth",
           name: "OpenAI Codex",
@@ -1729,6 +1732,7 @@ export const DISPLAY_COPY = {
       worktreeCleanupFailed: "Could not clean up the worktree sandbox.",
       providerLoadFailed: "Could not load provider settings.",
       providerConnected: "Connected. Go to Models to choose which model to use.",
+      codexProviderConnected: "OpenAI Codex was added as a provider. Run the command below to finish OAuth login.",
       providerConnectFailed: "Could not connect provider.",
       providerDisconnectFailed: "Could not disconnect provider.",
       codexAuthLoadFailed: "Could not load OpenAI Codex auth status.",

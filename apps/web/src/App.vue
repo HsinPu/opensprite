@@ -94,6 +94,7 @@
     @save-channel-connection="saveChannelConnection"
     @disconnect-channel="disconnectChannel"
     @begin-provider-connect="beginProviderConnect"
+    @connect-codex-provider="connectCodexProvider"
     @cancel-provider-connect="cancelProviderConnect"
     @save-provider-connection="saveProviderConnection"
     @disconnect-provider="disconnectProvider"
@@ -189,6 +190,7 @@ const {
   saveChannelConnection,
   disconnectChannel,
   beginProviderConnect,
+  connectCodexProvider,
   cancelProviderConnect,
   saveProviderConnection,
   disconnectProvider,

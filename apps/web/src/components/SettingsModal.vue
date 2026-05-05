@@ -448,9 +448,9 @@
                   class="provider-row__action"
                   type="button"
                   :disabled="settingsState.providersLoading"
-                  @click="$emit('begin-provider-connect', provider)"
+                  @click="provider.requires_api_key === false ? $emit('connect-codex-provider', provider) : $emit('begin-provider-connect', provider)"
                 >
-                  {{ copy.settings.providers.connect }}
+                  {{ provider.requires_api_key === false ? copy.settings.providers.connectOAuth : copy.settings.providers.connect }}
                 </button>
               </div>
 
@@ -1001,7 +1001,7 @@
             />
           </label>
 
-          <label class="provider-connect-field">
+          <label v-if="selectedConnectProviderRequiresApiKey" class="provider-connect-field">
             <span>{{ copy.settings.providers.apiKeyLabel(selectedConnectProvider.name) }}</span>
             <input
               v-model="settingsState.connectForm.apiKey"
@@ -1351,6 +1351,8 @@ const selectedConnectProvider = computed(() => {
   );
 });
 
+const selectedConnectProviderRequiresApiKey = computed(() => selectedConnectProvider.value?.requires_api_key !== false);
+
 const selectedConnectChannel = computed(() => {
   const channelType = props.settingsState.channelConnectForm.type;
   if (!channelType) {
@@ -1635,6 +1637,7 @@ defineEmits([
   "save-channel-connection",
   "disconnect-channel",
   "begin-provider-connect",
+  "connect-codex-provider",
   "cancel-provider-connect",
   "save-provider-connection",
   "disconnect-provider",

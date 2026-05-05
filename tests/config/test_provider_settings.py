@@ -59,6 +59,30 @@ def test_provider_settings_allows_multiple_connections_for_same_provider(tmp_pat
     assert {provider["id"] for provider in models["providers"]} >= {"openai", "openai_personal"}
 
 
+def test_provider_settings_connects_codex_without_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("openai-codex", api_key=None)
+    service.select_model("openai-codex", "gpt-5.1-codex")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+    connected = listing["connected"][0]
+
+    assert result["provider"]["api_key_configured"] is False
+    assert result["provider"]["requires_api_key"] is False
+    assert providers["openai-codex"]["auth_type"] == "openai_codex_oauth"
+    assert providers["openai-codex"].get("api_key", "") == ""
+    assert providers["openai-codex"]["enabled"] is True
+    assert connected["id"] == "openai-codex"
+    assert connected["auth_type"] == "openai_codex_oauth"
+    assert connected["requires_api_key"] is False
+    assert models["default_provider"] == "openai-codex"
+    assert models["providers"][0]["provider"] == "openai-codex"
+
+
 def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_path):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)

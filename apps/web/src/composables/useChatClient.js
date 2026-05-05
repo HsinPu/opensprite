@@ -3713,6 +3713,31 @@ export function useChatClient() {
     }
   }
 
+  async function connectCodexProvider(provider) {
+    const providerId = provider?.id || "openai-codex";
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    settingsState.codexAuthNotice = "";
+    try {
+      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
+        method: "PUT",
+        body: JSON.stringify({
+          name: provider?.name || "OpenAI Codex",
+          base_url: provider?.default_base_url || "",
+        }),
+      });
+      setSettingsSuccess("providersNotice", copy.value.notices.codexProviderConnected);
+      await loadProviderSettings();
+      await loadModelSettings();
+      await startCodexAuthLogin();
+    } catch (error) {
+      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
+    } finally {
+      settingsState.providersLoading = false;
+    }
+  }
+
   async function startCodexAuthLogin() {
     settingsState.codexAuthLoading = true;
     settingsState.codexAuthError = "";
@@ -4639,6 +4664,7 @@ export function useChatClient() {
     cancelProviderConnect,
     saveProviderConnection,
     disconnectProvider,
+    connectCodexProvider,
     startCodexAuthLogin,
     logoutCodexAuth,
     runUpdate,
