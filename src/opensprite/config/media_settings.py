@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ..auth.credentials import CredentialNotFoundError, resolve_credential
 from .llm_presets import load_llm_presets
 from .provider_settings import (
-    ProviderSettingsError,
     ProviderSettingsNotFound,
     ProviderSettingsValidationError,
     get_model_choices,
@@ -77,14 +77,30 @@ class MediaSettingsService:
         return main_data, providers, loaded
 
     @staticmethod
-    def _section_payload(category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
+    def _provider_api_key(provider_id: str, provider: dict[str, Any], *, app_home: Path) -> str:
+        api_key = str(provider.get("api_key", "") or "").strip()
+        if api_key:
+            return api_key
+        credential_id = str(provider.get("credential_id", "") or "").strip()
+        if not credential_id:
+            return ""
+        try:
+            return resolve_credential(
+                provider=str(provider.get("provider") or provider_id).strip() or provider_id,
+                credential_id=credential_id,
+                app_home=app_home,
+            ).secret
+        except CredentialNotFoundError:
+            return ""
+
+    def _section_payload(self, category: str, config: Any, providers: dict[str, Any]) -> dict[str, Any]:
         provider_id = ""
         for candidate_id, provider in providers.items():
             if not isinstance(provider, dict):
                 continue
             if (
-                str(provider.get("api_key", "") or "") == str(config.api_key or "")
-                and str(provider.get("base_url", "") or "") == str(config.base_url or "")
+                self._provider_api_key(candidate_id, provider, app_home=self.config_path.parent) == str(config.api_key or "")
+                and str(self._media_base_url(candidate_id, provider) or "") == str(config.base_url or "")
                 and (provider.get("provider") or candidate_id) == config.provider
             ):
                 provider_id = candidate_id
@@ -99,6 +115,13 @@ class MediaSettingsService:
             "api_key_configured": bool(config.api_key),
         }
 
+    @staticmethod
+    def _media_base_url(provider_id: str, provider: dict[str, Any]) -> str | None:
+        base_url = provider.get("base_url")
+        if str(provider.get("provider") or provider_id).strip() == "minimax":
+            return "https://api.minimax.io/v1"
+        return base_url
+
     def list_media(self) -> dict[str, Any]:
         """Return media model settings without leaking API keys."""
         main_data, providers, loaded = self._load_state()
@@ -106,7 +129,7 @@ class MediaSettingsService:
         provider_choices = []
         for provider_id in get_provider_choices({"llm": {"providers": providers}}, provider_order=presets.provider_order):
             provider = providers.get(provider_id, {})
-            if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
+            if not isinstance(provider, dict) or not self._provider_api_key(provider_id, provider, app_home=self.config_path.parent):
                 continue
             preset_id = get_provider_preset_id(provider_id, provider, presets)
             preset = presets.providers.get(preset_id) if preset_id else None
@@ -159,15 +182,18 @@ class MediaSettingsService:
             if not normalized_model:
                 raise ProviderSettingsValidationError("model is required when media model is enabled")
             provider = providers.get(normalized_provider_id)
-            if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
+            if not isinstance(provider, dict):
+                raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
+            api_key = self._provider_api_key(normalized_provider_id, provider, app_home=self.config_path.parent)
+            if not api_key:
                 raise ProviderSettingsNotFound(f"Provider is not connected: {normalized_provider_id}")
             preset_id = str(provider.get("provider") or normalized_provider_id).strip()
             next_section.update(
                 {
                     "provider": preset_id,
-                    "api_key": provider.get("api_key", ""),
+                    "api_key": api_key,
                     "model": normalized_model,
-                    "base_url": provider.get("base_url"),
+                    "base_url": self._media_base_url(normalized_provider_id, provider),
                 }
             )
         else:
