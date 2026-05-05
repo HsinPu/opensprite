@@ -135,6 +135,40 @@ opensprite config validate
 opensprite config validate --json
 ```
 
+## Credential Vault
+
+OpenSprite 會把 LLM provider API key 存在本機 credential vault，而不是寫回 `llm.providers.json`。預設位置是 `~/.opensprite/auth.json`；不要把這個檔案 commit 到 repository。
+
+可用 Web UI、CLI 或明確的 chat 指令管理 credentials：
+
+- Web UI：開啟 Settings，連接 provider 或切換 provider credential。
+- CLI：使用 `opensprite auth credentials ...` 管理本機 credentials。
+- Chat：只有在你明確要求儲存、列出、刪除或設定預設 credential 時，agent 才能使用 `credential_store` tool。
+
+CLI 範例：
+
+```bash
+opensprite auth credentials add openrouter --secret sk-or-...
+opensprite auth credentials list openrouter
+opensprite auth credentials default <credential_id> --provider openrouter
+opensprite auth credentials default <credential_id> --capability llm.chat
+opensprite auth credentials remove openrouter <credential_id>
+```
+
+Chat 範例：
+
+```text
+幫我把這個 OpenRouter API key 存起來：sk-or-...
+列出目前 openrouter credentials
+把 <credential_id> 設成 llm.chat 預設 credential
+```
+
+安全行為：
+
+- Agent 不會只因為訊息中出現 API key 就自動保存；你必須明確要求或確認保存。
+- Tool result、run trace、persisted tool args 和後續 LLM context 只會顯示 redacted preview，不會回顯完整 secret。
+- Runtime 會從 vault 解析 `credential_id`、provider default，或 `llm.chat` capability default。
+
 ## Search And Cron
 
 搜尋維護：
