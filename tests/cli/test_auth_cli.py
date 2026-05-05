@@ -64,3 +64,78 @@ def test_auth_login_runs_codex_device_flow(tmp_path, monkeypatch):
     assert calls == [(tmp_path, 12.0)]
     assert "Login successful" in result.stdout
     assert "device message" in result.stdout
+
+
+def test_auth_credentials_add_list_default_and_remove(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+
+    add_result = runner.invoke(
+        app,
+        [
+            "auth",
+            "credentials",
+            "add",
+            "openrouter",
+            "--secret",
+            "router-secret",
+            "--label",
+            "Router",
+            "--config",
+            str(config_path),
+            "--json",
+        ],
+    )
+
+    assert add_result.exit_code == 0
+    credential = json.loads(add_result.stdout)["credential"]
+    assert credential["id"].startswith("cred_")
+    assert credential["secret_preview"] == "rout...cret"
+    assert "secret" not in credential
+
+    list_result = runner.invoke(
+        app,
+        ["auth", "credentials", "list", "openrouter", "--config", str(config_path), "--json"],
+    )
+
+    assert list_result.exit_code == 0
+    listed = json.loads(list_result.stdout)["credentials"]["openrouter"][0]
+    assert listed["id"] == credential["id"]
+    assert listed["is_default"] is True
+    assert "secret" not in listed
+
+    default_result = runner.invoke(
+        app,
+        [
+            "auth",
+            "credentials",
+            "default",
+            credential["id"],
+            "--capability",
+            "llm.chat",
+            "--config",
+            str(config_path),
+        ],
+    )
+
+    assert default_result.exit_code == 0
+    assert "Set default credential for capability llm.chat" in default_result.stdout
+
+    remove_result = runner.invoke(
+        app,
+        ["auth", "credentials", "remove", "openrouter", credential["id"], "--config", str(config_path)],
+    )
+
+    assert remove_result.exit_code == 0
+    assert f"Removed openrouter credential: {credential['id']}" in remove_result.stdout
+
+
+def test_auth_credentials_default_requires_target(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+
+    result = runner.invoke(
+        app,
+        ["auth", "credentials", "default", "cred_missing", "--config", str(config_path)],
+    )
+
+    assert result.exit_code == 1
+    assert "pass --provider or --capability" in result.stderr

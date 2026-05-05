@@ -39,6 +39,8 @@ config_app = typer.Typer(help="Inspect and validate configuration files.")
 app.add_typer(config_app, name="config")
 auth_app = typer.Typer(help="Manage provider authentication.")
 app.add_typer(auth_app, name="auth")
+credential_app = typer.Typer(help="Manage stored API-key credentials.")
+auth_app.add_typer(credential_app, name="credentials")
 
 
 def version_callback(value: bool) -> None:
@@ -149,6 +151,27 @@ def _resolve_app_home(config: str | None = None) -> Path:
 def _format_presence(value: bool) -> str:
     """Return a simple status label."""
     return "yes" if value else "no"
+
+
+def _emit_credential_listing(payload: dict[str, object], json_output: bool) -> None:
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    credentials = payload.get("credentials")
+    if not isinstance(credentials, dict) or not credentials:
+        typer.echo("No credentials stored.")
+        return
+    for provider, entries in credentials.items():
+        if not isinstance(entries, list) or not entries:
+            continue
+        typer.echo(f"{provider}:")
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            marker = " default" if entry.get("is_default") else ""
+            label = entry.get("label") or entry.get("id")
+            preview = entry.get("secret_preview") or "configured"
+            typer.echo(f"  {entry.get('id')}  {label}  {preview}{marker}")
 
 
 def _use_linux_service() -> bool:
@@ -606,6 +629,110 @@ def auth_login(
         raise typer.Exit(code=1) from exc
     typer.echo("Login successful.")
     typer.echo(f"Token file: {codex_auth_path(app_home)}")
+
+
+@credential_app.command("list")
+def auth_credentials_list(
+    provider: str | None = typer.Argument(None, help="Optional provider id filter."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+    json_output: bool = typer.Option(False, "--json", help="Output credentials as JSON."),
+) -> None:
+    """List stored API-key credentials without revealing secrets."""
+    from ..auth.credentials import CredentialStoreError, list_credentials
+
+    try:
+        payload = {"credentials": list_credentials(provider, app_home=_resolve_app_home(config))}
+    except CredentialStoreError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    _emit_credential_listing(payload, json_output)
+
+
+@credential_app.command("add")
+def auth_credentials_add(
+    provider: str = typer.Argument(..., help="Provider id, for example openrouter or openai."),
+    secret: str | None = typer.Option(None, "--secret", "--api-key", help="API key value. If omitted, prompts securely."),
+    label: str | None = typer.Option(None, "--label", help="Display label for this credential."),
+    base_url: str | None = typer.Option(None, "--base-url", help="Optional runtime base URL."),
+    capability: list[str] | None = typer.Option(None, "--capability", help="Capability this credential can satisfy. Repeatable."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+    json_output: bool = typer.Option(False, "--json", help="Output created credential as JSON."),
+) -> None:
+    """Store an API key in the local credential vault."""
+    from ..auth.credentials import CredentialStoreError, add_credential
+
+    value = (secret or "").strip()
+    if not value:
+        value = typer.prompt("API key", hide_input=True).strip()
+    try:
+        credential = add_credential(
+            provider,
+            value,
+            label=label,
+            base_url=base_url,
+            scopes=capability,
+            app_home=_resolve_app_home(config),
+        )
+    except CredentialStoreError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    if json_output:
+        typer.echo(json.dumps({"credential": credential}, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"Stored {provider} credential: {credential['id']} ({credential['secret_preview']})")
+
+
+@credential_app.command("remove")
+def auth_credentials_remove(
+    provider: str = typer.Argument(..., help="Provider id."),
+    credential_id: str = typer.Argument(..., help="Credential id to remove."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+) -> None:
+    """Remove one stored credential."""
+    from ..auth.credentials import CredentialStoreError, remove_credential
+    from ..config.provider_settings import ProviderSettingsService
+
+    app_home = _resolve_app_home(config)
+    try:
+        payload = remove_credential(provider, credential_id, app_home=app_home)
+        config_path = _resolve_config_path(config)
+        if config_path.exists():
+            cleanup = ProviderSettingsService(config_path).remove_credential_references(provider, credential_id)
+            payload.update(cleanup)
+    except CredentialStoreError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"Removed {provider} credential: {payload['credential_id']}")
+
+
+@credential_app.command("default")
+def auth_credentials_default(
+    credential_id: str = typer.Argument(..., help="Credential id to use by default."),
+    provider: str | None = typer.Option(None, "--provider", help="Set the default credential for this provider."),
+    capability: str | None = typer.Option(None, "--capability", help="Set the default credential for this capability."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+    json_output: bool = typer.Option(False, "--json", help="Output updated default as JSON."),
+) -> None:
+    """Set a provider or capability default credential."""
+    from ..auth.credentials import CredentialStoreError, set_capability_default, set_provider_default
+
+    if not provider and not capability:
+        typer.secho("Error: pass --provider or --capability.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    try:
+        if provider:
+            credential = set_provider_default(provider, credential_id, app_home=_resolve_app_home(config))
+            target = f"provider {provider}"
+        else:
+            credential = set_capability_default(capability or "", credential_id, app_home=_resolve_app_home(config))
+            target = f"capability {capability}"
+    except CredentialStoreError as exc:
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+    if json_output:
+        typer.echo(json.dumps({"credential": credential}, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"Set default credential for {target}: {credential_id}")
 
 
 @search_app.command("rebuild")
