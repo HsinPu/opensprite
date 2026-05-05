@@ -510,6 +510,16 @@ def public_credential_for_provider(provider_id: str, provider: dict[str, Any], p
     return next((entry for entry in credentials if entry.get("id") == resolved.id), None)
 
 
+def public_credential_source(provider: dict[str, Any], credential: dict[str, Any] | None) -> str:
+    if not credential:
+        return ""
+    if str(provider.get("credential_id", "") or "").strip():
+        return "explicit"
+    if credential.get("is_default"):
+        return "provider_default"
+    return "priority"
+
+
 def update_openrouter_options(provider: dict[str, Any], body: dict[str, Any]) -> None:
     """Validate and update optional OpenRouter request settings."""
     if "reasoning_enabled" in body:
@@ -602,6 +612,7 @@ class ProviderSettingsService:
             if not is_provider_connected(provider, preset):
                 continue
             credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
+            credential_source = public_credential_source(provider, credential)
             connected.append(
                 {
                     "id": provider_id,
@@ -612,6 +623,8 @@ class ProviderSettingsService:
                     "model": provider.get("model") or "",
                     "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
                     "credential_id": provider.get("credential_id") or "",
+                    "credential_effective_id": (credential or {}).get("id") or "",
+                    "credential_source": credential_source,
                     "credential_label": (credential or {}).get("label") or "",
                     "credential_preview": (credential or {}).get("secret_preview") or "",
                     "auth_type": provider.get("auth_type") or (preset.auth_type if preset else "api_key"),
@@ -661,6 +674,7 @@ class ProviderSettingsService:
         self._persist_llm_state(main_data, providers)
         preset = load_llm_presets().providers[provider_id]
         credential = public_credential_for_provider(instance_id, provider, provider_id, app_home=self.config_path.parent)
+        credential_source = public_credential_source(provider, credential)
         return {
             "ok": True,
             "provider": {
@@ -672,6 +686,8 @@ class ProviderSettingsService:
                 "model": provider.get("model") or "",
                 "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
                 "credential_id": provider.get("credential_id") or "",
+                "credential_effective_id": (credential or {}).get("id") or "",
+                "credential_source": credential_source,
                 "credential_label": (credential or {}).get("label") or "",
                 "credential_preview": (credential or {}).get("secret_preview") or "",
                 "auth_type": provider.get("auth_type") or preset.auth_type,

@@ -68,6 +68,8 @@ assertIncludes(settingsModal, "showCodexAuthCard", "conditional Codex auth card"
 assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth card");
 assertIncludes(settingsModal, "hasConnectedProvider", "OAuth auth card connected-provider visibility");
 assertIncludes(settingsModal, "providerCredentials", "credential picker rendering");
+assertIncludes(settingsModal, "providerEffectiveCredentialId", "effective credential selection");
+assertIncludes(settingsModal, "credentialSourceLabel", "credential source status rendering");
 assertIncludes(settingsModal, "set-provider-credential", "provider credential selection event");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
@@ -94,6 +96,8 @@ for (const key of [
   "retentionTitle",
   "commandSuggestions",
   "curator",
+  "credentialSources",
+  "missingCredential",
 ]) {
   assertRegex(copy, new RegExp(`${key}\\s*:`), `copy key ${key}`);
 }

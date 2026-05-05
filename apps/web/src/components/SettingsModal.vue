@@ -463,12 +463,15 @@
                   </div>
                   <span>{{ providerDescription(provider) }}</span>
                   <span v-if="provider.credential_preview" class="provider-row__credential">
-                    {{ copy.settings.providers.credentialLabel(provider.credential_label || provider.name, provider.credential_preview) }}
+                    {{ copy.settings.providers.credentialLabel(provider.credential_label || provider.name, provider.credential_preview, credentialSourceLabel(provider)) }}
+                  </span>
+                  <span v-else-if="provider.requires_api_key" class="provider-row__credential provider-row__credential--missing">
+                    {{ copy.settings.providers.missingCredential }}
                   </span>
                   <label v-if="providerCredentials(provider).length > 1" class="provider-row__select">
                     <span>{{ copy.settings.providers.credentialSelect }}</span>
                     <select
-                      :value="provider.credential_id"
+                      :value="providerEffectiveCredentialId(provider)"
                       :disabled="settingsState.providersLoading"
                       @change="$emit('set-provider-credential', provider, $event.target.value)"
                     >
@@ -484,11 +487,11 @@
                 </div>
               </div>
               <button
-                v-if="provider.credential_id"
+                v-if="providerEffectiveCredentialId(provider)"
                 class="provider-row__action provider-row__action--quiet"
                 type="button"
                 :disabled="settingsState.providersLoading"
-                @click="$emit('delete-credential', provider, provider.credential_id)"
+                @click="$emit('delete-credential', provider, providerEffectiveCredentialId(provider))"
               >
                 {{ copy.settings.providers.deleteCredential }}
               </button>
@@ -1682,6 +1685,18 @@ function hasConnectedProvider(presetId) {
 function providerCredentials(provider) {
   const providerKey = provider?.provider || provider?.id;
   return props.settingsState.credentials?.[providerKey] || [];
+}
+
+function providerEffectiveCredentialId(provider) {
+  return provider?.credential_effective_id || provider?.credential_id || "";
+}
+
+function credentialSourceLabel(provider) {
+  const sources = props.copy.settings.providers.credentialSources;
+  if (!sources) {
+    return "";
+  }
+  return sources[provider?.credential_source] || "";
 }
 
 const showCodexAuthCard = computed(() => (

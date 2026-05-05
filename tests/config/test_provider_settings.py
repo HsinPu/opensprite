@@ -51,9 +51,18 @@ def test_provider_settings_connects_provider_without_leaking_api_key(tmp_path):
     assert connected["id"] == "openai"
     assert connected["provider"] == "openai"
     assert connected["api_key_configured"] is True
+    assert connected["credential_effective_id"] == providers["openai"]["credential_id"]
+    assert connected["credential_source"] == "explicit"
     assert connected["credential_preview"] == "secr...-key"
     assert "api_key" not in connected
     assert "openai" in {provider["id"] for provider in listing["available"]}
+
+
+def test_provider_settings_labels_credential_sources():
+    assert provider_settings.public_credential_source({"credential_id": "cred_1"}, {"id": "cred_1"}) == "explicit"
+    assert provider_settings.public_credential_source({}, {"id": "cred_1", "is_default": True}) == "provider_default"
+    assert provider_settings.public_credential_source({}, {"id": "cred_1", "is_default": False}) == "priority"
+    assert provider_settings.public_credential_source({}, None) == ""
 
 
 def test_provider_settings_allows_multiple_connections_for_same_provider(tmp_path):
