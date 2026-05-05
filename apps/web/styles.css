@@ -3592,6 +3592,20 @@ button:disabled {
   gap: 8px;
 }
 
+.provider-row__actions--connected {
+  justify-self: end;
+  align-items: center;
+}
+
+.provider-row__actions--connected .provider-row__action {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
 .codex-auth-row {
   gap: 14px;
 }
@@ -4415,6 +4429,10 @@ textarea:focus-visible {
   }
 
   .provider-row__action {
+    justify-self: start;
+  }
+
+  .provider-row__actions--connected {
     justify-self: start;
   }
 

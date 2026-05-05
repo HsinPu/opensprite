@@ -486,23 +486,25 @@
                   </label>
                 </div>
               </div>
-              <button
-                v-if="providerEffectiveCredentialId(provider)"
-                class="provider-row__action provider-row__action--quiet"
-                type="button"
-                :disabled="settingsState.providersLoading"
-                @click="$emit('delete-credential', provider, providerEffectiveCredentialId(provider))"
-              >
-                {{ copy.settings.providers.deleteCredential }}
-              </button>
-              <button
-                class="provider-row__action"
-                type="button"
-                :disabled="settingsState.providersLoading"
-                @click="$emit('disconnect-provider', provider)"
-              >
-                {{ copy.settings.providers.disconnect }}
-              </button>
+              <div class="provider-row__actions provider-row__actions--connected">
+                <button
+                  v-if="providerEffectiveCredentialId(provider)"
+                  class="provider-row__action provider-row__action--quiet"
+                  type="button"
+                  :disabled="settingsState.providersLoading"
+                  @click="$emit('delete-credential', provider, providerEffectiveCredentialId(provider))"
+                >
+                  {{ copy.settings.providers.deleteCredential }}
+                </button>
+                <button
+                  class="provider-row__action provider-row__action--quiet"
+                  type="button"
+                  :disabled="settingsState.providersLoading"
+                  @click="$emit('disconnect-provider', provider)"
+                >
+                  {{ copy.settings.providers.disconnect }}
+                </button>
+              </div>
             </div>
           </div>
 
