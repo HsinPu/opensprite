@@ -289,6 +289,7 @@ class LogConfig(BaseModel):
     level: str = "INFO"
     log_system_prompt: bool = True  # 是否印出 system prompt
     log_system_prompt_lines: int = 0  # 印出多少行，0 = 全部
+    log_reasoning_details: bool = False  # 是否印出完整 LLM reasoning/thinking 內容
 
 
 class MCPServerConfig(BaseModel):
@@ -1355,7 +1356,14 @@ class Config:
             "search_file": self.search_file,
             "media_file": self.media_file,
             "messages_file": self.messages_file,
-            "log": {"enabled": self.log.enabled, "retention_days": self.log.retention_days, "level": self.log.level, "log_system_prompt": self.log.log_system_prompt, "log_system_prompt_lines": self.log.log_system_prompt_lines},
+            "log": {
+                "enabled": self.log.enabled,
+                "retention_days": self.log.retention_days,
+                "level": self.log.level,
+                "log_system_prompt": self.log.log_system_prompt,
+                "log_system_prompt_lines": self.log.log_system_prompt_lines,
+                "log_reasoning_details": self.log.log_reasoning_details,
+            },
             "tools": {
                 "max_tool_iterations": self.tools.max_tool_iterations,
                 "exec": self.tools.exec_tool.model_dump(by_alias=True),

@@ -9,6 +9,7 @@ from opensprite.config.schema import (
     ChannelsConfig,
     Config,
     LLMsConfig,
+    LogConfig,
     MCPServerConfig,
     MessagesConfig,
     OcrConfig,
@@ -34,6 +35,10 @@ def test_storage_config_accepts_supported_types():
 def test_storage_config_rejects_unsupported_file_type():
     with pytest.raises(ValidationError):
         StorageConfig(type="file", path="sessions.db")
+
+
+def test_log_config_does_not_print_full_reasoning_by_default():
+    assert LogConfig().log_reasoning_details is False
 
 
 def test_agent_config_requires_template_backed_values():

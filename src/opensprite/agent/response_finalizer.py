@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any, Awaitable, Callable
 
 from ..bus.message import AssistantMessage
+from ..config import LogConfig
 from ..utils.log import logger
 from .run_trace import RunTraceRecorder
 
@@ -18,10 +20,52 @@ class AgentResponseFinalizer:
         run_trace: RunTraceRecorder,
         save_message: Callable[..., Awaitable[None]],
         format_log_preview: Callable[..., str],
+        log_config: LogConfig | None = None,
     ):
         self.run_trace = run_trace
         self._save_message = save_message
         self._format_log_preview = format_log_preview
+        self.log_config = log_config or LogConfig()
+
+    @staticmethod
+    def _reasoning_text_size(value: Any) -> int:
+        if isinstance(value, str):
+            return len(value)
+        if isinstance(value, dict):
+            return sum(AgentResponseFinalizer._reasoning_text_size(item) for item in value.values())
+        if isinstance(value, list):
+            return sum(AgentResponseFinalizer._reasoning_text_size(item) for item in value)
+        return 0
+
+    @staticmethod
+    def _reasoning_type_summary(details: list[Any]) -> str:
+        counts: dict[str, int] = {}
+        for item in details:
+            item_type = item.get("type") if isinstance(item, dict) else type(item).__name__
+            key = str(item_type or "unknown")
+            counts[key] = counts.get(key, 0) + 1
+        return ", ".join(f"{key}:{counts[key]}" for key in sorted(counts)) or "none"
+
+    def _log_reasoning_details(self, session_id: str, metadata: dict[str, Any]) -> None:
+        details = metadata.get("llm_reasoning_details")
+        if not isinstance(details, list) or not details:
+            return
+
+        logger.info(
+            "[{}] LLM reasoning summary | details={} chars={} types={}",
+            session_id,
+            len(details),
+            self._reasoning_text_size(details),
+            self._reasoning_type_summary(details),
+        )
+        if not self.log_config.log_reasoning_details:
+            return
+
+        logger.info(
+            "[{}] LLM reasoning details | {}",
+            session_id,
+            json.dumps(details, ensure_ascii=False, default=str),
+        )
 
     def _log_outbound(
         self,
@@ -69,11 +113,14 @@ class AgentResponseFinalizer:
         if not log_before_record:
             self._log_outbound(session_id, response, prefix=log_prefix)
 
+        persisted_metadata = persisted_assistant_metadata if persisted_assistant_metadata is not None else assistant_metadata
+        self._log_reasoning_details(session_id, persisted_metadata)
+
         await self._save_message(
             session_id,
             "assistant",
             response,
-            metadata=persisted_assistant_metadata if persisted_assistant_metadata is not None else assistant_metadata,
+            metadata=persisted_metadata,
         )
         if after_save is not None:
             await after_save()

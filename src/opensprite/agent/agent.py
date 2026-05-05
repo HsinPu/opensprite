@@ -635,6 +635,7 @@ class AgentLoop:
             run_trace=self.run_trace,
             save_message=self._save_message,
             format_log_preview=self._format_log_preview,
+            log_config=self.log_config,
         )
         self.task_intents = TaskIntentService()
         self.completion_gate = CompletionGateService()

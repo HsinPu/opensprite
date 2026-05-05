@@ -23,7 +23,8 @@
     "retention_days": 365,
     "level": "INFO",
     "log_system_prompt": true,
-    "log_system_prompt_lines": 0
+    "log_system_prompt_lines": 0,
+    "log_reasoning_details": false
   },
   "tools": {
     "max_tool_iterations": 100,
