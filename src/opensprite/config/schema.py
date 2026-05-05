@@ -15,6 +15,7 @@ class ProviderConfig(BaseModel):
     auth_type: Literal["api_key", "openai_codex_oauth", "github_copilot_oauth"] = "api_key"
     api_mode: Literal["chat_completions", "responses", "anthropic_messages"] | None = None
     api_key: str = ""
+    credential_id: str = ""
     model: str = ""
     base_url: str | None = None
     enabled: bool = False
@@ -1210,7 +1211,7 @@ class Config:
                 except Exception:
                     return False
                 return status.configured
-            return bool(provider.api_key and provider.model)
+            return bool((provider.api_key or provider.credential_id) and provider.model)
         return bool(self.llm.api_key)
 
     @classmethod

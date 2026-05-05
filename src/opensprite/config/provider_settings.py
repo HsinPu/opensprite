@@ -8,6 +8,14 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+from ..auth.credentials import (
+    DEFAULT_LLM_CAPABILITY,
+    CredentialNotFoundError,
+    add_credential,
+    list_credentials,
+    resolve_credential,
+    set_provider_default,
+)
 from .llm_presets import ProviderPreset, load_llm_presets
 from .schema import Config
 
@@ -60,7 +68,7 @@ def get_selected_provider(config_data: dict[str, Any], *, provider_order: tuple[
 
     for provider_name in provider_order:
         provider = providers.get(provider_name, {}) if isinstance(providers, dict) else {}
-        if isinstance(provider, dict) and (provider.get("enabled") or provider.get("api_key")):
+        if isinstance(provider, dict) and (provider.get("enabled") or provider.get("api_key") or provider.get("credential_id")):
             return provider_name
     return None
 
@@ -225,11 +233,21 @@ def discover_provider_models(
 ) -> tuple[list[str], str]:
     fallback = list(preset.model_choices if preset else ())
     preset_id = str(provider.get("provider") or provider_id or "").strip()
+    credential_api_key = ""
+    if not str(provider.get("api_key") or "").strip() and preset_id:
+        try:
+            credential_api_key = resolve_credential(
+                provider=preset_id,
+                credential_id=str(provider.get("credential_id") or "").strip() or None,
+                app_home=app_home,
+            ).secret
+        except CredentialNotFoundError:
+            credential_api_key = ""
     live: list[str] = []
     if preset_id == "openai-codex":
         live = fetch_codex_models(app_home)
     elif preset_id == "copilot":
-        api_key = str(provider.get("api_key") or "").strip()
+        api_key = str(provider.get("api_key") or "").strip() or credential_api_key
         if not api_key:
             try:
                 from ..auth.copilot import load_copilot_token
@@ -244,7 +262,7 @@ def discover_provider_models(
         preset_id in {"openai", "minimax"} or str(provider.get("base_url") or "").strip()
     ):
         live = fetch_openai_compatible_models(
-            str(provider.get("api_key") or "").strip(),
+            str(provider.get("api_key") or "").strip() or credential_api_key,
             str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
         )
     if live:
@@ -263,7 +281,10 @@ def prune_llm_providers(llm: dict[str, Any]) -> None:
     default = default.strip()
     keep: set[str] = {default}
     for name, provider in providers.items():
-        if isinstance(provider, dict) and str(provider.get("api_key", "") or "").strip():
+        if isinstance(provider, dict) and (
+            str(provider.get("api_key", "") or "").strip()
+            or str(provider.get("credential_id", "") or "").strip()
+        ):
             keep.add(name)
     llm["providers"] = {name: dict(providers[name]) for name in sorted(keep) if name in providers}
 
@@ -280,6 +301,7 @@ def ensure_provider_entry(
         providers[provider_id] = existing
 
     existing.setdefault("api_key", "")
+    existing.setdefault("credential_id", "")
     existing.setdefault("model", "")
     existing.setdefault("base_url", preset.default_base_url)
     existing.setdefault("auth_type", preset.auth_type)
@@ -349,8 +371,20 @@ def connect_provider_in_config(
 
     normalized_key = str(api_key or "").strip()
     if normalized_key:
-        provider["api_key"] = normalized_key
-    elif preset.auth_type == "api_key" and not str(provider.get("api_key", "") or "").strip():
+        credential = add_credential(
+            preset_id,
+            normalized_key,
+            label=normalized_name or None,
+            base_url=base_url or preset.default_base_url,
+            scopes=[DEFAULT_LLM_CAPABILITY],
+            app_home=config_data.get("app_home"),
+        )
+        provider["credential_id"] = credential["id"]
+        provider["api_key"] = ""
+    elif preset.auth_type == "api_key" and not (
+        str(provider.get("api_key", "") or "").strip()
+        or str(provider.get("credential_id", "") or "").strip()
+    ):
         raise ProviderSettingsValidationError("api_key is required when connecting a new provider")
 
     normalized_base_url = str(base_url or "").strip()
@@ -387,7 +421,10 @@ def select_model_in_config(
         raise ProviderSettingsNotFound(f"Unknown provider: {provider_id}")
     if require_api_key and preset_id:
         preset = presets.providers[preset_id]
-        if preset.auth_type == "api_key" and not str(provider.get("api_key", "") or "").strip():
+        if preset.auth_type == "api_key" and not (
+            str(provider.get("api_key", "") or "").strip()
+            or str(provider.get("credential_id", "") or "").strip()
+        ):
             raise ProviderSettingsConflict("Provider must be connected before selecting a model")
 
     preset = presets.providers[preset_id]
@@ -421,7 +458,56 @@ def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | Non
         return False
     if preset and preset.auth_type != "api_key":
         return True
-    return bool(str(provider.get("api_key", "") or "").strip())
+    return bool(str(provider.get("api_key", "") or "").strip() or str(provider.get("credential_id", "") or "").strip())
+
+
+def migrate_provider_api_keys_to_credentials(
+    providers: dict[str, Any],
+    *,
+    app_home: str | Path,
+) -> bool:
+    """Move legacy provider api_key values into auth.json credential entries."""
+    changed = False
+    presets = load_llm_presets()
+    for provider_id, provider in providers.items():
+        if not isinstance(provider, dict):
+            continue
+        raw_key = str(provider.get("api_key", "") or "").strip()
+        if not raw_key or str(provider.get("credential_id", "") or "").strip():
+            continue
+        preset_id = get_provider_preset_id(provider_id, provider, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if not preset or preset.auth_type != "api_key":
+            continue
+        label = str(provider.get("name") or "").strip() or ProviderSettingsService._display_name(provider_id, preset, provider)
+        credential = add_credential(
+            preset_id,
+            raw_key,
+            label=label,
+            base_url=str(provider.get("base_url") or preset.default_base_url or "").strip() or None,
+            scopes=[DEFAULT_LLM_CAPABILITY],
+            app_home=app_home,
+        )
+        provider["credential_id"] = credential["id"]
+        provider["api_key"] = ""
+        changed = True
+    return changed
+
+
+def public_credential_for_provider(provider_id: str, provider: dict[str, Any], preset_id: str | None, *, app_home: str | Path) -> dict[str, Any] | None:
+    credential_id = str(provider.get("credential_id", "") or "").strip()
+    if not credential_id and not preset_id:
+        return None
+    try:
+        resolved = resolve_credential(
+            provider=preset_id or provider_id,
+            credential_id=credential_id or None,
+            app_home=app_home,
+        )
+    except CredentialNotFoundError:
+        return None
+    credentials = list_credentials(resolved.provider, app_home=app_home).get(resolved.provider, [])
+    return next((entry for entry in credentials if entry.get("id") == resolved.id), None)
 
 
 def update_openrouter_options(provider: dict[str, Any], body: dict[str, Any]) -> None:
@@ -477,6 +563,10 @@ class ProviderSettingsService:
         main_data = self._load_main_data()
         loaded = Config.from_json(self.config_path)
         providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
+        if migrate_provider_api_keys_to_credentials(providers, app_home=self.config_path.parent):
+            self._persist_llm_state(main_data, providers)
+            loaded = Config.from_json(self.config_path)
+            providers = {name: provider.model_dump() for name, provider in loaded.llm.providers.items()}
         return main_data, providers, loaded
 
     def _persist_llm_state(self, main_data: dict[str, Any], providers: dict[str, Any]) -> None:
@@ -511,6 +601,7 @@ class ProviderSettingsService:
             preset = presets.providers.get(preset_id) if preset_id else None
             if not is_provider_connected(provider, preset):
                 continue
+            credential = public_credential_for_provider(provider_id, provider, preset_id, app_home=self.config_path.parent)
             connected.append(
                 {
                     "id": provider_id,
@@ -519,7 +610,10 @@ class ProviderSettingsService:
                     "preset_name": self._display_name(preset_id or provider_id, preset),
                     "base_url": provider.get("base_url") or (preset.default_base_url if preset else None),
                     "model": provider.get("model") or "",
-                    "api_key_configured": bool(provider.get("api_key")),
+                    "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
+                    "credential_id": provider.get("credential_id") or "",
+                    "credential_label": (credential or {}).get("label") or "",
+                    "credential_preview": (credential or {}).get("secret_preview") or "",
                     "auth_type": provider.get("auth_type") or (preset.auth_type if preset else "api_key"),
                     "requires_api_key": (preset.auth_type if preset else "api_key") == "api_key",
                     "is_default": provider_id == default_provider,
@@ -555,7 +649,7 @@ class ProviderSettingsService:
         """Connect or update one provider without selecting a model."""
         main_data, providers, loaded = self._load_state()
         instance_id = make_provider_instance_id(provider_id, providers, name)
-        config_data = {"llm": {"providers": providers, "default": loaded.llm.default}}
+        config_data = {"app_home": self.config_path.parent, "llm": {"providers": providers, "default": loaded.llm.default}}
         provider = connect_provider_in_config(
             config_data,
             instance_id,
@@ -566,6 +660,7 @@ class ProviderSettingsService:
         )
         self._persist_llm_state(main_data, providers)
         preset = load_llm_presets().providers[provider_id]
+        credential = public_credential_for_provider(instance_id, provider, provider_id, app_home=self.config_path.parent)
         return {
             "ok": True,
             "provider": {
@@ -575,7 +670,10 @@ class ProviderSettingsService:
                 "preset_name": self._display_name(provider_id, preset),
                 "base_url": provider.get("base_url") or preset.default_base_url,
                 "model": provider.get("model") or "",
-                "api_key_configured": bool(provider.get("api_key")),
+                "api_key_configured": bool(provider.get("api_key") or provider.get("credential_id")),
+                "credential_id": provider.get("credential_id") or "",
+                "credential_label": (credential or {}).get("label") or "",
+                "credential_preview": (credential or {}).get("secret_preview") or "",
                 "auth_type": provider.get("auth_type") or preset.auth_type,
                 "requires_api_key": preset.auth_type == "api_key",
                 "is_default": instance_id == loaded.llm.default,
@@ -626,6 +724,51 @@ class ProviderSettingsService:
                     item["enabled"] = False
         self._persist_llm_state(main_data, providers)
         return {"ok": True, "provider_id": provider_id, "restart_required": was_default}
+
+    def set_provider_credential(self, provider_id: str, credential_id: str) -> dict[str, Any]:
+        """Select which stored credential a connected provider instance should use."""
+        main_data, providers, loaded = self._load_state()
+        provider = providers.get(provider_id)
+        presets = load_llm_presets()
+        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
+        preset = presets.providers.get(preset_id) if preset_id else None
+        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
+            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+        credential = set_provider_default(preset_id or provider_id, credential_id, app_home=self.config_path.parent)
+        provider["credential_id"] = credential_id
+        provider["api_key"] = ""
+        self._persist_llm_state(main_data, providers)
+        return {
+            "ok": True,
+            "provider_id": provider_id,
+            "credential": credential,
+            "restart_required": provider_id == loaded.llm.default,
+        }
+
+    def remove_credential_references(self, provider: str, credential_id: str) -> dict[str, Any]:
+        """Remove provider instances that reference a deleted credential."""
+        main_data, providers, loaded = self._load_state()
+        removed_provider_ids: list[str] = []
+        for provider_id, item in list(providers.items()):
+            if not isinstance(item, dict):
+                continue
+            preset_id = str(item.get("provider") or provider_id or "").strip()
+            if preset_id != provider or item.get("credential_id") != credential_id:
+                continue
+            providers.pop(provider_id, None)
+            removed_provider_ids.append(provider_id)
+        restart_required = bool(loaded.llm.default in removed_provider_ids)
+        if restart_required:
+            main_data.setdefault("llm", {})["default"] = None
+            for item in providers.values():
+                if isinstance(item, dict):
+                    item["enabled"] = False
+        if removed_provider_ids:
+            self._persist_llm_state(main_data, providers)
+        return {
+            "removed_provider_ids": removed_provider_ids,
+            "restart_required": restart_required,
+        }
 
     def list_models(self) -> dict[str, Any]:
         """Return selectable models for connected providers."""

@@ -5,6 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..auth.credentials import (
+    DEFAULT_LLM_CAPABILITY,
+    CredentialNotFoundError,
+    mark_credential_used,
+    resolve_credential,
+)
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
@@ -51,6 +57,8 @@ def resolve_provider_runtime(
     api_mode = provider.api_mode
     base_url = str(provider.base_url or "").strip()
     api_key = str(provider.api_key or "").strip()
+    credential_id = str(provider.credential_id or "").strip()
+    app_home_path = Path(app_home) if app_home is not None else default_app_home()
 
     if auth_type == "openai_codex_oauth":
         configured_provider = configured_provider or "openai-codex"
@@ -59,7 +67,7 @@ def resolve_provider_runtime(
         if not api_key:
             try:
                 api_key = load_or_refresh_codex_token(
-                    Path(app_home) if app_home is not None else default_app_home()
+                    app_home_path
                 ).access_token
             except CodexAuthError as exc:
                 raise ProviderRuntimeError(str(exc)) from exc
@@ -69,12 +77,28 @@ def resolve_provider_runtime(
         api_mode = api_mode or "chat_completions"
         if not api_key and auth_type == "github_copilot_oauth":
             try:
-                api_key = load_copilot_token(Path(app_home) if app_home is not None else default_app_home()).access_token
+                api_key = load_copilot_token(app_home_path).access_token
             except CopilotAuthError as exc:
                 raise ProviderRuntimeError(str(exc)) from exc
         api_key = get_copilot_api_token(api_key)
     elif api_mode is None:
         api_mode = "chat_completions"
+
+    if not api_key and auth_type == "api_key":
+        try:
+            credential = resolve_credential(
+                provider=configured_provider,
+                credential_id=credential_id or None,
+                capability=DEFAULT_LLM_CAPABILITY,
+                app_home=app_home_path,
+            )
+            api_key = credential.secret
+            if not base_url and credential.base_url:
+                base_url = credential.base_url
+            mark_credential_used(credential.provider, credential.id, app_home=app_home_path)
+        except CredentialNotFoundError as exc:
+            if credential_id:
+                raise ProviderRuntimeError(str(exc)) from exc
 
     return ResolvedProviderRuntime(
         provider_name=configured_provider,

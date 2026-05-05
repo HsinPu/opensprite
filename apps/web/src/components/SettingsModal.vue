@@ -462,8 +462,36 @@
                     </span>
                   </div>
                   <span>{{ providerDescription(provider) }}</span>
+                  <span v-if="provider.credential_preview" class="provider-row__credential">
+                    {{ copy.settings.providers.credentialLabel(provider.credential_label || provider.name, provider.credential_preview) }}
+                  </span>
+                  <label v-if="providerCredentials(provider).length > 1" class="provider-row__select">
+                    <span>{{ copy.settings.providers.credentialSelect }}</span>
+                    <select
+                      :value="provider.credential_id"
+                      :disabled="settingsState.providersLoading"
+                      @change="$emit('set-provider-credential', provider, $event.target.value)"
+                    >
+                      <option
+                        v-for="credential in providerCredentials(provider)"
+                        :key="credential.id"
+                        :value="credential.id"
+                      >
+                        {{ credential.label }} · {{ credential.secret_preview }}
+                      </option>
+                    </select>
+                  </label>
                 </div>
               </div>
+              <button
+                v-if="provider.credential_id"
+                class="provider-row__action provider-row__action--quiet"
+                type="button"
+                :disabled="settingsState.providersLoading"
+                @click="$emit('delete-credential', provider, provider.credential_id)"
+              >
+                {{ copy.settings.providers.deleteCredential }}
+              </button>
               <button
                 class="provider-row__action"
                 type="button"
@@ -1651,6 +1679,11 @@ function hasConnectedProvider(presetId) {
   return props.settingsState.providers.connected.some((provider) => provider.provider === presetId || provider.id === presetId);
 }
 
+function providerCredentials(provider) {
+  const providerKey = provider?.provider || provider?.id;
+  return props.settingsState.credentials?.[providerKey] || [];
+}
+
 const showCodexAuthCard = computed(() => (
   hasConnectedProvider("openai-codex") ||
   props.settingsState.codexAuthLoading ||
@@ -1839,6 +1872,8 @@ defineEmits([
   "cancel-provider-connect",
   "save-provider-connection",
   "disconnect-provider",
+  "set-provider-credential",
+  "delete-credential",
   "refresh-codex-auth",
   "start-codex-auth-login",
   "logout-codex-auth",

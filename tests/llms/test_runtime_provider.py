@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from opensprite.auth.credentials import add_credential
 from opensprite.config import ProviderConfig
 from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 from opensprite.llms.minimax import MiniMaxLLM
@@ -20,6 +21,24 @@ def test_resolve_api_key_provider_runtime_defaults_to_chat_completions():
     assert runtime.api_key == "sk-test"
     assert runtime.api_mode == "chat_completions"
     assert runtime.auth_type == "api_key"
+
+
+def test_resolve_api_key_provider_runtime_reads_credential_store(tmp_path):
+    credential = add_credential(
+        "openai",
+        "vault-secret",
+        base_url="https://vault.example/v1",
+        app_home=tmp_path,
+    )
+
+    runtime = resolve_provider_runtime(
+        ProviderConfig(credential_id=credential["id"], model="gpt-4.1-mini", enabled=True),
+        provider_name="openai",
+        app_home=tmp_path,
+    )
+
+    assert runtime.api_key == "vault-secret"
+    assert runtime.base_url == "https://vault.example/v1"
 
 
 def test_resolve_codex_oauth_runtime_reads_auth_store(tmp_path):

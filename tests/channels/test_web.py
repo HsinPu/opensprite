@@ -1762,7 +1762,17 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 connect_payload = await resp.json()
 
             assert connect_payload["provider"]["api_key_configured"] is True
+            assert connect_payload["provider"]["credential_id"].startswith("cred_")
+            assert connect_payload["provider"]["credential_preview"] == "secr...-key"
             assert "api_key" not in connect_payload["provider"]
+
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/credentials") as resp:
+                assert resp.status == 200
+                credentials_payload = await resp.json()
+
+            openai_credentials = credentials_payload["credentials"]["openai"]
+            assert openai_credentials[0]["secret_preview"] == "secr...-key"
+            assert "secret" not in openai_credentials[0]
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/models") as resp:
                 assert resp.status == 200
@@ -1787,9 +1797,22 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             }
             assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
-            assert providers["openai"]["api_key"] == "secret-key"
+            assert providers["openai"]["api_key"] == ""
+            assert providers["openai"]["credential_id"] == connect_payload["provider"]["credential_id"]
             assert providers["openai"]["enabled"] is True
             assert providers["openai"]["model"] == selected_openai_model
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/credentials/default",
+                json={"provider": "openai", "credential_id": connect_payload["provider"]["credential_id"]},
+            ) as resp:
+                assert resp.status == 200
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/providers/openai/credential",
+                json={"credential_id": connect_payload["provider"]["credential_id"]},
+            ) as resp:
+                assert resp.status == 200
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/providers/openrouter/connect",

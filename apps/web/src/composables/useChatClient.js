@@ -1406,6 +1406,7 @@ export function useChatClient() {
       connected: [],
       available: [],
     },
+    credentials: {},
     codexAuthLoading: false,
     codexAuthError: "",
     codexAuthNotice: "",
@@ -3350,7 +3351,12 @@ export function useChatClient() {
     settingsState.providersLoading = true;
     settingsState.providersError = "";
     try {
-      settingsState.providers = await requestSettingsJson("/api/settings/providers");
+      const [providers, credentials] = await Promise.all([
+        requestSettingsJson("/api/settings/providers"),
+        requestSettingsJson("/api/settings/credentials"),
+      ]);
+      settingsState.providers = providers;
+      settingsState.credentials = credentials.credentials || {};
     } catch (error) {
       settingsState.providersError = error?.message || copy.value.notices.providerLoadFailed;
     } finally {
@@ -3757,6 +3763,51 @@ export function useChatClient() {
       settingsState.modelsError = error?.message || copy.value.notices.modelSelectFailed;
     } finally {
       settingsState.modelsLoading = false;
+    }
+  }
+
+  async function setProviderCredential(provider, credentialId) {
+    if (!provider?.id || !credentialId || credentialId === provider.credential_id) {
+      return;
+    }
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    try {
+      const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(provider.id)}/credential`, {
+        method: "POST",
+        body: JSON.stringify({ credential_id: credentialId }),
+      });
+      setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialUpdated(payload.restart_required));
+      await loadProviderSettings();
+      await loadModelSettings();
+    } catch (error) {
+      settingsState.providersError = error?.message || copy.value.notices.providerCredentialUpdateFailed;
+    } finally {
+      settingsState.providersLoading = false;
+    }
+  }
+
+  async function deleteCredential(provider, credentialId) {
+    const providerKey = provider?.provider || provider?.id;
+    if (!providerKey || !credentialId) {
+      return;
+    }
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    try {
+      await requestSettingsJson(
+        `/api/settings/credentials/${encodeURIComponent(providerKey)}/${encodeURIComponent(credentialId)}`,
+        { method: "DELETE" }
+      );
+      setSettingsSuccess("providersNotice", copy.value.notices.providerCredentialDeleted);
+      await loadProviderSettings();
+      await loadModelSettings();
+    } catch (error) {
+      settingsState.providersError = error?.message || copy.value.notices.providerCredentialDeleteFailed;
+    } finally {
+      settingsState.providersLoading = false;
     }
   }
 
@@ -4897,6 +4948,8 @@ export function useChatClient() {
     cancelProviderConnect,
     saveProviderConnection,
     disconnectProvider,
+    setProviderCredential,
+    deleteCredential,
     connectCodexProvider,
     connectOAuthProvider,
     connectCopilotProvider,

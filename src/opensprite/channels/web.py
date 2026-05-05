@@ -21,6 +21,15 @@ from uuid import uuid4
 from aiohttp import WSMsgType, web
 
 from .identity import build_session_id, normalize_identifier
+from ..auth.credentials import (
+    CredentialNotFoundError,
+    CredentialStoreError,
+    add_credential,
+    list_credentials,
+    remove_credential,
+    set_capability_default,
+    set_provider_default,
+)
 from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
@@ -511,6 +520,12 @@ class WebAdapter(MessageAdapter):
         if isinstance(exc, ChannelSettingsNotFound):
             raise web.HTTPNotFound(text=str(exc)) from exc
         raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+
+    @staticmethod
+    def _raise_credential_store_error(exc: CredentialStoreError) -> None:
+        if isinstance(exc, CredentialNotFoundError):
+            raise web.HTTPNotFound(text=str(exc)) from exc
+        raise web.HTTPBadRequest(text=str(exc)) from exc
 
     @staticmethod
     def _raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:
@@ -1251,6 +1266,84 @@ class WebAdapter(MessageAdapter):
         payload = self._reload_agent_llm_from_config(payload, force=True)
         return web.json_response(payload)
 
+    async def _handle_settings_credentials(self, request: web.Request) -> web.Response:
+        provider = self._coerce_optional_text(request.query.get("provider"))
+        try:
+            credentials = list_credentials(provider, app_home=self._get_config_path().parent)
+        except CredentialStoreError as exc:
+            self._raise_credential_store_error(exc)
+        return web.json_response({"credentials": credentials})
+
+    async def _handle_settings_credential_create(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        provider = self._coerce_optional_text(body.get("provider"))
+        secret = self._coerce_optional_text(body.get("secret")) or self._coerce_optional_text(body.get("api_key"))
+        if provider is None or secret is None:
+            raise web.HTTPBadRequest(text="provider and secret are required")
+        scopes = body.get("scopes")
+        if not isinstance(scopes, list):
+            scopes = None
+        try:
+            credential = add_credential(
+                provider,
+                secret,
+                label=self._coerce_optional_text(body.get("label")),
+                auth_type=self._coerce_optional_text(body.get("auth_type"), default="api_key") or "api_key",
+                base_url=self._coerce_optional_text(body.get("base_url")),
+                scopes=scopes,
+                app_home=self._get_config_path().parent,
+            )
+        except CredentialStoreError as exc:
+            self._raise_credential_store_error(exc)
+        return web.json_response({"ok": True, "credential": credential})
+
+    async def _handle_settings_credential_delete(self, request: web.Request) -> web.Response:
+        provider = self._coerce_optional_text(request.match_info.get("provider"))
+        credential_id = self._coerce_optional_text(request.match_info.get("credential_id"))
+        if provider is None or credential_id is None:
+            raise web.HTTPBadRequest(text="provider and credential_id are required")
+        try:
+            payload = remove_credential(provider, credential_id, app_home=self._get_config_path().parent)
+            cleanup = self._get_provider_settings().remove_credential_references(provider, credential_id)
+            payload.update(cleanup)
+        except CredentialStoreError as exc:
+            self._raise_credential_store_error(exc)
+        except ProviderSettingsError as exc:
+            self._raise_provider_settings_error(exc)
+        payload = self._reload_agent_llm_from_config(payload, force=bool(payload.get("restart_required")))
+        return web.json_response(payload)
+
+    async def _handle_settings_credential_default(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        provider = self._coerce_optional_text(body.get("provider"))
+        capability = self._coerce_optional_text(body.get("capability"))
+        credential_id = self._coerce_optional_text(body.get("credential_id"))
+        if credential_id is None or (provider is None and capability is None):
+            raise web.HTTPBadRequest(text="credential_id plus provider or capability is required")
+        try:
+            if provider is not None:
+                credential = set_provider_default(provider, credential_id, app_home=self._get_config_path().parent)
+            else:
+                credential = set_capability_default(capability or "", credential_id, app_home=self._get_config_path().parent)
+        except CredentialStoreError as exc:
+            self._raise_credential_store_error(exc)
+        return web.json_response({"ok": True, "credential": credential})
+
+    async def _handle_settings_provider_credential(self, request: web.Request) -> web.Response:
+        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
+        if provider_id is None:
+            raise web.HTTPBadRequest(text="provider_id is required")
+        body = await self._read_json_body(request)
+        credential_id = self._coerce_optional_text(body.get("credential_id"))
+        if credential_id is None:
+            raise web.HTTPBadRequest(text="credential_id is required")
+        try:
+            payload = self._get_provider_settings().set_provider_credential(provider_id, credential_id)
+        except ProviderSettingsError as exc:
+            self._raise_provider_settings_error(exc)
+        payload = self._reload_agent_llm_from_config(payload, force=True)
+        return web.json_response(payload)
+
     async def _handle_settings_models(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_provider_settings().list_models()
@@ -1706,7 +1799,15 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_post("/api/settings/auth/copilot/login", self._handle_settings_copilot_auth_login)
         self.app.router.add_post("/api/settings/auth/copilot/poll", self._handle_settings_copilot_auth_poll)
         self.app.router.add_post("/api/settings/auth/copilot/logout", self._handle_settings_copilot_auth_logout)
+        self.app.router.add_get("/api/settings/credentials", self._handle_settings_credentials)
+        self.app.router.add_post("/api/settings/credentials", self._handle_settings_credential_create)
+        self.app.router.add_delete(
+            "/api/settings/credentials/{provider}/{credential_id}",
+            self._handle_settings_credential_delete,
+        )
+        self.app.router.add_post("/api/settings/credentials/default", self._handle_settings_credential_default)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
+        self.app.router.add_post("/api/settings/providers/{provider_id}/credential", self._handle_settings_provider_credential)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
         self.app.router.add_put("/api/settings/providers/{provider_id}/options", self._handle_settings_provider_options_update)
         self.app.router.add_get("/api/settings/models", self._handle_settings_models)

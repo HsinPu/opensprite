@@ -42,12 +42,16 @@ def test_provider_settings_connects_provider_without_leaking_api_key(tmp_path):
     connected = listing["connected"][0]
 
     assert result["provider"]["api_key_configured"] is True
-    assert providers["openai"]["api_key"] == "secret-key"
+    assert providers["openai"]["api_key"] == ""
+    assert providers["openai"]["credential_id"].startswith("cred_")
+    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+    assert auth_store["credentials"]["openai"][0]["secret"] == "secret-key"
     assert providers["openai"]["enabled"] is False
     assert providers["openai"]["model"] == ""
     assert connected["id"] == "openai"
     assert connected["provider"] == "openai"
     assert connected["api_key_configured"] is True
+    assert connected["credential_preview"] == "secr...-key"
     assert "api_key" not in connected
     assert "openai" in {provider["id"] for provider in listing["available"]}
 
@@ -68,6 +72,8 @@ def test_provider_settings_allows_multiple_connections_for_same_provider(tmp_pat
     assert providers["openai"]["provider"] == "openai"
     assert providers["openai_personal"]["provider"] == "openai"
     assert providers["openai_personal"]["name"] == "Personal"
+    assert providers["openai_personal"]["api_key"] == ""
+    assert providers["openai_personal"]["credential_id"].startswith("cred_")
     assert providers["openai_personal"]["enabled"] is True
     assert providers["openai"]["enabled"] is False
     assert models["default_provider"] == "openai_personal"
@@ -145,6 +151,45 @@ def test_provider_settings_uses_discovered_provider_models(tmp_path, monkeypatch
     provider = models["providers"][0]
     assert provider["model_source"] == "live"
     assert provider["models"][:3] == ["custom-selected-model", "live-model", "gpt-4.1-mini"]
+
+
+def test_provider_settings_migrates_legacy_api_key_to_credential_store(tmp_path):
+    config_path = _copy_config(tmp_path)
+    providers_path = tmp_path / "llm.providers.json"
+    providers = json.loads(providers_path.read_text(encoding="utf-8"))
+    providers["openai"] = {
+        "provider": "openai",
+        "auth_type": "api_key",
+        "api_key": "legacy-secret",
+        "model": "gpt-4.1-mini",
+        "base_url": "https://api.openai.com/v1",
+        "enabled": True,
+    }
+    providers_path.write_text(json.dumps(providers), encoding="utf-8")
+
+    listing = ProviderSettingsService(config_path).list_providers()
+
+    migrated = json.loads(providers_path.read_text(encoding="utf-8"))["openai"]
+    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+    assert migrated["api_key"] == ""
+    assert migrated["credential_id"].startswith("cred_")
+    assert auth_store["credentials"]["openai"][0]["secret"] == "legacy-secret"
+    assert listing["connected"][0]["credential_preview"] == "lega...cret"
+
+
+def test_provider_settings_removes_provider_references_for_deleted_credential(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    connected = service.connect_provider("openai", api_key="secret-key")
+    service.select_model("openai", "gpt-4.1-mini")
+
+    cleanup = service.remove_credential_references("openai", connected["provider"]["credential_id"])
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    main_config = json.loads(config_path.read_text(encoding="utf-8"))
+    assert cleanup == {"removed_provider_ids": ["openai"], "restart_required": True}
+    assert providers == {}
+    assert main_config["llm"]["default"] is None
 
 
 def test_provider_settings_does_not_probe_anthropic_messages_minimax_models(tmp_path, monkeypatch):

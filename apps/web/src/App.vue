@@ -98,6 +98,8 @@
     @cancel-provider-connect="cancelProviderConnect"
     @save-provider-connection="saveProviderConnection"
     @disconnect-provider="disconnectProvider"
+    @set-provider-credential="setProviderCredential"
+    @delete-credential="deleteCredential"
     @refresh-codex-auth="loadCodexAuthStatus"
     @start-codex-auth-login="startCodexAuthLogin"
     @logout-codex-auth="logoutCodexAuth"
@@ -197,6 +199,8 @@ const {
   cancelProviderConnect,
   saveProviderConnection,
   disconnectProvider,
+  setProviderCredential,
+  deleteCredential,
   loadCodexAuthStatus,
   loadCopilotAuthStatus,
   startCodexAuthLogin,

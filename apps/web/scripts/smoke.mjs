@@ -67,6 +67,8 @@ assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot aut
 assertIncludes(settingsModal, "showCodexAuthCard", "conditional Codex auth card");
 assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth card");
 assertIncludes(settingsModal, "hasConnectedProvider", "OAuth auth card connected-provider visibility");
+assertIncludes(settingsModal, "providerCredentials", "credential picker rendering");
+assertIncludes(settingsModal, "set-provider-credential", "provider credential selection event");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(chatClient, "/api/settings/media", "media model settings fetch");
@@ -79,6 +81,8 @@ assertIncludes(chatClient, "scheduleCuratorPoll", "curator polling scheduler");
 assertIncludes(chatClient, "curator.completed", "curator event refresh");
 assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing");
 assertIncludes(chatClient, "connectForm.name", "provider connection naming");
+assertIncludes(chatClient, "/api/settings/credentials", "credential settings fetch");
+assertIncludes(chatClient, "setProviderCredential", "provider credential switching");
 assertIncludes(chatClient, "window.requestAnimationFrame", "message stage deferred scroll");
 assertIncludes(chatClient, "currentEntries.value.length, currentMessages.value.length", "message list scroll watch");
 
