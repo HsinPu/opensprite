@@ -3656,6 +3656,11 @@ export function useChatClient() {
     settingsState.modelsError = "";
     settingsState.modelsNotice = "";
     try {
+      const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
+      if (provider?.provider === "openrouter" && providerId !== settingsState.models.default_provider) {
+        settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions(DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS);
+        await persistOpenRouterOptions(providerId, { silent: true });
+      }
       const payload = await requestSettingsJson("/api/settings/models/select", {
         method: "POST",
         body: JSON.stringify({ provider_id: providerId, model: normalizedModel }),
@@ -3742,19 +3747,6 @@ export function useChatClient() {
       await loadProviderSettings();
     }
     return payload;
-  }
-
-  async function resetOpenRouterOptions(providerId) {
-    const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
-    if (provider?.provider !== "openrouter") {
-      return;
-    }
-    settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions(DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS);
-    try {
-      await persistOpenRouterOptions(providerId, { silent: true });
-    } catch (error) {
-      settingsState.modelsError = error?.message || copy.value.notices.providerOptionsSaveFailed;
-    }
   }
 
   async function saveOpenRouterOptions(providerId) {
@@ -4573,7 +4565,6 @@ export function useChatClient() {
     runUpdate,
     selectModel,
     applyOpenRouterRecommendedOptions,
-    resetOpenRouterOptions,
     saveOpenRouterOptions,
     saveMediaModel,
     beginMcpEdit,

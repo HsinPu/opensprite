@@ -446,7 +446,6 @@
                 <select
                   v-model="settingsState.selectedTextProviderId"
                   :disabled="settingsState.modelsLoading"
-                  @change="$emit('reset-openrouter-options', settingsState.selectedTextProviderId)"
                 >
                   <option v-for="provider in settingsState.models.providers" :key="provider.id" :value="provider.id">
                     {{ provider.name }}{{ provider.is_default ? ` (${copy.settings.models.active})` : '' }}
@@ -1561,7 +1560,6 @@ defineEmits([
   "disconnect-provider",
   "select-model",
   "apply-openrouter-recommended-options",
-  "reset-openrouter-options",
   "save-openrouter-options",
   "save-media-model",
   "begin-mcp-create",

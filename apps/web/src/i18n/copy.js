@@ -655,7 +655,8 @@ export const DISPLAY_COPY = {
             vision: "Vision",
             tools: "Tools",
           },
-          recommendedSummary: (options) => {
+          recommendedSummary: (options = {}) => {
+            options = options || {};
             const parts = [];
             if (options.reasoning_enabled) parts.push("reasoning");
             if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
@@ -1527,7 +1528,8 @@ export const DISPLAY_COPY = {
             vision: "Vision",
             tools: "Tools",
           },
-          recommendedSummary: (options) => {
+          recommendedSummary: (options = {}) => {
+            options = options || {};
             const parts = [];
             if (options.reasoning_enabled) parts.push("reasoning");
             if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
