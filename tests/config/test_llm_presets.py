@@ -56,6 +56,20 @@ def test_load_llm_presets_has_expected_providers():
         "o3",
         "o4-mini",
     )
+    assert presets.providers["openrouter"].media_model_choices == {
+        "vision": (
+            "google/gemini-3-flash-preview",
+            "anthropic/claude-sonnet-4.6",
+            "openai/gpt-5.5",
+            "qwen/qwen3.6-flash",
+        ),
+        "ocr": (
+            "baidu/qianfan-ocr-fast:free",
+            "google/gemini-3-flash-preview",
+            "openai/gpt-5.5",
+            "qwen/qwen3.6-flash",
+        ),
+    }
     assert presets.providers["minimax"].model_choices[:3] == ("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1")
     assert presets.providers["minimax"].media_model_choices == {
         "vision": ("MiniMax-VL-01",),

@@ -36,7 +36,21 @@
         "mistralai/mistral-small-2603",
         "minimax/minimax-m2.5:free",
         "qwen/qwen3-next-80b-a3b-instruct:free"
-      ]
+      ],
+      "media_model_choices": {
+        "vision": [
+          "google/gemini-3-flash-preview",
+          "anthropic/claude-sonnet-4.6",
+          "openai/gpt-5.5",
+          "qwen/qwen3.6-flash"
+        ],
+        "ocr": [
+          "baidu/qianfan-ocr-fast:free",
+          "google/gemini-3-flash-preview",
+          "openai/gpt-5.5",
+          "qwen/qwen3.6-flash"
+        ]
+      }
     },
     "openai": {
       "display_name": "OpenAI",

@@ -54,6 +54,23 @@ def test_media_settings_lists_minimax_vision_models_separately(tmp_path):
     assert provider["media_models"] == {"vision": ["MiniMax-VL-01"], "ocr": ["MiniMax-VL-01"]}
 
 
+def test_media_settings_lists_openrouter_image_models_separately(tmp_path):
+    config_path = _copy_config(tmp_path)
+    ProviderSettingsService(config_path).connect_provider("openrouter", api_key="secret-key", name="OpenRouter")
+
+    payload = MediaSettingsService(config_path).list_media()
+    provider = next(entry for entry in payload["providers"] if entry["id"] == "openrouter")
+
+    assert provider["media_models"]["vision"][:2] == [
+        "google/gemini-3-flash-preview",
+        "anthropic/claude-sonnet-4.6",
+    ]
+    assert provider["media_models"]["ocr"][:2] == [
+        "baidu/qianfan-ocr-fast:free",
+        "google/gemini-3-flash-preview",
+    ]
+
+
 def test_media_settings_can_save_minimax_cn_vision_model(tmp_path):
     config_path = _copy_config(tmp_path)
     ProviderSettingsService(config_path).connect_provider("minimax-cn", api_key="secret-key")
