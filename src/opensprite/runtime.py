@@ -184,6 +184,12 @@ async def create_agent(config: Config):
         base_url=cfg.base_url or "",
         provider_name=cfg.provider or config.llm.default or "",
         enabled=cfg.enabled if hasattr(cfg, 'enabled') else True,
+        reasoning_enabled=cfg.reasoning_enabled,
+        reasoning_effort=cfg.reasoning_effort,
+        reasoning_max_tokens=cfg.reasoning_max_tokens,
+        reasoning_exclude=cfg.reasoning_exclude,
+        provider_sort=cfg.provider_sort,
+        require_parameters=cfg.require_parameters,
     )
     
     # 建立 Agent 設定

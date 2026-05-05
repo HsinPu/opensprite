@@ -244,6 +244,12 @@ class SubagentRunService:
                     base_url=getattr(provider_config, "base_url", "") or "",
                     provider_name=getattr(provider_config, "provider", None) or llm_provider,
                     enabled=getattr(provider_config, "enabled", True),
+                    reasoning_enabled=getattr(provider_config, "reasoning_enabled", False),
+                    reasoning_effort=getattr(provider_config, "reasoning_effort", None),
+                    reasoning_max_tokens=getattr(provider_config, "reasoning_max_tokens", None),
+                    reasoning_exclude=getattr(provider_config, "reasoning_exclude", False),
+                    provider_sort=getattr(provider_config, "provider_sort", None),
+                    require_parameters=getattr(provider_config, "require_parameters", False),
                 )
             else:
                 return None

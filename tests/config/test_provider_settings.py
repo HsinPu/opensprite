@@ -3,7 +3,11 @@ import json
 import pytest
 
 from opensprite.config import Config
-from opensprite.config.provider_settings import ProviderSettingsConflict, ProviderSettingsService
+from opensprite.config.provider_settings import (
+    ProviderSettingsConflict,
+    ProviderSettingsService,
+    ProviderSettingsValidationError,
+)
 
 
 def _copy_config(tmp_path):
@@ -79,6 +83,55 @@ def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_pa
     assert providers["openai"]["enabled"] is False
     assert models["default_provider"] == "openrouter"
     assert models["active_model"] == "openai/gpt-4o-mini"
+
+
+def test_provider_settings_updates_openrouter_request_options(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    service.select_model("openrouter", "anthropic/claude-sonnet-4.6")
+    result = service.update_provider_options(
+        "openrouter",
+        {
+            "reasoning_enabled": True,
+            "reasoning_effort": "high",
+            "reasoning_max_tokens": 1024,
+            "reasoning_exclude": True,
+            "provider_sort": "throughput",
+            "require_parameters": True,
+        },
+    )
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    options = listing["connected"][0]["options"]
+
+    assert result == {
+        "ok": True,
+        "provider_id": "openrouter",
+        "options": {
+            "reasoning_enabled": True,
+            "reasoning_effort": "high",
+            "reasoning_max_tokens": 1024,
+            "reasoning_exclude": True,
+            "provider_sort": "throughput",
+            "require_parameters": True,
+        },
+        "restart_required": True,
+    }
+    assert providers["openrouter"]["reasoning_enabled"] is True
+    assert providers["openrouter"]["provider_sort"] == "throughput"
+    assert options == result["options"]
+
+
+def test_provider_settings_rejects_openrouter_options_for_other_providers(tmp_path):
+    service = ProviderSettingsService(_copy_config(tmp_path))
+
+    service.connect_provider("openai", api_key="openai-key")
+
+    with pytest.raises(ProviderSettingsValidationError):
+        service.update_provider_options("openai", {"reasoning_enabled": True})
 
 
 def test_provider_settings_rejects_unconnected_model_selection(tmp_path):

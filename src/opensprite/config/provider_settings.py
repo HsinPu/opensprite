@@ -11,6 +11,10 @@ from .llm_presets import ProviderPreset, load_llm_presets
 from .schema import Config
 
 
+OPENROUTER_REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh"}
+OPENROUTER_PROVIDER_SORTS = {"price", "throughput", "latency"}
+
+
 class ProviderSettingsError(Exception):
     """Base error for provider settings operations."""
 
@@ -222,6 +226,56 @@ def select_model_in_config(
     return provider
 
 
+def public_openrouter_options(provider: dict[str, Any]) -> dict[str, Any]:
+    """Return OpenRouter request options safe for settings APIs."""
+    return {
+        "reasoning_enabled": bool(provider.get("reasoning_enabled", False)),
+        "reasoning_effort": provider.get("reasoning_effort"),
+        "reasoning_max_tokens": provider.get("reasoning_max_tokens"),
+        "reasoning_exclude": bool(provider.get("reasoning_exclude", False)),
+        "provider_sort": provider.get("provider_sort"),
+        "require_parameters": bool(provider.get("require_parameters", False)),
+    }
+
+
+def update_openrouter_options(provider: dict[str, Any], body: dict[str, Any]) -> None:
+    """Validate and update optional OpenRouter request settings."""
+    if "reasoning_enabled" in body:
+        provider["reasoning_enabled"] = bool(body["reasoning_enabled"])
+    if "reasoning_effort" in body:
+        value = body["reasoning_effort"]
+        if value is None or str(value).strip() == "":
+            provider["reasoning_effort"] = None
+        elif str(value) in OPENROUTER_REASONING_EFFORTS:
+            provider["reasoning_effort"] = str(value)
+        else:
+            raise ProviderSettingsValidationError("reasoning_effort must be one of minimal, low, medium, high, or xhigh")
+    if "reasoning_max_tokens" in body:
+        value = body["reasoning_max_tokens"]
+        if value is None or str(value).strip() == "":
+            provider["reasoning_max_tokens"] = None
+        else:
+            try:
+                normalized = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ProviderSettingsValidationError("reasoning_max_tokens must be a positive integer") from exc
+            if normalized < 1:
+                raise ProviderSettingsValidationError("reasoning_max_tokens must be a positive integer")
+            provider["reasoning_max_tokens"] = normalized
+    if "reasoning_exclude" in body:
+        provider["reasoning_exclude"] = bool(body["reasoning_exclude"])
+    if "provider_sort" in body:
+        value = body["provider_sort"]
+        if value is None or str(value).strip() == "":
+            provider["provider_sort"] = None
+        elif str(value) in OPENROUTER_PROVIDER_SORTS:
+            provider["provider_sort"] = str(value)
+        else:
+            raise ProviderSettingsValidationError("provider_sort must be one of price, throughput, or latency")
+    if "require_parameters" in body:
+        provider["require_parameters"] = bool(body["require_parameters"])
+
+
 class ProviderSettingsService:
     """Read and mutate provider/model settings on disk."""
 
@@ -282,6 +336,7 @@ class ProviderSettingsService:
                     "api_key_configured": True,
                     "is_default": provider_id == default_provider,
                     "enabled": bool(provider.get("enabled")),
+                    "options": public_openrouter_options(provider) if preset_id == "openrouter" else {},
                 }
             )
 
@@ -332,8 +387,29 @@ class ProviderSettingsService:
                 "api_key_configured": bool(provider.get("api_key")),
                 "is_default": instance_id == loaded.llm.default,
                 "enabled": bool(provider.get("enabled")),
+                "options": public_openrouter_options(provider) if provider_id == "openrouter" else {},
             },
             "restart_required": False,
+        }
+
+    def update_provider_options(self, provider_id: str, options: dict[str, Any]) -> dict[str, Any]:
+        """Update optional request settings for a connected provider."""
+        main_data, providers, _loaded = self._load_state()
+        provider = providers.get(provider_id)
+        if not isinstance(provider, dict) or not str(provider.get("api_key", "") or "").strip():
+            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
+        presets = load_llm_presets()
+        preset_id = get_provider_preset_id(provider_id, provider, presets)
+        if preset_id != "openrouter":
+            raise ProviderSettingsValidationError("OpenRouter request options are only available for OpenRouter providers")
+
+        update_openrouter_options(provider, options)
+        self._persist_llm_state(main_data, providers)
+        return {
+            "ok": True,
+            "provider_id": provider_id,
+            "options": public_openrouter_options(provider),
+            "restart_required": bool(provider.get("enabled")),
         }
 
     def disconnect_provider(self, provider_id: str) -> dict[str, Any]:

@@ -1092,6 +1092,18 @@ class WebAdapter(MessageAdapter):
         payload = self._reload_agent_llm_from_config(payload, force=True)
         return web.json_response(payload)
 
+    async def _handle_settings_provider_options_update(self, request: web.Request) -> web.Response:
+        provider_id = self._coerce_optional_text(request.match_info.get("provider_id"))
+        if provider_id is None:
+            raise web.HTTPBadRequest(text="provider_id is required")
+        body = await self._read_json_body(request)
+        try:
+            payload = self._get_provider_settings().update_provider_options(provider_id, body)
+        except ProviderSettingsError as exc:
+            self._raise_provider_settings_error(exc)
+        payload = self._reload_agent_llm_from_config(payload, force=True)
+        return web.json_response(payload)
+
     async def _handle_settings_models(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_provider_settings().list_models()
@@ -1453,6 +1465,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/settings/providers", self._handle_settings_providers)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
+        self.app.router.add_put("/api/settings/providers/{provider_id}/options", self._handle_settings_provider_options_update)
         self.app.router.add_get("/api/settings/models", self._handle_settings_models)
         self.app.router.add_post("/api/settings/models/select", self._handle_settings_model_select)
         self.app.router.add_get("/api/settings/media", self._handle_settings_media)

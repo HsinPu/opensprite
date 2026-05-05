@@ -55,7 +55,14 @@ class OpenRouterLLM(LLMProvider):
     def __init__(
         self, 
         api_key: str, 
-        default_model: str = "openai/gpt-4o-mini"
+        default_model: str = "openai/gpt-4o-mini",
+        base_url: str = "",
+        reasoning_enabled: bool = False,
+        reasoning_effort: str | None = None,
+        reasoning_max_tokens: int | None = None,
+        reasoning_exclude: bool = False,
+        provider_sort: str | None = None,
+        require_parameters: bool = False,
     ):
         """
         初始化 OpenRouter LLM
@@ -72,9 +79,15 @@ class OpenRouterLLM(LLMProvider):
         """
         self.api_key = api_key
         self.default_model = default_model
+        self.reasoning_enabled = reasoning_enabled
+        self.reasoning_effort = reasoning_effort
+        self.reasoning_max_tokens = reasoning_max_tokens
+        self.reasoning_exclude = reasoning_exclude
+        self.provider_sort = provider_sort
+        self.require_parameters = require_parameters
         self._client_kwargs = {
             "api_key": api_key,
-            "base_url": "https://openrouter.ai/api/v1",
+            "base_url": base_url or "https://openrouter.ai/api/v1",
             # OpenRouter 需要這些 headers
             "default_headers": {
                 "HTTP-Referer": "https://github.com/HsinPu/opensprite",
@@ -142,6 +155,25 @@ class OpenRouterLLM(LLMProvider):
             params["frequency_penalty"] = frequency_penalty
         if presence_penalty is not None:
             params["presence_penalty"] = presence_penalty
+
+        reasoning: dict[str, Any] = {}
+        if self.reasoning_enabled:
+            if self.reasoning_effort:
+                reasoning["effort"] = self.reasoning_effort
+            if self.reasoning_max_tokens is not None:
+                reasoning["max_tokens"] = self.reasoning_max_tokens
+        if self.reasoning_exclude:
+            reasoning["exclude"] = True
+        if reasoning:
+            params["reasoning"] = reasoning
+
+        provider: dict[str, Any] = {}
+        if self.provider_sort:
+            provider["sort"] = self.provider_sort
+        if self.require_parameters:
+            provider["require_parameters"] = True
+        if provider:
+            params["provider"] = provider
 
         # 加入 tools 如果有
         if tools:

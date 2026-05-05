@@ -50,7 +50,19 @@ def find_provider(api_key: str = "", base_url: str = "", model: str = "", provid
     return PROVIDERS[1]  # openai
 
 
-def create_llm(api_key: str, model: str, base_url: str = "", provider_name: str = "", enabled: bool = True) -> LLMProvider:
+def create_llm(
+    api_key: str,
+    model: str,
+    base_url: str = "",
+    provider_name: str = "",
+    enabled: bool = True,
+    reasoning_enabled: bool = False,
+    reasoning_effort: str | None = None,
+    reasoning_max_tokens: int | None = None,
+    reasoning_exclude: bool = False,
+    provider_sort: str | None = None,
+    require_parameters: bool = False,
+) -> LLMProvider:
     """建立 LLM Provider"""
     if not enabled:
         raise ValueError(f"Provider {provider_name} is disabled")
@@ -58,7 +70,17 @@ def create_llm(api_key: str, model: str, base_url: str = "", provider_name: str 
     spec = find_provider(api_key, base_url, model, provider_name)
     
     if spec.name == "openrouter":
-        return OpenRouterLLM(api_key=api_key, default_model=model)
+        return OpenRouterLLM(
+            api_key=api_key,
+            default_model=model,
+            base_url=base_url,
+            reasoning_enabled=reasoning_enabled,
+            reasoning_effort=reasoning_effort,
+            reasoning_max_tokens=reasoning_max_tokens,
+            reasoning_exclude=reasoning_exclude,
+            provider_sort=provider_sort,
+            require_parameters=require_parameters,
+        )
     
     if spec.name == "minimax":
         return MiniMaxLLM(api_key=api_key, default_model=model)
