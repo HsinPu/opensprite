@@ -1999,6 +1999,15 @@ export function useChatClient() {
     }
   }
 
+  function viewExternalChatIdForPayload(payload) {
+    const sessionId = String(payload?.session_id || payload?.sessionId || "").trim();
+    const channel = String(payload?.channel || channelFromSessionId(sessionId) || "web").trim() || "web";
+    const transportExternalChatId = String(payload?.external_chat_id || payload?.externalChatId || "").trim()
+      || externalChatIdFromSessionId(sessionId)
+      || generateExternalChatId();
+    return channel === "web" ? transportExternalChatId : (sessionId || `${channel}:${transportExternalChatId}`);
+  }
+
   function addMessage(externalChatId, message) {
     const session = ensureSession(externalChatId);
     session.messages.push(message);
@@ -2170,7 +2179,7 @@ export function useChatClient() {
   }
 
   function handleRunEvent(payload) {
-    const externalChatId = payload.external_chat_id || currentSession.value?.externalChatId || generateExternalChatId();
+    const externalChatId = viewExternalChatIdForPayload(payload);
     const session = ensureSession(externalChatId, payload.session_id);
     const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
     const eventType = String(payload.event_type || "run_event");

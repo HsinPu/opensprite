@@ -969,22 +969,31 @@ class WebAdapter(MessageAdapter):
 
     async def send_run_event(self, event: RunEvent) -> None:
         """Send one structured run event to the browser session socket."""
-        ws = self._session_connections.get(event.session_id)
-        if ws is None or ws.closed:
+        payload = serialize_run_event(
+            event,
+            include_event_id=False,
+            extra={
+                "type": "run_event",
+                "channel": event.channel or self._channel_from_session(event.session_id),
+                "channel_type": self.channel_type,
+                "external_chat_id": event.external_chat_id,
+            },
+        )
+        sent: set[web.WebSocketResponse] = set()
+        session_ws = self._session_connections.get(event.session_id)
+        if session_ws is not None and not session_ws.closed:
+            await session_ws.send_json(payload)
+            sent.add(session_ws)
+
+        if self._channel_from_session(event.session_id) == self.channel_instance_id:
             return
 
-        await ws.send_json(
-            serialize_run_event(
-                event,
-                include_event_id=False,
-                extra={
-                    "type": "run_event",
-                    "channel": self.channel_instance_id,
-                    "channel_type": self.channel_type,
-                    "external_chat_id": event.external_chat_id,
-                },
-            )
-        )
+        # Browser clients can inspect external-channel sessions, so broadcast
+        # non-web run events to connected Web inspectors as live trace updates.
+        for ws in list(self._socket_sessions.keys()):
+            if ws in sent or ws.closed:
+                continue
+            await ws.send_json(payload)
 
     async def send_session_status(self, event: SessionStatusEvent) -> None:
         """Send one session status update to interested browser sockets."""

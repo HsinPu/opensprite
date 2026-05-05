@@ -1202,9 +1202,12 @@ class MessageQueue:
                 normalized_channel = self.normalize_channel(event.channel)
                 await self._set_session_status_from_run_event(event)
                 handler = self._run_event_handlers.get(normalized_channel)
-                if handler is None:
-                    continue
-                await handler(event)
+                if handler is not None:
+                    await handler(event)
+
+                inspector_handler = self._run_event_handlers.get("web")
+                if inspector_handler is not None and normalized_channel != "web":
+                    await inspector_handler(event)
             except asyncio.TimeoutError:
                 continue
             except Exception as e:

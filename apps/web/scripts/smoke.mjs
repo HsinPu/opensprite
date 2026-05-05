@@ -81,6 +81,7 @@ assertIncludes(chatClient, 'params.set("scope", scope)', "curator scoped action 
 assertIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval");
 assertIncludes(chatClient, "scheduleCuratorPoll", "curator polling scheduler");
 assertIncludes(chatClient, "curator.completed", "curator event refresh");
+assertIncludes(chatClient, "viewExternalChatIdForPayload", "external session realtime keying");
 assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing");
 assertIncludes(chatClient, "connectForm.name", "provider connection naming");
 assertIncludes(chatClient, "/api/settings/credentials", "credential settings fetch");

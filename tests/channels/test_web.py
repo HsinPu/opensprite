@@ -100,6 +100,30 @@ async def _run_web_roundtrip():
                 assert auto_status_frame["status"] == "thinking"
                 assert auto_status_frame["metadata"]["run_id"] == "run-test"
 
+                await queue.bus.publish_run_event(
+                    RunEvent(
+                        channel="telegram",
+                        external_chat_id="chat-42",
+                        session_id="telegram:chat-42",
+                        run_id="run-telegram",
+                        event_type="run_started",
+                        payload={"status": "running"},
+                        created_at=125.0,
+                    )
+                )
+                external_run_frame = await ws.receive_json(timeout=2)
+                assert external_run_frame["type"] == "run_event"
+                assert external_run_frame["channel"] == "telegram"
+                assert external_run_frame["external_chat_id"] == "chat-42"
+                assert external_run_frame["session_id"] == "telegram:chat-42"
+                assert external_run_frame["run_id"] == "run-telegram"
+
+                external_status_frame = await ws.receive_json(timeout=2)
+                assert external_status_frame["type"] == "session_status"
+                assert external_status_frame["channel"] == "telegram"
+                assert external_status_frame["session_id"] == "telegram:chat-42"
+                assert external_status_frame["metadata"]["run_id"] == "run-telegram"
+
                 await queue.bus.publish_session_status(
                     SessionStatusEvent(
                         session_id=session_frame["session_id"],
