@@ -82,6 +82,25 @@ def test_resolve_copilot_runtime_exchanges_github_token(monkeypatch):
     assert runtime.api_mode == "chat_completions"
 
 
+def test_resolve_copilot_oauth_runtime_reads_auth_store(tmp_path, monkeypatch):
+    token_path = tmp_path / "auth" / "github-copilot.json"
+    token_path.parent.mkdir()
+    token_path.write_text(json.dumps({"access_token": "gho_raw"}), encoding="utf-8")
+    monkeypatch.setattr(
+        "opensprite.llms.runtime_provider.exchange_copilot_token",
+        lambda api_key: ("copilot-api-token", 1_000),
+    )
+
+    runtime = resolve_provider_runtime(
+        ProviderConfig(provider="copilot", auth_type="github_copilot_oauth", model="gpt-5.4", enabled=True),
+        provider_name="copilot",
+        app_home=tmp_path,
+    )
+
+    assert runtime.api_key == "copilot-api-token"
+    assert runtime.auth_type == "github_copilot_oauth"
+
+
 def test_create_llm_uses_copilot_headers():
     provider = create_llm(
         api_key="copilot-api-token",

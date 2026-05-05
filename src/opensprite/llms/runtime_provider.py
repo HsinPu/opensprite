@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
-from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, exchange_copilot_token
+from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, exchange_copilot_token, load_copilot_token
 from ..config import ProviderConfig
 
 
@@ -63,9 +63,15 @@ def resolve_provider_runtime(
                 ).access_token
             except CodexAuthError as exc:
                 raise ProviderRuntimeError(str(exc)) from exc
-    elif configured_provider == "copilot":
+    elif configured_provider == "copilot" or auth_type == "github_copilot_oauth":
+        configured_provider = "copilot"
         base_url = base_url or GITHUB_COPILOT_BASE_URL
         api_mode = api_mode or "chat_completions"
+        if not api_key and auth_type == "github_copilot_oauth":
+            try:
+                api_key = load_copilot_token(Path(app_home) if app_home is not None else default_app_home()).access_token
+            except CopilotAuthError as exc:
+                raise ProviderRuntimeError(str(exc)) from exc
         try:
             api_key, _expires_at = exchange_copilot_token(api_key)
         except CopilotAuthError as exc:

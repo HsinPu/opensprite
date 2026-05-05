@@ -469,8 +469,8 @@ def config_validate(
 
 
 def _require_codex_provider(provider: str) -> None:
-    if provider != "openai-codex":
-        typer.secho("Error: only openai-codex auth is supported right now.", fg=typer.colors.RED, err=True)
+    if provider not in {"openai-codex", "copilot"}:
+        typer.secho("Error: only openai-codex and copilot auth are supported right now.", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
 
 
@@ -481,9 +481,29 @@ def auth_status(
     json_output: bool = typer.Option(False, "--json", help="Output status as JSON."),
 ) -> None:
     """Show provider authentication status."""
-    from ..auth.codex import CodexAuthError, get_codex_status
-
     _require_codex_provider(provider)
+    if provider == "copilot":
+        from ..auth.copilot import CopilotAuthError, get_copilot_status
+
+        try:
+            status = get_copilot_status(_resolve_app_home(config))
+            payload = {"provider": provider, "configured": status.configured, "path": str(status.path)}
+        except CopilotAuthError as exc:
+            payload = {"provider": provider, "configured": False, "error": str(exc)}
+            if json_output:
+                typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+                return
+            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from exc
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            return
+        typer.echo(f"Provider: {provider}")
+        typer.echo(f"Configured: {_format_presence(status.configured)}")
+        typer.echo(f"Token file: {status.path}")
+        return
+
+    from ..auth.codex import CodexAuthError, get_codex_status
     try:
         status = get_codex_status(_resolve_app_home(config))
         payload = {
@@ -522,9 +542,16 @@ def auth_logout(
     config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
 ) -> None:
     """Remove stored provider credentials."""
-    from ..auth.codex import codex_auth_path, delete_codex_token
-
     _require_codex_provider(provider)
+    if provider == "copilot":
+        from ..auth.copilot import copilot_auth_path, delete_copilot_token
+
+        path = copilot_auth_path(_resolve_app_home(config))
+        removed = delete_copilot_token(_resolve_app_home(config))
+        typer.echo(f"Removed GitHub Copilot credentials: {path}" if removed else f"No GitHub Copilot credentials found: {path}")
+        return
+
+    from ..auth.codex import codex_auth_path, delete_codex_token
     path = codex_auth_path(_resolve_app_home(config))
     removed = delete_codex_token(_resolve_app_home(config))
     if removed:
@@ -540,10 +567,37 @@ def auth_login(
     timeout_seconds: float = typer.Option(900.0, "--timeout", help="Maximum seconds to wait for browser authorization."),
 ) -> None:
     """Start provider login."""
-    from ..auth.codex import CodexAuthError, codex_device_login, codex_auth_path
-
     _require_codex_provider(provider)
     app_home = _resolve_app_home(config)
+    if provider == "copilot":
+        import time
+        from ..auth.copilot import CopilotAuthError, copilot_auth_path, copilot_poll_device_auth, copilot_start_device_auth
+
+        typer.echo("Signing in to GitHub Copilot...")
+        try:
+            device = copilot_start_device_auth()
+            typer.echo("To continue, open this URL in your browser:")
+            typer.echo(f"  {device.verification_uri}")
+            typer.echo("Enter this code:")
+            typer.echo(f"  {device.user_code}")
+            deadline = time.monotonic() + max(1.0, float(timeout_seconds))
+            while time.monotonic() < deadline:
+                time.sleep(device.poll_interval)
+                result = copilot_poll_device_auth(device.device_code, app_home=app_home)
+                if result.status == "authorized":
+                    typer.echo("Login successful.")
+                    typer.echo(f"Token file: {copilot_auth_path(app_home)}")
+                    return
+                if result.status in {"expired_token", "access_denied"}:
+                    raise CopilotAuthError(f"GitHub Copilot login failed: {result.status}")
+        except CopilotAuthError as exc:
+            typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1) from exc
+        typer.secho("Error: GitHub Copilot login timed out waiting for browser authorization.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+    from ..auth.codex import CodexAuthError, codex_device_login, codex_auth_path
+
     typer.echo("Signing in to OpenAI Codex...")
     try:
         codex_device_login(app_home, timeout_seconds=timeout_seconds, announce=typer.echo)

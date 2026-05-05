@@ -94,13 +94,16 @@
     @save-channel-connection="saveChannelConnection"
     @disconnect-channel="disconnectChannel"
     @begin-provider-connect="beginProviderConnect"
-    @connect-codex-provider="connectCodexProvider"
+    @connect-oauth-provider="connectOAuthProvider"
     @cancel-provider-connect="cancelProviderConnect"
     @save-provider-connection="saveProviderConnection"
     @disconnect-provider="disconnectProvider"
     @refresh-codex-auth="loadCodexAuthStatus"
     @start-codex-auth-login="startCodexAuthLogin"
     @logout-codex-auth="logoutCodexAuth"
+    @refresh-copilot-auth="loadCopilotAuthStatus"
+    @start-copilot-auth-login="startCopilotAuthLogin"
+    @logout-copilot-auth="logoutCopilotAuth"
     @select-model="selectModel"
     @apply-openrouter-recommended-options="applyOpenRouterRecommendedOptions"
     @save-openrouter-options="saveOpenRouterOptions"
@@ -190,13 +193,16 @@ const {
   saveChannelConnection,
   disconnectChannel,
   beginProviderConnect,
-  connectCodexProvider,
+  connectOAuthProvider,
   cancelProviderConnect,
   saveProviderConnection,
   disconnectProvider,
   loadCodexAuthStatus,
+  loadCopilotAuthStatus,
   startCodexAuthLogin,
   logoutCodexAuth,
+  startCopilotAuthLogin,
+  logoutCopilotAuth,
   selectModel,
   applyOpenRouterRecommendedOptions,
   saveOpenRouterOptions,

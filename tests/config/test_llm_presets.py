@@ -64,6 +64,7 @@ def test_load_llm_presets_has_expected_providers():
     assert presets.providers["openai-codex"].api_mode == "responses"
     assert presets.providers["openai-codex"].default_base_url == "https://chatgpt.com/backend-api/codex"
     assert presets.providers["copilot"].display_name == "GitHub Copilot"
+    assert presets.providers["copilot"].auth_type == "github_copilot_oauth"
     assert presets.providers["copilot"].default_base_url == "https://api.githubcopilot.com"
     assert presets.providers["copilot"].model_choices[:3] == ("gpt-5.4", "gpt-5.4-mini", "gpt-5-mini")
     assert presets.providers["openrouter"].media_model_choices == {

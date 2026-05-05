@@ -141,6 +141,46 @@
             </label>
           </div>
 
+          <h3>{{ copy.settings.providers.copilotAuth.title }}</h3>
+          <p v-if="settingsState.copilotAuthNotice" class="settings-inline-status">{{ settingsState.copilotAuthNotice }}</p>
+          <p v-if="settingsState.copilotAuthError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.copilotAuthError }}
+          </p>
+          <div class="settings-card provider-card">
+            <div class="provider-row provider-row--stacked codex-auth-row">
+              <div class="provider-row__content">
+                <div class="provider-row__main">
+                  <span class="provider-row__mark" aria-hidden="true">Gh</span>
+                  <div>
+                    <div class="provider-row__title">
+                      <strong>{{ copy.settings.providers.copilotAuth.name }}</strong>
+                      <span class="provider-row__badge">{{ copilotAuthStatusLabel }}</span>
+                    </div>
+                    <span>{{ copilotAuthDescription }}</span>
+                  </div>
+                </div>
+                <div class="provider-row__actions">
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('refresh-copilot-auth')">
+                    {{ copy.settings.providers.copilotAuth.refresh }}
+                  </button>
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading" @click="$emit('start-copilot-auth-login')">
+                    {{ copy.settings.providers.copilotAuth.login }}
+                  </button>
+                  <button class="provider-row__action" type="button" :disabled="settingsState.copilotAuthLoading || !settingsState.copilotAuth.configured" @click="$emit('logout-copilot-auth')">
+                    {{ copy.settings.providers.copilotAuth.logout }}
+                  </button>
+                </div>
+              </div>
+              <div v-if="settingsState.copilotAuth.userCode" class="codex-auth-command">
+                <span>{{ copy.settings.providers.copilotAuth.userCodeLabel }}</span>
+                <code>{{ settingsState.copilotAuth.userCode }}</code>
+                <a v-if="settingsState.copilotAuth.verificationUri" :href="settingsState.copilotAuth.verificationUri" target="_blank" rel="noreferrer">
+                  {{ copy.settings.providers.copilotAuth.openVerification }}
+                </a>
+              </div>
+            </div>
+          </div>
+
           <h3>{{ copy.settings.general.connectionTitle }}</h3>
           <div class="settings-card settings-card--form">
             <label class="settings-row settings-row--field">
@@ -413,6 +453,9 @@
                     <span v-if="provider.provider === 'openai-codex' && !settingsState.codexAuth.configured" class="provider-row__badge">
                       {{ copy.settings.providers.codexAuth.notConfigured }}
                     </span>
+                    <span v-if="provider.provider === 'copilot' && !settingsState.copilotAuth.configured" class="provider-row__badge">
+                      {{ copy.settings.providers.copilotAuth.notConfigured }}
+                    </span>
                   </div>
                   <span>{{ providerDescription(provider) }}</span>
                 </div>
@@ -454,7 +497,7 @@
                   class="provider-row__action"
                   type="button"
                   :disabled="settingsState.providersLoading"
-                  @click="provider.requires_api_key === false ? $emit('connect-codex-provider', provider) : $emit('begin-provider-connect', provider)"
+                  @click="provider.requires_api_key === false ? $emit('connect-oauth-provider', provider) : $emit('begin-provider-connect', provider)"
                 >
                   {{ provider.requires_api_key === false ? copy.settings.providers.connectOAuth : copy.settings.providers.connect }}
                 </button>
@@ -1610,6 +1653,24 @@ const codexAuthDescription = computed(() => {
   return parts.join(" · ") || props.copy.settings.providers.codexAuth.configuredDescription;
 });
 
+const copilotAuthStatusLabel = computed(() => {
+  if (props.settingsState.copilotAuthLoading) {
+    return props.copy.settings.providers.copilotAuth.loading;
+  }
+  if (!props.settingsState.copilotAuth.configured) {
+    return props.copy.settings.providers.copilotAuth.notConfigured;
+  }
+  return props.copy.settings.providers.copilotAuth.configured;
+});
+
+const copilotAuthDescription = computed(() => {
+  const auth = props.settingsState.copilotAuth || {};
+  if (!auth.configured) {
+    return props.copy.settings.providers.copilotAuth.description;
+  }
+  return auth.path ? props.copy.settings.providers.copilotAuth.path(auth.path) : props.copy.settings.providers.copilotAuth.configuredDescription;
+});
+
 function mediaProviderModels(category) {
   const providerId = props.settingsState.mediaSelections[category]?.providerId;
   return mediaModelsForProvider(category, providerId, props.settingsState.mediaSelections[category]?.model);
@@ -1629,6 +1690,9 @@ function mediaModelsForProvider(category, providerId, selectedModel = "") {
 function providerDescription(provider) {
   if (provider?.provider === "openai-codex" && !props.settingsState.codexAuth.configured) {
     return props.copy.settings.providers.codexAuth.providerNeedsLogin;
+  }
+  if (provider?.provider === "copilot" && !props.settingsState.copilotAuth.configured) {
+    return props.copy.settings.providers.copilotAuth.providerNeedsLogin;
   }
   return provider?.base_url || "";
 }
@@ -1722,13 +1786,16 @@ defineEmits([
   "save-channel-connection",
   "disconnect-channel",
   "begin-provider-connect",
-  "connect-codex-provider",
+  "connect-oauth-provider",
   "cancel-provider-connect",
   "save-provider-connection",
   "disconnect-provider",
   "refresh-codex-auth",
   "start-codex-auth-login",
   "logout-codex-auth",
+  "refresh-copilot-auth",
+  "start-copilot-auth-login",
+  "logout-copilot-auth",
   "select-model",
   "apply-openrouter-recommended-options",
   "save-openrouter-options",

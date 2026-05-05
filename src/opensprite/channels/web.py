@@ -1090,6 +1090,61 @@ class WebAdapter(MessageAdapter):
             }
         )
 
+    async def _handle_settings_copilot_auth_status(self, request: web.Request) -> web.Response:
+        from ..auth.copilot import CopilotAuthError, get_copilot_status
+
+        try:
+            status = get_copilot_status(self._get_app_home())
+        except CopilotAuthError as exc:
+            return web.json_response({"provider": "copilot", "configured": False, "error": str(exc)}, status=400)
+        return web.json_response({"provider": "copilot", "configured": status.configured, "path": str(status.path)})
+
+    async def _handle_settings_copilot_auth_login(self, request: web.Request) -> web.Response:
+        from ..auth.copilot import CopilotAuthError, copilot_start_device_auth
+
+        try:
+            device_auth = copilot_start_device_auth()
+        except CopilotAuthError as exc:
+            return web.json_response({"ok": False, "provider": "copilot", "error": str(exc)}, status=502)
+        return web.json_response(
+            {
+                "ok": True,
+                "provider": "copilot",
+                "mode": "web_device_code",
+                "verification_uri": device_auth.verification_uri,
+                "user_code": device_auth.user_code,
+                "device_code": device_auth.device_code,
+                "interval": device_auth.poll_interval,
+                "expires_in": device_auth.expires_in,
+            }
+        )
+
+    async def _handle_settings_copilot_auth_poll(self, request: web.Request) -> web.Response:
+        from ..auth.copilot import CopilotAuthError, copilot_poll_device_auth, get_copilot_status
+
+        body = await self._read_json_body(request)
+        try:
+            result = copilot_poll_device_auth(
+                self._coerce_optional_text(body.get("device_code")),
+                app_home=self._get_app_home(),
+            )
+            status = get_copilot_status(self._get_app_home()) if result.status == "authorized" else None
+        except CopilotAuthError as exc:
+            return web.json_response({"ok": False, "provider": "copilot", "error": str(exc)}, status=400)
+        payload: dict[str, Any] = {"ok": True, "provider": "copilot", "status": result.status}
+        if status is not None:
+            payload["auth"] = {"configured": status.configured, "path": str(status.path)}
+            payload = self._reload_agent_llm_from_config(payload, force=True)
+        return web.json_response(payload)
+
+    async def _handle_settings_copilot_auth_logout(self, request: web.Request) -> web.Response:
+        from ..auth.copilot import copilot_auth_path, delete_copilot_token
+
+        app_home = self._get_app_home()
+        path = copilot_auth_path(app_home)
+        removed = delete_copilot_token(app_home)
+        return web.json_response({"ok": True, "provider": "copilot", "removed": removed, "path": str(path)})
+
     async def _handle_settings_channels(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_channel_settings().list_channels()
@@ -1647,6 +1702,10 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_post("/api/settings/auth/openai-codex/login", self._handle_settings_codex_auth_login)
         self.app.router.add_post("/api/settings/auth/openai-codex/poll", self._handle_settings_codex_auth_poll)
         self.app.router.add_post("/api/settings/auth/openai-codex/logout", self._handle_settings_codex_auth_logout)
+        self.app.router.add_get("/api/settings/auth/copilot", self._handle_settings_copilot_auth_status)
+        self.app.router.add_post("/api/settings/auth/copilot/login", self._handle_settings_copilot_auth_login)
+        self.app.router.add_post("/api/settings/auth/copilot/poll", self._handle_settings_copilot_auth_poll)
+        self.app.router.add_post("/api/settings/auth/copilot/logout", self._handle_settings_copilot_auth_logout)
         self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
         self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
         self.app.router.add_put("/api/settings/providers/{provider_id}/options", self._handle_settings_provider_options_update)

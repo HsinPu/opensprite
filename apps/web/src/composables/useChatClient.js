@@ -1421,6 +1421,17 @@ export function useChatClient() {
       deviceAuthId: "",
       pollIntervalSeconds: 5,
     },
+    copilotAuthLoading: false,
+    copilotAuthError: "",
+    copilotAuthNotice: "",
+    copilotAuth: {
+      configured: false,
+      path: "",
+      verificationUri: "",
+      userCode: "",
+      deviceCode: "",
+      pollIntervalSeconds: 5,
+    },
     connectForm: {
       providerId: "",
       name: "",
@@ -1551,6 +1562,7 @@ export function useChatClient() {
   const runBackfillTimes = new Map();
   let curatorPollTimer = null;
   let codexAuthPollTimer = null;
+  let copilotAuthPollTimer = null;
   let curatorPollSessionId = "";
   let toastId = 0;
   const toastTimers = new Map();
@@ -3354,6 +3366,23 @@ export function useChatClient() {
     }
   }
 
+  async function loadCopilotAuthStatus() {
+    settingsState.copilotAuthLoading = true;
+    settingsState.copilotAuthError = "";
+    try {
+      const payload = await requestSettingsJson("/api/settings/auth/copilot");
+      settingsState.copilotAuth = {
+        ...settingsState.copilotAuth,
+        configured: Boolean(payload.configured),
+        path: payload.path || "",
+      };
+    } catch (error) {
+      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoadFailed;
+    } finally {
+      settingsState.copilotAuthLoading = false;
+    }
+  }
+
   function visibleChannels(channels) {
     return (channels || []).filter((channel) => channel.id !== "web" && channel.id !== "console");
   }
@@ -3535,6 +3564,7 @@ export function useChatClient() {
     if (sectionName === "providers") {
       loadProviderSettings();
       loadCodexAuthStatus();
+      loadCopilotAuthStatus();
       return;
     }
     if (sectionName === "models") {
@@ -3743,6 +3773,36 @@ export function useChatClient() {
     }
   }
 
+  async function connectOAuthProvider(provider) {
+    if (provider?.id === "copilot") {
+      await connectCopilotProvider(provider);
+      return;
+    }
+    await connectCodexProvider(provider);
+  }
+
+  async function connectCopilotProvider(provider) {
+    const providerId = provider?.id || "copilot";
+    settingsState.providersLoading = true;
+    settingsState.providersError = "";
+    settingsState.providersNotice = "";
+    settingsState.copilotAuthNotice = "";
+    try {
+      await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/connect`, {
+        method: "PUT",
+        body: JSON.stringify({ name: provider?.name || "GitHub Copilot", base_url: provider?.default_base_url || "" }),
+      });
+      setSettingsSuccess("providersNotice", copy.value.notices.copilotProviderConnected);
+      await loadProviderSettings();
+      await loadModelSettings();
+      await startCopilotAuthLogin();
+    } catch (error) {
+      settingsState.providersError = error?.message || copy.value.notices.providerConnectFailed;
+    } finally {
+      settingsState.providersLoading = false;
+    }
+  }
+
   async function startCodexAuthLogin() {
     clearCodexAuthPollTimer();
     settingsState.codexAuthLoading = true;
@@ -3844,6 +3904,93 @@ export function useChatClient() {
       settingsState.codexAuthError = error?.message || copy.value.notices.codexAuthLogoutFailed;
     } finally {
       settingsState.codexAuthLoading = false;
+    }
+  }
+
+  async function startCopilotAuthLogin() {
+    clearCopilotAuthPollTimer();
+    settingsState.copilotAuthLoading = true;
+    settingsState.copilotAuthError = "";
+    settingsState.copilotAuthNotice = "";
+    try {
+      const payload = await requestSettingsJson("/api/settings/auth/copilot/login", { method: "POST" });
+      settingsState.copilotAuth = {
+        ...settingsState.copilotAuth,
+        verificationUri: payload.verification_uri || "",
+        userCode: payload.user_code || "",
+        deviceCode: payload.device_code || "",
+        pollIntervalSeconds: coerceNonNegativeInteger(payload.interval) || 5,
+      };
+      if (settingsState.copilotAuth.verificationUri) {
+        window.open(settingsState.copilotAuth.verificationUri, "_blank", "noopener,noreferrer");
+      }
+      setSettingsSuccess("copilotAuthNotice", copy.value.notices.copilotAuthLoginReady);
+      scheduleCopilotAuthPoll();
+    } catch (error) {
+      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoginFailed;
+    } finally {
+      settingsState.copilotAuthLoading = false;
+    }
+  }
+
+  function clearCopilotAuthPollTimer() {
+    if (copilotAuthPollTimer) {
+      clearTimeout(copilotAuthPollTimer);
+      copilotAuthPollTimer = null;
+    }
+  }
+
+  function scheduleCopilotAuthPoll() {
+    clearCopilotAuthPollTimer();
+    const delayMs = Math.max(3, settingsState.copilotAuth.pollIntervalSeconds || 5) * 1000;
+    copilotAuthPollTimer = window.setTimeout(() => {
+      void pollCopilotAuthLogin();
+    }, delayMs);
+  }
+
+  async function pollCopilotAuthLogin() {
+    const deviceCode = settingsState.copilotAuth.deviceCode;
+    if (!deviceCode) return;
+    try {
+      const payload = await requestSettingsJson("/api/settings/auth/copilot/poll", {
+        method: "POST",
+        body: JSON.stringify({ device_code: deviceCode }),
+      });
+      if (payload.status === "authorized") {
+        const auth = payload.auth || {};
+        settingsState.copilotAuth = {
+          ...settingsState.copilotAuth,
+          configured: Boolean(auth.configured),
+          path: auth.path || settingsState.copilotAuth.path,
+          verificationUri: "",
+          userCode: "",
+          deviceCode: "",
+        };
+        setSettingsSuccess("copilotAuthNotice", copy.value.notices.copilotAuthLoginComplete);
+        await loadModelSettings();
+        return;
+      }
+      scheduleCopilotAuthPoll();
+    } catch (error) {
+      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLoginFailed;
+      clearCopilotAuthPollTimer();
+    }
+  }
+
+  async function logoutCopilotAuth() {
+    clearCopilotAuthPollTimer();
+    settingsState.copilotAuthLoading = true;
+    settingsState.copilotAuthError = "";
+    settingsState.copilotAuthNotice = "";
+    try {
+      await requestSettingsJson("/api/settings/auth/copilot/logout", { method: "POST" });
+      settingsState.copilotAuth = { ...settingsState.copilotAuth, configured: false, path: "", verificationUri: "", userCode: "", deviceCode: "" };
+      setSettingsSuccess("copilotAuthNotice", copy.value.notices.copilotAuthLoggedOut);
+      await loadCopilotAuthStatus();
+    } catch (error) {
+      settingsState.copilotAuthError = error?.message || copy.value.notices.copilotAuthLogoutFailed;
+    } finally {
+      settingsState.copilotAuthLoading = false;
     }
   }
 
@@ -4653,6 +4800,7 @@ export function useChatClient() {
     runBackfillTimes.clear();
     clearCuratorPollTimer();
     clearCodexAuthPollTimer();
+    clearCopilotAuthPollTimer();
     for (const timer of toastTimers.values()) {
       clearTimeout(timer);
     }
@@ -4719,6 +4867,7 @@ export function useChatClient() {
     saveConnectionSettings,
     loadProviderSettings,
     loadCodexAuthStatus,
+    loadCopilotAuthStatus,
     loadUpdateStatus,
     loadModelSettings,
     loadChannelSettings,
@@ -4734,8 +4883,12 @@ export function useChatClient() {
     saveProviderConnection,
     disconnectProvider,
     connectCodexProvider,
+    connectOAuthProvider,
+    connectCopilotProvider,
     startCodexAuthLogin,
     logoutCodexAuth,
+    startCopilotAuthLogin,
+    logoutCopilotAuth,
     runUpdate,
     selectModel,
     applyOpenRouterRecommendedOptions,

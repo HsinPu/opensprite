@@ -12,7 +12,7 @@ class ProviderConfig(BaseModel):
 
     provider: str | None = None
     name: str | None = None
-    auth_type: Literal["api_key", "openai_codex_oauth"] = "api_key"
+    auth_type: Literal["api_key", "openai_codex_oauth", "github_copilot_oauth"] = "api_key"
     api_mode: Literal["chat_completions", "responses"] | None = None
     api_key: str = ""
     model: str = ""
@@ -1200,6 +1200,16 @@ class Config:
                 except Exception:
                     return False
                 return status.configured and status.expired is not True
+            if provider.auth_type == "github_copilot_oauth":
+                if not provider.model:
+                    return False
+                try:
+                    from ..auth.copilot import get_copilot_status
+
+                    status = get_copilot_status(self.source_path.parent if self.source_path is not None else None)
+                except Exception:
+                    return False
+                return status.configured
             return bool(provider.api_key and provider.model)
         return bool(self.llm.api_key)
 

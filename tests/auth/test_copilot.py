@@ -10,6 +10,35 @@ def test_validate_copilot_token_rejects_classic_pat():
         copilot.validate_copilot_token("ghp_classic")
 
 
+def test_copilot_token_store_roundtrip(tmp_path):
+    path = copilot.save_copilot_token(copilot.CopilotToken("gho_raw"), tmp_path)
+
+    assert path == tmp_path / "auth" / "github-copilot.json"
+    assert copilot.get_copilot_status(tmp_path).configured is True
+    assert copilot.load_copilot_token(tmp_path).access_token == "gho_raw"
+    assert copilot.delete_copilot_token(tmp_path) is True
+    assert copilot.get_copilot_status(tmp_path).configured is False
+
+
+def test_copilot_device_poll_saves_token(tmp_path, monkeypatch):
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self):
+            return json.dumps({"access_token": "gho_device"}).encode("utf-8")
+
+    monkeypatch.setattr(copilot.urllib.request, "urlopen", lambda request, timeout=None: FakeResponse())
+
+    result = copilot.copilot_poll_device_auth("device-code", app_home=tmp_path)
+
+    assert result.status == "authorized"
+    assert copilot.load_copilot_token(tmp_path).access_token == "gho_device"
+
+
 def test_exchange_copilot_token_uses_cache(monkeypatch):
     calls = []
 

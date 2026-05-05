@@ -229,7 +229,15 @@ def discover_provider_models(
     if preset_id == "openai-codex":
         live = fetch_codex_models(app_home)
     elif preset_id == "copilot":
-        live = fetch_copilot_provider_models(str(provider.get("api_key") or "").strip())
+        api_key = str(provider.get("api_key") or "").strip()
+        if not api_key:
+            try:
+                from ..auth.copilot import load_copilot_token
+
+                api_key = load_copilot_token(app_home).access_token
+            except Exception:
+                api_key = ""
+        live = fetch_copilot_provider_models(api_key) if api_key else []
     elif preset_id == "openrouter":
         live = fetch_openrouter_models()
     elif preset_id in {"openai", "minimax"} or str(provider.get("base_url") or "").strip():

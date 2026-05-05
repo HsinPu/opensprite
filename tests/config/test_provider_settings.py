@@ -102,7 +102,7 @@ def test_provider_settings_connects_copilot_provider(tmp_path):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)
 
-    result = service.connect_provider("copilot", api_key="github-token")
+    result = service.connect_provider("copilot", api_key=None)
 
     providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
     listing = service.list_providers()
@@ -110,7 +110,9 @@ def test_provider_settings_connects_copilot_provider(tmp_path):
     assert result["provider"]["id"] == "copilot"
     assert result["provider"]["provider"] == "copilot"
     assert result["provider"]["base_url"] == "https://api.githubcopilot.com"
-    assert providers["copilot"]["api_key"] == "github-token"
+    assert result["provider"]["requires_api_key"] is False
+    assert providers["copilot"].get("api_key", "") == ""
+    assert providers["copilot"]["auth_type"] == "github_copilot_oauth"
     assert listing["connected"][0]["name"] == "GitHub Copilot"
 
 
