@@ -1,13 +1,25 @@
 import json
+from types import SimpleNamespace
 
 import pytest
 
 from opensprite.config import Config
+from opensprite.config import provider_settings
 from opensprite.config.provider_settings import (
     ProviderSettingsConflict,
     ProviderSettingsService,
     ProviderSettingsValidationError,
 )
+
+_ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS = provider_settings.fetch_openai_compatible_models
+_ORIGINAL_FETCH_CODEX_MODELS = provider_settings.fetch_codex_models
+
+
+@pytest.fixture(autouse=True)
+def _disable_live_model_discovery(monkeypatch):
+    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", lambda _api_key, _base_url: [])
+    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", lambda: [])
+    monkeypatch.setattr(provider_settings, "fetch_codex_models", lambda _app_home=None: [])
 
 
 def _copy_config(tmp_path):
@@ -81,6 +93,100 @@ def test_provider_settings_connects_codex_without_api_key(tmp_path):
     assert connected["requires_api_key"] is False
     assert models["default_provider"] == "openai-codex"
     assert models["providers"][0]["provider"] == "openai-codex"
+
+
+def test_provider_settings_uses_discovered_provider_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(
+        provider_settings,
+        "fetch_openai_compatible_models",
+        lambda api_key, base_url: ["live-model", "gpt-4.1-mini", "live-model"],
+    )
+
+    service.connect_provider("openai", api_key="openai-key")
+    service.select_model("openai", "custom-selected-model")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "live"
+    assert provider["models"][:3] == ["custom-selected-model", "live-model", "gpt-4.1-mini"]
+
+
+def test_provider_settings_falls_back_to_preset_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", lambda: [])
+
+    service.connect_provider("openrouter", api_key="router-key")
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert provider["model_source"] == "preset"
+    assert "openai/gpt-5.5" in provider["models"]
+
+
+def test_provider_settings_uses_discovered_codex_models(tmp_path, monkeypatch):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    seen_app_homes = []
+
+    def fake_fetch_codex_models(app_home=None):
+        seen_app_homes.append(app_home)
+        return ["gpt-5.1-codex-live", "gpt-5.1-codex"]
+
+    monkeypatch.setattr(provider_settings, "fetch_codex_models", fake_fetch_codex_models)
+
+    service.connect_provider("openai-codex", api_key=None)
+    models = service.list_models()
+
+    provider = models["providers"][0]
+    assert seen_app_homes == [tmp_path]
+    assert provider["model_source"] == "live"
+    assert provider["models"][:2] == ["gpt-5.1-codex-live", "gpt-5.1-codex"]
+
+
+def test_fetch_openai_compatible_models_probes_v1_fallback(monkeypatch):
+    seen_urls = []
+
+    def fake_read_json_url(url, *, headers=None):
+        seen_urls.append((url, headers))
+        if url == "https://example.test/v1/models":
+            return {"data": [{"id": "first-live"}, {"id": ""}, {"id": "first-live"}, {"id": "second-live"}]}
+        return {"data": []}
+
+    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
+    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+
+    models = provider_settings.fetch_openai_compatible_models("secret", "https://example.test")
+
+    assert models == ["first-live", "second-live"]
+    assert seen_urls == [
+        ("https://example.test/models", {"Accept": "application/json", "Authorization": "Bearer secret"}),
+        ("https://example.test/v1/models", {"Accept": "application/json", "Authorization": "Bearer secret"}),
+    ]
+
+
+def test_fetch_codex_models_filters_and_sorts(monkeypatch):
+    def fake_read_json_url(url, *, headers=None):
+        return {
+            "models": [
+                {"slug": "hidden", "visibility": "hide", "priority": 1},
+                {"slug": "unsupported", "supported_in_api": False, "priority": 2},
+                {"slug": "later", "priority": 20},
+                {"slug": "earlier", "priority": 10},
+                {"slug": "earlier", "priority": 10},
+            ]
+        }
+
+    monkeypatch.setattr(provider_settings, "fetch_codex_models", _ORIGINAL_FETCH_CODEX_MODELS)
+    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+    monkeypatch.setattr(
+        "opensprite.auth.codex.load_or_refresh_codex_token",
+        lambda app_home=None: SimpleNamespace(access_token="codex-token"),
+    )
+
+    assert provider_settings.fetch_codex_models(object()) == ["earlier", "later"]
 
 
 def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_path):

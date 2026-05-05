@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,7 @@ from .schema import Config
 
 OPENROUTER_REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh"}
 OPENROUTER_PROVIDER_SORTS = {"price", "throughput", "latency"}
+MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
 
 
 class ProviderSettingsError(Exception):
@@ -86,6 +88,128 @@ def get_model_choices(
         choices.append(custom_choice)
     default = current_model or (choices[0] if choices else None)
     return choices, default
+
+
+def _dedupe_models(models: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for model in models:
+        normalized = str(model or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
+
+
+def _read_json_url(url: str, *, headers: dict[str, str] | None = None) -> dict[str, Any] | None:
+    request = urllib.request.Request(url, headers=headers or {"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=MODEL_DISCOVERY_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _models_from_openai_compatible_payload(payload: dict[str, Any] | None) -> list[str]:
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return []
+    return _dedupe_models([str(item.get("id") or "") for item in data if isinstance(item, dict)])
+
+
+def fetch_openai_compatible_models(api_key: str, base_url: str) -> list[str]:
+    normalized = str(base_url or "").strip().rstrip("/")
+    if not normalized:
+        return []
+    candidates = [normalized]
+    if normalized.endswith("/v1"):
+        candidates.append(normalized[:-3].rstrip("/"))
+    else:
+        candidates.append(f"{normalized}/v1")
+    headers = {"Accept": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    for candidate in _dedupe_models(candidates):
+        models = _models_from_openai_compatible_payload(_read_json_url(f"{candidate}/models", headers=headers))
+        if models:
+            return models
+    return []
+
+
+def fetch_openrouter_models() -> list[str]:
+    payload = _read_json_url("https://openrouter.ai/api/v1/models", headers={"Accept": "application/json"})
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list):
+        return []
+    out: list[str] = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        model_id = str(item.get("id") or "").strip()
+        if not model_id:
+            continue
+        params = item.get("supported_parameters")
+        if isinstance(params, list) and params and "tools" not in {str(param) for param in params}:
+            continue
+        out.append(model_id)
+    return _dedupe_models(out)
+
+
+def fetch_codex_models(app_home: str | Path | None = None) -> list[str]:
+    try:
+        from ..auth.codex import load_or_refresh_codex_token
+
+        token = load_or_refresh_codex_token(app_home).access_token
+    except Exception:
+        return []
+    payload = _read_json_url(
+        "https://chatgpt.com/backend-api/codex/models?client_version=1.0.0",
+        headers={"Accept": "application/json", "Authorization": f"Bearer {token}"},
+    )
+    entries = payload.get("models") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        return []
+    sortable: list[tuple[int, str]] = []
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        slug = str(item.get("slug") or "").strip()
+        if not slug or item.get("supported_in_api") is False:
+            continue
+        visibility = str(item.get("visibility") or "").strip().lower()
+        if visibility in {"hide", "hidden"}:
+            continue
+        priority = item.get("priority")
+        rank = int(priority) if isinstance(priority, (int, float)) else 10_000
+        sortable.append((rank, slug))
+    sortable.sort(key=lambda item: (item[0], item[1]))
+    return _dedupe_models([slug for _, slug in sortable])
+
+
+def discover_provider_models(
+    provider_id: str,
+    provider: dict[str, Any],
+    preset: ProviderPreset | None,
+    *,
+    app_home: str | Path | None = None,
+) -> tuple[list[str], str]:
+    fallback = list(preset.model_choices if preset else ())
+    preset_id = str(provider.get("provider") or provider_id or "").strip()
+    live: list[str] = []
+    if preset_id == "openai-codex":
+        live = fetch_codex_models(app_home)
+    elif preset_id == "openrouter":
+        live = fetch_openrouter_models()
+    elif preset_id in {"openai", "minimax"} or str(provider.get("base_url") or "").strip():
+        live = fetch_openai_compatible_models(
+            str(provider.get("api_key") or "").strip(),
+            str(provider.get("base_url") or (preset.default_base_url if preset else "")).strip(),
+        )
+    if live:
+        return _dedupe_models(live + fallback), "live"
+    return fallback, "preset"
 
 
 def prune_llm_providers(llm: dict[str, Any]) -> None:
@@ -474,9 +598,15 @@ class ProviderSettingsService:
             preset = presets.providers.get(preset_id) if preset_id else None
             if not is_provider_connected(provider, preset):
                 continue
+            discovered_models, model_source = discover_provider_models(
+                provider_id,
+                provider,
+                preset,
+                app_home=self.config_path.parent,
+            )
             choices, _ = get_model_choices(
                 str(provider.get("model") or "") or None,
-                model_choices=preset.model_choices if preset else (),
+                model_choices=tuple(discovered_models),
             )
             out.append(
                 {
@@ -488,6 +618,7 @@ class ProviderSettingsService:
                     "is_default": provider_id == loaded.llm.default,
                     "selected_model": provider.get("model") or "",
                     "models": choices,
+                    "model_source": model_source,
                     "model_capabilities": (preset.model_capabilities or {}) if preset else {},
                     "options": public_openrouter_options(provider) if preset_id == "openrouter" else {},
                     "supports_custom_model": True,
