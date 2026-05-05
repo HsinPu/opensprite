@@ -240,6 +240,30 @@ function coerceNonNegativeInteger(value) {
   return Math.floor(number);
 }
 
+function normalizeOpenRouterOptions(options = {}) {
+  const maxTokens = options.reasoning_max_tokens ?? "";
+  return {
+    reasoningEnabled: coerceBoolean(options.reasoning_enabled),
+    reasoningEffort: String(options.reasoning_effort || "").trim(),
+    reasoningMaxTokens: maxTokens === null || maxTokens === undefined ? "" : String(maxTokens),
+    reasoningExclude: coerceBoolean(options.reasoning_exclude),
+    providerSort: String(options.provider_sort || "").trim(),
+    requireParameters: coerceBoolean(options.require_parameters),
+  };
+}
+
+function serializeOpenRouterOptions(options = {}) {
+  const maxTokens = String(options.reasoningMaxTokens || "").trim();
+  return {
+    reasoning_enabled: coerceBoolean(options.reasoningEnabled),
+    reasoning_effort: String(options.reasoningEffort || "").trim() || null,
+    reasoning_max_tokens: maxTokens ? Number.parseInt(maxTokens, 10) : null,
+    reasoning_exclude: coerceBoolean(options.reasoningExclude),
+    provider_sort: String(options.providerSort || "").trim() || null,
+    require_parameters: coerceBoolean(options.requireParameters),
+  };
+}
+
 function normalizeRunKind(value, fallback = "other") {
   const normalized = String(value || "").trim();
   return RUN_EVENT_KINDS.has(normalized) ? normalized : fallback;
@@ -1394,6 +1418,7 @@ export function useChatClient() {
     selectedTextProviderId: "",
     modelSelections: {},
     customModels: {},
+    openRouterOptions: {},
     mediaLoading: false,
     mediaError: "",
     mediaNotice: "",
@@ -3364,6 +3389,9 @@ export function useChatClient() {
         if (!Object.prototype.hasOwnProperty.call(settingsState.customModels, provider.id)) {
           settingsState.customModels[provider.id] = "";
         }
+        if (provider.provider === "openrouter") {
+          settingsState.openRouterOptions[provider.id] = normalizeOpenRouterOptions(provider.options || {});
+        }
       }
       for (const category of Object.keys(settingsState.media.sections || {})) {
         const section = settingsState.media.sections[category] || {};
@@ -3621,6 +3649,45 @@ export function useChatClient() {
       await loadProviderSettings();
     } catch (error) {
       settingsState.modelsError = error?.message || copy.value.notices.modelSelectFailed;
+    } finally {
+      settingsState.modelsLoading = false;
+    }
+  }
+
+  function applyOpenRouterRecommendedOptions(providerId, model) {
+    const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
+    const recommended = provider?.model_capabilities?.[model]?.recommended_options;
+    if (!recommended) {
+      return;
+    }
+    settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions({
+      ...serializeOpenRouterOptions(settingsState.openRouterOptions[providerId] || {}),
+      ...recommended,
+    });
+  }
+
+  async function saveOpenRouterOptions(providerId) {
+    const options = settingsState.openRouterOptions[providerId];
+    if (!options) {
+      return;
+    }
+
+    settingsState.modelsLoading = true;
+    settingsState.modelsError = "";
+    settingsState.modelsNotice = "";
+    try {
+      const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/options`, {
+        method: "PUT",
+        body: JSON.stringify(serializeOpenRouterOptions(options)),
+      });
+      setSettingsSuccess(
+        "modelsNotice",
+        payload.restart_required ? copy.value.notices.modelRestartRequired : copy.value.notices.modelApplied,
+      );
+      await loadModelSettings();
+      await loadProviderSettings();
+    } catch (error) {
+      settingsState.modelsError = error?.message || copy.value.notices.providerOptionsSaveFailed;
     } finally {
       settingsState.modelsLoading = false;
     }
@@ -4421,6 +4488,8 @@ export function useChatClient() {
     saveProviderConnection,
     disconnectProvider,
     selectModel,
+    applyOpenRouterRecommendedOptions,
+    saveOpenRouterOptions,
     saveMediaModel,
     beginMcpEdit,
     beginMcpCreate,

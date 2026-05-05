@@ -456,6 +456,7 @@ class ProviderSettingsService:
                     "selected_model": provider.get("model") or "",
                     "models": choices,
                     "model_capabilities": (preset.model_capabilities or {}) if preset else {},
+                    "options": public_openrouter_options(provider) if preset_id == "openrouter" else {},
                     "supports_custom_model": True,
                 }
             )

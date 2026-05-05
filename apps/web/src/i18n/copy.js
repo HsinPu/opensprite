@@ -621,6 +621,34 @@ export const DISPLAY_COPY = {
         customModel: "自訂模型",
         customPlaceholder: "輸入模型名稱",
         useCustom: "使用自訂模型",
+        openRouter: {
+          title: "OpenRouter 進階選項",
+          description: "這些設定會隨文字模型請求送出，只影響這個 OpenRouter 連線。",
+          applyRecommended: "套用建議",
+          save: "儲存 OpenRouter 選項",
+          none: "不指定",
+          reasoningEnabled: "啟用 reasoning",
+          reasoningEnabledDescription: "對支援的模型要求 OpenRouter reasoning 控制。",
+          reasoningEffort: "Reasoning effort",
+          reasoningMaxTokens: "Reasoning max tokens",
+          reasoningExclude: "不回傳 reasoning",
+          reasoningExcludeDescription: "請 OpenRouter 不把 reasoning 區塊回傳給 OpenSprite。",
+          providerSort: "Provider sort",
+          requireParameters: "Require parameters",
+          requireParametersDescription: "只路由到支援所送參數的模型供應商。",
+          noRecommendation: "這個模型沒有內建建議選項。",
+          capabilities: {
+            reasoning: "Reasoning",
+            vision: "Vision",
+            tools: "Tools",
+          },
+          recommendedSummary: (options) => {
+            const parts = [];
+            if (options.reasoning_enabled) parts.push("reasoning");
+            if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
+            return parts.length ? `建議：${parts.join(" / ")}` : "這個模型沒有內建建議選項。";
+          },
+        },
         mediaCategories: {
           vision: {
             title: "圖片分析",
@@ -784,6 +812,7 @@ export const DISPLAY_COPY = {
       modelRestartRequired: "已儲存，重啟 opensprite gateway 後生效。",
       modelLoadFailed: "無法載入模型設定。",
       modelSelectFailed: "無法選擇模型。",
+      providerOptionsSaveFailed: "無法儲存提供商選項。",
       mediaModelApplied: "已套用媒體模型設定。",
       mediaModelRestartRequired: "已儲存媒體模型設定，重啟 opensprite gateway 後生效。",
       mediaModelLoadFailed: "無法載入媒體模型設定。",
@@ -1447,6 +1476,34 @@ export const DISPLAY_COPY = {
         customModel: "Custom model",
         customPlaceholder: "Enter a model name",
         useCustom: "Use custom model",
+        openRouter: {
+          title: "OpenRouter advanced options",
+          description: "These settings are sent with text model requests and only affect this OpenRouter connection.",
+          applyRecommended: "Use recommended",
+          save: "Save OpenRouter options",
+          none: "Unspecified",
+          reasoningEnabled: "Enable reasoning",
+          reasoningEnabledDescription: "Ask OpenRouter to apply reasoning controls for supported models.",
+          reasoningEffort: "Reasoning effort",
+          reasoningMaxTokens: "Reasoning max tokens",
+          reasoningExclude: "Exclude reasoning",
+          reasoningExcludeDescription: "Ask OpenRouter not to return reasoning blocks to OpenSprite.",
+          providerSort: "Provider sort",
+          requireParameters: "Require parameters",
+          requireParametersDescription: "Only route to providers that support the parameters being sent.",
+          noRecommendation: "This model has no built-in recommendation.",
+          capabilities: {
+            reasoning: "Reasoning",
+            vision: "Vision",
+            tools: "Tools",
+          },
+          recommendedSummary: (options) => {
+            const parts = [];
+            if (options.reasoning_enabled) parts.push("reasoning");
+            if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
+            return parts.length ? `Recommended: ${parts.join(" / ")}` : "This model has no built-in recommendation.";
+          },
+        },
         mediaCategories: {
           vision: {
             title: "Image analysis",
@@ -1610,6 +1667,7 @@ export const DISPLAY_COPY = {
       modelRestartRequired: "Saved. Restart opensprite gateway for this to take effect.",
       modelLoadFailed: "Could not load model settings.",
       modelSelectFailed: "Could not select model.",
+      providerOptionsSaveFailed: "Could not save provider options.",
       mediaModelApplied: "Media model settings applied.",
       mediaModelRestartRequired: "Media model settings saved. Restart opensprite gateway for this to take effect.",
       mediaModelLoadFailed: "Could not load media model settings.",

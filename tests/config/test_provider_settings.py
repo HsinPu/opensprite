@@ -88,6 +88,14 @@ def test_provider_settings_select_model_updates_default_and_enabled_flags(tmp_pa
         "reasoning_enabled": True,
         "reasoning_effort": "medium",
     }
+    assert models["providers"][0]["options"] == {
+        "reasoning_enabled": False,
+        "reasoning_effort": None,
+        "reasoning_max_tokens": None,
+        "reasoning_exclude": False,
+        "provider_sort": None,
+        "require_parameters": False,
+    }
 
 
 def test_provider_settings_updates_openrouter_request_options(tmp_path):

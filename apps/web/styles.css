@@ -235,6 +235,12 @@
   background: var(--surface-muted);
 }
 
+:root[data-color-scheme="dark"] .openrouter-options,
+:root[data-color-scheme="dark"] .openrouter-option-row,
+:root[data-color-scheme="dark"] .openrouter-option-field {
+  background: var(--surface);
+}
+
 :root[data-color-scheme="dark"] .settings-nav__group p,
 :root[data-color-scheme="dark"] .settings-nav__footer,
 :root[data-color-scheme="dark"] .settings-nav__footer strong,
@@ -261,6 +267,10 @@
 :root[data-color-scheme="dark"] .settings-page h3,
 :root[data-color-scheme="dark"] .provider-row--empty strong,
 :root[data-color-scheme="dark"] .provider-row__title strong,
+:root[data-color-scheme="dark"] .openrouter-options__header strong,
+:root[data-color-scheme="dark"] .openrouter-option-row strong,
+:root[data-color-scheme="dark"] .openrouter-option-field select,
+:root[data-color-scheme="dark"] .openrouter-option-field input,
 :root[data-color-scheme="dark"] .schedule-editor__header strong,
 :root[data-color-scheme="dark"] .provider-connect-dialog__title h3,
 :root[data-color-scheme="dark"] .model-select-row select,
@@ -302,6 +312,11 @@
 :root[data-color-scheme="dark"] .channel-field select,
 :root[data-color-scheme="dark"] .channel-field textarea,
 :root[data-color-scheme="dark"] .model-select-row select,
+:root[data-color-scheme="dark"] .openrouter-options,
+:root[data-color-scheme="dark"] .openrouter-option-row,
+:root[data-color-scheme="dark"] .openrouter-option-field,
+:root[data-color-scheme="dark"] .openrouter-option-field select,
+:root[data-color-scheme="dark"] .openrouter-option-field input,
 :root[data-color-scheme="dark"] .settings-row select:hover,
 :root[data-color-scheme="dark"] .settings-row select:focus,
 :root[data-color-scheme="dark"] .settings-row input[type="text"]:hover,
@@ -318,6 +333,8 @@
 :root[data-color-scheme="dark"] .channel-field select,
 :root[data-color-scheme="dark"] .channel-field textarea,
 :root[data-color-scheme="dark"] .model-select-row select,
+:root[data-color-scheme="dark"] .openrouter-option-field select,
+:root[data-color-scheme="dark"] .openrouter-option-field input,
 :root[data-color-scheme="dark"] .settings-row select:hover,
 :root[data-color-scheme="dark"] .settings-row select:focus,
 :root[data-color-scheme="dark"] .settings-row input[type="text"]:hover,
@@ -3989,6 +4006,93 @@ button:disabled {
   padding-top: 4px;
 }
 
+.openrouter-options {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.openrouter-options__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.openrouter-options__header strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #1d1d1d;
+  font-size: 0.94rem;
+  font-weight: 560;
+}
+
+.openrouter-options__header span,
+.openrouter-option-row span {
+  color: #858585;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.openrouter-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.openrouter-options__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.openrouter-option-row,
+.openrouter-option-field {
+  display: grid;
+  gap: 6px;
+  padding: 11px 12px;
+  border: 1px solid #e1e1e1;
+  border-radius: 9px;
+  background: #fbfbfb;
+}
+
+.openrouter-option-row--switch {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.openrouter-option-row strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #1d1d1d;
+  font-size: 0.9rem;
+  font-weight: 540;
+}
+
+.openrouter-option-field {
+  color: #777777;
+  font-size: 0.82rem;
+}
+
+.openrouter-option-field select,
+.openrouter-option-field input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d7d7d7;
+  border-radius: 7px;
+  color: #151515;
+  background: #ffffff;
+}
+
+.openrouter-options__save {
+  justify-self: start;
+}
+
 .secondary-button {
   min-height: 38px;
   padding: 0 15px;
@@ -4217,10 +4321,16 @@ textarea:focus-visible {
   .channel-card__footer,
   .model-select-row,
   .custom-model-row,
+  .openrouter-options__grid,
   .schedule-form-grid,
   .schedule-job-row {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+
+  .openrouter-options__header {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .schedule-editor__header,

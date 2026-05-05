@@ -454,6 +454,107 @@
                 {{ copy.settings.models.useCustom }}
               </button>
             </div>
+
+            <div v-if="showOpenRouterOptions" class="openrouter-options">
+              <div class="openrouter-options__header">
+                <div>
+                  <strong>{{ copy.settings.models.openRouter.title }}</strong>
+                  <span>{{ copy.settings.models.openRouter.description }}</span>
+                </div>
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.modelsLoading || !selectedTextRecommendedOptions"
+                  @click="$emit('apply-openrouter-recommended-options', selectedTextProvider.id, selectedTextModel)"
+                >
+                  {{ copy.settings.models.openRouter.applyRecommended }}
+                </button>
+              </div>
+
+              <div class="openrouter-capabilities">
+                <span v-for="capability in selectedTextCapabilityBadges" :key="capability" class="provider-row__badge">
+                  {{ capability }}
+                </span>
+                <span v-if="selectedTextRecommendedOptions" class="settings-muted">
+                  {{ copy.settings.models.openRouter.recommendedSummary(selectedTextRecommendedOptions) }}
+                </span>
+                <span v-else class="settings-muted">{{ copy.settings.models.openRouter.noRecommendation }}</span>
+              </div>
+
+              <div class="openrouter-options__grid">
+                <label class="openrouter-option-row openrouter-option-row--switch">
+                  <div>
+                    <strong>{{ copy.settings.models.openRouter.reasoningEnabled }}</strong>
+                    <span>{{ copy.settings.models.openRouter.reasoningEnabledDescription }}</span>
+                  </div>
+                  <input
+                    v-model="settingsState.openRouterOptions[selectedTextProvider.id].reasoningEnabled"
+                    class="switch"
+                    type="checkbox"
+                  />
+                </label>
+                <label class="openrouter-option-field">
+                  <span>{{ copy.settings.models.openRouter.reasoningEffort }}</span>
+                  <select v-model="settingsState.openRouterOptions[selectedTextProvider.id].reasoningEffort">
+                    <option value="">{{ copy.settings.models.openRouter.none }}</option>
+                    <option value="minimal">minimal</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                    <option value="xhigh">xhigh</option>
+                  </select>
+                </label>
+                <label class="openrouter-option-field">
+                  <span>{{ copy.settings.models.openRouter.reasoningMaxTokens }}</span>
+                  <input
+                    v-model="settingsState.openRouterOptions[selectedTextProvider.id].reasoningMaxTokens"
+                    type="number"
+                    min="1"
+                    :placeholder="copy.settings.models.openRouter.none"
+                  />
+                </label>
+                <label class="openrouter-option-row openrouter-option-row--switch">
+                  <div>
+                    <strong>{{ copy.settings.models.openRouter.reasoningExclude }}</strong>
+                    <span>{{ copy.settings.models.openRouter.reasoningExcludeDescription }}</span>
+                  </div>
+                  <input
+                    v-model="settingsState.openRouterOptions[selectedTextProvider.id].reasoningExclude"
+                    class="switch"
+                    type="checkbox"
+                  />
+                </label>
+                <label class="openrouter-option-field">
+                  <span>{{ copy.settings.models.openRouter.providerSort }}</span>
+                  <select v-model="settingsState.openRouterOptions[selectedTextProvider.id].providerSort">
+                    <option value="">{{ copy.settings.models.openRouter.none }}</option>
+                    <option value="price">price</option>
+                    <option value="throughput">throughput</option>
+                    <option value="latency">latency</option>
+                  </select>
+                </label>
+                <label class="openrouter-option-row openrouter-option-row--switch">
+                  <div>
+                    <strong>{{ copy.settings.models.openRouter.requireParameters }}</strong>
+                    <span>{{ copy.settings.models.openRouter.requireParametersDescription }}</span>
+                  </div>
+                  <input
+                    v-model="settingsState.openRouterOptions[selectedTextProvider.id].requireParameters"
+                    class="switch"
+                    type="checkbox"
+                  />
+                </label>
+              </div>
+
+              <button
+                class="secondary-button openrouter-options__save"
+                type="button"
+                :disabled="settingsState.modelsLoading"
+                @click="$emit('save-openrouter-options', selectedTextProvider.id)"
+              >
+                {{ copy.settings.models.openRouter.save }}
+              </button>
+            </div>
           </div>
 
           <h3>{{ copy.settings.models.mediaTitle }}</h3>
@@ -1240,6 +1341,37 @@ const textProviderModels = computed(() => {
   return models;
 });
 
+const selectedTextModel = computed(() => {
+  if (!selectedTextProvider.value) {
+    return "";
+  }
+  return String(props.settingsState.modelSelections[selectedTextProvider.value.id] || selectedTextProvider.value.selected_model || "").trim();
+});
+
+const selectedTextCapabilities = computed(() => {
+  if (!selectedTextProvider.value || !selectedTextModel.value) {
+    return null;
+  }
+  return selectedTextProvider.value.model_capabilities?.[selectedTextModel.value] || null;
+});
+
+const selectedTextRecommendedOptions = computed(() => selectedTextCapabilities.value?.recommended_options || null);
+
+const selectedTextCapabilityBadges = computed(() => {
+  const labels = props.copy.settings.models.openRouter.capabilities;
+  const capabilities = selectedTextCapabilities.value || {};
+  return [
+    capabilities.reasoning ? labels.reasoning : null,
+    capabilities.vision ? labels.vision : null,
+    capabilities.tools ? labels.tools : null,
+  ].filter(Boolean);
+});
+
+const showOpenRouterOptions = computed(() => (
+  selectedTextProvider.value?.provider === "openrouter" &&
+  props.settingsState.openRouterOptions[selectedTextProvider.value.id]
+));
+
 function mediaProviderModels(category) {
   const providerId = props.settingsState.mediaSelections[category]?.providerId;
   const provider = props.settingsState.media.providers.find((entry) => entry.id === providerId);
@@ -1329,6 +1461,8 @@ defineEmits([
   "save-provider-connection",
   "disconnect-provider",
   "select-model",
+  "apply-openrouter-recommended-options",
+  "save-openrouter-options",
   "save-media-model",
   "begin-mcp-create",
   "save-mcp-server",
