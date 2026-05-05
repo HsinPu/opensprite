@@ -264,6 +264,11 @@ function serializeOpenRouterOptions(options = {}) {
   };
 }
 
+const DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS = {
+  reasoning_enabled: true,
+  reasoning_effort: "medium",
+};
+
 function normalizeRunKind(value, fallback = "other") {
   const normalized = String(value || "").trim();
   return RUN_EVENT_KINDS.has(normalized) ? normalized : fallback;
@@ -3709,14 +3714,20 @@ export function useChatClient() {
 
   function applyOpenRouterRecommendedOptions(providerId, model) {
     const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
-    const recommended = provider?.model_capabilities?.[model]?.recommended_options;
-    if (!recommended) {
-      return;
-    }
+    const recommended = provider?.model_capabilities?.[model]?.recommended_options || DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS;
     settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions({
       ...serializeOpenRouterOptions(settingsState.openRouterOptions[providerId] || {}),
       ...recommended,
     });
+  }
+
+  async function resetOpenRouterOptions(providerId) {
+    const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
+    if (provider?.provider !== "openrouter") {
+      return;
+    }
+    settingsState.openRouterOptions[providerId] = normalizeOpenRouterOptions(DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS);
+    await saveOpenRouterOptions(providerId);
   }
 
   async function saveOpenRouterOptions(providerId) {
@@ -4544,6 +4555,7 @@ export function useChatClient() {
     runUpdate,
     selectModel,
     applyOpenRouterRecommendedOptions,
+    resetOpenRouterOptions,
     saveOpenRouterOptions,
     saveMediaModel,
     beginMcpEdit,

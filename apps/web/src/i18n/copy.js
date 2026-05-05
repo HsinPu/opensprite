@@ -649,7 +649,7 @@ export const DISPLAY_COPY = {
           providerSort: "Provider sort",
           requireParameters: "Require parameters",
           requireParametersDescription: "只路由到支援所送參數的模型供應商。",
-          noRecommendation: "這個模型沒有內建建議選項。",
+          noRecommendation: "預設建議：reasoning / effort: medium",
           capabilities: {
             reasoning: "Reasoning",
             vision: "Vision",
@@ -659,7 +659,7 @@ export const DISPLAY_COPY = {
             const parts = [];
             if (options.reasoning_enabled) parts.push("reasoning");
             if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
-            return parts.length ? `建議：${parts.join(" / ")}` : "這個模型沒有內建建議選項。";
+            return parts.length ? `建議：${parts.join(" / ")}` : "預設建議：reasoning / effort: medium";
           },
         },
         mediaCategories: {
@@ -1521,7 +1521,7 @@ export const DISPLAY_COPY = {
           providerSort: "Provider sort",
           requireParameters: "Require parameters",
           requireParametersDescription: "Only route to providers that support the parameters being sent.",
-          noRecommendation: "This model has no built-in recommendation.",
+          noRecommendation: "Default recommendation: reasoning / effort: medium",
           capabilities: {
             reasoning: "Reasoning",
             vision: "Vision",
@@ -1531,7 +1531,7 @@ export const DISPLAY_COPY = {
             const parts = [];
             if (options.reasoning_enabled) parts.push("reasoning");
             if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
-            return parts.length ? `Recommended: ${parts.join(" / ")}` : "This model has no built-in recommendation.";
+            return parts.length ? `Recommended: ${parts.join(" / ")}` : "Default recommendation: reasoning / effort: medium";
           },
         },
         mediaCategories: {

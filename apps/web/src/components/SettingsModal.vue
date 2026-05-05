@@ -443,7 +443,11 @@
             <div class="model-select-row">
               <label>
                 <span>{{ copy.settings.models.providerChoice }}</span>
-                <select v-model="settingsState.selectedTextProviderId" :disabled="settingsState.modelsLoading">
+                <select
+                  v-model="settingsState.selectedTextProviderId"
+                  :disabled="settingsState.modelsLoading"
+                  @change="$emit('reset-openrouter-options', settingsState.selectedTextProviderId)"
+                >
                   <option v-for="provider in settingsState.models.providers" :key="provider.id" :value="provider.id">
                     {{ provider.name }}{{ provider.is_default ? ` (${copy.settings.models.active})` : '' }}
                   </option>
@@ -496,7 +500,7 @@
                 <button
                   class="secondary-button"
                   type="button"
-                  :disabled="settingsState.modelsLoading || !selectedTextRecommendedOptions"
+                  :disabled="settingsState.modelsLoading"
                   @click="$emit('apply-openrouter-recommended-options', selectedTextProvider.id, selectedTextModel)"
                 >
                   {{ copy.settings.models.openRouter.applyRecommended }}
@@ -507,10 +511,9 @@
                 <span v-for="capability in selectedTextCapabilityBadges" :key="capability" class="provider-row__badge">
                   {{ capability }}
                 </span>
-                <span v-if="selectedTextRecommendedOptions" class="settings-muted">
+                <span class="settings-muted">
                   {{ copy.settings.models.openRouter.recommendedSummary(selectedTextRecommendedOptions) }}
                 </span>
-                <span v-else class="settings-muted">{{ copy.settings.models.openRouter.noRecommendation }}</span>
               </div>
 
               <div class="openrouter-options__grid">
@@ -1558,6 +1561,7 @@ defineEmits([
   "disconnect-provider",
   "select-model",
   "apply-openrouter-recommended-options",
+  "reset-openrouter-options",
   "save-openrouter-options",
   "save-media-model",
   "begin-mcp-create",

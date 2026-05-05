@@ -99,6 +99,7 @@
     @disconnect-provider="disconnectProvider"
     @select-model="selectModel"
     @apply-openrouter-recommended-options="applyOpenRouterRecommendedOptions"
+    @reset-openrouter-options="resetOpenRouterOptions"
     @save-openrouter-options="saveOpenRouterOptions"
     @save-media-model="saveMediaModel"
     @begin-mcp-create="beginMcpCreate"
@@ -191,6 +192,7 @@ const {
   disconnectProvider,
   selectModel,
   applyOpenRouterRecommendedOptions,
+  resetOpenRouterOptions,
   saveOpenRouterOptions,
   saveMediaModel,
   beginMcpCreate,
