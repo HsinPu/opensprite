@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..auth.codex import CodexAuthError, load_codex_token
 from ..config import ProviderConfig
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
-OPENAI_CODEX_AUTH_FILE = Path("auth") / "openai-codex.json"
-
-
 class ProviderRuntimeError(RuntimeError):
     """Raised when a configured provider cannot be resolved for runtime use."""
 
@@ -40,26 +37,6 @@ def default_app_home(config_path: str | Path | None = None) -> Path:
     return Path.home() / ".opensprite"
 
 
-def _load_codex_access_token(app_home: Path) -> str:
-    token_path = app_home / OPENAI_CODEX_AUTH_FILE
-    try:
-        raw = json.loads(token_path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise ProviderRuntimeError(
-            "OpenAI Codex OAuth is selected but no token is stored. "
-            "Run `opensprite auth login openai-codex` after the login flow is implemented."
-        ) from exc
-    except json.JSONDecodeError as exc:
-        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file is invalid: {token_path}") from exc
-
-    if not isinstance(raw, dict):
-        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file must contain a JSON object: {token_path}")
-    token = str(raw.get("access_token") or "").strip()
-    if not token:
-        raise ProviderRuntimeError(f"OpenAI Codex OAuth token file is missing access_token: {token_path}")
-    return token
-
-
 def resolve_provider_runtime(
     provider: ProviderConfig,
     *,
@@ -78,7 +55,10 @@ def resolve_provider_runtime(
         api_mode = api_mode or "responses"
         base_url = base_url or OPENAI_CODEX_BASE_URL
         if not api_key:
-            api_key = _load_codex_access_token(Path(app_home) if app_home is not None else default_app_home())
+            try:
+                api_key = load_codex_token(Path(app_home) if app_home is not None else default_app_home()).access_token
+            except CodexAuthError as exc:
+                raise ProviderRuntimeError(str(exc)) from exc
     elif api_mode is None:
         api_mode = "chat_completions"
 

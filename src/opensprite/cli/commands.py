@@ -37,6 +37,8 @@ search_app = typer.Typer(help="Manage the SQLite search index.")
 app.add_typer(search_app, name="search")
 config_app = typer.Typer(help="Inspect and validate configuration files.")
 app.add_typer(config_app, name="config")
+auth_app = typer.Typer(help="Manage provider authentication.")
+app.add_typer(auth_app, name="auth")
 
 
 def version_callback(value: bool) -> None:
@@ -138,6 +140,10 @@ def _resolve_config_path(config: str | None = None) -> Path:
     if config:
         return Path(config).expanduser().resolve()
     return (Path.home() / ".opensprite" / "opensprite.json").resolve()
+
+
+def _resolve_app_home(config: str | None = None) -> Path:
+    return _resolve_config_path(config).parent
 
 
 def _format_presence(value: bool) -> str:
@@ -460,6 +466,86 @@ def config_validate(
     _emit_config_validate(payload, json_output)
     if not bool(payload.get("valid")):
         raise typer.Exit(code=1)
+
+
+def _require_codex_provider(provider: str) -> None:
+    if provider != "openai-codex":
+        typer.secho("Error: only openai-codex auth is supported right now.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+@auth_app.command("status")
+def auth_status(
+    provider: str = typer.Argument("openai-codex", help="Provider id."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+    json_output: bool = typer.Option(False, "--json", help="Output status as JSON."),
+) -> None:
+    """Show provider authentication status."""
+    from ..auth.codex import CodexAuthError, get_codex_status
+
+    _require_codex_provider(provider)
+    try:
+        status = get_codex_status(_resolve_app_home(config))
+        payload = {
+            "provider": provider,
+            "configured": status.configured,
+            "path": str(status.path),
+            "expires_at": status.expires_at,
+            "expired": status.expired,
+            "account_id": status.account_id,
+        }
+    except CodexAuthError as exc:
+        payload = {"provider": provider, "configured": False, "error": str(exc)}
+        if json_output:
+            typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            return
+        typer.secho(f"Error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1) from exc
+
+    if json_output:
+        typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"Provider: {provider}")
+    typer.echo(f"Configured: {_format_presence(status.configured)}")
+    typer.echo(f"Token file: {status.path}")
+    if status.configured:
+        typer.echo(f"Expired: {_format_presence(bool(status.expired))}")
+        if status.expires_at is not None:
+            typer.echo(f"Expires at: {status.expires_at}")
+        if status.account_id:
+            typer.echo(f"Account: {status.account_id}")
+
+
+@auth_app.command("logout")
+def auth_logout(
+    provider: str = typer.Argument("openai-codex", help="Provider id."),
+    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
+) -> None:
+    """Remove stored provider credentials."""
+    from ..auth.codex import codex_auth_path, delete_codex_token
+
+    _require_codex_provider(provider)
+    path = codex_auth_path(_resolve_app_home(config))
+    removed = delete_codex_token(_resolve_app_home(config))
+    if removed:
+        typer.echo(f"Removed OpenAI Codex credentials: {path}")
+    else:
+        typer.echo(f"No OpenAI Codex credentials found: {path}")
+
+
+@auth_app.command("login")
+def auth_login(
+    provider: str = typer.Argument("openai-codex", help="Provider id."),
+) -> None:
+    """Start provider login. OpenAI Codex OAuth is not implemented yet."""
+    _require_codex_provider(provider)
+    typer.secho(
+        "OpenAI Codex OAuth login is not implemented yet. "
+        "This build can read stored tokens from auth/openai-codex.json for runtime testing.",
+        fg=typer.colors.YELLOW,
+        err=True,
+    )
+    raise typer.Exit(code=1)
 
 
 @search_app.command("rebuild")
