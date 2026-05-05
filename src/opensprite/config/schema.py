@@ -1189,7 +1189,18 @@ class Config:
     @property
     def is_llm_configured(self) -> bool:
         if self.llm.providers and self.llm.default and self.llm.default in self.llm.providers:
-            return bool(self.llm.providers[self.llm.default].api_key)
+            provider = self.llm.providers[self.llm.default]
+            if provider.auth_type == "openai_codex_oauth":
+                if not provider.model:
+                    return False
+                try:
+                    from ..auth.codex import get_codex_status
+
+                    status = get_codex_status(self.source_path.parent if self.source_path is not None else None)
+                except Exception:
+                    return False
+                return status.configured and status.expired is not True
+            return bool(provider.api_key and provider.model)
         return bool(self.llm.api_key)
 
     @classmethod

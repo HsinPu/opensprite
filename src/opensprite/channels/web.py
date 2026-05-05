@@ -1072,6 +1072,7 @@ class WebAdapter(MessageAdapter):
                 "expired": status.expired,
                 "account_id": status.account_id,
             }
+            payload = self._reload_agent_llm_from_config(payload, force=True)
         return web.json_response(payload)
 
     async def _handle_settings_codex_auth_logout(self, request: web.Request) -> web.Response:

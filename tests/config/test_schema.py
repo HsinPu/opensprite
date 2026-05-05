@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from opensprite.auth.codex import CodexToken, save_codex_token
 from opensprite.config.schema import (
     AgentConfig,
     ChannelsConfig,
@@ -52,6 +53,36 @@ def test_provider_config_supports_codex_oauth_shape():
     assert provider.api_key == ""
     assert provider.auth_type == "openai_codex_oauth"
     assert provider.api_mode == "responses"
+
+
+def test_codex_oauth_provider_is_configured_when_token_exists(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    providers_path = tmp_path / "llm.providers.json"
+    providers_path.write_text(
+        json.dumps(
+            {
+                "openai-codex": {
+                    "provider": "openai-codex",
+                    "auth_type": "openai_codex_oauth",
+                    "api_mode": "responses",
+                    "model": "gpt-5.1-codex",
+                    "base_url": "https://chatgpt.com/backend-api/codex",
+                    "enabled": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    data["llm"]["default"] = "openai-codex"
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert Config.from_json(config_path).is_llm_configured is False
+
+    save_codex_token(CodexToken(access_token="codex-token"), tmp_path)
+
+    assert Config.from_json(config_path).is_llm_configured is True
 
 
 def test_agent_config_requires_template_backed_values():
