@@ -131,6 +131,48 @@ def test_provider_settings_connects_copilot_provider(tmp_path):
     assert listing["connected"][0]["name"] == "GitHub Copilot"
 
 
+def test_provider_settings_connects_local_ollama_without_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("ollama", api_key=None)
+    service.select_model("ollama", "qwen3:14b")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    listing = service.list_providers()
+    models = service.list_models()
+
+    assert result["provider"]["provider"] == "ollama"
+    assert result["provider"]["auth_type"] == "optional_api_key"
+    assert result["provider"]["requires_api_key"] is False
+    assert result["provider"]["api_key_optional"] is True
+    assert result["provider"]["base_url"] == "http://localhost:11434/v1"
+    assert providers["ollama"].get("api_key", "") == ""
+    assert providers["ollama"].get("credential_id", "") == ""
+    assert providers["ollama"]["enabled"] is True
+    assert listing["connected"][0]["name"] == "Ollama Local"
+    assert models["default_provider"] == "ollama"
+
+
+def test_provider_settings_connects_ollama_cloud_with_api_key(tmp_path):
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+
+    result = service.connect_provider("ollama-cloud", api_key="ollama-key")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    auth_store = json.loads((tmp_path / "auth.json").read_text(encoding="utf-8"))
+
+    assert result["provider"]["provider"] == "ollama-cloud"
+    assert result["provider"]["auth_type"] == "api_key"
+    assert result["provider"]["requires_api_key"] is True
+    assert result["provider"].get("api_key_optional") is False
+    assert providers["ollama-cloud"]["base_url"] == "https://ollama.com/v1"
+    assert providers["ollama-cloud"]["credential_id"].startswith("cred_")
+    assert providers["ollama-cloud"]["api_key"] == ""
+    assert auth_store["credentials"]["ollama-cloud"][0]["secret"] == "ollama-key"
+
+
 def test_provider_settings_uses_discovered_copilot_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)

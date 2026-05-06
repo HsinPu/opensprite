@@ -99,6 +99,8 @@ def resolve_provider_runtime(
         except CredentialNotFoundError as exc:
             if credential_id:
                 raise ProviderRuntimeError(str(exc)) from exc
+    elif not api_key and auth_type == "optional_api_key":
+        api_key = "no-key-required"
 
     return ResolvedProviderRuntime(
         provider_name=configured_provider,

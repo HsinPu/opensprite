@@ -629,6 +629,7 @@ class ProviderSettingsService:
                     "credential_preview": (credential or {}).get("secret_preview") or "",
                     "auth_type": provider.get("auth_type") or (preset.auth_type if preset else "api_key"),
                     "requires_api_key": (preset.auth_type if preset else "api_key") == "api_key",
+                    "api_key_optional": (preset.auth_type if preset else "api_key") == "optional_api_key",
                     "is_default": provider_id == default_provider,
                     "enabled": bool(provider.get("enabled")),
                     "options": public_openrouter_options(provider) if preset_id == "openrouter" else {},
@@ -643,6 +644,7 @@ class ProviderSettingsService:
                 "auth_type": presets.providers[provider_id].auth_type,
                 "api_mode": presets.providers[provider_id].api_mode,
                 "requires_api_key": presets.providers[provider_id].auth_type == "api_key",
+                "api_key_optional": presets.providers[provider_id].auth_type == "optional_api_key",
                 "model_choices": list(presets.providers[provider_id].model_choices),
                 "connected_count": sum(1 for provider in connected if provider.get("provider") == provider_id),
             }
@@ -692,6 +694,7 @@ class ProviderSettingsService:
                 "credential_preview": (credential or {}).get("secret_preview") or "",
                 "auth_type": provider.get("auth_type") or preset.auth_type,
                 "requires_api_key": preset.auth_type == "api_key",
+                "api_key_optional": preset.auth_type == "optional_api_key",
                 "is_default": instance_id == loaded.llm.default,
                 "enabled": bool(provider.get("enabled")),
                 "options": public_openrouter_options(provider) if provider_id == "openrouter" else {},

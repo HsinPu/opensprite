@@ -41,6 +41,25 @@ def test_resolve_api_key_provider_runtime_reads_credential_store(tmp_path):
     assert runtime.base_url == "https://vault.example/v1"
 
 
+def test_resolve_optional_api_key_provider_runtime_uses_placeholder_key():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="ollama",
+            auth_type="optional_api_key",
+            model="qwen3:14b",
+            base_url="http://localhost:11434/v1",
+            enabled=True,
+        ),
+        provider_name="ollama",
+    )
+
+    assert runtime.provider_name == "ollama"
+    assert runtime.auth_type == "optional_api_key"
+    assert runtime.api_key == "no-key-required"
+    assert runtime.api_mode == "chat_completions"
+    assert runtime.base_url == "http://localhost:11434/v1"
+
+
 def test_resolve_codex_oauth_runtime_reads_auth_store(tmp_path):
     token_path = tmp_path / "auth" / "openai-codex.json"
     token_path.parent.mkdir()

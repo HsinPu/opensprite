@@ -543,9 +543,9 @@
                   class="provider-row__action"
                   type="button"
                   :disabled="settingsState.providersLoading"
-                  @click="provider.requires_api_key === false ? $emit('connect-oauth-provider', provider) : $emit('begin-provider-connect', provider)"
+                  @click="provider.auth_type === 'openai_codex_oauth' || provider.auth_type === 'github_copilot_oauth' ? $emit('connect-oauth-provider', provider) : $emit('begin-provider-connect', provider)"
                 >
-                  {{ provider.requires_api_key === false ? copy.settings.providers.connectOAuth : copy.settings.providers.connect }}
+                  {{ provider.auth_type === 'openai_codex_oauth' || provider.auth_type === 'github_copilot_oauth' ? copy.settings.providers.connectOAuth : copy.settings.providers.connect }}
                 </button>
               </div>
 
@@ -1550,7 +1550,9 @@ const selectedConnectProvider = computed(() => {
   );
 });
 
-const selectedConnectProviderRequiresApiKey = computed(() => selectedConnectProvider.value?.requires_api_key !== false);
+const selectedConnectProviderRequiresApiKey = computed(
+  () => selectedConnectProvider.value?.requires_api_key !== false || selectedConnectProvider.value?.api_key_optional === true,
+);
 
 const selectedConnectChannel = computed(() => {
   const channelType = props.settingsState.channelConnectForm.type;
