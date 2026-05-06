@@ -94,6 +94,31 @@ def test_codex_oauth_provider_is_configured_when_token_exists(tmp_path):
     assert Config.from_json(config_path).is_llm_configured is True
 
 
+def test_optional_api_key_provider_is_configured_with_model(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    providers_path = tmp_path / "llm.providers.json"
+    providers_path.write_text(
+        json.dumps(
+            {
+                "ollama": {
+                    "provider": "ollama",
+                    "auth_type": "optional_api_key",
+                    "model": "qwen3:14b",
+                    "base_url": "http://localhost:11434/v1",
+                    "enabled": True,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+    data["llm"]["default"] = "ollama"
+    config_path.write_text(json.dumps(data), encoding="utf-8")
+
+    assert Config.from_json(config_path).is_llm_configured is True
+
+
 def test_agent_config_requires_template_backed_values():
     with pytest.raises(ValidationError):
         AgentConfig()

@@ -1774,6 +1774,33 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             assert providers_payload["connected"] == []
             assert {provider["id"] for provider in providers_payload["available"]} >= {"openai", "openrouter", "minimax"}
 
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/providers/ollama/connect",
+                json={},
+            ) as resp:
+                assert resp.status == 200
+                ollama_connect_payload = await resp.json()
+
+            assert ollama_connect_payload["provider"]["auth_type"] == "optional_api_key"
+            assert ollama_connect_payload["provider"]["requires_api_key"] is False
+            assert ollama_connect_payload["provider"]["api_key_optional"] is True
+
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/models/select",
+                json={"provider_id": "ollama", "model": "qwen3:14b"},
+            ) as resp:
+                assert resp.status == 200
+                ollama_select_payload = await resp.json()
+
+            assert ollama_select_payload["restart_required"] is False
+            assert ollama_select_payload["runtime_reloaded"] is True
+            assert ollama_select_payload["runtime"] == {
+                "provider_id": "ollama",
+                "model": "qwen3:14b",
+                "configured": True,
+            }
+            assert agent.reloads[-1] == ("ollama", "qwen3:14b")
+
             async with session.get(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex") as resp:
                 assert resp.status == 200
                 codex_status = await resp.json()
@@ -1919,7 +1946,20 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             }
             assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
-            assert set(providers) == {"openai"}
+            assert set(providers) == {"openai", "ollama"}
+
+            async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/ollama/disconnect") as resp:
+                assert resp.status == 200
+                inactive_ollama_disconnect_payload = await resp.json()
+
+            assert inactive_ollama_disconnect_payload == {
+                "ok": True,
+                "provider_id": "ollama",
+                "restart_required": False,
+                "runtime_reloaded": True,
+                "runtime": {"provider_id": "openai", "model": selected_openai_model, "configured": True},
+            }
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
 
             async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/openai/disconnect") as resp:
                 assert resp.status == 200

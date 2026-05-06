@@ -1222,6 +1222,8 @@ class Config:
                 except Exception:
                     return False
                 return status.configured
+            if provider.auth_type == "optional_api_key":
+                return bool(provider.model)
             return bool((provider.api_key or provider.credential_id) and provider.model)
         return bool(self.llm.api_key)
 
