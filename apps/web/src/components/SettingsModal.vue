@@ -87,6 +87,15 @@
             <span aria-hidden="true">◷</span>
             {{ copy.settingsTitles.schedule }}
           </button>
+          <button
+            class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'network' }"
+            type="button"
+            @click="$emit('select-section', 'network')"
+          >
+            <span aria-hidden="true">⇄</span>
+            {{ copy.settingsTitles.network }}
+          </button>
         </div>
 
         <div class="settings-nav__footer">
@@ -1072,6 +1081,83 @@
             </div>
           </div>
         </section>
+
+        <section v-show="section === 'network'" class="settings-page">
+          <p v-if="settingsState.networkLoading" class="settings-inline-status">{{ copy.settings.network.loading }}</p>
+          <p v-if="settingsState.networkNotice" class="settings-inline-status">{{ settingsState.networkNotice }}</p>
+          <p v-if="settingsState.networkError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.networkError }}
+          </p>
+
+          <h3>{{ copy.settings.network.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.network.httpProxy.title }}</strong>
+                <span>{{ copy.settings.network.httpProxy.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.networkForm.httpProxy"
+                type="text"
+                :placeholder="copy.settings.network.proxyPlaceholder"
+                :disabled="settingsState.networkLoading"
+                @keydown.enter.prevent="$emit('save-network-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.network.httpsProxy.title }}</strong>
+                <span>{{ copy.settings.network.httpsProxy.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.networkForm.httpsProxy"
+                type="text"
+                :placeholder="copy.settings.network.proxyPlaceholder"
+                :disabled="settingsState.networkLoading"
+                @keydown.enter.prevent="$emit('save-network-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.network.noProxy.title }}</strong>
+                <span>{{ copy.settings.network.noProxy.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.networkForm.noProxy"
+                type="text"
+                :placeholder="copy.settings.network.noProxy.placeholder"
+                :disabled="settingsState.networkLoading"
+                @keydown.enter.prevent="$emit('save-network-settings')"
+              />
+            </label>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.network.currentTitle }}</strong>
+                <span>{{ networkSummary }}</span>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.networkLoading"
+                @click="$emit('save-network-settings')"
+              >
+                {{ copy.settings.network.save }}
+              </button>
+            </div>
+          </div>
+
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.network.scopeTitle }}</strong>
+                <span>{{ copy.settings.network.scopeDescription }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div v-if="selectedConnectProvider" class="provider-connect-dialog" role="dialog" aria-modal="true">
@@ -1824,6 +1910,15 @@ const mcpRuntimeStatus = computed(() => {
   return props.copy.settings.mcp.runtimeDisconnected;
 });
 
+const networkSummary = computed(() => {
+  const form = props.settingsState.networkForm || {};
+  const active = [form.httpProxy, form.httpsProxy].map((value) => String(value || "").trim()).filter(Boolean).length;
+  if (!active) {
+    return props.copy.settings.network.noProxyConfigured;
+  }
+  return props.copy.settings.network.proxyConfigured(active);
+});
+
 const mcpToolGroups = computed(() => {
   const toolNames = props.settingsState.mcp.runtime?.tool_names || [];
   const servers = Array.isArray(props.settingsState.mcp.servers) ? props.settingsState.mcp.servers : [];
@@ -1912,6 +2007,7 @@ defineEmits([
   "toggle-mcp-tool-group",
   "apply-mcp-json",
   "save-schedule-settings",
+  "save-network-settings",
   "refresh-curator",
   "run-curator-action",
   "begin-cron-job-create",

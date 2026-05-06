@@ -546,6 +546,68 @@ def test_web_adapter_root_explains_missing_frontend(tmp_path):
     asyncio.run(_run_web_frontend_unavailable_response(tmp_path))
 
 
+async def _run_web_network_settings_roundtrip(tmp_path: Path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/network") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["network"]["no_proxy"] == "127.0.0.1,localhost"
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/network",
+                json={
+                    "http_proxy": "http://proxy.local:8080",
+                    "https_proxy": "http://proxy.local:8443",
+                    "no_proxy": "127.0.0.1,localhost,.internal",
+                },
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["restart_required"] is False
+                assert payload["network"]["https_proxy"] == "http://proxy.local:8443"
+
+        loaded = Config.from_json(config_path)
+        assert loaded.network.http_proxy == "http://proxy.local:8080"
+        assert loaded.network.https_proxy == "http://proxy.local:8443"
+        assert loaded.network.no_proxy == "127.0.0.1,localhost,.internal"
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_network_settings_roundtrip(tmp_path):
+    asyncio.run(_run_web_network_settings_roundtrip(tmp_path))
+
+
 async def _run_web_run_events_api():
     storage = MemoryStorage()
     await storage.create_run(

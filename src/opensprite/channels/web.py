@@ -358,6 +358,33 @@ class WebAdapter(MessageAdapter):
     def _get_media_settings(self) -> MediaSettingsService:
         return MediaSettingsService(self._get_config_path())
 
+    @staticmethod
+    def _apply_network_environment(config: Config) -> None:
+        network = getattr(config, "network", None)
+        if network is None:
+            return
+        for env_key, value in {
+            "HTTP_PROXY": getattr(network, "http_proxy", "") or "",
+            "HTTPS_PROXY": getattr(network, "https_proxy", "") or "",
+            "NO_PROXY": getattr(network, "no_proxy", "") or "",
+        }.items():
+            normalized = str(value or "").strip()
+            if normalized:
+                os.environ[env_key] = normalized
+                os.environ[env_key.lower()] = normalized
+            else:
+                os.environ.pop(env_key, None)
+                os.environ.pop(env_key.lower(), None)
+
+    @staticmethod
+    def _network_payload(config: Config) -> dict[str, Any]:
+        network = getattr(config, "network", None)
+        return {
+            "http_proxy": str(getattr(network, "http_proxy", "") or ""),
+            "https_proxy": str(getattr(network, "https_proxy", "") or ""),
+            "no_proxy": str(getattr(network, "no_proxy", "") or ""),
+        }
+
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
         if not force and not payload.get("restart_required"):
@@ -1503,6 +1530,21 @@ class WebAdapter(MessageAdapter):
         payload = self._reload_schedule_from_config(payload)
         return web.json_response(payload)
 
+    async def _handle_settings_network(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        return web.json_response({"network": self._network_payload(config)})
+
+    async def _handle_settings_network_update(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        config_path = self._get_config_path()
+        config = Config.load(config_path)
+        config.network.http_proxy = self._coerce_optional_text(body.get("http_proxy"), default="") or ""
+        config.network.https_proxy = self._coerce_optional_text(body.get("https_proxy"), default="") or ""
+        config.network.no_proxy = self._coerce_optional_text(body.get("no_proxy"), default="") or ""
+        config.save(config_path)
+        self._apply_network_environment(config)
+        return web.json_response({"network": self._network_payload(config), "restart_required": False})
+
     async def _handle_settings_mcp(self, request: web.Request) -> web.Response:
         try:
             payload = self._get_mcp_settings().list_servers()
@@ -1827,6 +1869,8 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/media", self._handle_settings_media_update)
         self.app.router.add_get("/api/settings/schedule", self._handle_settings_schedule)
         self.app.router.add_put("/api/settings/schedule", self._handle_settings_schedule_update)
+        self.app.router.add_get("/api/settings/network", self._handle_settings_network)
+        self.app.router.add_put("/api/settings/network", self._handle_settings_network_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
         self.app.router.add_post("/api/settings/mcp", self._handle_settings_mcp_create)
         self.app.router.add_post("/api/settings/mcp/reload", self._handle_settings_mcp_reload)
