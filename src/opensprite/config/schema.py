@@ -295,6 +295,14 @@ class LogConfig(BaseModel):
     log_reasoning_details: bool = False  # 是否印出完整 LLM reasoning/thinking 內容
 
 
+class NetworkConfig(BaseModel):
+    """Process-wide outbound network settings."""
+
+    http_proxy: str = ""
+    https_proxy: str = ""
+    no_proxy: str = "127.0.0.1,localhost"
+
+
 class MCPServerConfig(BaseModel):
     """MCP server connection configuration."""
 
@@ -528,8 +536,9 @@ class SearchConfig(BaseModel):
 
 class Config:
     def __init__(self, llm: LLMsConfig, agent: AgentConfig, storage: StorageConfig,
-                 channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None,
-                 memory: MemoryConfig | None = None, search: SearchConfig | None = None,
+                  channels: ChannelsConfig, log: LogConfig | None = None, tools: ToolsConfig | None = None,
+                  network: NetworkConfig | None = None,
+                  memory: MemoryConfig | None = None, search: SearchConfig | None = None,
                  user_profile: UserProfileConfig | None = None, vision: VisionConfig | None = None,
                  ocr: OcrConfig | None = None, speech: SpeechConfig | None = None, video: VideoConfig | None = None,
                  active_task: ActiveTaskConfig | None = None,
@@ -541,6 +550,7 @@ class Config:
         self.storage = storage
         self.channels = channels
         self.log = log or LogConfig()
+        self.network = network or NetworkConfig()
         self.tools = tools or ToolsConfig()
         self.memory = memory or MemoryConfig(
             **Config._merge_document_section({}, Config.load_template_data().get("memory", {}))
@@ -1142,6 +1152,7 @@ class Config:
             storage=StorageConfig(**data["storage"]),
             channels=ChannelsConfig(instances=coerce_channel_instances(merged_channels)),
             log=LogConfig(**data["log"]) if "log" in data else None,
+            network=NetworkConfig(**data["network"]) if "network" in data else None,
             tools=ToolsConfig(**tools_data) if "tools" in data else None,
             memory=MemoryConfig(
                 **cls._merge_document_section(dict(data.get("memory", {})), template_data.get("memory", {}))
@@ -1388,6 +1399,7 @@ class Config:
                 "log_system_prompt_lines": self.log.log_system_prompt_lines,
                 "log_reasoning_details": self.log.log_reasoning_details,
             },
+            "network": self.network.model_dump(),
             "tools": {
                 "max_tool_iterations": self.tools.max_tool_iterations,
                 "exec": self.tools.exec_tool.model_dump(by_alias=True),

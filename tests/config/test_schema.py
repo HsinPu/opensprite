@@ -13,6 +13,7 @@ from opensprite.config.schema import (
     LogConfig,
     MCPServerConfig,
     MessagesConfig,
+    NetworkConfig,
     OcrConfig,
     ProviderConfig,
     SearchConfig,
@@ -40,6 +41,14 @@ def test_storage_config_rejects_unsupported_file_type():
 
 def test_log_config_does_not_print_full_reasoning_by_default():
     assert LogConfig().log_reasoning_details is False
+
+
+def test_network_config_defaults_to_loopback_no_proxy():
+    config = NetworkConfig()
+
+    assert config.http_proxy == ""
+    assert config.https_proxy == ""
+    assert config.no_proxy == "127.0.0.1,localhost"
 
 
 def test_provider_config_supports_codex_oauth_shape():
@@ -118,6 +127,11 @@ def test_config_load_reads_llm_providers_from_external_file(tmp_path):
                     "max_tokens": 2048,
                 },
                 "storage": {"type": "memory", "path": "memory.db"},
+                "network": {
+                    "http_proxy": "http://proxy.local:8080",
+                    "https_proxy": "http://proxy.local:8443",
+                    "no_proxy": "127.0.0.1,localhost,.internal",
+                },
                 "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
             }
         ),
@@ -133,6 +147,9 @@ def test_config_load_reads_llm_providers_from_external_file(tmp_path):
     assert config.llm.context_window_tokens == 32000
     assert config.llm.get_active().context_window_tokens == 128000
     assert config.llm.providers_file == "llm.providers.json"
+    assert config.network.http_proxy == "http://proxy.local:8080"
+    assert config.network.https_proxy == "http://proxy.local:8443"
+    assert config.network.no_proxy == "127.0.0.1,localhost,.internal"
 
 
 def test_config_load_creates_default_config_and_split_files(monkeypatch, tmp_path):

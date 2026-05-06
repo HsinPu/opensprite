@@ -1,6 +1,7 @@
 """Service runtime for starting the OpenSprite gateway process."""
 
 import asyncio
+import os
 from pathlib import Path
 
 from .agent import AgentLoop
@@ -27,6 +28,27 @@ from .utils.log import logger
 # ============================================
 # 共用設定
 # ============================================
+
+def apply_network_environment(config: Config) -> None:
+    """Apply configured proxy settings for urllib/httpx/OpenAI clients in this process."""
+    network = getattr(config, "network", None)
+    if network is None:
+        return
+
+    values = {
+        "HTTP_PROXY": getattr(network, "http_proxy", "") or "",
+        "HTTPS_PROXY": getattr(network, "https_proxy", "") or "",
+        "NO_PROXY": getattr(network, "no_proxy", "") or "",
+    }
+    for key, value in values.items():
+        normalized = str(value or "").strip()
+        if normalized:
+            os.environ[key] = normalized
+            os.environ[key.lower()] = normalized
+
+    if values["HTTP_PROXY"] or values["HTTPS_PROXY"]:
+        logger.info("Applied network proxy settings for outbound API requests")
+
 
 def create_storage(config: Config) -> StorageProvider:
     """根據設定建立 Storage"""
@@ -281,6 +303,7 @@ async def run(config_path: str | Path | None = None) -> None:
     # 初始化日誌
     from .utils.log import setup_log
     setup_log(config.log)
+    apply_network_environment(config)
 
     if not config.is_llm_configured:
         logger.warning(

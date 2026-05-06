@@ -134,6 +134,20 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/unin
 
 目前使用者可連接的 channel 主要是 `telegram`。`web` 是內建 Web UI channel。
 
+如果 gateway 需要透過 proxy 連外，例如 GitHub Copilot API，可在 `~/.opensprite/opensprite.json` 加上：
+
+```json
+{
+  "network": {
+    "http_proxy": "http://proxy-host:port",
+    "https_proxy": "http://proxy-host:port",
+    "no_proxy": "127.0.0.1,localhost"
+  }
+}
+```
+
+修改後重啟 gateway：`opensprite service restart`。
+
 設定檢查：
 
 ```bash

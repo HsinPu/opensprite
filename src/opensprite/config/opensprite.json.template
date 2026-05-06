@@ -26,6 +26,11 @@
     "log_system_prompt_lines": 0,
     "log_reasoning_details": false
   },
+  "network": {
+    "http_proxy": "",
+    "https_proxy": "",
+    "no_proxy": "127.0.0.1,localhost"
+  },
   "tools": {
     "max_tool_iterations": 100,
     "exec": {
