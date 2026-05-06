@@ -202,6 +202,25 @@ function createSession(externalChatId) {
   };
 }
 
+function makeLiveEntry(message) {
+  const role = message?.role === "user" ? "user" : "assistant";
+  const createdAt = Number(message?.createdAt || Date.now());
+  const text = String(message?.text || "");
+  return {
+    id: `live-entry-${createdAt.toString(36)}-${randomToken()}`,
+    type: role,
+    role,
+    runId: "",
+    status: "",
+    text,
+    content: [],
+    meta: message?.meta || (role === "user" ? "You" : "OpenSprite"),
+    createdAt,
+    updatedAt: createdAt,
+    metadata: {},
+  };
+}
+
 function coerceStringList(value) {
   if (!Array.isArray(value)) {
     return [];
@@ -2024,6 +2043,9 @@ export function useChatClient() {
   function addMessage(externalChatId, message) {
     const session = ensureSession(externalChatId);
     session.messages.push(message);
+    if (session.entries.length) {
+      session.entries.push(makeLiveEntry(message));
+    }
     session.updatedAt = message.createdAt;
     if (message.role === "user" && session.title === "New chat") {
       session.title = summarizeTitle(message.text);
@@ -4559,7 +4581,7 @@ export function useChatClient() {
       if (session.channel !== "web") {
         return;
       }
-      addMessage(session.externalChatId, makeMessage("assistant", payload.text || "", payload.session_id || "OpenSprite"));
+      addMessage(session.externalChatId, makeMessage("assistant", payload.text || "", "OpenSprite"));
       scrollMessagesToBottom();
       return;
     }
