@@ -130,7 +130,7 @@
           </button>
         </header>
 
-        <section v-show="section === 'general'" class="settings-page">
+        <section v-if="section === 'general'" class="settings-page">
           <div class="settings-card">
             <div class="settings-row">
               <div>
@@ -273,7 +273,7 @@
 
         </section>
 
-        <section v-show="section === 'curator'" class="settings-page">
+        <section v-if="section === 'curator'" class="settings-page">
           <CuratorSettingsPage
             :copy="copy"
             :state="curatorState"
@@ -283,7 +283,7 @@
           />
         </section>
 
-        <section v-show="section === 'shortcuts'" class="settings-page">
+        <section v-if="section === 'shortcuts'" class="settings-page">
           <div class="settings-card">
             <div class="settings-row">
               <div>
@@ -302,7 +302,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'channels'" class="settings-page">
+        <section v-if="section === 'channels'" class="settings-page">
           <p v-if="settingsState.channelsLoading" class="settings-inline-status">{{ copy.settings.channels.loading }}</p>
           <p v-if="settingsState.channelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.channelsError }}
@@ -374,7 +374,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'providers'" class="settings-page">
+        <section v-if="section === 'providers'" class="settings-page">
           <p v-if="settingsState.providersLoading" class="settings-inline-status">{{ copy.settings.providers.loading }}</p>
           <p v-if="settingsState.providersError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.providersError }}
@@ -586,7 +586,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'models'" class="settings-page">
+        <section v-if="section === 'models'" class="settings-page">
           <p v-if="settingsState.modelsLoading" class="settings-inline-status">{{ copy.settings.models.loading }}</p>
           <p v-if="settingsState.modelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.modelsError }}
@@ -928,7 +928,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'mcp'" class="settings-page">
+        <section v-if="section === 'mcp'" class="settings-page">
           <p v-if="settingsState.mcpLoading" class="settings-inline-status">{{ copy.settings.mcp.loading }}</p>
           <p v-if="settingsState.mcpError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.mcpError }}
@@ -1018,7 +1018,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'schedule'" class="settings-page">
+        <section v-if="section === 'schedule'" class="settings-page">
           <p v-if="settingsState.scheduleLoading" class="settings-inline-status">{{ copy.settings.schedule.loading }}</p>
           <p v-if="settingsState.scheduleError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.scheduleError }}
@@ -1149,7 +1149,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'network'" class="settings-page">
+        <section v-if="section === 'network'" class="settings-page">
           <p v-if="settingsState.networkLoading" class="settings-inline-status">{{ copy.settings.network.loading }}</p>
           <p v-if="settingsState.networkNotice" class="settings-inline-status">{{ settingsState.networkNotice }}</p>
           <p v-if="settingsState.networkError" class="settings-inline-status settings-inline-status--error">
@@ -1226,7 +1226,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'eval'" class="settings-page">
+        <section v-if="section === 'eval'" class="settings-page">
           <p v-if="settingsState.evalLoading" class="settings-inline-status">{{ copy.settings.eval.loading }}</p>
           <p v-if="settingsState.evalNotice" class="settings-inline-status">{{ settingsState.evalNotice }}</p>
           <p v-if="settingsState.evalError" class="settings-inline-status settings-inline-status--error">
@@ -1298,7 +1298,7 @@
           </div>
         </section>
 
-        <section v-show="section === 'data'" class="settings-page">
+        <section v-if="section === 'data'" class="settings-page">
           <p v-if="settingsState.dataLoading" class="settings-inline-status">{{ copy.settings.data.loading }}</p>
           <p v-if="settingsState.dataError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.dataError }}
