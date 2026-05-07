@@ -48,6 +48,7 @@ from ..tools import (
     RunWorkflowTool,
 )
 from ..tools.delegate import DelegateTool
+from ..tools.process_runtime import BackgroundProcessManager
 from ..tools.permissions import ToolPermissionPolicy
 
 
@@ -201,10 +202,11 @@ def register_shell_tools(
     background_notification_factory: Callable[[], Any | None] | None = None,
     background_session_owner_factory: Callable[[], dict[str, str | None] | None] | None = None,
     process_manager_callback: Callable[[Any], None] | None = None,
+    storage: Any = None,
 ) -> None:
     """Register shell execution tools."""
     current_tools_config = tools_config or ToolsConfig()
-    process_tool = ProcessTool()
+    process_tool = ProcessTool(manager=BackgroundProcessManager(storage=storage))
     if process_manager_callback is not None:
         process_manager_callback(process_tool.manager)
     registry.register(
@@ -493,6 +495,7 @@ def register_default_tools(
         background_notification_factory=background_notification_factory,
         background_session_owner_factory=background_session_owner_factory,
         process_manager_callback=process_manager_callback,
+        storage=storage,
     )
     register_verify_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=current_tools_config)

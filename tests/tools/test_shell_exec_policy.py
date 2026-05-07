@@ -105,6 +105,53 @@ def test_exec_tool_accepts_notify_on_complete_alias(tmp_path):
     assert sessions[0].notify_on_exit is False
 
 
+def test_exec_tool_persists_background_session_lifecycle(tmp_path):
+    from opensprite.storage.sqlite import SQLiteStorage
+    from opensprite.tools.process_runtime import BackgroundProcessManager
+    from opensprite.tools.shell import ExecTool
+
+    storage = SQLiteStorage(Path(tmp_path) / "sessions.db")
+    manager = BackgroundProcessManager(storage=storage)
+    tool = ExecTool(
+        workspace=Path(tmp_path),
+        process_manager=manager,
+        background_session_owner_factory=lambda: {
+            "session_id": "chat-1",
+            "run_id": "run-1",
+            "channel": "web",
+            "external_chat_id": "external-1",
+        },
+    )
+
+    async def run():
+        result = await tool.execute(
+            command=_python_shell_command("print('persisted background', flush=True)"),
+            background=True,
+            notify_on_complete=False,
+        )
+        sessions = await manager.list_sessions()
+        assert len(sessions) == 1
+        session = sessions[0]
+        deadline = time.time() + 5
+        while session.state != "exited" and time.time() < deadline:
+            await asyncio.sleep(0.05)
+            session = (await manager.list_sessions())[0]
+        stored = await storage.get_background_process(session.session_id)
+        return result, session, stored
+
+    result, session, stored = asyncio.run(run())
+
+    assert "Background session started." in result
+    assert session.state == "exited"
+    assert stored is not None
+    assert stored.owner_session_id == "chat-1"
+    assert stored.owner_run_id == "run-1"
+    assert stored.state == "exited"
+    assert stored.exit_code == 0
+    assert stored.notify_mode == "none"
+    assert "persisted background" in stored.output_tail
+
+
 def test_exec_tool_preserves_stdout_stderr_order(tmp_path):
     from opensprite.tools.shell import ExecTool
 

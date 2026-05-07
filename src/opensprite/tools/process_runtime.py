@@ -9,9 +9,10 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Awaitable, Callable
 
-from .shell_runtime import CapturedOutputChunk, drain_process_output, format_captured_output
+from ..storage.base import StorageProvider, StoredBackgroundProcess
 from ..utils.log import logger
 from ..utils.processes import terminate_process_tree
+from .shell_runtime import CapturedOutputChunk, drain_process_output, format_captured_output
 
 
 SessionExitNotifier = Callable[["BackgroundSession"], Awaitable[None]]
@@ -59,9 +60,15 @@ class BackgroundProcessManager:
 
     DEFAULT_MAX_EXITED_SESSIONS = 200
 
-    def __init__(self, *, max_exited_sessions: int = DEFAULT_MAX_EXITED_SESSIONS) -> None:
+    def __init__(
+        self,
+        *,
+        max_exited_sessions: int = DEFAULT_MAX_EXITED_SESSIONS,
+        storage: StorageProvider | None = None,
+    ) -> None:
         self._sessions: dict[str, BackgroundSession] = {}
         self.max_exited_sessions = max(1, int(max_exited_sessions))
+        self.storage = storage
 
     def _prune_exited_sessions(self) -> None:
         exited_sessions = [
@@ -114,7 +121,55 @@ class BackgroundProcessManager:
         )
         session.watch_task = asyncio.create_task(self._watch_session(session))
         self._sessions[session.session_id] = session
+        self._schedule_persist_session(session)
         return session
+
+    def _stored_process_for_session(self, session: BackgroundSession) -> StoredBackgroundProcess | None:
+        if session.owner_session_id is None:
+            return None
+        return StoredBackgroundProcess(
+            process_session_id=session.session_id,
+            owner_session_id=session.owner_session_id,
+            owner_run_id=session.owner_run_id,
+            owner_channel=session.owner_channel,
+            owner_external_chat_id=session.owner_external_chat_id,
+            pid=session.pid,
+            command=session.command,
+            cwd=session.cwd,
+            state=session.state,
+            termination_reason=session.termination_reason,
+            exit_code=session.exit_code,
+            notify_mode="agent_summary" if session.notify_on_exit else "none",
+            output_tail=self.render_output(session, max_chars=12000, empty_placeholder=""),
+            metadata={
+                "output_drained": session.output_drained,
+                "notify_on_exit_empty_success": session.notify_on_exit_empty_success,
+                "error": session.error,
+            },
+            started_at=session.started_at_wall,
+            updated_at=session.finished_at_wall or time.time(),
+            finished_at=session.finished_at_wall,
+        )
+
+    async def _persist_session(self, session: BackgroundSession) -> None:
+        if self.storage is None:
+            return
+        stored_process = self._stored_process_for_session(session)
+        if stored_process is None:
+            return
+        try:
+            await self.storage.upsert_background_process(stored_process)
+        except Exception:
+            logger.exception(
+                "background.process.persist-failed | session_id={} state={}",
+                session.session_id,
+                session.state,
+            )
+
+    def _schedule_persist_session(self, session: BackgroundSession) -> None:
+        if self.storage is None or session.owner_session_id is None:
+            return
+        asyncio.create_task(self._persist_session(session))
 
     @staticmethod
     def _session_owned_by(
@@ -180,6 +235,7 @@ class BackgroundProcessManager:
             session.finished_at = time.monotonic()
             session.finished_at_wall = time.time()
             self._prune_exited_sessions()
+            await self._persist_session(session)
             if self._should_notify_on_exit(session):
                 try:
                     await session.exit_notifier(session)
