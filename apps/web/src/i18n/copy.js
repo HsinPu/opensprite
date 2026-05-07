@@ -741,6 +741,8 @@ export const DISPLAY_COPY = {
         openRouter: {
           title: "OpenRouter 進階選項",
           description: "這些設定會隨文字模型請求送出，只影響這個 OpenRouter 連線。",
+          showOptions: "展開設定",
+          hideOptions: "收起設定",
           applyRecommended: "套用建議",
           save: "儲存 OpenRouter 選項",
           none: "不指定",
@@ -1861,6 +1863,8 @@ export const DISPLAY_COPY = {
         openRouter: {
           title: "OpenRouter advanced options",
           description: "These settings are sent with text model requests and only affect this OpenRouter connection.",
+          showOptions: "Show options",
+          hideOptions: "Hide options",
           applyRecommended: "Use recommended",
           save: "Save OpenRouter options",
           none: "Unspecified",
