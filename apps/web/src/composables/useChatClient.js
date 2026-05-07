@@ -1,16 +1,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { getDisplayCopy } from "../i18n/copy";
+import { useChannelSettingsActions } from "./useChannelSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
 import {
   DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS,
-  normalizeChannelSettings,
   normalizeMcpSettings,
   normalizeMcpTransport,
   normalizeMediaSettings,
   normalizeOpenRouterOptions,
   serializeOpenRouterOptions,
-  sortChannelList,
-  visibleChannels,
 } from "./settingsNormalizers";
 import { createCuratorState, createPermissionState, createSettingsForm, createSettingsState } from "./useSettingsState";
 
@@ -2103,6 +2101,20 @@ export function useChatClient() {
     showToast(text, "success");
   }
 
+  const {
+    loadChannelSettings,
+    beginChannelConnect,
+    cancelChannelConnect,
+    saveChannelConnection,
+    disconnectChannel,
+  } = useChannelSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy,
+    setSettingsSuccess,
+    cancelProviderConnect,
+  });
+
   function setActiveSession(externalChatId) {
     state.activeExternalChatId = externalChatId;
     writeStoredValue(STORAGE_KEYS.activeExternalChatId, externalChatId);
@@ -3185,42 +3197,6 @@ export function useChatClient() {
     }
   }
 
-  function upsertConnectedChannel(channel) {
-    const visibleChannel = visibleChannels([channel])[0];
-    if (!visibleChannel) {
-      return;
-    }
-    const connected = settingsState.channels.connected.filter((entry) => entry.id !== visibleChannel.id);
-    const nextConnected = sortChannelList([...connected, visibleChannel]);
-    settingsState.channels = {
-      ...settingsState.channels,
-      connected: nextConnected,
-      channels: nextConnected,
-    };
-  }
-
-  function removeConnectedChannel(channelId) {
-    const nextConnected = settingsState.channels.connected.filter((entry) => entry.id !== channelId);
-    settingsState.channels = {
-      ...settingsState.channels,
-      connected: nextConnected,
-      channels: nextConnected,
-    };
-  }
-
-  async function loadChannelSettings() {
-    settingsState.channelsLoading = true;
-    settingsState.channelsError = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/channels");
-      settingsState.channels = normalizeChannelSettings(payload);
-    } catch (error) {
-      settingsState.channelsError = error?.message || copy.value.notices.channelLoadFailed;
-    } finally {
-      settingsState.channelsLoading = false;
-    }
-  }
-
   async function loadModelSettings() {
     settingsState.modelsLoading = true;
     settingsState.mediaLoading = true;
@@ -3375,67 +3351,6 @@ export function useChatClient() {
     }
     if (sectionName === "curator") {
       void refreshCuratorState();
-    }
-  }
-
-  function beginChannelConnect(channel) {
-    settingsState.channelsNotice = "";
-    settingsState.channelsError = "";
-    cancelProviderConnect();
-    settingsState.channelConnectForm.type = channel.type || channel.id;
-    settingsState.channelConnectForm.name = channel.name || "";
-    settingsState.channelConnectForm.token = "";
-  }
-
-  function cancelChannelConnect() {
-    settingsState.channelConnectForm.type = "";
-    settingsState.channelConnectForm.name = "";
-    settingsState.channelConnectForm.token = "";
-  }
-
-  async function saveChannelConnection() {
-    const channelType = settingsState.channelConnectForm.type;
-    if (!channelType) {
-      return;
-    }
-    settingsState.channelsLoading = true;
-    settingsState.channelsError = "";
-    settingsState.channelsNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/channels", {
-        method: "POST",
-        body: JSON.stringify({
-          type: channelType,
-          name: settingsState.channelConnectForm.name,
-          token: settingsState.channelConnectForm.token,
-        }),
-      });
-      setSettingsSuccess("channelsNotice", copy.value.notices.channelConnected(payload.channel.name, payload.restart_required));
-      upsertConnectedChannel(payload.channel);
-      cancelChannelConnect();
-      await loadChannelSettings();
-    } catch (error) {
-      settingsState.channelsError = error?.message || copy.value.notices.channelConnectFailed;
-    } finally {
-      settingsState.channelsLoading = false;
-    }
-  }
-
-  async function disconnectChannel(channel) {
-    settingsState.channelsLoading = true;
-    settingsState.channelsError = "";
-    settingsState.channelsNotice = "";
-    try {
-      const payload = await requestSettingsJson(`/api/settings/channels/${encodeURIComponent(channel.id)}/disconnect`, {
-        method: "POST",
-      });
-      setSettingsSuccess("channelsNotice", copy.value.notices.channelDisconnected(channel.name, payload.restart_required));
-      removeConnectedChannel(channel.id);
-      await loadChannelSettings();
-    } catch (error) {
-      settingsState.channelsError = error?.message || copy.value.notices.channelDisconnectFailed;
-    } finally {
-      settingsState.channelsLoading = false;
     }
   }
 
