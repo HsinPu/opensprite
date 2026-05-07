@@ -140,6 +140,22 @@ export function createSettingsState() {
       httpsProxy: "",
       noProxy: "127.0.0.1,localhost",
     },
+    dataLoading: false,
+    dataError: "",
+    dataStatus: {
+      storage: {
+        type: "",
+        path: "",
+        provider: "",
+      },
+      counts: {
+        sessions: 0,
+        raw_sessions: 0,
+        messages: 0,
+        runs: 0,
+      },
+    },
+    dataSessions: [],
     cronJobsLoading: false,
     cronJobsError: "",
     cronJobsNotice: "",

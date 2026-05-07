@@ -7,6 +7,7 @@ from typing import Any
 from aiohttp import web
 
 from ..bus.session_commands import session_command_catalog
+from ..config import Config
 from ..runs.schema import (
     serialize_file_change,
     serialize_run_artifacts,
@@ -178,6 +179,35 @@ class WebApiHandlers:
         service = adapter._get_session_status_service()
         statuses = [] if service is None else [adapter._serialize_session_status(item.session_id) for item in service.list()]
         return web.json_response({"statuses": statuses})
+
+    async def handle_storage_status(self, request: web.Request) -> web.Response:
+        adapter = self.adapter
+        storage = adapter._require_storage()
+        config = Config.load(adapter._get_config_path())
+        session_ids = await storage.get_all_sessions()
+        visible_session_ids = [session_id for session_id in session_ids if ":subagent:" not in session_id]
+        message_count = 0
+        run_count = 0
+        for session_id in session_ids:
+            message_count += await storage.get_message_count(session_id)
+            run_count += len(await storage.get_runs(session_id))
+
+        storage_path = getattr(storage, "db_path", None) or getattr(config.storage, "path", "")
+        return web.json_response(
+            {
+                "storage": {
+                    "type": config.storage.type,
+                    "path": str(storage_path or ""),
+                    "provider": type(storage).__name__,
+                },
+                "counts": {
+                    "sessions": len(visible_session_ids),
+                    "raw_sessions": len(session_ids),
+                    "messages": message_count,
+                    "runs": run_count,
+                },
+            }
+        )
 
     async def handle_run_trace(self, request: web.Request) -> web.Response:
         adapter = self.adapter

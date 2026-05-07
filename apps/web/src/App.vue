@@ -123,6 +123,7 @@
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
+    @refresh-data-settings="loadDataSettings"
     @begin-cron-job-create="beginCronJobCreate"
     @save-cron-job="saveCronJob"
     @edit-cron-job="beginCronJobEdit"
@@ -226,6 +227,7 @@ const {
   applyMcpJson,
   saveScheduleSettings,
   saveNetworkSettings,
+  loadDataSettings,
   beginCronJobCreate,
   beginCronJobEdit,
   cancelCronJobEdit,

@@ -1121,6 +1121,10 @@ async def _run_web_sessions_api():
                 assert resp.status == 200
                 status_payload = await resp.json()
 
+            async with session.get(f"http://127.0.0.1:{port}/api/storage/status") as resp:
+                assert resp.status == 200
+                storage_status_payload = await resp.json()
+
             async with session.get(
                 f"http://127.0.0.1:{port}/api/sessions/status",
                 params={"session_id": "web:missing"},
@@ -1155,6 +1159,14 @@ async def _run_web_sessions_api():
         assert idle_status_payload["status"]["session_id"] == "web:missing"
         assert idle_status_payload["status"]["status"] == "idle"
         assert idle_status_payload["status"]["metadata"] == {}
+        assert storage_status_payload["storage"]["type"] in {"memory", "sqlite"}
+        assert storage_status_payload["storage"]["provider"] == "MemoryStorage"
+        assert storage_status_payload["counts"] == {
+            "sessions": 3,
+            "raw_sessions": 4,
+            "messages": 5,
+            "runs": 3,
+        }
         assert payload["sessions"][0]["message_count"] == 1
         assert payload["sessions"][0]["runs"] == [
             {

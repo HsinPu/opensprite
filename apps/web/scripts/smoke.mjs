@@ -38,6 +38,7 @@ const [
   curatorSettingsPage,
   settingsModal,
   chatClient,
+  dataSettingsActions,
   mcpSettingsActions,
   modelSettingsActions,
   networkSettingsActions,
@@ -54,6 +55,7 @@ const [
   read("src/components/CuratorSettingsPage.vue"),
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
+  read("src/composables/useDataSettingsActions.js"),
   read("src/composables/useMcpSettingsActions.js"),
   read("src/composables/useModelSettingsActions.js"),
   read("src/composables/useNetworkSettingsActions.js"),
@@ -62,7 +64,7 @@ const [
   read("src/i18n/copy.js"),
 ]);
 
-const settingsLogic = `${chatClient}\n${mcpSettingsActions}\n${modelSettingsActions}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
@@ -94,6 +96,8 @@ assertIncludes(settingsModal, "providerCredentials", "credential picker renderin
 assertIncludes(settingsModal, "providerEffectiveCredentialId", "effective credential selection");
 assertIncludes(settingsModal, "credentialSourceLabel", "credential source status rendering");
 assertIncludes(settingsModal, "set-provider-credential", "provider credential selection event");
+assertIncludes(settingsModal, "section === 'data'", "data settings section");
+assertIncludes(settingsModal, "settingsState.dataSessions", "data session rendering");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
@@ -108,6 +112,7 @@ assertIncludes(chatClient, "viewExternalChatIdForPayload", "external session rea
 assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing");
 assertIncludes(settingsLogic, "connectForm.name", "provider connection naming");
 assertIncludes(settingsLogic, "/api/settings/credentials", "credential settings fetch");
+assertIncludes(settingsLogic, "/api/storage/status", "storage status fetch");
 assertIncludes(settingsLogic, "setProviderCredential", "provider credential switching");
 assertIncludes(chatClient, "window.requestAnimationFrame", "message stage deferred scroll");
 assertIncludes(chatClient, "currentEntries.value.length, currentMessages.value.length", "message list scroll watch");
@@ -122,6 +127,7 @@ for (const key of [
   "curator",
   "credentialSources",
   "missingCredential",
+  "dataLoadFailed",
 ]) {
   assertRegex(copy, new RegExp(`${key}\\s*:`), `copy key ${key}`);
 }

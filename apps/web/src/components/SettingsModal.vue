@@ -96,6 +96,15 @@
             <span aria-hidden="true">⇄</span>
             {{ copy.settingsTitles.network }}
           </button>
+          <button
+            class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'data' }"
+            type="button"
+            @click="$emit('select-section', 'data')"
+          >
+            <span aria-hidden="true">▣</span>
+            {{ copy.settingsTitles.data }}
+          </button>
         </div>
 
         <div class="settings-nav__footer">
@@ -1179,6 +1188,89 @@
             </div>
           </div>
         </section>
+
+        <section v-show="section === 'data'" class="settings-page">
+          <p v-if="settingsState.dataLoading" class="settings-inline-status">{{ copy.settings.data.loading }}</p>
+          <p v-if="settingsState.dataError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.dataError }}
+          </p>
+
+          <h3>{{ copy.settings.data.title }}</h3>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.storageType }}</strong>
+                <span>{{ dataStorage.type || copy.settings.data.unknown }}</span>
+              </div>
+              <button class="secondary-button" type="button" :disabled="settingsState.dataLoading" @click="$emit('refresh-data-settings')">
+                {{ copy.settings.data.refresh }}
+              </button>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.storageProvider }}</strong>
+                <span>{{ dataStorage.provider || copy.settings.data.unknown }}</span>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.storagePath }}</strong>
+                <span>{{ dataStorage.path || copy.settings.data.noPath }}</span>
+              </div>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.data.countsTitle }}</h3>
+          <div class="settings-card">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.sessions }}</strong>
+                <span>{{ dataCounts.sessions || 0 }}</span>
+              </div>
+              <span class="provider-row__badge">{{ copy.settings.data.rawSessions(dataCounts.raw_sessions || 0) }}</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.messages }}</strong>
+                <span>{{ dataCounts.messages || 0 }}</span>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.data.runs }}</strong>
+                <span>{{ dataCounts.runs || 0 }}</span>
+              </div>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.data.recentTitle }}</h3>
+          <div class="settings-card">
+            <div v-if="settingsState.dataSessions.length === 0" class="provider-row provider-row--empty">
+              <div>
+                <strong>{{ copy.settings.data.noSessionsTitle }}</strong>
+                <span>{{ copy.settings.data.noSessionsDescription }}</span>
+              </div>
+            </div>
+            <div v-for="session in settingsState.dataSessions" :key="session.session_id" class="provider-row provider-row--stacked">
+              <div class="provider-row__main">
+                <span class="provider-row__mark" aria-hidden="true">{{ session.channel?.slice(0, 2).toUpperCase() || 'OS' }}</span>
+                <div>
+                  <strong>{{ session.title || session.session_id }}</strong>
+                  <span>{{ session.session_id }}</span>
+                  <span>{{ copy.settings.data.sessionMeta(session.channel || 'unknown', session.message_count || 0, formatTimestamp(session.updated_at)) }}</span>
+                </div>
+              </div>
+              <div v-if="session.messages?.length" class="settings-card settings-card--form">
+                <div v-for="message in session.messages" :key="`${session.session_id}:${message.created_at}:${message.role}`" class="settings-row">
+                  <div>
+                    <strong>{{ copy.settings.data.messageRole(message.role) }}</strong>
+                    <span>{{ previewMessage(message.content) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <div v-if="selectedConnectProvider" class="provider-connect-dialog" role="dialog" aria-modal="true">
@@ -1650,6 +1742,25 @@ const scheduleTimezoneOptions = computed(() => {
   }
   return uniqueOptions;
 });
+
+const dataStorage = computed(() => props.settingsState.dataStatus?.storage || {});
+const dataCounts = computed(() => props.settingsState.dataStatus?.counts || {});
+
+function formatTimestamp(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return props.copy.settings.data.never;
+  }
+  return new Date(numeric * 1000).toLocaleString();
+}
+
+function previewMessage(content) {
+  const text = String(content || "").replace(/\s+/g, " ").trim();
+  if (!text) {
+    return props.copy.settings.data.emptyMessage;
+  }
+  return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+}
 
 const mediaModelCategories = computed(() => [
   {

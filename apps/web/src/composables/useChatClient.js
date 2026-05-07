@@ -1,6 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { getDisplayCopy } from "../i18n/copy";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
+import { useDataSettingsActions } from "./useDataSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
 import { useNetworkSettingsActions } from "./useNetworkSettingsActions";
@@ -2147,6 +2148,12 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
+  const { loadDataSettings } = useDataSettingsActions({
+    settingsState,
+    requestSettingsJson,
+    copy,
+  });
+
   const { loadNetworkSettings, saveNetworkSettings } = useNetworkSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -3119,6 +3126,10 @@ export function useChatClient() {
       loadNetworkSettings();
       return;
     }
+    if (sectionName === "data") {
+      loadDataSettings();
+      return;
+    }
     if (sectionName === "curator") {
       void refreshCuratorState();
     }
@@ -3897,6 +3908,7 @@ export function useChatClient() {
     loadChannelSettings,
     loadScheduleSettings,
     loadNetworkSettings,
+    loadDataSettings,
     loadMcpSettings,
     loadCronJobs,
     beginChannelConnect,
