@@ -457,6 +457,8 @@ class ToolsConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     max_tool_iterations: int = 100
+    tool_result_max_chars: int = Field(default=1200, ge=200)
+    exec_result_max_chars: int = Field(default=1200, ge=200)
     exec_tool: ExecToolConfig = Field(default_factory=ExecToolConfig, alias="exec")
     web_search: WebSearchToolConfig = Field(default_factory=WebSearchToolConfig)
     web_fetch: WebFetchToolConfig = Field(default_factory=WebFetchToolConfig)
@@ -1404,6 +1406,8 @@ class Config:
             "network": self.network.model_dump(),
             "tools": {
                 "max_tool_iterations": self.tools.max_tool_iterations,
+                "tool_result_max_chars": self.tools.tool_result_max_chars,
+                "exec_result_max_chars": self.tools.exec_result_max_chars,
                 "exec": self.tools.exec_tool.model_dump(by_alias=True),
                 "web_search": self.tools.web_search.model_dump(by_alias=True),
                 "web_fetch": self.tools.web_fetch.model_dump(by_alias=True),

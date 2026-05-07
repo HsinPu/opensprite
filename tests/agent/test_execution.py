@@ -829,6 +829,50 @@ def test_execution_engine_slims_tool_result_for_context_but_persists_full_result
     assert messages[-1].content.endswith("TAIL")
 
 
+def test_execution_engine_uses_configured_tool_result_context_limit():
+    class VerboseTool(Tool):
+        @property
+        def name(self) -> str:
+            return "verbose_tool"
+
+        @property
+        def description(self) -> str:
+            return "Verbose tool"
+
+        @property
+        def parameters(self) -> dict:
+            return {"type": "object", "properties": {}}
+
+        async def _execute(self, **kwargs) -> str:
+            return "A" * 2000 + "TAIL"
+
+    registry = ToolRegistry()
+    registry.register(VerboseTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need tool",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="verbose_tool", arguments={})],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(
+        provider,
+        registry,
+        [],
+        tools_config=ToolsConfig(max_tool_iterations=3, tool_result_max_chars=400),
+    )
+    messages = [ChatMessage(role="user", content="hi")]
+
+    asyncio.run(engine.execute_messages("chat-1", messages, allow_tools=True))
+
+    assert "Output truncated for context" in messages[-1].content
+    assert len(messages[-1].content) < 700
+    assert messages[-1].content.endswith("TAIL")
+
+
 def test_exec_tool_result_slimming_keeps_timeout_and_stderr_highlights():
     result = (
         "Error: Command timed out after 60s. The command may be waiting for interactive input or may be stuck.\n"

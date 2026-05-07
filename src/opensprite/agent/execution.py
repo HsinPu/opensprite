@@ -266,6 +266,8 @@ Output exactly these sections when applicable:
         self.context_compaction_strategy = context_compaction_strategy
         self.context_compaction_llm = context_compaction_llm
         self.tools_config = tools_config or ToolsConfig()
+        self.tool_result_max_chars = max(200, self.tools_config.tool_result_max_chars)
+        self.exec_result_max_chars = max(200, self.tools_config.exec_result_max_chars)
         self.search_store = search_store
         self.empty_response_fallback = empty_response_fallback
         self.format_log_preview = format_log_preview
@@ -408,6 +410,60 @@ Output exactly these sections when applicable:
             return summarized
 
         return summarized[: cls.EXEC_RESULT_MAX_CHARS].rstrip() + "\n... (exec context summary truncated)"
+
+    def _summarize_tool_result_for_context_with_config(self, tool_name: str, result: str) -> str:
+        """Shrink verbose tool output using runtime-configured limits."""
+        text = result.strip()
+        if tool_name == "exec":
+            return self._summarize_exec_result_for_context_with_config(text)
+        if len(text) <= self.tool_result_max_chars:
+            return text
+
+        head_limit = self.tool_result_max_chars // 2
+        tail_limit = self.tool_result_max_chars - head_limit
+        head = text[:head_limit].rstrip()
+        tail = text[-tail_limit:].lstrip()
+        return (
+            f"[tool:{tool_name}] Output truncated for context. Full result was persisted separately "
+            f"({len(text)} chars total).\n"
+            f"--- BEGIN HEAD ---\n{head}\n"
+            f"--- MIDDLE TRUNCATED ---\n"
+            f"--- END TAIL ---\n{tail}"
+        )
+
+    def _summarize_exec_result_for_context_with_config(self, text: str) -> str:
+        """Prefer error markers and latest lines for shell output using configured limits."""
+        if len(text) <= self.exec_result_max_chars:
+            return text
+
+        lines = [line for line in text.splitlines() if line.strip()]
+        first_lines = lines[:6]
+        stderr_lines = [line for line in lines if "[stderr]" in line][:4]
+        timeout_lines = [line for line in lines if "timed out" in line.lower()][:2]
+        tail_lines = lines[-8:]
+
+        summary_parts: list[str] = [
+            f"[tool:exec] Output truncated for context. Full result was persisted separately ({len(text)} chars total)."
+        ]
+        if timeout_lines:
+            summary_parts.extend(["Timeout/Error summary:", *timeout_lines])
+        elif text.startswith("Error:"):
+            summary_parts.extend(["Error summary:", lines[0]])
+
+        if stderr_lines:
+            summary_parts.extend(["stderr highlights:", *stderr_lines])
+
+        if first_lines:
+            summary_parts.extend(["output start:", *first_lines])
+
+        if tail_lines:
+            summary_parts.extend(["output tail:", *tail_lines])
+
+        summarized = "\n".join(summary_parts)
+        if len(summarized) <= self.exec_result_max_chars:
+            return summarized
+
+        return summarized[: self.exec_result_max_chars].rstrip() + "\n... (exec context summary truncated)"
 
     @staticmethod
     def _summarize_tool_names(tool_calls: list[Any] | None) -> str:
@@ -1472,7 +1528,7 @@ Output exactly these sections when applicable:
                             logger.exception(
                                 f"[{log_id}] tool.result-hook.error | name={tool_name}"
                             )
-                    result_for_context = self._summarize_tool_result_for_context(tool_name, result)
+                    result_for_context = self._summarize_tool_result_for_context_with_config(tool_name, result)
 
                     repeated_error_marker = self._classify_tool_result(raw_result_for_repeated_error)
                     if repeated_error_marker is not None:
