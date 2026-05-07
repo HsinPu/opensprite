@@ -12,7 +12,7 @@ import {
   sortChannelList,
   visibleChannels,
 } from "./settingsNormalizers";
-import { createSettingsForm, createSettingsState } from "./useSettingsState";
+import { createCuratorState, createPermissionState, createSettingsForm, createSettingsState } from "./useSettingsState";
 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
@@ -1369,21 +1369,8 @@ export function useChatClient() {
   const settingsSection = ref("general");
   const settingsForm = reactive(createSettingsForm(state));
   const settingsState = reactive(createSettingsState());
-  const permissionState = reactive({
-    loading: false,
-    error: "",
-    requests: [],
-    resolvingIds: {},
-  });
-  const curatorState = reactive({
-    loading: false,
-    action: "",
-    error: "",
-    status: null,
-    history: [],
-    historyLoading: false,
-    historyError: "",
-  });
+  const permissionState = reactive(createPermissionState());
+  const curatorState = reactive(createCuratorState());
 
   let activeSocket = null;
   let colorSchemeMediaQuery = null;

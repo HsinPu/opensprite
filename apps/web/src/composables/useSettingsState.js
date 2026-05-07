@@ -188,3 +188,24 @@ export function createSettingsState() {
     },
   };
 }
+
+export function createPermissionState() {
+  return {
+    loading: false,
+    error: "",
+    requests: [],
+    resolvingIds: {},
+  };
+}
+
+export function createCuratorState() {
+  return {
+    loading: false,
+    action: "",
+    error: "",
+    status: null,
+    history: [],
+    historyLoading: false,
+    historyError: "",
+  };
+}
