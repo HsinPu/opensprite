@@ -27,6 +27,58 @@ def test_anthropic_messages_minimax_enables_thinking_and_headers():
     assert payload["thinking"] == {"type": "enabled", "budget_tokens": 16000}
     assert payload["temperature"] == 1
     assert payload["max_tokens"] == 20096
+    assert "cache_control" not in str(payload)
+
+
+def test_anthropic_messages_applies_prompt_cache_for_official_anthropic_base_url():
+    provider = AnthropicMessagesLLM(
+        api_key="anthropic-key",
+        base_url="https://api.anthropic.com",
+        default_model="claude-sonnet-4-6",
+        reasoning_enabled=False,
+    )
+    payload = provider._build_payload(
+        [
+            ChatMessage(role="system", content="Stable system"),
+            ChatMessage(role="user", content="First"),
+            ChatMessage(role="assistant", content="Second"),
+            ChatMessage(role="user", content="Third"),
+            ChatMessage(role="assistant", content="Fourth"),
+        ],
+        tools=None,
+        model=None,
+        max_tokens=1024,
+    )
+
+    assert payload["system"] == [
+        {"type": "text", "text": "Stable system", "cache_control": {"type": "ephemeral"}}
+    ]
+    assert "cache_control" not in payload["messages"][0]["content"][0]
+    assert [message["content"][-1]["cache_control"] for message in payload["messages"][-3:]] == [
+        {"type": "ephemeral"},
+        {"type": "ephemeral"},
+        {"type": "ephemeral"},
+    ]
+
+
+def test_anthropic_messages_can_force_prompt_cache_for_compatible_endpoint():
+    provider = AnthropicMessagesLLM(
+        api_key="minimax-key",
+        base_url="https://api.minimax.io/anthropic",
+        default_model="MiniMax-M2.7",
+        reasoning_enabled=False,
+        prompt_cache_enabled=True,
+    )
+
+    payload = provider._build_payload(
+        [ChatMessage(role="system", content="Stable system"), ChatMessage(role="user", content="Hello")],
+        tools=None,
+        model=None,
+        max_tokens=1024,
+    )
+
+    assert payload["system"][-1]["cache_control"] == {"type": "ephemeral"}
+    assert payload["messages"][-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
 
 
 def test_anthropic_messages_response_maps_text_thinking_and_tools():

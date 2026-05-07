@@ -12,6 +12,7 @@ from .tool_args import parse_tool_arguments
 
 
 THINKING_BUDGETS = {"xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000, "minimal": 4000}
+CACHE_CONTROL_MARKER = {"type": "ephemeral"}
 
 
 def _coerce_content(content: Any) -> str:
@@ -81,6 +82,35 @@ def _convert_tool(tool: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _content_as_blocks(content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if isinstance(content, list):
+        return [dict(block) for block in content]
+    return [{"type": "text", "text": _coerce_content(content)}]
+
+
+def _apply_cache_marker_to_content(content: str | list[dict[str, Any]]) -> list[dict[str, Any]]:
+    blocks = _content_as_blocks(content)
+    if not blocks:
+        blocks.append({"type": "text", "text": ""})
+    blocks[-1] = {**blocks[-1], "cache_control": dict(CACHE_CONTROL_MARKER)}
+    return blocks
+
+
+def apply_anthropic_cache_control(payload: dict[str, Any]) -> dict[str, Any]:
+    """Apply Anthropic prompt cache markers to system and recent messages."""
+    if payload.get("system"):
+        payload["system"] = _apply_cache_marker_to_content(payload["system"])
+
+    messages = payload.get("messages")
+    if not isinstance(messages, list):
+        return payload
+    for message in messages[-3:]:
+        if not isinstance(message, dict) or "content" not in message:
+            continue
+        message["content"] = _apply_cache_marker_to_content(message["content"])
+    return payload
+
+
 class AnthropicMessagesLLM(LLMProvider):
     """LLM provider for Anthropic Messages-compatible endpoints such as MiniMax."""
 
@@ -92,6 +122,7 @@ class AnthropicMessagesLLM(LLMProvider):
         *,
         reasoning_enabled: bool = True,
         reasoning_effort: str | None = "medium",
+        prompt_cache_enabled: bool | None = None,
         timeout_seconds: float = 900.0,
     ) -> None:
         self.api_key = api_key
@@ -99,6 +130,11 @@ class AnthropicMessagesLLM(LLMProvider):
         self.default_model = default_model
         self.reasoning_enabled = reasoning_enabled
         self.reasoning_effort = reasoning_effort or "medium"
+        self.prompt_cache_enabled = (
+            "api.anthropic.com" in self.base_url.lower()
+            if prompt_cache_enabled is None
+            else bool(prompt_cache_enabled)
+        )
         self.timeout_seconds = timeout_seconds
 
     def _headers(self) -> dict[str, str]:
@@ -186,6 +222,8 @@ class AnthropicMessagesLLM(LLMProvider):
             payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
             payload["temperature"] = 1
             payload["max_tokens"] = max(int(payload["max_tokens"]), budget + 4096)
+        if self.prompt_cache_enabled:
+            apply_anthropic_cache_control(payload)
         return payload
 
     async def _post_messages(self, payload: dict[str, Any]) -> dict[str, Any]:
