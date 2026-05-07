@@ -174,6 +174,7 @@ from html import unescape
 
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
+from ..utils.log import logger
 
 # 嘗試引入 trafilatura
 try:
@@ -516,7 +517,7 @@ def extract_with_jina(url: str, timeout: int = 20) -> dict | None:
         return None
         
     except Exception as e:
-        print(f"Jina extraction failed: {e}")
+        logger.warning("Jina extraction failed: {}", e)
         return None
 
 

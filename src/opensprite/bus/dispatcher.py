@@ -1148,8 +1148,8 @@ class MessageQueue:
                 await previous_task
             except asyncio.CancelledError:
                 pass
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Previous session task failed before continuing session {}: {}", session_id, exc)
 
         await self._process_message(inbound)
     
@@ -1393,77 +1393,3 @@ class MessageQueue:
         """回傳 (inbound_size, outbound_size)"""
         return (self.bus.inbound_size, self.bus.outbound_size)
 
-
-# ============================================
-# 使用範例（Console 版本）
-# ============================================
-
-"""
-# 建立 Queue 版本（Bus 版）
-
-import asyncio
-from ..agent import AgentLoop
-from ..config import Config
-from ..llms import OpenAILLM
-from ..storage import MemoryStorage
-from .dispatcher import MessageQueue
-from .message import UserMessage
-
-async def main():
-    # 1. 建立 Storage（可替換）
-    storage = MemoryStorage()
-    
-    # 2. 建立 LLM
-    llm = OpenAILLM(
-        api_key="your-key",
-        default_model="gpt-4o-mini"
-    )
-    
-    # 3. 建立 Agent（傳入 storage）
-    config = Config.load_agent_template_config()
-    agent = AgentLoop(config, llm, storage)
-    
-    # 4. 建立 Queue（Bus 版本）
-    mq = MessageQueue(agent)
-    
-    # 5. 定義收到回覆時要做什麼
-    async def on_response(response, channel, external_chat_id):
-        logger.info(f"[{channel}] 🤖: {response.text}")
-
-    mq.register_response_handler("cli", on_response)
-    
-    # 6. 啟動處理迴圈（在背景執行）
-    processor = asyncio.create_task(mq.process_queue())
-    
-    # 7. 主執行緒處理輸入
-    while True:
-        line = input("\n你: ").strip()
-        
-        if line.lower() == "/exit":
-            await mq.stop()
-            break
-        
-        if line.lower() == "/reset":
-            await mq.reset_conversation("default")
-            logger.info("歷史已清除")
-            continue
-        
-        if line.lower() == "/queues":
-            inbound, outbound = mq.queue_sizes
-            logger.info(f"Queue sizes: inbound={inbound}, outbound={outbound}")
-            continue
-        
-        # 解析 external_chat_id
-        if line.startswith("@"):
-            parts = line[1:].split(" ", 1)
-            external_chat_id = parts[0]
-            text = parts[1] if len(parts) > 1 else ""
-        else:
-            external_chat_id = "default"
-            text = line
-        
-        # 加入佇列（現在用 enqueue_raw 更方便）
-        await mq.enqueue_raw(content=text, external_chat_id=external_chat_id, channel="cli")
-
-asyncio.run(main())
-"""
