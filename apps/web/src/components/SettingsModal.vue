@@ -630,7 +630,6 @@
                 <select
                   v-model="settingsState.selectedTextProviderId"
                   :disabled="settingsState.modelsLoading"
-                  @change="$emit('select-model', settingsState.selectedTextProviderId, settingsState.modelSelections[settingsState.selectedTextProviderId])"
                 >
                   <option v-for="provider in settingsState.models.providers" :key="provider.id" :value="provider.id">
                     {{ provider.name }}{{ provider.is_default ? ` (${copy.settings.models.active})` : '' }}

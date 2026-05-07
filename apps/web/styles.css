@@ -266,6 +266,7 @@
 :root[data-color-scheme="dark"] .provider-row--empty span,
 :root[data-color-scheme="dark"] .codex-auth-command,
 :root[data-color-scheme="dark"] .model-select-row label,
+:root[data-color-scheme="dark"] .provider-row__select,
 :root[data-color-scheme="dark"] .settings-muted,
 :root[data-color-scheme="dark"] kbd {
   color: var(--text-muted);
@@ -284,6 +285,7 @@
 :root[data-color-scheme="dark"] .schedule-editor__header strong,
 :root[data-color-scheme="dark"] .provider-connect-dialog__title h3,
 :root[data-color-scheme="dark"] .model-select-row select,
+:root[data-color-scheme="dark"] .provider-row__select select,
 :root[data-color-scheme="dark"] .settings-row strong,
 :root[data-color-scheme="dark"] .data-timeline-table__row strong,
 :root[data-color-scheme="dark"] .data-timeline-table__details-grid strong,
@@ -329,6 +331,7 @@
 :root[data-color-scheme="dark"] .channel-field select,
 :root[data-color-scheme="dark"] .channel-field textarea,
 :root[data-color-scheme="dark"] .model-select-row select,
+:root[data-color-scheme="dark"] .provider-row__select select,
 :root[data-color-scheme="dark"] .openrouter-options,
 :root[data-color-scheme="dark"] .openrouter-option-row,
 :root[data-color-scheme="dark"] .openrouter-option-field,
@@ -352,6 +355,7 @@
 :root[data-color-scheme="dark"] .channel-field select,
 :root[data-color-scheme="dark"] .channel-field textarea,
 :root[data-color-scheme="dark"] .model-select-row select,
+:root[data-color-scheme="dark"] .provider-row__select select,
 :root[data-color-scheme="dark"] .openrouter-option-field select,
 :root[data-color-scheme="dark"] .openrouter-option-field input,
 :root[data-color-scheme="dark"] .settings-row select:hover,
@@ -3888,6 +3892,24 @@ button:disabled {
   font-weight: 500;
 }
 
+.provider-row__select {
+  display: grid;
+  min-width: min(320px, 100%);
+  gap: 6px;
+  color: #777777;
+  font-size: 0.82rem;
+}
+
+.provider-row__select select {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d7d7d7;
+  border-radius: 7px;
+  color: #151515;
+  background: #ffffff;
+}
+
 .codex-auth-row {
   gap: 14px;
 }
@@ -4342,9 +4364,14 @@ button:disabled {
 
 .model-select-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 1fr;
   gap: 10px;
-  align-items: end;
+  align-items: start;
+}
+
+.model-select-row .secondary-button {
+  justify-self: end;
+  width: fit-content;
 }
 
 .model-select-row label {

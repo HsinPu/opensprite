@@ -105,7 +105,8 @@ assertIncludes(settingsModal, "textProviderModelGroups", "OpenRouter model group
 assertIncludes(settingsModal, "mediaProviderModelGroups", "OpenRouter media model grouping");
 assertIncludes(settingsModal, "openRouterModelGroups", "shared OpenRouter model grouping");
 assertIncludes(settingsModal, "<optgroup", "grouped model select rendering");
-assertIncludes(settingsModal, "settingsState.selectedTextProviderId, settingsState.modelSelections[settingsState.selectedTextProviderId]", "text provider selection applies model");
+assertIncludes(settingsModal, "@click=\"$emit('select-model', selectedTextProvider.id, settingsState.modelSelections[selectedTextProvider.id])\"", "model selection applies on explicit action");
+assertNotIncludes(settingsModal, "@change=\"$emit('select-model', settingsState.selectedTextProviderId", "provider selection does not auto-apply model");
 assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot auth code rendering");
 assertIncludes(settingsModal, "showCodexAuthCard", "conditional Codex auth card");
 assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth card");
