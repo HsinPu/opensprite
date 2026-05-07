@@ -30,12 +30,24 @@ def test_retry_delay_parses_retry_after_seconds_header():
     assert delay.next_retry_at == 102.0
 
 
-def test_retry_delay_uses_default_for_5xx_without_header():
+def test_retry_delay_uses_jittered_default_for_5xx_without_header(monkeypatch):
+    monkeypatch.setattr("opensprite.llms.retry.random.random", lambda: 0.25)
+
     delay = retry_delay_from_error(ProviderError("server error", status_code=503), now=100.0)
 
     assert delay.retryable is True
-    assert delay.retry_after_ms == 1000
-    assert delay.next_retry_at == 101.0
+    assert delay.retry_after_ms == 1125
+    assert delay.next_retry_at == 101.125
+
+
+def test_retry_delay_increases_jittered_default_by_attempt(monkeypatch):
+    monkeypatch.setattr("opensprite.llms.retry.random.random", lambda: 0.5)
+
+    delay = retry_delay_from_error(ProviderError("server error", status_code=503), now=100.0, attempt=3)
+
+    assert delay.retryable is True
+    assert delay.retry_after_ms == 5000
+    assert delay.next_retry_at == 105.0
 
 
 def test_retry_delay_parses_textual_rate_limit_delay():
@@ -54,7 +66,9 @@ def test_retry_delay_ignores_non_transient_errors():
     assert delay.next_retry_at is None
 
 
-def test_retry_delay_treats_transient_transport_errors_as_retryable():
+def test_retry_delay_treats_transient_transport_errors_as_retryable(monkeypatch):
+    monkeypatch.setattr("opensprite.llms.retry.random.random", lambda: 0.0)
+
     delay = retry_delay_from_error(ProviderError("connection reset by peer"), now=100.0)
 
     assert delay.retryable is True

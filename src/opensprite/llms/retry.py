@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import re
 import time
 from dataclasses import dataclass
@@ -42,6 +43,9 @@ _TRANSIENT_ERROR_TEXT_MARKERS = (
     "high traffic detected",
     "overloaded_error",
 )
+_DEFAULT_RETRY_BASE_MS = 1000
+_DEFAULT_RETRY_MAX_MS = 30_000
+_DEFAULT_RETRY_JITTER_RATIO = 0.5
 
 
 @dataclass(frozen=True)
@@ -121,7 +125,14 @@ def _looks_like_transient_transport(error: BaseException) -> bool:
     return any(marker in lowered for marker in _TRANSIENT_ERROR_TEXT_MARKERS)
 
 
-def retry_delay_from_error(error: BaseException, *, now: float | None = None) -> RetryDelay:
+def _jittered_default_delay_ms(attempt: int) -> int:
+    exponent = max(0, int(attempt) - 1)
+    delay = min(_DEFAULT_RETRY_BASE_MS * (2 ** exponent), _DEFAULT_RETRY_MAX_MS)
+    jitter = random.random() * _DEFAULT_RETRY_JITTER_RATIO * delay
+    return int(delay + jitter)
+
+
+def retry_delay_from_error(error: BaseException, *, now: float | None = None, attempt: int = 1) -> RetryDelay:
     """Return retry metadata for rate-limit and transient provider failures."""
     current_time = time.time() if now is None else float(now)
     headers = _headers_from_error(error)
@@ -148,7 +159,7 @@ def retry_delay_from_error(error: BaseException, *, now: float | None = None) ->
         or _looks_like_transient_transport(error)
     )
     if retry_after_ms is None and retryable:
-        retry_after_ms = 1000
+        retry_after_ms = _jittered_default_delay_ms(attempt)
     if not retryable:
         return RetryDelay(retryable=False, reason=reason)
     return RetryDelay(

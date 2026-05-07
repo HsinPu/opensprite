@@ -349,7 +349,9 @@ def test_execution_engine_retries_transient_provider_errors_with_metadata():
     assert statuses == [ExecutionEngine.PROVIDER_RETRY_STATUS_MESSAGE]
 
 
-def test_execution_engine_retries_transient_transport_errors_without_status_code():
+def test_execution_engine_retries_transient_transport_errors_without_status_code(monkeypatch):
+    monkeypatch.setattr("opensprite.llms.retry.random.random", lambda: 0.0)
+
     class TransportThenSuccessProvider:
         def __init__(self):
             self.calls = []

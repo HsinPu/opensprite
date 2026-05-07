@@ -1199,7 +1199,7 @@ Output exactly these sections when applicable:
                 except Exception as exc:
                     duration_ms = int((time.perf_counter() - started_at) * 1000)
                     error_preview = self.format_log_preview(str(exc), max_chars=240)
-                    retry_delay = retry_delay_from_error(exc)
+                    retry_delay = retry_delay_from_error(exc, attempt=request_attempt)
                     llm_step_events.append(
                         LlmStepEvent(
                             iteration=iteration + 1,
