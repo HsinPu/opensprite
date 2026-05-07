@@ -1,6 +1,17 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
 import { getDisplayCopy } from "../i18n/copy";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
+import {
+  DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS,
+  normalizeChannelSettings,
+  normalizeMcpSettings,
+  normalizeMcpTransport,
+  normalizeMediaSettings,
+  normalizeOpenRouterOptions,
+  serializeOpenRouterOptions,
+  sortChannelList,
+  visibleChannels,
+} from "./settingsNormalizers";
 import { createSettingsForm, createSettingsState } from "./useSettingsState";
 
 const STORAGE_KEYS = {
@@ -40,7 +51,6 @@ const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const TERMINAL_PART_STATES = new Set(["completed", "failed", "cancelled", "error"]);
 const CURATOR_BUSY_STATES = new Set(["queued", "running"]);
 const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permission", "work", "completion", "file", "text", "system", "other"]);
-const MCP_TRANSPORT_TYPES = new Set(["stdio", "sse", "streamableHttp"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "llm_status",
@@ -260,36 +270,6 @@ function coerceNonNegativeInteger(value) {
   }
   return Math.floor(number);
 }
-
-function normalizeOpenRouterOptions(options = {}) {
-  const maxTokens = options.reasoning_max_tokens ?? "";
-  return {
-    reasoningEnabled: coerceBoolean(options.reasoning_enabled),
-    reasoningEffort: String(options.reasoning_effort || "").trim(),
-    reasoningMaxTokens: maxTokens === null || maxTokens === undefined ? "" : String(maxTokens),
-    reasoningExclude: coerceBoolean(options.reasoning_exclude),
-    providerSort: String(options.provider_sort || "").trim(),
-    requireParameters: coerceBoolean(options.require_parameters),
-  };
-}
-
-function serializeOpenRouterOptions(options = {}) {
-  const maxTokens = String(options.reasoningMaxTokens || "").trim();
-  return {
-    reasoning_enabled: coerceBoolean(options.reasoningEnabled),
-    reasoning_effort: String(options.reasoningEffort || "").trim() || null,
-    reasoning_max_tokens: maxTokens ? Number.parseInt(maxTokens, 10) : null,
-    reasoning_exclude: coerceBoolean(options.reasoningExclude),
-    provider_sort: String(options.providerSort || "").trim() || null,
-    require_parameters: coerceBoolean(options.requireParameters),
-  };
-}
-
-const DEFAULT_OPENROUTER_RECOMMENDED_OPTIONS = {
-  reasoning_enabled: true,
-  reasoning_effort: "medium",
-  reasoning_exclude: false,
-};
 
 function normalizeRunKind(value, fallback = "other") {
   const normalized = String(value || "").trim();
@@ -2866,17 +2846,6 @@ export function useChatClient() {
     return fallback;
   }
 
-  function normalizeMcpTransport(value, fallback = "stdio") {
-    const transport = String(value || "").trim();
-    if (MCP_TRANSPORT_TYPES.has(transport)) {
-      return transport;
-    }
-    if (["streamable-http", "streamable_http", "http"].includes(transport)) {
-      return "streamableHttp";
-    }
-    return fallback;
-  }
-
   function getMcpServerMap(parsed) {
     if (parsed?.mcpServers && typeof parsed.mcpServers === "object" && !Array.isArray(parsed.mcpServers)) {
       return parsed.mcpServers;
@@ -2923,22 +2892,6 @@ export function useChatClient() {
     return {
       serverId: parsed.server_id || parsed.serverId || parsed.server_name || parsed.serverName || parsed.id || parsed.name || "",
       server: parsed,
-    };
-  }
-
-  function normalizeMcpSettings(payload) {
-    return {
-      ...payload,
-      servers: Array.isArray(payload?.servers) ? payload.servers : [],
-      runtime: payload?.runtime && typeof payload.runtime === "object"
-        ? {
-            connected: Boolean(payload.runtime.connected),
-            connecting: Boolean(payload.runtime.connecting),
-            connect_failures: Number(payload.runtime.connect_failures || 0),
-            retry_after: Number(payload.runtime.retry_after || 0),
-            tool_names: Array.isArray(payload.runtime.tool_names) ? payload.runtime.tool_names : [],
-          }
-        : settingsState.mcp.runtime,
     };
   }
 
@@ -3245,34 +3198,6 @@ export function useChatClient() {
     }
   }
 
-  function visibleChannels(channels) {
-    return (channels || []).filter((channel) => channel.id !== "web" && channel.id !== "console");
-  }
-
-  function normalizeChannelSettings(payload) {
-    const channels = visibleChannels(payload.channels);
-    const hasGroupedChannels = Array.isArray(payload.connected) || Array.isArray(payload.available);
-    if (hasGroupedChannels) {
-      return {
-        ...payload,
-        connected: visibleChannels(payload.connected),
-        available: visibleChannels(payload.available),
-        channels,
-      };
-    }
-
-    return {
-      ...payload,
-      connected: channels.filter((channel) => channel.token_configured),
-      available: channels.filter((channel) => !channel.token_configured),
-      channels,
-    };
-  }
-
-  function sortChannelList(channels) {
-    return [...channels].sort((left, right) => String(left.name || left.id).localeCompare(String(right.name || right.id)));
-  }
-
   function upsertConnectedChannel(channel) {
     const visibleChannel = visibleChannels([channel])[0];
     if (!visibleChannel) {
@@ -3366,25 +3291,11 @@ export function useChatClient() {
     }
   }
 
-  function normalizeMediaSettings(payload) {
-    const sections = payload?.sections && typeof payload.sections === "object" ? payload.sections : {};
-    return {
-      ...payload,
-      sections: {
-        vision: sections.vision || { category: "vision", enabled: false, provider_id: "", model: "" },
-        ocr: sections.ocr || { category: "ocr", enabled: false, provider_id: "", model: "" },
-        speech: sections.speech || { category: "speech", enabled: false, provider_id: "", model: "" },
-        video: sections.video || { category: "video", enabled: false, provider_id: "", model: "" },
-      },
-      providers: Array.isArray(payload?.providers) ? payload.providers : [],
-    };
-  }
-
   async function loadMcpSettings() {
     settingsState.mcpLoading = true;
     settingsState.mcpError = "";
     try {
-      settingsState.mcp = normalizeMcpSettings(await requestSettingsJson("/api/settings/mcp"));
+      settingsState.mcp = normalizeMcpSettings(await requestSettingsJson("/api/settings/mcp"), settingsState.mcp.runtime);
     } catch (error) {
       settingsState.mcpError = error?.message || copy.value.notices.mcpLoadFailed;
     } finally {
@@ -4197,7 +4108,7 @@ export function useChatClient() {
         method: editingId ? "PUT" : "POST",
         body: JSON.stringify(payload),
       });
-      settingsState.mcp = normalizeMcpSettings(response);
+      settingsState.mcp = normalizeMcpSettings(response, settingsState.mcp.runtime);
       setSettingsSuccess("mcpNotice", response.reload_message || copy.value.notices.mcpSaved);
       resetMcpForm();
     } catch (error) {
@@ -4215,7 +4126,7 @@ export function useChatClient() {
       const response = await requestSettingsJson(`/api/settings/mcp/${encodeURIComponent(server.id)}`, {
         method: "DELETE",
       });
-      settingsState.mcp = normalizeMcpSettings(response);
+      settingsState.mcp = normalizeMcpSettings(response, settingsState.mcp.runtime);
       setSettingsSuccess("mcpNotice", response.reload_message || copy.value.notices.mcpRemoved);
       if (settingsState.mcpForm.editingId === server.id) {
         resetMcpForm();
@@ -4233,7 +4144,7 @@ export function useChatClient() {
     settingsState.mcpNotice = "";
     try {
       const response = await requestSettingsJson("/api/settings/mcp/reload", { method: "POST" });
-      settingsState.mcp = normalizeMcpSettings(response);
+      settingsState.mcp = normalizeMcpSettings(response, settingsState.mcp.runtime);
       setSettingsSuccess("mcpNotice", response.reload_message || copy.value.notices.mcpReloaded);
     } catch (error) {
       settingsState.mcpError = error?.message || copy.value.notices.mcpReloadFailed;
