@@ -14,6 +14,12 @@ function assertIncludes(content, needle, label) {
   }
 }
 
+function assertNotIncludes(content, needle, label) {
+  if (content.includes(needle)) {
+    throw new Error(`${label}: unexpected ${needle}`);
+  }
+}
+
 function assertRegex(content, pattern, label) {
   if (!pattern.test(content)) {
     throw new Error(`${label}: expected ${pattern}`);
@@ -100,6 +106,9 @@ assertIncludes(settingsModal, "section === 'data'", "data settings section");
 assertIncludes(settingsModal, "settingsState.dataSessions", "data session rendering");
 assertIncludes(settingsModal, "selectedDataSession", "data maintenance dialog state");
 assertIncludes(settingsModal, "copy.settings.data.maintenanceTitle", "data maintenance dialog copy");
+assertIncludes(settingsModal, "dataTimelineEntries", "data timeline rendering");
+assertIncludes(settingsModal, "timelineItemLabel", "data timeline item labels");
+assertNotIncludes(settingsModal, "props.copy.settings.general.update.branch", "update description hides branch");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
@@ -115,6 +124,8 @@ assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing
 assertIncludes(settingsLogic, "connectForm.name", "provider connection naming");
 assertIncludes(settingsLogic, "/api/settings/credentials", "credential settings fetch");
 assertIncludes(settingsLogic, "/api/storage/status", "storage status fetch");
+assertIncludes(settingsLogic, "/api/sessions/timeline", "session timeline fetch");
+assertIncludes(settingsLogic, "loadDataSessionTimeline", "session timeline action export");
 assertIncludes(settingsLogic, "setProviderCredential", "provider credential switching");
 assertIncludes(chatClient, "window.requestAnimationFrame", "message stage deferred scroll");
 assertIncludes(chatClient, "currentEntries.value.length, currentMessages.value.length", "message list scroll watch");
@@ -130,6 +141,7 @@ for (const key of [
   "credentialSources",
   "missingCredential",
   "dataLoadFailed",
+  "dataTimelineLoadFailed",
 ]) {
   assertRegex(copy, new RegExp(`${key}\\s*:`), `copy key ${key}`);
 }

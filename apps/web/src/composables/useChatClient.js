@@ -2148,7 +2148,7 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
-  const { loadDataSettings } = useDataSettingsActions({
+  const { loadDataSettings, loadDataSessionTimeline } = useDataSettingsActions({
     settingsState,
     requestSettingsJson,
     copy,
@@ -3909,6 +3909,7 @@ export function useChatClient() {
     loadScheduleSettings,
     loadNetworkSettings,
     loadDataSettings,
+    loadDataSessionTimeline,
     loadMcpSettings,
     loadCronJobs,
     beginChannelConnect,

@@ -1251,7 +1251,7 @@
                 <span>{{ copy.settings.data.noSessionsDescription }}</span>
               </div>
             </div>
-            <div v-for="session in settingsState.dataSessions" :key="session.session_id" class="provider-row provider-row--stacked">
+            <div v-for="session in settingsState.dataSessions" :key="session.session_id" class="provider-row">
               <div class="provider-row__main">
                 <span class="provider-row__mark" aria-hidden="true">{{ session.channel?.slice(0, 2).toUpperCase() || 'OS' }}</span>
                 <div>
@@ -1259,6 +1259,8 @@
                   <span>{{ session.session_id }}</span>
                   <span>{{ copy.settings.data.sessionMeta(session.channel || 'unknown', session.message_count || 0, formatTimestamp(session.updated_at)) }}</span>
                 </div>
+              </div>
+              <div class="provider-row__actions">
                 <button class="provider-row__action" type="button" @click="openDataSessionDialog(session)">
                   {{ copy.settings.data.maintain }}
                 </button>
@@ -1666,6 +1668,31 @@
               </div>
             </div>
           </div>
+
+          <h3>{{ copy.settings.data.timelineTitle }}</h3>
+          <p v-if="settingsState.dataTimelineLoading" class="settings-inline-status">{{ copy.settings.data.timelineLoading }}</p>
+          <p v-if="settingsState.dataTimelineError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.dataTimelineError }}
+          </p>
+          <div class="settings-card">
+            <div v-if="dataTimelineEntries.length === 0 && !settingsState.dataTimelineLoading" class="provider-row provider-row--empty">
+              <div>
+                <strong>{{ copy.settings.data.noTimelineTitle }}</strong>
+                <span>{{ copy.settings.data.noTimelineDescription }}</span>
+              </div>
+            </div>
+            <div v-for="entry in dataTimelineEntries" :key="entry.entry_id || `${entry.created_at}:${entry.entry_type}`" class="settings-row">
+              <div>
+                <strong>{{ timelineEntryLabel(entry) }}</strong>
+                <span>{{ timelineEntryDetail(entry) }}</span>
+                <span>{{ formatTimestamp(entry.created_at) }}</span>
+                <span v-for="item in timelineEntryContent(entry)" :key="`${entry.entry_id}:${item.created_at}:${item.type}:${item.title}`">
+                  {{ timelineItemLabel(item) }}
+                </span>
+              </div>
+              <span v-if="entry.status" class="provider-row__badge">{{ entry.status }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1719,6 +1746,7 @@ const selectedDataSession = ref(null);
 
 function openDataSessionDialog(session) {
   selectedDataSession.value = session;
+  emit("load-data-session-timeline", session?.session_id || "");
 }
 
 function closeDataSessionDialog() {
@@ -1790,9 +1818,6 @@ const updateStatusDescription = computed(() => {
     return status.error;
   }
   const parts = [];
-  if (status.branch) {
-    parts.push(`${props.copy.settings.general.update.branch}: ${status.branch}`);
-  }
   if (status.current_rev_short) {
     parts.push(`${props.copy.settings.general.update.commit}: ${status.current_rev_short}`);
   }
@@ -1819,6 +1844,7 @@ const scheduleTimezoneOptions = computed(() => {
 
 const dataStorage = computed(() => props.settingsState.dataStatus?.storage || {});
 const dataCounts = computed(() => props.settingsState.dataStatus?.counts || {});
+const dataTimelineEntries = computed(() => props.settingsState.dataTimeline?.entries || []);
 
 function formatTimestamp(value) {
   const numeric = Number(value || 0);
@@ -1834,6 +1860,39 @@ function previewMessage(content) {
     return props.copy.settings.data.emptyMessage;
   }
   return text.length > 120 ? `${text.slice(0, 120)}...` : text;
+}
+
+function timelineEntryContent(entry) {
+  return Array.isArray(entry?.content) ? entry.content : [];
+}
+
+function timelineEntryLabel(entry) {
+  if (entry?.run_id) {
+    return props.copy.settings.data.timelineRun(entry.run_id);
+  }
+  return props.copy.settings.data.messageRole(entry?.role || entry?.entry_type || "message");
+}
+
+function timelineEntryDetail(entry) {
+  if (entry?.text) {
+    return previewMessage(entry.text);
+  }
+  const textItem = timelineEntryContent(entry).find((item) => item?.type === "text" && item?.text);
+  if (textItem) {
+    return previewMessage(textItem.text);
+  }
+  const itemCount = timelineEntryContent(entry).length;
+  if (itemCount > 0) {
+    return props.copy.settings.data.timelineItemCount(itemCount);
+  }
+  return props.copy.settings.data.emptyMessage;
+}
+
+function timelineItemLabel(item) {
+  const type = props.copy.settings.data.timelineItemType(item?.type || "event");
+  const title = item?.title || item?.detail || item?.text || "";
+  const status = item?.status ? ` · ${item.status}` : "";
+  return `${type}${title ? `: ${previewMessage(title)}` : ""}${status}`;
 }
 
 const mediaModelCategories = computed(() => [
@@ -2176,7 +2235,7 @@ const mcpToolGroups = computed(() => {
     .sort((left, right) => left.serverName.localeCompare(right.serverName));
 });
 
-defineEmits([
+const emit = defineEmits([
   "close",
   "select-section",
   "save-connection-settings",
@@ -2216,6 +2275,7 @@ defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "load-data-session-timeline",
   "refresh-curator",
   "run-curator-action",
   "begin-cron-job-create",

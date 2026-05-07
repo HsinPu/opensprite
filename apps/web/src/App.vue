@@ -124,6 +124,7 @@
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
     @refresh-data-settings="loadDataSettings"
+    @load-data-session-timeline="loadDataSessionTimeline"
     @begin-cron-job-create="beginCronJobCreate"
     @save-cron-job="saveCronJob"
     @edit-cron-job="beginCronJobEdit"
@@ -228,6 +229,7 @@ const {
   saveScheduleSettings,
   saveNetworkSettings,
   loadDataSettings,
+  loadDataSessionTimeline,
   beginCronJobCreate,
   beginCronJobEdit,
   cancelCronJobEdit,

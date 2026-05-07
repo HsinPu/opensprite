@@ -610,6 +610,14 @@ def test_web_adapter_network_settings_roundtrip(tmp_path):
 
 async def _run_web_run_events_api():
     storage = MemoryStorage()
+    await storage.add_message(
+        "web:browser-1",
+        StoredMessage(role="user", content="inspect run timeline", timestamp=99.0, metadata={"sender_name": "Tester"}),
+    )
+    await storage.add_message(
+        "web:browser-1",
+        StoredMessage(role="assistant", content="timeline inspected", timestamp=105.0),
+    )
     await storage.create_run(
         "web:browser-1",
         "run-1",
@@ -835,6 +843,27 @@ async def _run_web_run_events_api():
             ]
 
             async with session.get(
+                f"http://127.0.0.1:{port}/api/sessions/timeline",
+                params={"session_id": "web:browser-1"},
+            ) as resp:
+                assert resp.status == 200
+                timeline_payload = await resp.json()
+
+            assert timeline_payload["session_id"] == "web:browser-1"
+            assert [message["role"] for message in timeline_payload["messages"]] == ["user", "assistant"]
+            assert [run["run_id"] for run in timeline_payload["runs"]] == ["run-2", "run-1"]
+            assert [entry["entry_id"] for entry in timeline_payload["entries"]] == [
+                "message:1",
+                "run:run-1",
+                "message:2",
+                "run:run-2",
+            ]
+            assert timeline_payload["entries"][0]["text"] == "inspect run timeline"
+            assert timeline_payload["entries"][1]["content"][0]["type"] == "tool"
+            assert timeline_payload["entries"][1]["content"][1]["type"] == "file"
+            assert timeline_payload["entries"][2]["content"][0]["text"] == "timeline inspected"
+
+            async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
                 params={"session_id": "web:browser-1"},
             ) as resp:
@@ -943,6 +972,10 @@ async def _run_web_run_events_api():
 
             async with session.get(f"http://127.0.0.1:{port}/api/runs") as resp:
                 assert resp.status == 400
+
+            async with session.get(f"http://127.0.0.1:{port}/api/sessions/timeline") as resp:
+                assert resp.status == 400
+                assert await resp.text() == "session_id is required"
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",

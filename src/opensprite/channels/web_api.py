@@ -17,7 +17,7 @@ from ..runs.schema import (
     serialize_run_summary,
     serialize_diff_summary,
 )
-from ..runs.session_entries import serialize_run_trace_entries
+from ..runs.session_entries import serialize_run_trace_entries, serialize_session_entries
 
 
 class WebApiHandlers:
@@ -169,6 +169,32 @@ class WebApiHandlers:
         ]
         sessions.sort(key=lambda item: (item["updated_at"], item["session_id"]), reverse=True)
         return web.json_response({"sessions": sessions[:session_limit], "channel": channel_filter or adapter.channel_instance_id})
+
+    async def handle_session_timeline(self, request: web.Request) -> web.Response:
+        adapter = self.adapter
+        storage = adapter._require_storage()
+        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
+        if session_id is None:
+            raise web.HTTPBadRequest(text="session_id is required")
+
+        message_limit = adapter._coerce_limit(request.query.get("messages"), default=200, maximum=500)
+        run_limit = adapter._coerce_limit(request.query.get("runs"), default=50, maximum=100)
+        messages = await storage.get_messages(session_id, limit=message_limit)
+        runs = await storage.get_runs(session_id, limit=run_limit)
+        traces = []
+        for run in runs:
+            trace = await storage.get_run_trace(session_id, run.run_id)
+            if trace is not None:
+                traces.append(trace)
+
+        return web.json_response(
+            {
+                "session_id": session_id,
+                "messages": [adapter._serialize_message(message) for message in messages],
+                "runs": [adapter._serialize_run(run) for run in runs],
+                "entries": serialize_session_entries(messages, traces),
+            }
+        )
 
     async def handle_session_status(self, request: web.Request) -> web.Response:
         adapter = self.adapter
