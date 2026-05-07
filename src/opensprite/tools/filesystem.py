@@ -35,12 +35,37 @@ _DEFAULT_READ_LIMIT = 2000
 _MAX_READ_LIMIT = 2000
 _MAX_READ_CHARS = 50_000
 _MAX_LINE_LENGTH = 2000
+_MAX_AGENT_HINT_CHARS = 8_000
 _SEARCH_RESULT_LIMIT = 100
 _SEARCH_TIMEOUT_SECONDS = 30
 _MAX_DIFF_CHARS = 12_000
 _MAX_SNAPSHOT_CHARS = 200_000
 _MAX_PATCH_CHANGES = 20
 _SHA256_PATTERN = r"^[a-fA-F0-9]{64}$"
+_CONTEXT_INVISIBLE_CHARS = frozenset(
+    {
+        "\u200b",
+        "\u200c",
+        "\u200d",
+        "\u2060",
+        "\ufeff",
+        "\u202a",
+        "\u202b",
+        "\u202c",
+        "\u202d",
+        "\u202e",
+    }
+)
+_CONTEXT_THREAT_PATTERNS = (
+    (re.compile(r"ignore\s+(previous|all|above|prior)\s+instructions", re.IGNORECASE), "prompt_injection"),
+    (re.compile(r"disregard\s+(your|all|any)\s+(instructions|rules|guidelines)", re.IGNORECASE), "disregard_rules"),
+    (re.compile(r"do\s+not\s+tell\s+the\s+user", re.IGNORECASE), "deception_hide"),
+    (re.compile(r"system\s+prompt\s+override", re.IGNORECASE), "system_prompt_override"),
+    (re.compile(r"<!--[^>]*(ignore|override|system|secret|hidden)[^>]*-->", re.IGNORECASE), "html_comment_injection"),
+    (re.compile(r"<\s*div\s+style\s*=\s*[\"'][\s\S]*?display\s*:\s*none", re.IGNORECASE), "hidden_div"),
+    (re.compile(r"curl\s+[^\n]*\$\{?\w*(KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|API)", re.IGNORECASE), "secret_exfiltration"),
+    (re.compile(r"cat\s+[^\n]*(\.env|credentials|\.netrc|\.pgpass)", re.IGNORECASE), "secret_file_access"),
+)
 
 
 def path_touches_protected_system_config(
@@ -131,6 +156,77 @@ def _display_path(workspace: Path, path: Path) -> str:
         return path.relative_to(workspace).as_posix()
     except ValueError:
         return str(path)
+
+
+def _context_file_findings(content: str) -> list[str]:
+    findings: list[str] = []
+    for char in _CONTEXT_INVISIBLE_CHARS:
+        if char in content:
+            findings.append(f"invisible unicode U+{ord(char):04X}")
+    for pattern, finding in _CONTEXT_THREAT_PATTERNS:
+        if pattern.search(content):
+            findings.append(finding)
+    return findings
+
+
+def _truncate_agent_hint(content: str, filename: str) -> str:
+    if len(content) <= _MAX_AGENT_HINT_CHARS:
+        return content
+    head_chars = int(_MAX_AGENT_HINT_CHARS * 0.7)
+    tail_chars = int(_MAX_AGENT_HINT_CHARS * 0.2)
+    return (
+        content[:head_chars].rstrip()
+        + f"\n\n[...truncated {filename}: kept {head_chars}+{tail_chars} of {len(content)} chars. Use read_file to read the full file.]\n\n"
+        + content[-tail_chars:].lstrip()
+    )
+
+
+def _sanitize_agent_hint(content: str, filename: str) -> str:
+    findings = _context_file_findings(content)
+    if findings:
+        return f"[BLOCKED: {filename} contained potential prompt injection ({', '.join(findings)}). Content not loaded.]"
+    return _truncate_agent_hint(content, filename)
+
+
+def _workspace_agents_hint(workspace: Path, target_path: Path, seen_paths: set[Path]) -> str:
+    """Return a newly discovered nearest subdirectory AGENTS.md hint."""
+    try:
+        workspace = workspace.resolve(strict=False)
+        target_path = target_path.resolve(strict=False)
+    except OSError:
+        return ""
+
+    start_dir = target_path if target_path.is_dir() else target_path.parent
+    for directory in [start_dir, *start_dir.parents]:
+        try:
+            directory.relative_to(workspace)
+        except ValueError:
+            break
+        if directory == workspace:
+            break
+        agents_path = directory / "AGENTS.md"
+        if agents_path in seen_paths:
+            return ""
+        seen_paths.add(agents_path)
+        if not agents_path.is_file():
+            continue
+        try:
+            content = agents_path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+        if not content:
+            return ""
+        display_path = _display_path(workspace, agents_path)
+        body = _sanitize_agent_hint(content, "AGENTS.md")
+        return f"# Subdirectory AGENTS.md\n\nLoaded from: `{display_path}`\n\n{body}"
+    return ""
+
+
+def _append_agents_hint(result: str, workspace: Path, target_path: Path, seen_paths: set[Path]) -> str:
+    hint = _workspace_agents_hint(workspace, target_path, seen_paths)
+    if not hint:
+        return result
+    return f"{result}\n\n---\n\n{hint}"
 
 
 def _hash_label(content: str | None) -> str:
@@ -481,6 +577,7 @@ class ReadFileTool(Tool):
     ):
         self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
         self.skills_loader = skills_loader
+        self._agents_hint_seen: set[Path] = set()
 
     def _get_workspace(self) -> Path:
         return self._workspace_resolver()
@@ -578,7 +675,7 @@ class ReadFileTool(Tool):
             ]
             if not selected:
                 header.append("(empty file)")
-                return "\n".join(header)
+                return _append_agents_hint("\n".join(header), workspace, file_path, self._agents_hint_seen)
 
             output = [*header, *selected]
             if has_more:
@@ -588,7 +685,7 @@ class ReadFileTool(Tool):
                 ])
             else:
                 output.extend(["", f"(End of file - total {total_lines} lines)"])
-            return "\n".join(output)
+            return _append_agents_hint("\n".join(output), workspace, file_path, self._agents_hint_seen)
         except Exception as e:
             return f"Error reading file: {str(e)}"
 
@@ -603,6 +700,7 @@ class GlobFilesTool(Tool):
         workspace_resolver: WorkspaceResolver | None = None,
     ):
         self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+        self._agents_hint_seen: set[Path] = set()
 
     def _get_workspace(self) -> Path:
         return self._workspace_resolver()
@@ -672,7 +770,7 @@ class GlobFilesTool(Tool):
                     "",
                     f"(Results truncated: showing first {_SEARCH_RESULT_LIMIT} files. Use a more specific pattern.)",
                 ])
-            return "\n".join(output)
+            return _append_agents_hint("\n".join(output), workspace, search_path, self._agents_hint_seen)
         except Exception as e:
             return f"Error finding files: {str(e)}"
 
@@ -687,6 +785,7 @@ class GrepFilesTool(Tool):
         workspace_resolver: WorkspaceResolver | None = None,
     ):
         self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
+        self._agents_hint_seen: set[Path] = set()
 
     def _get_workspace(self) -> Path:
         return self._workspace_resolver()
@@ -790,7 +889,7 @@ class GrepFilesTool(Tool):
                     "",
                     f"(Results truncated: showing {_SEARCH_RESULT_LIMIT} of {total} matches. Use a more specific path, include, or pattern.)",
                 ])
-            return "\n".join(output)
+            return _append_agents_hint("\n".join(output), workspace, search_path, self._agents_hint_seen)
         except Exception as e:
             return f"Error searching files: {str(e)}"
 
@@ -1116,6 +1215,8 @@ class ListDirTool(Tool):
     ):
         self._workspace_resolver = _build_workspace_resolver(workspace, workspace_resolver)
 
+        self._agents_hint_seen: set[Path] = set()
+
     def _get_workspace(self) -> Path:
         return self._workspace_resolver()
 
@@ -1158,7 +1259,8 @@ class ListDirTool(Tool):
                 suffix = "/" if item.is_dir() else ""
                 items.append(f"{item.name}{suffix}")
             
-            return "\n".join(items) if items else "(empty)"
+            result = "\n".join(items) if items else "(empty)"
+            return _append_agents_hint(result, workspace, dir_path, self._agents_hint_seen)
         except Exception as e:
             return f"Error listing directory: {str(e)}"
 
