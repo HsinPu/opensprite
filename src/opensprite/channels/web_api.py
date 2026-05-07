@@ -148,6 +148,29 @@ class WebApiHandlers:
             }
         )
 
+    async def handle_background_processes(self, request: web.Request) -> web.Response:
+        adapter = self.adapter
+        storage = adapter._require_storage()
+        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
+        states = _coerce_states(request.query.get("states") or request.query.get("state"))
+        limit = adapter._coerce_limit(request.query.get("limit"), default=20, maximum=100)
+        processes = await storage.list_background_processes(
+            owner_session_id=session_id,
+            states=states,
+            limit=limit,
+        )
+        counts: dict[str, int] = {}
+        for process in processes:
+            counts[process.state] = counts.get(process.state, 0) + 1
+        return web.json_response(
+            {
+                "session_id": session_id,
+                "states": list(states or []),
+                "counts": counts,
+                "processes": [_serialize_background_process(process) for process in processes],
+            }
+        )
+
     async def handle_sessions(self, request: web.Request) -> web.Response:
         adapter = self.adapter
         storage = adapter._require_storage()
@@ -384,3 +407,33 @@ class WebApiHandlers:
             raise web.HTTPBadRequest(text="sandbox_path is required")
         result = cleanup(sandbox_path)
         return web.json_response({"ok": bool(result.get("ok")), "cleanup": adapter._json_safe(result)})
+
+
+def _coerce_states(raw: str | None) -> tuple[str, ...] | None:
+    if raw is None:
+        return None
+    states = tuple(item.strip() for item in str(raw).split(",") if item.strip())
+    return states or None
+
+
+def _serialize_background_process(process: Any) -> dict[str, Any]:
+    return {
+        "process_session_id": process.process_session_id,
+        "owner_session_id": process.owner_session_id,
+        "owner_run_id": process.owner_run_id,
+        "owner_channel": process.owner_channel,
+        "owner_external_chat_id": process.owner_external_chat_id,
+        "pid": process.pid,
+        "command": process.command,
+        "cwd": process.cwd,
+        "state": process.state,
+        "termination_reason": process.termination_reason,
+        "exit_code": process.exit_code,
+        "notify_mode": process.notify_mode,
+        "output_tail": process.output_tail,
+        "output_path": process.output_path,
+        "metadata": dict(process.metadata or {}),
+        "started_at": process.started_at,
+        "updated_at": process.updated_at,
+        "finished_at": process.finished_at,
+    }

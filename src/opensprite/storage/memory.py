@@ -11,6 +11,7 @@ from typing import Any
 
 from .base import (
     StorageProvider,
+    StoredBackgroundProcess,
     StoredMessage,
     StoredRun,
     StoredRunEvent,
@@ -40,6 +41,7 @@ class MemoryStorage(StorageProvider):
         self._run_file_changes: dict[tuple[str, str], list[StoredRunFileChange]] = defaultdict(list)
         self._run_parts: dict[tuple[str, str], list[StoredRunPart]] = defaultdict(list)
         self._work_states: dict[str, StoredWorkState] = {}
+        self._background_processes: dict[str, StoredBackgroundProcess] = {}
     
     async def get_messages(self, session_id: str, limit: int | None = None) -> list[StoredMessage]:
         """
@@ -89,6 +91,9 @@ class MemoryStorage(StorageProvider):
                 self._run_file_changes.pop((session_id, run_id), None)
                 self._run_parts.pop((session_id, run_id), None)
         self._work_states.pop(session_id, None)
+        for process_id, process in list(self._background_processes.items()):
+            if process.owner_session_id == session_id:
+                self._background_processes.pop(process_id, None)
     
     async def get_consolidated_index(self, session_id: str) -> int:
         """取得 consolidation 標記"""
@@ -105,7 +110,58 @@ class MemoryStorage(StorageProvider):
         session_ids = set(self._messages.keys())
         session_ids.update(run.session_id for run in self._runs.values())
         session_ids.update(self._work_states.keys())
+        session_ids.update(process.owner_session_id for process in self._background_processes.values())
         return sorted(session_ids)
+
+    async def upsert_background_process(
+        self,
+        process: StoredBackgroundProcess,
+    ) -> StoredBackgroundProcess:
+        existing = self._background_processes.get(process.process_session_id)
+        started_at = existing.started_at if existing is not None and existing.started_at else float(process.started_at or time.time())
+        updated = StoredBackgroundProcess(
+            process_session_id=process.process_session_id,
+            owner_session_id=process.owner_session_id,
+            owner_run_id=process.owner_run_id,
+            owner_channel=process.owner_channel,
+            owner_external_chat_id=process.owner_external_chat_id,
+            pid=process.pid,
+            command=process.command,
+            cwd=process.cwd,
+            state=process.state,
+            termination_reason=process.termination_reason,
+            exit_code=process.exit_code,
+            notify_mode=process.notify_mode,
+            output_tail=process.output_tail,
+            output_path=process.output_path,
+            metadata=dict(process.metadata or {}),
+            started_at=started_at,
+            updated_at=float(process.updated_at or time.time()),
+            finished_at=process.finished_at,
+        )
+        self._background_processes[updated.process_session_id] = updated
+        return updated
+
+    async def get_background_process(self, process_session_id: str) -> StoredBackgroundProcess | None:
+        return self._background_processes.get(process_session_id)
+
+    async def list_background_processes(
+        self,
+        *,
+        owner_session_id: str | None = None,
+        states: tuple[str, ...] | None = None,
+        limit: int | None = None,
+    ) -> list[StoredBackgroundProcess]:
+        processes = list(self._background_processes.values())
+        if owner_session_id is not None:
+            processes = [process for process in processes if process.owner_session_id == owner_session_id]
+        if states:
+            allowed_states = set(states)
+            processes = [process for process in processes if process.state in allowed_states]
+        processes.sort(key=lambda process: (process.updated_at, process.process_session_id), reverse=True)
+        if limit is not None:
+            return processes[:limit]
+        return processes
 
     async def create_run(
         self,

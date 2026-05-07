@@ -15,6 +15,7 @@ import opensprite.auth.codex as codex_module
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
 from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
+from opensprite.storage.base import StoredBackgroundProcess
 
 
 class EchoAgent:
@@ -677,6 +678,47 @@ async def _run_web_run_events_api():
         created_at=104.0,
     )
     await storage.create_run("web:browser-1", "run-2", created_at=200.0)
+    await storage.upsert_background_process(
+        StoredBackgroundProcess(
+            process_session_id="proc-running",
+            owner_session_id="web:browser-1",
+            owner_run_id="run-1",
+            owner_channel="web",
+            owner_external_chat_id="browser-1",
+            pid=1234,
+            command="npm run dev",
+            cwd="C:/repo",
+            state="running",
+            notify_mode="agent_summary",
+            output_tail="server ready",
+            metadata={"source": "test"},
+            started_at=150.0,
+            updated_at=151.0,
+        )
+    )
+    await storage.upsert_background_process(
+        StoredBackgroundProcess(
+            process_session_id="proc-lost",
+            owner_session_id="web:browser-1",
+            owner_run_id="run-1",
+            command="python worker.py",
+            state="lost",
+            termination_reason="runtime_restart",
+            started_at=140.0,
+            updated_at=160.0,
+            finished_at=160.0,
+        )
+    )
+    await storage.upsert_background_process(
+        StoredBackgroundProcess(
+            process_session_id="proc-other",
+            owner_session_id="web:browser-2",
+            command="python other.py",
+            state="running",
+            started_at=170.0,
+            updated_at=170.0,
+        )
+    )
 
     agent = EchoAgent()
     agent.storage = storage
@@ -743,6 +785,24 @@ async def _run_web_run_events_api():
 
             assert runs_payload["session_id"] == "web:browser-1"
             assert [run["run_id"] for run in runs_payload["runs"]] == ["run-2"]
+
+            async with session.get(
+                f"http://127.0.0.1:{port}/api/background-processes",
+                params={"session_id": "web:browser-1", "states": "running,lost", "limit": "10"},
+            ) as resp:
+                assert resp.status == 200
+                processes_payload = await resp.json()
+
+            assert processes_payload["session_id"] == "web:browser-1"
+            assert processes_payload["states"] == ["running", "lost"]
+            assert processes_payload["counts"] == {"lost": 1, "running": 1}
+            assert [process["process_session_id"] for process in processes_payload["processes"]] == [
+                "proc-lost",
+                "proc-running",
+            ]
+            assert processes_payload["processes"][0]["termination_reason"] == "runtime_restart"
+            assert processes_payload["processes"][1]["command"] == "npm run dev"
+            assert processes_payload["processes"][1]["metadata"] == {"source": "test"}
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1",

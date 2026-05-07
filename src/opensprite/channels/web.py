@@ -1842,6 +1842,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/sessions/timeline", self._api.handle_session_timeline)
         self.app.router.add_get("/api/sessions", self._api.handle_sessions)
         self.app.router.add_get("/api/storage/status", self._api.handle_storage_status)
+        self.app.router.add_get("/api/background-processes", self._api.handle_background_processes)
         self.app.router.add_get("/api/runs", self._api.handle_runs)
         self.app.router.add_get("/api/runs/{run_id}/summary", self._api.handle_run_summary)
         self.app.router.add_get("/api/runs/{run_id}", self._api.handle_run_trace)
