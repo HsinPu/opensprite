@@ -1,6 +1,7 @@
 from agent_test_helpers import make_agent_loop
 import opensprite.agent.agent as agent_module
 import opensprite.agent.prompt_logging as prompt_logging_module
+from opensprite.agent.prompt_logging import PromptLoggingService
 
 
 def _make_logging_agent(tmp_path):
@@ -58,3 +59,32 @@ def test_main_prompt_logging_includes_available_subagent_summary(tmp_path, monke
         "[telegram:user-a] prompt.subagents | count=2 names=writer, researcher" in message
         for message in info_messages
     )
+
+
+def test_format_log_preview_redacts_common_secret_shapes():
+    preview = PromptLoggingService.format_log_preview(
+        "OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrstuvwxyz "
+        "Authorization: Bearer github_pat_abcdefghijklmnopqrstuvwxyz "
+        "https://example.test/cb?code=oauth-code&state=ok "
+        'payload={"token": "ghp_abcdefghijklmnopqrstuvwxyz"}',
+        max_chars=500,
+    )
+
+    assert "sk-proj-abcdefghijklmnopqrstuvwxyz" not in preview
+    assert "github_pat_abcdefghijklmnopqrstuvwxyz" not in preview
+    assert "oauth-code" not in preview
+    assert "ghp_abcdefghijklmnopqrstuvwxyz" not in preview
+    assert "OPENAI_API_KEY=sk-pro...wxyz" in preview
+    assert "Authorization: Bearer github...wxyz" in preview
+    assert "code=***&state=ok" in preview
+    assert '"token": "ghp_ab...wxyz"' in preview
+
+
+def test_format_log_preview_redacts_private_key_blocks():
+    preview = PromptLoggingService.format_log_preview(
+        "before -----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY----- after",
+        max_chars=500,
+    )
+
+    assert "secret" not in preview
+    assert "[REDACTED PRIVATE KEY]" in preview
