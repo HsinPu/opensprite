@@ -38,6 +38,7 @@ const [
   curatorSettingsPage,
   settingsModal,
   chatClient,
+  mcpSettingsActions,
   modelSettingsActions,
   networkSettingsActions,
   providerSettingsActions,
@@ -53,6 +54,7 @@ const [
   read("src/components/CuratorSettingsPage.vue"),
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
+  read("src/composables/useMcpSettingsActions.js"),
   read("src/composables/useModelSettingsActions.js"),
   read("src/composables/useNetworkSettingsActions.js"),
   read("src/composables/useProviderSettingsActions.js"),
@@ -60,7 +62,7 @@ const [
   read("src/i18n/copy.js"),
 ]);
 
-const settingsLogic = `${chatClient}\n${modelSettingsActions}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${mcpSettingsActions}\n${modelSettingsActions}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
