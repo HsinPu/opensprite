@@ -11,7 +11,7 @@ from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
 from opensprite.bus import MessageBus
-from opensprite.bus.events import OutboundMessage
+from opensprite.bus.events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
@@ -137,7 +137,11 @@ class HistoryStorage(FakeStorage):
 
 class FakeBus:
     def __init__(self):
+        self.inbound: list[InboundMessage] = []
         self.outbound: list[OutboundMessage] = []
+
+    async def publish_inbound(self, message: InboundMessage) -> None:
+        self.inbound.append(message)
 
     async def publish_outbound(self, message: OutboundMessage) -> None:
         self.outbound.append(message)
@@ -2433,7 +2437,7 @@ def test_process_moves_active_task_to_blocked_when_reply_reports_blocking_error(
     assert "目前無法繼續，測試環境失敗。" in task_block
 
 
-def test_background_session_exit_notifier_publishes_outbound_and_persists_message(tmp_path):
+def test_background_session_exit_notifier_queues_agent_summary_request(tmp_path):
     registry = ToolRegistry()
     registry.register(DummyTool())
     storage = FakeStorage()
@@ -2487,17 +2491,20 @@ def test_background_session_exit_notifier_publishes_outbound_and_persists_messag
         agent._current_channel.reset(channel_token)
         agent._current_session_id.reset(session_token)
 
-    assert len(fake_bus.outbound) == 1
-    outbound = fake_bus.outbound[0]
-    assert outbound.channel == "telegram"
-    assert outbound.external_chat_id == "room-1"
-    assert outbound.session_id == "telegram:room-1"
-    assert "Background session finished." in outbound.content
-    assert "Session ID: bg123" in outbound.content
-    assert "job done" in outbound.content
-    assert storage.saved[-1][1] == "assistant"
-    assert storage.saved[-1][2] == outbound.content
-    assert storage.saved[-1][3]["kind"] == "background_session_exit"
+    assert fake_bus.outbound == []
+    assert len(fake_bus.inbound) == 1
+    inbound = fake_bus.inbound[0]
+    assert inbound.channel == "telegram"
+    assert inbound.external_chat_id == "room-1"
+    assert inbound.session_id == "telegram:room-1"
+    assert inbound.sender_id == "system:background"
+    assert "A managed background process has finished." in inbound.content
+    assert "Session ID: bg123" in inbound.content
+    assert "Command: python job.py" in inbound.content
+    assert "job done" in inbound.content
+    assert inbound.metadata["kind"] == "background_session_summary_request"
+    assert inbound.metadata["_bypass_commands"] is True
+    assert storage.saved == []
 
 
 def test_call_llm_trims_old_history_to_token_budget(tmp_path):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Any, Awaitable, Callable
 
-from ..bus.events import OutboundMessage
+from ..bus.events import InboundMessage
 from ..tools.process_runtime import BackgroundSession
 from ..tools.shell_runtime import format_captured_output
 
@@ -23,8 +23,8 @@ class BackgroundSessionNotificationService:
         self._save_message = save_message
 
     @staticmethod
-    def format_exit_message(session: BackgroundSession) -> str:
-        """Render a concise outbound notice when a managed background session exits."""
+    def format_summary_request(session: BackgroundSession) -> str:
+        """Render the internal request asking the agent to summarize a completed process."""
         output_tail = format_captured_output(
             session.output_chunks,
             max_chars=1200,
@@ -35,15 +35,22 @@ class BackgroundSessionNotificationService:
         )
         return "\n".join(
             [
-                "Background session finished.",
+                "A managed background process has finished. Summarize the result for the user.",
                 f"Session ID: {session.session_id}",
+                f"Command: {session.command}",
                 f"Termination: {session.termination_reason or 'exit'}",
                 f"Exit code: {session.exit_code}",
                 f"Runtime: {runtime_seconds:.2f}s",
+                "Keep the reply concise. Mention whether it succeeded, failed, or was stopped. Include only the most relevant output details.",
                 "Output tail:",
                 output_tail,
             ]
         )
+
+    @staticmethod
+    def format_exit_message(session: BackgroundSession) -> str:
+        """Backward-compatible alias for the agent summary request text."""
+        return BackgroundSessionNotificationService.format_summary_request(session)
 
     def make_exit_notifier(
         self,
@@ -62,19 +69,21 @@ class BackgroundSessionNotificationService:
         sid = session_id
 
         async def _notify(session: BackgroundSession) -> None:
-            content = self.format_exit_message(session)
+            content = self.format_summary_request(session)
             metadata = {
                 "channel": ch,
                 "external_chat_id": tid,
-                "kind": "background_session_exit",
+                "kind": "background_session_summary_request",
                 "session_id": session.session_id,
                 "termination_reason": session.termination_reason or "exit",
                 "exit_code": session.exit_code,
+                "_bypass_commands": True,
             }
-            await self._save_message(sid, "assistant", content, metadata=metadata)
-            await bus.publish_outbound(
-                OutboundMessage(
+            await bus.publish_inbound(
+                InboundMessage(
                     channel=ch,
+                    sender_id="system:background",
+                    sender_name="background process",
                     external_chat_id=tid,
                     session_id=sid,
                     content=content,
