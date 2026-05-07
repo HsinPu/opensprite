@@ -678,6 +678,149 @@ button:disabled {
   background: var(--surface-active);
 }
 
+.background-process-sidebar {
+  display: grid;
+  min-height: 0;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.background-process-sidebar__head button {
+  padding: 3px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.background-process-sidebar__summary {
+  display: flex;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.background-process-sidebar__summary span,
+.background-process-card__status {
+  padding: 2px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.background-process-sidebar__notice {
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.background-process-sidebar__list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.background-process-card {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+
+.background-process-card--active-session {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-soft));
+  background: var(--surface-active);
+}
+
+.background-process-card--running .background-process-card__status {
+  color: #0f766e;
+  border-color: color-mix(in srgb, #0f766e 35%, var(--border-soft));
+}
+
+.background-process-card--failed .background-process-card__status,
+.background-process-card--lost .background-process-card__status {
+  color: #b91c1c;
+  border-color: color-mix(in srgb, #b91c1c 35%, var(--border-soft));
+}
+
+.background-process-card__main {
+  display: grid;
+  gap: 3px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+}
+
+.background-process-card__main strong,
+.background-process-card__main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.background-process-card__main strong {
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.background-process-card__main small,
+.background-process-card__meta {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.background-process-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.background-process-card__meta button {
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-weight: 650;
+}
+
+.background-process-sidebar__collapsed-button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 42px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  background: var(--surface-subtle);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+
+.background-process-sidebar__collapsed-button strong {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  display: grid;
+  min-width: 16px;
+  height: 16px;
+  place-items: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--accent);
+  font-size: 0.62rem;
+}
+
 .sidebar__bottom {
   border-top: 1px solid var(--border-soft);
   padding-top: 10px;
@@ -722,6 +865,9 @@ button:disabled {
   .app-shell--sidebar-collapsed .session-filter,
   .app-shell--sidebar-collapsed .session-tile__heading,
   .app-shell--sidebar-collapsed .session-tile__id,
+  .app-shell--sidebar-collapsed .background-process-sidebar__summary,
+  .app-shell--sidebar-collapsed .background-process-sidebar__notice,
+  .app-shell--sidebar-collapsed .background-process-sidebar__list,
   .app-shell--sidebar-collapsed .settings-button__copy {
     display: none;
   }

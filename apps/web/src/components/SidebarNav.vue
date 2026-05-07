@@ -66,6 +66,18 @@
           </button>
         </div>
       </section>
+
+      <BackgroundProcessSidebar
+        :copy="copy"
+        :processes="backgroundProcesses.processes"
+        :loading="backgroundProcesses.loading"
+        :error="backgroundProcesses.error"
+        :collapsed="collapsed"
+        :active-session-id="activeSessionId"
+        @select-session="$emit('select-background-process', $event)"
+        @select-run="$emit('select-background-process', $event)"
+        @refresh="$emit('refresh-background-processes')"
+      />
     </div>
 
     <div class="sidebar__bottom">
@@ -81,6 +93,8 @@
 </template>
 
 <script setup>
+import BackgroundProcessSidebar from "./BackgroundProcessSidebar.vue";
+
 defineProps({
   copy: {
     type: Object,
@@ -102,6 +116,14 @@ defineProps({
     type: Boolean,
     required: true,
   },
+  backgroundProcesses: {
+    type: Object,
+    required: true,
+  },
+  activeSessionId: {
+    type: String,
+    default: "",
+  },
   getSessionDisplayId: {
     type: Function,
     required: true,
@@ -116,6 +138,8 @@ defineEmits([
   "create-new-chat",
   "set-active-session",
   "set-session-channel-filter",
+  "select-background-process",
+  "refresh-background-processes",
   "toggle-sidebar-collapsed",
   "open-settings",
 ]);

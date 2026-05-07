@@ -44,6 +44,7 @@ const RUN_SUMMARY_FETCH_DELAY_MS = 500;
 const RUN_SUMMARY_NOT_FOUND_RETRY_DELAY_MS = 1200;
 const RUN_SUMMARY_NOT_FOUND_RETRY_LIMIT = 3;
 const RUN_BACKFILL_COOLDOWN_MS = 2000;
+const BACKGROUND_PROCESS_LIMIT = 30;
 const CURATOR_HISTORY_LIMIT = 5;
 const CURATOR_POLL_INTERVAL_MS = 2500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -818,6 +819,47 @@ function buildRunsPath(sessionId) {
   return `/api/runs?session_id=${encodeURIComponent(sessionId)}&limit=${RUN_HISTORY_LIMIT}`;
 }
 
+function buildBackgroundProcessesPath(sessionId = "", limit = BACKGROUND_PROCESS_LIMIT) {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (sessionId) {
+    params.set("session_id", sessionId);
+  }
+  return `/api/background-processes?${params.toString()}`;
+}
+
+function normalizeBackgroundProcess(payload) {
+  const processSessionId = String(payload?.process_session_id || payload?.processSessionId || "").trim();
+  if (!processSessionId) {
+    return null;
+  }
+  const ownerSessionId = String(payload?.owner_session_id || payload?.ownerSessionId || "").trim();
+  const ownerChannel = String(payload?.owner_channel || payload?.ownerChannel || channelFromSessionId(ownerSessionId) || "").trim();
+  const ownerExternalChatId = String(payload?.owner_external_chat_id || payload?.ownerExternalChatId || "").trim()
+    || externalChatIdFromSessionId(ownerSessionId);
+  const finishedAt = payload?.finished_at ?? payload?.finishedAt;
+  const exitCode = payload?.exit_code ?? payload?.exitCode;
+  return {
+    processSessionId,
+    ownerSessionId,
+    ownerRunId: String(payload?.owner_run_id || payload?.ownerRunId || "").trim(),
+    ownerChannel,
+    ownerExternalChatId,
+    pid: payload?.pid ?? null,
+    command: String(payload?.command || "").trim(),
+    cwd: String(payload?.cwd || "").trim(),
+    state: String(payload?.state || "unknown").trim() || "unknown",
+    terminationReason: String(payload?.termination_reason || payload?.terminationReason || "").trim(),
+    exitCode: Number.isFinite(Number(exitCode)) ? Number(exitCode) : null,
+    notifyMode: String(payload?.notify_mode || payload?.notifyMode || "").trim(),
+    outputTail: String(payload?.output_tail || payload?.outputTail || "").trim(),
+    outputPath: String(payload?.output_path || payload?.outputPath || "").trim(),
+    metadata: payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
+    startedAt: normalizeEventTimestamp(payload?.started_at ?? payload?.startedAt),
+    updatedAt: normalizeEventTimestamp(payload?.updated_at ?? payload?.updatedAt),
+    finishedAt: finishedAt ? normalizeEventTimestamp(finishedAt) : null,
+  };
+}
+
 function statusFromRunEvent(eventType, payload, eventStatus = "") {
   if (eventType === "run_started") {
     return "running";
@@ -1461,6 +1503,13 @@ export function useChatClient() {
       loading: false,
       error: "",
     },
+    backgroundProcesses: {
+      processes: [],
+      counts: {},
+      loading: false,
+      error: "",
+      lastLoadedAt: null,
+    },
   });
 
   const overlayProfileId = ref(storedOverlayProfileId || generateOverlayProfileId());
@@ -1600,6 +1649,16 @@ export function useChatClient() {
   });
 
   const currentCuratorStatus = computed(() => curatorState.status || null);
+
+  const currentSessionApiId = computed(() => getCuratorSessionId(currentSession.value));
+
+  const activeBackgroundProcesses = computed(() => {
+    const sessionId = currentSessionApiId.value;
+    if (!sessionId) {
+      return [];
+    }
+    return state.backgroundProcesses.processes.filter((process) => process.ownerSessionId === sessionId);
+  });
 
   const settingsTitle = computed(() => copy.value.settingsTitles[settingsSection.value] || copy.value.settingsTitles.general);
 
@@ -1767,6 +1826,7 @@ export function useChatClient() {
       curatorState.historyError = "";
       void loadCurrentSessionRuns();
       void refreshCuratorState();
+      void loadBackgroundProcesses({ quiet: true });
       scrollMessagesToBottom();
     },
     { immediate: true },
@@ -2192,6 +2252,9 @@ export function useChatClient() {
         void refreshCuratorState({ sessionId: curatorSessionId, quiet: true });
       }
     }
+    if (eventType.startsWith("background_process.")) {
+      void loadBackgroundProcesses({ quiet: true });
+    }
   }
 
   function setNotice(text, tone) {
@@ -2359,6 +2422,24 @@ export function useChatClient() {
     const firstWebSession = getFirstWebSession();
     if (firstWebSession) {
       setActiveSession(firstWebSession.externalChatId);
+    }
+  }
+
+  async function selectBackgroundProcess(process) {
+    const ownerSessionId = String(process?.ownerSessionId || "").trim();
+    const ownerChannel = String(process?.ownerChannel || channelFromSessionId(ownerSessionId) || "web").trim() || "web";
+    const ownerExternalChatId = String(process?.ownerExternalChatId || "").trim() || externalChatIdFromSessionId(ownerSessionId);
+    const externalChatId = ownerChannel === "web" ? ownerExternalChatId : ownerSessionId;
+    if (!externalChatId) {
+      return;
+    }
+
+    const session = ensureSession(externalChatId, ownerSessionId);
+    session.channel = ownerChannel;
+    setActiveSession(session.externalChatId);
+    await loadCurrentSessionRuns({ force: true });
+    if (process?.ownerRunId) {
+      selectRun(process.ownerRunId);
     }
   }
 
@@ -3105,6 +3186,38 @@ export function useChatClient() {
     }
   }
 
+  async function loadBackgroundProcesses(options = {}) {
+    const sessionId = String(options?.sessionId || "").trim();
+    const quiet = Boolean(options?.quiet);
+    const limit = coerceNonNegativeInteger(options?.limit) || BACKGROUND_PROCESS_LIMIT;
+    if (state.backgroundProcesses.loading || clientDisposed) {
+      return [];
+    }
+
+    if (!quiet) {
+      state.backgroundProcesses.loading = true;
+      state.backgroundProcesses.error = "";
+    }
+    try {
+      const payload = await requestSettingsJson(buildBackgroundProcessesPath(sessionId, limit));
+      const processes = Array.isArray(payload?.processes)
+        ? payload.processes.map(normalizeBackgroundProcess).filter(Boolean)
+        : [];
+      state.backgroundProcesses.processes = processes;
+      state.backgroundProcesses.counts = payload?.counts && typeof payload.counts === "object" ? payload.counts : {};
+      state.backgroundProcesses.error = "";
+      state.backgroundProcesses.lastLoadedAt = Date.now();
+      return processes;
+    } catch (error) {
+      state.backgroundProcesses.error = error?.message || copy.value.sidebar.backgroundProcessesLoadFailed;
+      return [];
+    } finally {
+      if (!quiet) {
+        state.backgroundProcesses.loading = false;
+      }
+    }
+  }
+
   async function loadCurrentSessionRuns({ force = false } = {}) {
     const session = currentSession.value;
     if (!session?.sessionId || session.runsLoading || (session.runsLoaded && !force)) {
@@ -3632,6 +3745,7 @@ export function useChatClient() {
       }
       state.connectionState = "connected";
       setNotice(copy.value.notices.connected, "success");
+      void loadBackgroundProcesses({ quiet: true });
     });
 
     socket.addEventListener("message", (event) => {
@@ -4010,6 +4124,8 @@ export function useChatClient() {
     currentPermissionRequests,
     curatorState,
     currentCuratorStatus,
+    currentSessionApiId,
+    activeBackgroundProcesses,
     settingsTitle,
     sessionMeta,
     runtimeHint,
@@ -4027,6 +4143,7 @@ export function useChatClient() {
     getSessionTitle,
     setActiveSession,
     setSessionChannelFilter,
+    selectBackgroundProcess,
     selectRun,
     selectSettingsSection,
     openSettings,
@@ -4041,6 +4158,7 @@ export function useChatClient() {
     loadScheduleSettings,
     loadNetworkSettings,
     loadDataSettings,
+    loadBackgroundProcesses,
     loadDataSessionTimeline,
     loadMcpSettings,
     loadCronJobs,

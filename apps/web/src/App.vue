@@ -16,11 +16,15 @@
       :sessions="sidebarSessions"
       :session-channel-filter="sessionChannelFilter"
       :collapsed="sidebarCollapsed"
+      :background-processes="state.backgroundProcesses"
+      :active-session-id="currentSessionApiId"
       :get-session-display-id="getSessionDisplayId"
       :get-session-title="getSessionTitle"
       @create-new-chat="createNewChat"
       @set-active-session="setActiveSession"
       @set-session-channel-filter="setSessionChannelFilter"
+      @select-background-process="selectBackgroundProcess"
+      @refresh-background-processes="loadBackgroundProcesses"
       @toggle-sidebar-collapsed="toggleSidebarCollapsed"
       @open-settings="openSettings()"
     />
@@ -173,6 +177,7 @@ const {
   currentPermissionRequests,
   curatorState,
   currentCuratorStatus,
+  currentSessionApiId,
   settingsTitle,
   sessionMeta,
   composerHint,
@@ -189,6 +194,7 @@ const {
   getSessionTitle,
   setActiveSession,
   setSessionChannelFilter,
+  selectBackgroundProcess,
   selectRun,
   selectSettingsSection,
   openSettings,
@@ -231,6 +237,7 @@ const {
   saveScheduleSettings,
   saveNetworkSettings,
   loadDataSettings,
+  loadBackgroundProcesses,
   loadDataSessionTimeline,
   beginCronJobCreate,
   beginCronJobEdit,
