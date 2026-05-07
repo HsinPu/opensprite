@@ -711,6 +711,19 @@ async def _run_web_run_events_api():
     )
     await storage.upsert_background_process(
         StoredBackgroundProcess(
+            process_session_id="proc-completed",
+            owner_session_id="web:browser-1",
+            owner_run_id="run-1",
+            command="npm run build",
+            state="completed",
+            exit_code=0,
+            started_at=130.0,
+            updated_at=155.0,
+            finished_at=155.0,
+        )
+    )
+    await storage.upsert_background_process(
+        StoredBackgroundProcess(
             process_session_id="proc-other",
             owner_session_id="web:browser-2",
             command="python other.py",
@@ -803,6 +816,27 @@ async def _run_web_run_events_api():
             assert processes_payload["processes"][0]["termination_reason"] == "runtime_restart"
             assert processes_payload["processes"][1]["command"] == "npm run dev"
             assert processes_payload["processes"][1]["metadata"] == {"source": "test"}
+
+            async with session.get(f"http://127.0.0.1:{port}/api/evals/long-task") as resp:
+                assert resp.status == 200
+                eval_status_payload = await resp.json()
+
+            assert eval_status_payload["ready"] is True
+            assert eval_status_payload["background_process_counts"] == {"completed": 1, "lost": 1, "running": 2}
+            assert "completion_rate" in {metric["id"] for metric in eval_status_payload["recommended_metrics"]}
+            assert "restart_recovery" in {scenario["id"] for scenario in eval_status_payload["recommended_scenarios"]}
+
+            async with session.post(f"http://127.0.0.1:{port}/api/evals/long-task/smoke") as resp:
+                assert resp.status == 200
+                eval_smoke_payload = await resp.json()
+
+            assert eval_smoke_payload["ok"] is True
+            assert [check["id"] for check in eval_smoke_payload["checks"]] == [
+                "storage_available",
+                "background_process_api",
+                "run_event_schema",
+            ]
+            assert eval_smoke_payload["background_process_counts"] == {"completed": 1, "lost": 1, "running": 2}
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1",

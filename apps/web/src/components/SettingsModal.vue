@@ -105,6 +105,15 @@
             <span aria-hidden="true">▣</span>
             {{ copy.settingsTitles.data }}
           </button>
+          <button
+            class="settings-nav__item"
+            :class="{ 'settings-nav__item--active': section === 'eval' }"
+            type="button"
+            @click="$emit('select-section', 'eval')"
+          >
+            <span aria-hidden="true">✓</span>
+            {{ copy.settingsTitles.eval }}
+          </button>
         </div>
 
         <div class="settings-nav__footer">
@@ -1204,6 +1213,78 @@
           </div>
         </section>
 
+        <section v-show="section === 'eval'" class="settings-page">
+          <p v-if="settingsState.evalLoading" class="settings-inline-status">{{ copy.settings.eval.loading }}</p>
+          <p v-if="settingsState.evalNotice" class="settings-inline-status">{{ settingsState.evalNotice }}</p>
+          <p v-if="settingsState.evalError" class="settings-inline-status settings-inline-status--error">
+            {{ settingsState.evalError }}
+          </p>
+
+          <h3>{{ copy.settings.eval.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.eval.readinessTitle }}</strong>
+                <span>{{ evalReadinessLabel }}</span>
+              </div>
+              <button class="secondary-button" type="button" :disabled="settingsState.evalLoading" @click="$emit('refresh-eval-status')">
+                {{ copy.settings.eval.refresh }}
+              </button>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.eval.smokeTitle }}</strong>
+                <span>{{ copy.settings.eval.smokeDescription }}</span>
+              </div>
+              <button class="secondary-button" type="button" :disabled="settingsState.evalRunning" @click="$emit('run-eval-smoke')">
+                {{ settingsState.evalRunning ? copy.settings.eval.running : copy.settings.eval.runSmoke }}
+              </button>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.eval.processCountsTitle }}</h3>
+          <div class="settings-card eval-grid">
+            <div v-for="entry in evalProcessCounts" :key="entry.state" class="settings-row">
+              <div>
+                <strong>{{ entry.state }}</strong>
+                <span>{{ copy.settings.eval.processCount(entry.count) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.eval.smokeResultsTitle }}</h3>
+          <div class="settings-card">
+            <div v-if="!settingsState.evalSmoke.checks.length" class="provider-row provider-row--empty">
+              <div>
+                <strong>{{ copy.settings.eval.noSmokeTitle }}</strong>
+                <span>{{ copy.settings.eval.noSmokeDescription }}</span>
+              </div>
+            </div>
+            <div v-for="check in settingsState.evalSmoke.checks" :key="check.id" class="settings-row">
+              <div>
+                <strong>{{ check.label }}</strong>
+                <span>{{ check.detail }}</span>
+              </div>
+              <span class="provider-row__badge">{{ check.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.eval.metricsTitle }}</h3>
+          <div class="settings-card eval-chip-list">
+            <span v-for="metric in settingsState.evalStatus.recommended_metrics" :key="metric.id" class="provider-row__badge">
+              {{ metric.label }}
+            </span>
+          </div>
+
+          <h3>{{ copy.settings.eval.scenariosTitle }}</h3>
+          <div class="settings-card eval-chip-list">
+            <span v-for="scenario in settingsState.evalStatus.recommended_scenarios" :key="scenario.id" class="provider-row__badge">
+              {{ scenario.label }}
+            </span>
+          </div>
+        </section>
+
         <section v-show="section === 'data'" class="settings-page">
           <p v-if="settingsState.dataLoading" class="settings-inline-status">{{ copy.settings.data.loading }}</p>
           <p v-if="settingsState.dataError" class="settings-inline-status settings-inline-status--error">
@@ -2271,6 +2352,19 @@ const networkSummary = computed(() => {
   return props.copy.settings.network.proxyConfigured(active);
 });
 
+const evalReadinessLabel = computed(() => {
+  if (props.settingsState.evalStatus.ready) {
+    return props.copy.settings.eval.ready;
+  }
+  return props.copy.settings.eval.notReady;
+});
+
+const evalProcessCounts = computed(() => {
+  const counts = props.settingsState.evalStatus.background_process_counts || {};
+  const entries = Object.entries(counts).map(([state, count]) => ({ state, count }));
+  return entries.length ? entries : [{ state: props.copy.settings.eval.none, count: 0 }];
+});
+
 const mcpToolGroups = computed(() => {
   const toolNames = props.settingsState.mcp.runtime?.tool_names || [];
   const servers = Array.isArray(props.settingsState.mcp.servers) ? props.settingsState.mcp.servers : [];
@@ -2360,6 +2454,8 @@ const emit = defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "refresh-eval-status",
+  "run-eval-smoke",
   "load-data-session-timeline",
   "refresh-curator",
   "run-curator-action",

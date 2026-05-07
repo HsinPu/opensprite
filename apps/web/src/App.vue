@@ -130,6 +130,8 @@
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
     @refresh-data-settings="loadDataSettings"
+    @refresh-eval-status="loadEvalStatus"
+    @run-eval-smoke="runEvalSmokeCheck"
     @load-data-session-timeline="loadDataSessionTimeline"
     @begin-cron-job-create="beginCronJobCreate"
     @save-cron-job="saveCronJob"
@@ -237,6 +239,8 @@ const {
   saveScheduleSettings,
   saveNetworkSettings,
   loadDataSettings,
+  loadEvalStatus,
+  runEvalSmokeCheck,
   loadBackgroundProcesses,
   loadDataSessionTimeline,
   beginCronJobCreate,

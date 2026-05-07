@@ -3615,6 +3615,27 @@ button:disabled {
   display: grid;
 }
 
+.eval-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.eval-grid .settings-row {
+  border-bottom: 0;
+  border-right: 1px solid #dddddd;
+}
+
+.eval-grid .settings-row:last-child {
+  border-right: 0;
+}
+
+.eval-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px;
+}
+
 .data-timeline-table-wrap {
   overflow-x: auto;
 }

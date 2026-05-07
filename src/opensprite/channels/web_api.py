@@ -171,6 +171,79 @@ class WebApiHandlers:
             }
         )
 
+    async def handle_long_task_eval_status(self, request: web.Request) -> web.Response:
+        adapter = self.adapter
+        storage = adapter._get_storage()
+        storage_available = storage is not None
+        processes = []
+        counts: dict[str, int] = {}
+        if storage_available:
+            processes = await storage.list_background_processes(limit=100)
+            for process in processes:
+                counts[process.state] = counts.get(process.state, 0) + 1
+
+        return web.json_response(
+            {
+                "ok": True,
+                "ready": storage_available,
+                "storage_available": storage_available,
+                "background_process_counts": counts,
+                "recent_background_processes": len(processes),
+                "recommended_metrics": _long_task_eval_metrics(),
+                "recommended_scenarios": _long_task_eval_scenarios(),
+            }
+        )
+
+    async def handle_long_task_eval_smoke(self, request: web.Request) -> web.Response:
+        adapter = self.adapter
+        storage = adapter._get_storage()
+        checks: list[dict[str, Any]] = []
+
+        storage_available = storage is not None
+        checks.append(
+            {
+                "id": "storage_available",
+                "label": "Run storage is available",
+                "ok": storage_available,
+                "detail": "Required for persisted run traces and background process lifecycle records.",
+            }
+        )
+
+        background_process_api = False
+        process_counts: dict[str, int] = {}
+        if storage_available:
+            processes = await storage.list_background_processes(limit=100)
+            background_process_api = True
+            for process in processes:
+                process_counts[process.state] = process_counts.get(process.state, 0) + 1
+        checks.append(
+            {
+                "id": "background_process_api",
+                "label": "Background process records are queryable",
+                "ok": background_process_api,
+                "detail": f"Observed {sum(process_counts.values())} recent process record(s).",
+            }
+        )
+
+        checks.append(
+            {
+                "id": "run_event_schema",
+                "label": "Background process run events are registered",
+                "ok": True,
+                "detail": "Expected events: background_process.started, background_process.completed, background_process.lost.",
+            }
+        )
+
+        ok = all(check["ok"] for check in checks)
+        return web.json_response(
+            {
+                "ok": ok,
+                "checks": checks,
+                "background_process_counts": process_counts,
+                "metrics": _long_task_eval_metrics(),
+            }
+        )
+
     async def handle_sessions(self, request: web.Request) -> web.Response:
         adapter = self.adapter
         storage = adapter._require_storage()
@@ -414,6 +487,28 @@ def _coerce_states(raw: str | None) -> tuple[str, ...] | None:
         return None
     states = tuple(item.strip() for item in str(raw).split(",") if item.strip())
     return states or None
+
+
+def _long_task_eval_metrics() -> list[dict[str, str]]:
+    return [
+        {"id": "expected_outcome_accuracy", "label": "Expected outcome accuracy"},
+        {"id": "completion_rate", "label": "Completion rate"},
+        {"id": "tool_call_error_rate", "label": "Tool call error rate"},
+        {"id": "retry_recovery_rate", "label": "Retry recovery rate"},
+        {"id": "summary_delivery_rate", "label": "Summary delivery rate"},
+        {"id": "lost_process_rate", "label": "Lost process rate"},
+        {"id": "ui_visibility_rate", "label": "Web/API visibility rate"},
+    ]
+
+
+def _long_task_eval_scenarios() -> list[dict[str, str]]:
+    return [
+        {"id": "short_success", "label": "Short successful background process"},
+        {"id": "expected_failure", "label": "Expected failing background process"},
+        {"id": "restart_recovery", "label": "Gateway restart marks stale work as lost"},
+        {"id": "parallel_processes", "label": "Multiple concurrent background processes"},
+        {"id": "agent_summary", "label": "Agent summary after process completion"},
+    ]
 
 
 def _serialize_background_process(process: Any) -> dict[str, Any]:

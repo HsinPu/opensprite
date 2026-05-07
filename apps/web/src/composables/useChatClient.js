@@ -3333,6 +3333,47 @@ export function useChatClient() {
     }
   }
 
+  async function loadEvalStatus() {
+    settingsState.evalLoading = true;
+    settingsState.evalError = "";
+    try {
+      const payload = await requestSettingsJson("/api/evals/long-task");
+      settingsState.evalStatus = {
+        ready: Boolean(payload?.ready),
+        storage_available: Boolean(payload?.storage_available),
+        background_process_counts: payload?.background_process_counts || {},
+        recent_background_processes: payload?.recent_background_processes || 0,
+        recommended_metrics: Array.isArray(payload?.recommended_metrics) ? payload.recommended_metrics : [],
+        recommended_scenarios: Array.isArray(payload?.recommended_scenarios) ? payload.recommended_scenarios : [],
+      };
+    } catch (error) {
+      settingsState.evalError = error?.message || copy.value.notices.evalStatusLoadFailed;
+    } finally {
+      settingsState.evalLoading = false;
+    }
+  }
+
+  async function runEvalSmokeCheck() {
+    settingsState.evalRunning = true;
+    settingsState.evalError = "";
+    settingsState.evalNotice = "";
+    try {
+      const payload = await requestSettingsJson("/api/evals/long-task/smoke", { method: "POST" });
+      settingsState.evalSmoke = {
+        ok: Boolean(payload?.ok),
+        checks: Array.isArray(payload?.checks) ? payload.checks : [],
+        background_process_counts: payload?.background_process_counts || {},
+        metrics: Array.isArray(payload?.metrics) ? payload.metrics : [],
+      };
+      settingsState.evalNotice = payload?.ok ? copy.value.settings.eval.smokePassed : copy.value.settings.eval.smokeFailed;
+      await loadEvalStatus();
+    } catch (error) {
+      settingsState.evalError = error?.message || copy.value.notices.evalSmokeFailed;
+    } finally {
+      settingsState.evalRunning = false;
+    }
+  }
+
   function loadSettingsSection(sectionName) {
     if (sectionName === "general") {
       loadUpdateStatus();
@@ -3367,6 +3408,10 @@ export function useChatClient() {
     }
     if (sectionName === "data") {
       loadDataSettings();
+      return;
+    }
+    if (sectionName === "eval") {
+      loadEvalStatus();
       return;
     }
     if (sectionName === "curator") {
@@ -4158,6 +4203,8 @@ export function useChatClient() {
     loadScheduleSettings,
     loadNetworkSettings,
     loadDataSettings,
+    loadEvalStatus,
+    runEvalSmokeCheck,
     loadBackgroundProcesses,
     loadDataSessionTimeline,
     loadMcpSettings,
