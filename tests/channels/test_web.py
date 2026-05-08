@@ -807,7 +807,8 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
                 payload = await resp.json()
                 assert payload["browser"]["enabled"] is False
                 assert payload["browser"]["backend"] == "agent-browser"
-                assert payload["browser"]["backends"] == ["agent-browser"]
+                assert payload["browser"]["backends"] == ["agent-browser", "browserbase", "browser-use", "firecrawl"]
+                assert payload["browser"]["cloud"]["browserbase"]["configured"] is False
                 assert "install_hint" in payload["browser"]["runtime"]
 
             async with session.put(
@@ -838,17 +839,45 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/browser",
+                json={
+                    "backend": "browserbase",
+                    "browserbase_api_key": "bb-key",
+                    "browserbase_project_id": "project-1",
+                    "browserbase_proxies": False,
+                    "browserbase_advanced_stealth": True,
+                    "browserbase_keep_alive": False,
+                    "browser_use_api_key": "bu-key",
+                    "firecrawl_api_key": "fc-key",
+                },
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["browser"]["backend"] == "browserbase"
+                assert payload["browser"]["cloud"]["browserbase"]["configured"] is True
+                assert payload["browser"]["cloud"]["browserbase"]["api_key_configured"] is True
+                assert payload["browser"]["cloud"]["browserbase"]["project_id"] == "project-1"
+                assert "bb-key" not in json.dumps(payload)
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/browser",
                 json={"backend": "unknown"},
             ) as resp:
                 assert resp.status == 400
 
         loaded = Config.from_json(config_path)
         assert loaded.tools.browser.enabled is True
-        assert loaded.tools.browser.backend == "agent-browser"
+        assert loaded.tools.browser.backend == "browserbase"
         assert loaded.tools.browser.command_timeout == 45
         assert loaded.tools.browser.session_timeout == 600
         assert loaded.tools.browser.cdp_url == ""
         assert loaded.tools.browser.allow_private_urls is True
+        assert loaded.tools.browser.browserbase_api_key == "bb-key"
+        assert loaded.tools.browser.browserbase_project_id == "project-1"
+        assert loaded.tools.browser.browserbase_proxies is False
+        assert loaded.tools.browser.browserbase_advanced_stealth is True
+        assert loaded.tools.browser.browserbase_keep_alive is False
+        assert loaded.tools.browser.browser_use_api_key == "bu-key"
+        assert loaded.tools.browser.firecrawl_api_key == "fc-key"
     finally:
         adapter_task.cancel()
         try:

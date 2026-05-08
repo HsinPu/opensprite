@@ -120,6 +120,8 @@ assertIncludes(app, "confirmClearHistoryTitle", "eval history clear custom confi
 assertIncludes(settingsModal, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
+assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
+assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");

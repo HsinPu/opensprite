@@ -69,6 +69,7 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
+from ..tools.browser_runtime import SUPPORTED_BROWSER_BACKENDS, browser_cloud_status
 from ..utils.log import logger, setup_log
 from .web_api import WebApiHandlers
 
@@ -78,7 +79,7 @@ class WebAdapter(MessageAdapter):
 
     LOG_LEVELS = ("TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL")
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
-    BROWSER_BACKENDS = ("agent-browser",)
+    BROWSER_BACKENDS = SUPPORTED_BROWSER_BACKENDS
     LLM_DECODING_PRESETS = {
         "precise": {
             "temperature": 0.25,
@@ -478,7 +479,7 @@ class WebAdapter(MessageAdapter):
                 "install_hint": "",
             }
 
-        npx = shutil.which("npx")
+        npx = shutil.which("npx") or shutil.which("npx.cmd")
         if npx:
             return {
                 "available": True,
@@ -503,6 +504,7 @@ class WebAdapter(MessageAdapter):
             "session_timeout": int(getattr(browser, "session_timeout", 300) or 300),
             "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
             "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),
+            "cloud": browser_cloud_status(browser),
             "runtime": cls._browser_runtime_status(),
         }
 
@@ -1933,6 +1935,20 @@ class WebAdapter(MessageAdapter):
             field="allow_private_urls",
             default=browser.allow_private_urls,
         )
+        for field in (
+            "browserbase_api_key",
+            "browserbase_project_id",
+            "browserbase_base_url",
+            "browser_use_api_key",
+            "browser_use_base_url",
+            "firecrawl_api_key",
+            "firecrawl_base_url",
+        ):
+            if field in body:
+                setattr(browser, field, self._coerce_optional_text(body.get(field), default="") or "")
+        for field in ("browserbase_proxies", "browserbase_advanced_stealth", "browserbase_keep_alive"):
+            if field in body:
+                setattr(browser, field, self._coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
         config.save(config_path)
         return web.json_response({"browser": self._browser_payload(config), "restart_required": True})
 

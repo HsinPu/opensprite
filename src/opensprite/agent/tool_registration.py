@@ -56,7 +56,7 @@ from ..tools import (
     RunWorkflowTool,
 )
 from ..tools.delegate import DelegateTool
-from ..tools.browser_runtime import AgentBrowserRuntime
+from ..tools.browser_runtime import AgentBrowserRuntime, cloud_provider_from_config
 from ..tools.process_runtime import BackgroundProcessManager
 from ..tools.permissions import ToolPermissionPolicy
 
@@ -301,6 +301,7 @@ def register_browser_tools(
         command_timeout=getattr(browser_config, "command_timeout", 30),
         session_timeout=getattr(browser_config, "session_timeout", 300),
         cdp_url=getattr(browser_config, "cdp_url", ""),
+        cloud_provider=cloud_provider_from_config(browser_config) if browser_config is not None else None,
     )
     kwargs = {"get_session_id": get_session_id, "runtime": runtime, "browser_config": browser_config}
     registry.register(BrowserNavigateTool(**kwargs))

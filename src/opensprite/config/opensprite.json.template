@@ -59,7 +59,17 @@
       "command_timeout": 30,
       "session_timeout": 300,
       "cdp_url": "",
-      "allow_private_urls": false
+      "allow_private_urls": false,
+      "browserbase_api_key": "",
+      "browserbase_project_id": "",
+      "browserbase_base_url": "https://api.browserbase.com",
+      "browserbase_proxies": true,
+      "browserbase_advanced_stealth": false,
+      "browserbase_keep_alive": true,
+      "browser_use_api_key": "",
+      "browser_use_base_url": "https://api.browser-use.com/api/v3",
+      "firecrawl_api_key": "",
+      "firecrawl_base_url": "https://api.firecrawl.dev"
     },
     "cron": {
       "default_timezone": "UTC"

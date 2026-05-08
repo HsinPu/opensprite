@@ -424,11 +424,21 @@ class BrowserToolConfig(BaseModel):
     """Browser automation tool configuration."""
 
     enabled: bool = False
-    backend: Literal["agent-browser"] = "agent-browser"
+    backend: Literal["agent-browser", "browserbase", "browser-use", "firecrawl"] = "agent-browser"
     command_timeout: int = Field(default=30, ge=1)
     session_timeout: int = Field(default=300, ge=1)
     cdp_url: str = ""
     allow_private_urls: bool = False
+    browserbase_api_key: str = ""
+    browserbase_project_id: str = ""
+    browserbase_base_url: str = "https://api.browserbase.com"
+    browserbase_proxies: bool = True
+    browserbase_advanced_stealth: bool = False
+    browserbase_keep_alive: bool = True
+    browser_use_api_key: str = ""
+    browser_use_base_url: str = "https://api.browser-use.com/api/v3"
+    firecrawl_api_key: str = ""
+    firecrawl_base_url: str = "https://api.firecrawl.dev"
 
 
 class CronToolConfig(BaseModel):

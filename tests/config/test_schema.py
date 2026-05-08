@@ -306,6 +306,10 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.browser.session_timeout == 300
     assert config.browser.cdp_url == ""
     assert config.browser.allow_private_urls is False
+    assert config.browser.browserbase_api_key == ""
+    assert config.browser.browserbase_project_id == ""
+    assert config.browser.browser_use_api_key == ""
+    assert config.browser.firecrawl_api_key == ""
     assert config.cron.default_timezone == "UTC"
     assert config.permissions.enabled is True
     assert config.permissions.approval_mode is None
@@ -332,11 +336,21 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
             },
             "browser": {
                 "enabled": True,
-                "backend": "agent-browser",
+                "backend": "browserbase",
                 "command_timeout": 11,
                 "session_timeout": 222,
                 "cdp_url": "http://127.0.0.1:9222",
                 "allow_private_urls": True,
+                "browserbase_api_key": "bb-key",
+                "browserbase_project_id": "project-1",
+                "browserbase_base_url": "https://browserbase.local",
+                "browserbase_proxies": False,
+                "browserbase_advanced_stealth": True,
+                "browserbase_keep_alive": False,
+                "browser_use_api_key": "bu-key",
+                "browser_use_base_url": "https://browser-use.local/api/v3",
+                "firecrawl_api_key": "fc-key",
+                "firecrawl_base_url": "https://firecrawl.local",
             },
             "cron": {"default_timezone": "Asia/Taipei"},
             "permissions": {
@@ -359,11 +373,21 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.web_fetch.timeout == 9
     assert config.web_fetch.prefer_trafilatura is False
     assert config.browser.enabled is True
-    assert config.browser.backend == "agent-browser"
+    assert config.browser.backend == "browserbase"
     assert config.browser.command_timeout == 11
     assert config.browser.session_timeout == 222
     assert config.browser.cdp_url == "http://127.0.0.1:9222"
     assert config.browser.allow_private_urls is True
+    assert config.browser.browserbase_api_key == "bb-key"
+    assert config.browser.browserbase_project_id == "project-1"
+    assert config.browser.browserbase_base_url == "https://browserbase.local"
+    assert config.browser.browserbase_proxies is False
+    assert config.browser.browserbase_advanced_stealth is True
+    assert config.browser.browserbase_keep_alive is False
+    assert config.browser.browser_use_api_key == "bu-key"
+    assert config.browser.browser_use_base_url == "https://browser-use.local/api/v3"
+    assert config.browser.firecrawl_api_key == "fc-key"
+    assert config.browser.firecrawl_base_url == "https://firecrawl.local"
     assert config.cron.default_timezone == "Asia/Taipei"
     assert config.permissions.approval_mode == "ask"
     assert config.permissions.approval_timeout_seconds == 12
@@ -374,6 +398,11 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
 def test_tools_config_rejects_unknown_approval_mode():
     with pytest.raises(ValidationError):
         ToolsConfig(**{"permissions": {"approval_mode": "sometimes"}})
+
+
+def test_tools_config_rejects_unknown_browser_backend():
+    with pytest.raises(ValidationError):
+        ToolsConfig(**{"browser": {"backend": "unknown"}})
 
 
 def test_vision_config_defaults_to_disabled_provider():

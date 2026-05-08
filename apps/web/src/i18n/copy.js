@@ -984,6 +984,9 @@ export const DISPLAY_COPY = {
         },
         backends: {
           "agent-browser": "agent-browser",
+          browserbase: "Browserbase",
+          "browser-use": "Browser Use",
+          firecrawl: "Firecrawl",
         },
         cdpUrl: {
           title: "Chrome CDP URL",
@@ -1009,6 +1012,10 @@ export const DISPLAY_COPY = {
         runtimeTitle: "Runtime status",
         runtimeAvailable: (command) => `可用：${command}`,
         runtimeMissing: "找不到 agent-browser 或 npx。",
+        cloudConfigured: (backend) => `${backend} credentials 已設定，且 agent-browser attach runtime 可用。`,
+        cloudMissing: (backend) => `${backend} credentials 尚未設定；請設定環境變數或 opensprite.json。`,
+        cloudAttachRuntimeMissing: (backend) => `${backend} credentials 已設定，但找不到 agent-browser 或 npx 來 attach CDP。`,
+        cloudEnabled: (backend) => `Browser tools 已啟用，會透過 ${backend} 建立 cloud session。`,
         save: "儲存瀏覽器設定",
       },
       log: {
@@ -2406,6 +2413,9 @@ export const DISPLAY_COPY = {
         },
         backends: {
           "agent-browser": "agent-browser",
+          browserbase: "Browserbase",
+          "browser-use": "Browser Use",
+          firecrawl: "Firecrawl",
         },
         cdpUrl: {
           title: "Chrome CDP URL",
@@ -2431,6 +2441,10 @@ export const DISPLAY_COPY = {
         runtimeTitle: "Runtime status",
         runtimeAvailable: (command) => `Available: ${command}`,
         runtimeMissing: "agent-browser and npx were not found.",
+        cloudConfigured: (backend) => `${backend} credentials are configured and the agent-browser attach runtime is available.`,
+        cloudMissing: (backend) => `${backend} credentials are not configured. Set environment variables or opensprite.json.`,
+        cloudAttachRuntimeMissing: (backend) => `${backend} credentials are configured, but agent-browser or npx is needed to attach CDP.`,
+        cloudEnabled: (backend) => `Browser tools are enabled and will create cloud sessions through ${backend}.`,
         save: "Save browser settings",
       },
       log: {

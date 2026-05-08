@@ -1,4 +1,4 @@
-"""Browser automation tools backed by local agent-browser."""
+"""Browser automation tools backed by agent-browser-compatible runtimes."""
 
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ class BrowserNavigateTool(BrowserToolBase):
 
     @property
     def description(self) -> str:
-        return "Navigate the browser to a URL using the local agent-browser backend."
+        return "Navigate the browser to a URL using the configured browser automation backend."
 
     @property
     def parameters(self) -> dict[str, Any]:

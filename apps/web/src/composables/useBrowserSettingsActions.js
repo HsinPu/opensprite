@@ -1,12 +1,15 @@
+const DEFAULT_BROWSER_BACKENDS = ["agent-browser", "browserbase", "browser-use", "firecrawl"];
+
 function normalizeBrowserSettings(browser = {}) {
   return {
     enabled: browser.enabled === true,
     backend: browser.backend || "agent-browser",
-    backends: Array.isArray(browser.backends) && browser.backends.length ? browser.backends : ["agent-browser"],
+    backends: Array.isArray(browser.backends) && browser.backends.length ? browser.backends : DEFAULT_BROWSER_BACKENDS,
     command_timeout: Number(browser.command_timeout || 30),
     session_timeout: Number(browser.session_timeout || 300),
     cdp_url: browser.cdp_url || "",
     allow_private_urls: browser.allow_private_urls === true,
+    cloud: browser.cloud || {},
     runtime: browser.runtime || { available: false, command: "", install_hint: "" },
   };
 }

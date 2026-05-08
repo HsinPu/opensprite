@@ -3529,15 +3529,29 @@ const mcpRuntimeStatus = computed(() => {
 
 const browserBackendOptions = computed(() => {
   const backends = props.settingsState.browser?.backends;
-  const values = Array.isArray(backends) && backends.length ? backends : ["agent-browser"];
+  const values = Array.isArray(backends) && backends.length ? backends : ["agent-browser", "browserbase", "browser-use", "firecrawl"];
   return values.map((id) => ({
     id,
     label: props.copy.settings.browser.backends?.[id] || id,
   }));
 });
 
+const selectedBrowserBackend = computed(() => props.settingsState.browserForm?.backend || props.settingsState.browser?.backend || "agent-browser");
+
+const selectedBrowserBackendLabel = computed(() => props.copy.settings.browser.backends?.[selectedBrowserBackend.value] || selectedBrowserBackend.value);
+
 const browserRuntimeStatus = computed(() => {
   const runtime = props.settingsState.browser?.runtime || {};
+  if (selectedBrowserBackend.value !== "agent-browser") {
+    const cloud = props.settingsState.browser?.cloud?.[selectedBrowserBackend.value] || {};
+    if (!cloud.configured) {
+      return props.copy.settings.browser.cloudMissing(selectedBrowserBackendLabel.value);
+    }
+    if (!runtime.available) {
+      return props.copy.settings.browser.cloudAttachRuntimeMissing(selectedBrowserBackendLabel.value);
+    }
+    return props.copy.settings.browser.cloudConfigured(selectedBrowserBackendLabel.value);
+  }
   if (runtime.available) {
     return props.copy.settings.browser.runtimeAvailable(runtime.command || "agent-browser");
   }
@@ -3551,6 +3565,9 @@ const browserSummary = computed(() => {
   }
   if (String(form.cdpUrl || "").trim()) {
     return props.copy.settings.browser.cdpEnabled;
+  }
+  if (selectedBrowserBackend.value !== "agent-browser") {
+    return props.copy.settings.browser.cloudEnabled(selectedBrowserBackendLabel.value);
   }
   return props.copy.settings.browser.enabledSummary;
 });

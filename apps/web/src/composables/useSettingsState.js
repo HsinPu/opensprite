@@ -159,11 +159,12 @@ export function createSettingsState() {
     browser: {
       enabled: false,
       backend: "agent-browser",
-      backends: ["agent-browser"],
+      backends: ["agent-browser", "browserbase", "browser-use", "firecrawl"],
       command_timeout: 30,
       session_timeout: 300,
       cdp_url: "",
       allow_private_urls: false,
+      cloud: {},
       runtime: {
         available: false,
         command: "",
