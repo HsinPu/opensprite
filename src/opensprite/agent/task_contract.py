@@ -61,12 +61,31 @@ class EvidenceRequirement:
 
 
 @dataclass(frozen=True)
+class AcceptanceCriterion:
+    """Answer-shape expectations needed for a high-quality final response."""
+
+    kind: str
+    min_count: int = 1
+    max_response_chars: int = 0
+    description: str = ""
+
+    def to_metadata(self) -> dict[str, Any]:
+        return {
+            "kind": self.kind,
+            "min_count": self.min_count,
+            "max_response_chars": self.max_response_chars,
+            "description": self.description,
+        }
+
+
+@dataclass(frozen=True)
 class TaskContract:
     """Language-independent completion contract for one turn."""
 
     objective: str
     task_type: str
     requirements: tuple[EvidenceRequirement, ...] = ()
+    acceptance_criteria: tuple[AcceptanceCriterion, ...] = ()
     selected_resources: tuple[ResourceRef, ...] = ()
     final_answer_required: bool = True
     allow_no_tool_final: bool = True
@@ -77,6 +96,7 @@ class TaskContract:
             "objective": self.objective,
             "task_type": self.task_type,
             "requirements": [item.to_metadata() for item in self.requirements],
+            "acceptance_criteria": [item.to_metadata() for item in self.acceptance_criteria],
             "selected_resources": [item.to_metadata() for item in self.selected_resources],
             "final_answer_required": self.final_answer_required,
             "allow_no_tool_final": self.allow_no_tool_final,
@@ -108,6 +128,7 @@ class TaskContractService:
         )
 
         requirements: list[EvidenceRequirement] = []
+        acceptance_criteria: list[AcceptanceCriterion] = []
         selected: list[ResourceRef] = []
         task_type = _task_type_from_intent(task_intent)
 
@@ -187,10 +208,22 @@ class TaskContractService:
                 )
             )
 
+        requested_count = _requested_item_count(objective)
+        if requested_count >= 3:
+            acceptance_criteria.append(
+                AcceptanceCriterion(
+                    kind="itemized_output",
+                    min_count=min(requested_count, 3),
+                    max_response_chars=260,
+                    description="Provide the requested itemized result instead of a short acknowledgement.",
+                )
+            )
+
         return TaskContract(
             objective=objective,
             task_type=task_type,
             requirements=tuple(requirements),
+            acceptance_criteria=tuple(acceptance_criteria),
             selected_resources=tuple(selected),
             final_answer_required=True,
             allow_no_tool_final=not requirements,
@@ -259,3 +292,8 @@ def _task_type_from_intent(task_intent: TaskIntent) -> str:
     if task_intent.kind in {"conversation", "question", "command"}:
         return "pure_answer"
     return task_intent.kind or "task"
+
+
+def _requested_item_count(objective: str) -> int:
+    counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,3}(?!\d)", str(objective or ""))]
+    return max(counts, default=0)

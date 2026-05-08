@@ -3,7 +3,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
-from opensprite.agent.task_contract import TaskContractService
+from opensprite.agent.task_contract import AcceptanceCriterion, TaskContract, TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
@@ -153,6 +153,48 @@ def test_quality_gate_reports_missing_requested_items():
 
     assert result.passed is False
     assert result.status == "incomplete"
+    assert result.reason == "assistant did not provide the requested itemized result"
+
+
+def test_task_contract_records_itemized_acceptance_criterion():
+    intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    assert len(contract.acceptance_criteria) == 1
+    criterion = contract.acceptance_criteria[0]
+    assert criterion.kind == "itemized_output"
+    assert criterion.min_count == 3
+    assert criterion.max_response_chars == 260
+    assert contract.to_metadata()["acceptance_criteria"][0]["kind"] == "itemized_output"
+
+
+def test_quality_gate_uses_contract_acceptance_criteria():
+    intent = TaskIntentService().classify("請整理結果")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="task",
+        acceptance_criteria=(
+            AcceptanceCriterion(
+                kind="itemized_output",
+                min_count=3,
+                max_response_chars=260,
+                description="Provide at least three listed items.",
+            ),
+        ),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="我會整理三筆結果。",
+        execution_result=ExecutionResult(content="我會整理三筆結果。"),
+        task_contract=contract,
+    )
+
+    assert result.passed is False
     assert result.reason == "assistant did not provide the requested itemized result"
 
 

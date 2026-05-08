@@ -360,6 +360,7 @@ class CompletionGateService:
             task_intent=task_intent,
             response_text=response_text,
             execution_result=execution_result,
+            task_contract=evidence_result.task_contract,
         )
         if not quality_result.passed:
             return CompletionGateResult(
