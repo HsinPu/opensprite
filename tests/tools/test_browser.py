@@ -1,0 +1,110 @@
+import asyncio
+import json
+
+import pytest
+
+from opensprite.agent.tool_registration import register_browser_tools
+from opensprite.tools.browser import BrowserClickTool, BrowserNavigateTool, BrowserSnapshotTool, BrowserTypeTool
+from opensprite.tools.browser_runtime import AgentBrowserRuntime, BrowserRuntimeError
+from opensprite.tools.registry import ToolRegistry
+
+
+class _FakeRuntime:
+    def __init__(self):
+        self.calls = []
+
+    async def run(self, *, session_key, command, args=None, timeout=None):
+        self.calls.append({"session_key": session_key, "command": command, "args": list(args or []), "timeout": timeout})
+        return {"success": True, "data": {"command": command}}
+
+
+def test_browser_navigate_uses_current_session_and_open_command():
+    runtime = _FakeRuntime()
+    tool = BrowserNavigateTool(runtime=runtime, get_session_id=lambda: "web:browser-1")
+
+    result = json.loads(asyncio.run(tool.execute(url="https://example.com")))
+
+    assert result["success"] is True
+    assert result["type"] == "browser_navigate"
+    assert runtime.calls == [
+        {
+            "session_key": "web:browser-1",
+            "command": "open",
+            "args": ["https://example.com"],
+            "timeout": 60,
+        }
+    ]
+
+
+def test_browser_snapshot_uses_compact_mode_by_default():
+    runtime = _FakeRuntime()
+    tool = BrowserSnapshotTool(runtime=runtime, get_session_id=lambda: None)
+
+    result = json.loads(asyncio.run(tool.execute()))
+
+    assert result["type"] == "browser_snapshot"
+    assert runtime.calls[0] == {"session_key": "default", "command": "snapshot", "args": ["-c"], "timeout": None}
+
+
+def test_browser_click_and_type_normalize_refs():
+    runtime = _FakeRuntime()
+
+    click = BrowserClickTool(runtime=runtime, get_session_id=lambda: "s")
+    fill = BrowserTypeTool(runtime=runtime, get_session_id=lambda: "s")
+
+    asyncio.run(click.execute(ref="e2"))
+    asyncio.run(fill.execute(ref="@e3", text="hello"))
+
+    assert runtime.calls[0]["args"] == ["@e2"]
+    assert runtime.calls[1]["args"] == ["@e3", "hello"]
+
+
+def test_register_browser_tools_adds_mvp_tools():
+    registry = ToolRegistry()
+
+    register_browser_tools(registry, get_session_id=lambda: "session")
+
+    assert {
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_click",
+        "browser_type",
+        "browser_press",
+        "browser_scroll",
+        "browser_back",
+    }.issubset(set(registry.tool_names))
+
+
+def test_agent_browser_runtime_builds_json_command(monkeypatch):
+    runtime = AgentBrowserRuntime(command="agent-browser", command_timeout=9)
+    captured = {}
+
+    async def fake_run(argv, timeout):
+        captured["argv"] = argv
+        captured["timeout"] = timeout
+        return {"success": True}
+
+    monkeypatch.setattr(runtime, "_run_subprocess", fake_run)
+
+    result = asyncio.run(runtime.run(session_key="web:browser-1", command="open", args=["https://example.com"]))
+
+    assert result == {"success": True}
+    assert captured == {
+        "argv": [
+            "agent-browser",
+            "--session",
+            "opensprite_web_browser-1",
+            "--json",
+            "open",
+            "https://example.com",
+        ],
+        "timeout": 9,
+    }
+
+
+def test_agent_browser_runtime_reports_missing_runtime(monkeypatch):
+    monkeypatch.setattr("opensprite.tools.browser_runtime.shutil.which", lambda name: None)
+    monkeypatch.setattr("opensprite.tools.browser_runtime._local_agent_browser_path", lambda: "")
+
+    with pytest.raises(BrowserRuntimeError):
+        AgentBrowserRuntime()._command_prefix()

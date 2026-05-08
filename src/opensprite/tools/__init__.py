@@ -6,6 +6,15 @@ from .registry import ToolRegistry
 from .active_task import TaskUpdateTool
 from .audio import TranscribeAudioTool
 from .batch import BatchTool
+from .browser import (
+    BrowserBackTool,
+    BrowserClickTool,
+    BrowserNavigateTool,
+    BrowserPressTool,
+    BrowserScrollTool,
+    BrowserSnapshotTool,
+    BrowserTypeTool,
+)
 from .video import AnalyzeVideoTool
 from .filesystem import (
     ApplyPatchTool,
@@ -43,6 +52,13 @@ __all__ = [
     "ToolRegistry",
     "TaskUpdateTool",
     "BatchTool",
+    "BrowserBackTool",
+    "BrowserClickTool",
+    "BrowserNavigateTool",
+    "BrowserPressTool",
+    "BrowserScrollTool",
+    "BrowserSnapshotTool",
+    "BrowserTypeTool",
     "TranscribeAudioTool",
     "AnalyzeVideoTool",
     "ReadFileTool",

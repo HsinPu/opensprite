@@ -16,6 +16,13 @@ from ..tools import (
     ToolRegistry,
     TaskUpdateTool,
     BatchTool,
+    BrowserBackTool,
+    BrowserClickTool,
+    BrowserNavigateTool,
+    BrowserPressTool,
+    BrowserScrollTool,
+    BrowserSnapshotTool,
+    BrowserTypeTool,
     AnalyzeImageTool,
     OCRImageTool,
     CronTool,
@@ -278,6 +285,22 @@ def register_web_tools(
     )
 
 
+def register_browser_tools(
+    registry: ToolRegistry,
+    *,
+    get_session_id: Callable[[], str | None],
+) -> None:
+    """Register local browser automation tools."""
+    kwargs = {"get_session_id": get_session_id}
+    registry.register(BrowserNavigateTool(**kwargs))
+    registry.register(BrowserSnapshotTool(**kwargs))
+    registry.register(BrowserClickTool(**kwargs))
+    registry.register(BrowserTypeTool(**kwargs))
+    registry.register(BrowserPressTool(**kwargs))
+    registry.register(BrowserScrollTool(**kwargs))
+    registry.register(BrowserBackTool(**kwargs))
+
+
 def register_media_tools(
     registry: ToolRegistry,
     *,
@@ -499,6 +522,7 @@ def register_default_tools(
     )
     register_verify_tools(registry, workspace_resolver=workspace_resolver)
     register_web_tools(registry, tools_config=current_tools_config)
+    register_browser_tools(registry, get_session_id=get_session_id)
     register_media_tools(
         registry,
         media_router=media_router,
