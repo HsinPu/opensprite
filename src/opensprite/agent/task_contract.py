@@ -66,6 +66,7 @@ class AcceptanceCriterion:
 
     kind: str
     min_count: int = 1
+    min_response_chars: int = 0
     max_response_chars: int = 0
     description: str = ""
 
@@ -73,6 +74,7 @@ class AcceptanceCriterion:
         return {
             "kind": self.kind,
             "min_count": self.min_count,
+            "min_response_chars": self.min_response_chars,
             "max_response_chars": self.max_response_chars,
             "description": self.description,
         }
@@ -138,6 +140,7 @@ class TaskContractService:
 
         if image_resources and cls._looks_like_image_task(text, task_intent, current_image_files):
             selected.extend(image_resources)
+            acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="resource_coverage",
@@ -151,6 +154,7 @@ class TaskContractService:
             task_type = "media_extraction"
         elif audio_resources and cls._looks_like_audio_task(text, current_audio_files):
             selected.extend(audio_resources)
+            acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="resource_coverage",
@@ -164,6 +168,7 @@ class TaskContractService:
             task_type = "media_extraction"
         elif video_resources and cls._looks_like_video_task(text, current_video_files):
             selected.extend(video_resources)
+            acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="resource_coverage",
@@ -297,3 +302,11 @@ def _task_type_from_intent(task_intent: TaskIntent) -> str:
 def _requested_item_count(objective: str) -> int:
     counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,3}(?!\d)", str(objective or ""))]
     return max(counts, default=0)
+
+
+def _media_final_answer_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="substantive_final_answer",
+        min_response_chars=80,
+        description="Provide a substantive final answer that uses the inspected media results.",
+    )

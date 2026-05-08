@@ -336,9 +336,17 @@ def test_completion_gate_completes_media_contract_when_all_images_have_evidence(
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
-        response_text="Prompt 1: ...\n\n整合版：...",
+        response_text=(
+            "Prompt 1: Create a clean product hero image with soft light and clear typography.\n\n"
+            "Prompt 2: Render the same subject from a wider angle with consistent styling.\n\n"
+            "整合版：保留共同主題、光線、構圖與文字重點，整理成可直接使用的完整 prompt。"
+        ),
         execution_result=ExecutionResult(
-            content="Prompt 1: ...\n\n整合版：...",
+            content=(
+                "Prompt 1: Create a clean product hero image with soft light and clear typography.\n\n"
+                "Prompt 2: Render the same subject from a wider angle with consistent styling.\n\n"
+                "整合版：保留共同主題、光線、構圖與文字重點，整理成可直接使用的完整 prompt。"
+            ),
             task_contract=contract,
             executed_tool_calls=2,
             tool_evidence=(
@@ -356,6 +364,38 @@ def test_completion_gate_completes_media_contract_when_all_images_have_evidence(
     assert completion.missing_evidence == ()
 
 
+def test_completion_gate_rejects_terse_media_final_answer():
+    intent = TaskIntentService().classify(
+        "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理"
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "user", "content": "[Media-only message saved to workspace]\nImages: images/a.jpg"},
+        ],
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="已完成。",
+        execution_result=ExecutionResult(
+            content="已完成。",
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(name="ocr_image", resource_ids=("image:images/a.jpg",), ok=True),
+            ),
+            task_artifacts=(
+                TaskArtifact(kind="image_text", source_tool="ocr_image", resource_ids=("image:images/a.jpg",)),
+            ),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer was too terse for the task"
+
+
 def test_completion_gate_requires_media_artifacts_after_evidence():
     intent = TaskIntentService().classify(
         "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理"
@@ -370,9 +410,9 @@ def test_completion_gate_requires_media_artifacts_after_evidence():
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
-        response_text="Prompt 1: ...\n\n整合版：...",
+        response_text="Prompt 1: Extracted prompt details from the uploaded image with enough content to produce a usable merged output.",
         execution_result=ExecutionResult(
-            content="Prompt 1: ...\n\n整合版：...",
+            content="Prompt 1: Extracted prompt details from the uploaded image with enough content to produce a usable merged output.",
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(
@@ -399,9 +439,17 @@ def test_completion_gate_accepts_current_turn_media_index_evidence_for_saved_fil
 
     completion = CompletionGateService().evaluate(
         task_intent=intent,
-        response_text="Prompt 1: ...\nPrompt 2: ...\n\n整合版：...",
+        response_text=(
+            "Prompt 1: Extract the full visible prompt from the first image and preserve wording.\n"
+            "Prompt 2: Extract the full visible prompt from the second image and preserve wording.\n\n"
+            "整合版：合併兩張圖中的共同主題、構圖、風格與細節，移除重複段落。"
+        ),
         execution_result=ExecutionResult(
-            content="Prompt 1: ...\nPrompt 2: ...\n\n整合版：...",
+            content=(
+                "Prompt 1: Extract the full visible prompt from the first image and preserve wording.\n"
+                "Prompt 2: Extract the full visible prompt from the second image and preserve wording.\n\n"
+                "整合版：合併兩張圖中的共同主題、構圖、風格與細節，移除重複段落。"
+            ),
             task_contract=contract,
             executed_tool_calls=2,
             tool_evidence=(

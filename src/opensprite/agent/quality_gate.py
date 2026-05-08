@@ -47,6 +47,10 @@ class QualityGateService:
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
                 if result is not None:
                     return result
+            elif criterion.kind == "substantive_final_answer":
+                result = _evaluate_substantive_final_answer(criterion, response_text)
+                if result is not None:
+                    return result
         return QualityGateResult(passed=True)
 
 
@@ -89,6 +93,22 @@ def _evaluate_media_artifacts(contract: TaskContract, execution_result: Executio
         status="incomplete",
         reason="required task artifacts were not produced",
         active_task_detail="\n".join(f"- Missing artifact for {resource_id}" for resource_id in missing),
+    )
+
+
+def _evaluate_substantive_final_answer(
+    criterion: AcceptanceCriterion,
+    response_text: str,
+) -> QualityGateResult | None:
+    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
+    min_response_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
+    if len(normalized) >= min_response_chars:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="assistant final answer was too terse for the task",
+        active_task_detail=getattr(criterion, "description", "") or None,
     )
 
 
