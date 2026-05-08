@@ -14,11 +14,12 @@ from ..llms.retry import retry_delay_from_error
 from ..search.base import SearchStore
 from ..storage.base import StoredDelegatedTask
 from ..tools import ToolRegistry
+from ..tools.evidence import ToolEvidence
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
 from .run_state import RunCancelledError
-from .task_contract import TaskContract, ToolEvidence, build_tool_evidence
+from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 
 
@@ -499,9 +500,10 @@ Output exactly these sections when applicable:
         except TypeError:
             return self.format_log_preview(content, max_chars=max_chars)
 
-    def _get_token_model(self) -> str | None:
+    def _get_token_model(self, provider: LLMProvider | None = None) -> str | None:
         """Best-effort model name lookup for local token estimates."""
-        get_default_model = getattr(self.provider, "get_default_model", None)
+        active_provider = provider or self.provider
+        get_default_model = getattr(active_provider, "get_default_model", None)
         if not callable(get_default_model):
             return None
         try:
@@ -523,8 +525,10 @@ Output exactly these sections when applicable:
         self,
         chat_messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None,
+        *,
+        provider: LLMProvider | None = None,
     ) -> tuple[int, int, int]:
-        model = self._get_token_model()
+        model = self._get_token_model(provider)
         message_tokens = count_messages_tokens(chat_messages, model=model)
         tool_schema_tokens = self._estimate_tool_schema_tokens(tools, model=model)
         return message_tokens + tool_schema_tokens, message_tokens, tool_schema_tokens
@@ -563,6 +567,7 @@ Output exactly these sections when applicable:
         tools: list[dict[str, Any]] | None,
         tool_results_history: list[str],
         work_state_summary: str = "",
+        provider: LLMProvider | None = None,
     ) -> _ProactiveCompactionResult | None:
         """Return compacted messages when the next request is nearing the configured budget."""
         if not self.context_compaction_enabled:
@@ -573,7 +578,11 @@ Output exactly these sections when applicable:
             return None
 
         threshold_tokens = max(1, int(self.context_compaction_token_budget * self.context_compaction_threshold_ratio))
-        estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(chat_messages, tools)
+        estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(
+            chat_messages,
+            tools,
+            provider=provider,
+        )
         if estimated_tokens < threshold_tokens:
             return None
 
@@ -585,10 +594,11 @@ Output exactly these sections when applicable:
                 chat_messages,
                 tool_results_history=tool_results_history,
                 work_state_summary=work_state_summary,
+                provider=provider,
             )
             compacted_messages = llm_attempt.messages
             if compacted_messages is not None:
-                compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
+                compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools, provider=provider)
                 if compacted_tokens < estimated_tokens:
                     return _ProactiveCompactionResult(
                         messages=compacted_messages,
@@ -620,7 +630,7 @@ Output exactly these sections when applicable:
         if compacted_messages is None:
             return None
 
-        compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
+        compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools, provider=provider)
         if compacted_tokens >= estimated_tokens:
             return None
 
@@ -775,11 +785,13 @@ Output exactly these sections when applicable:
         *,
         tool_results_history: list[str],
         work_state_summary: str = "",
+        provider: LLMProvider | None = None,
     ) -> _LlmCompactionAttempt:
         compaction_llm = self.context_compaction_llm
         if compaction_llm is None:
             return _LlmCompactionAttempt(fallback_reason="llm_config_missing")
 
+        active_provider = provider or self.provider
         leading_system, body = self._split_leading_system_messages(chat_messages)
         if not body:
             return _LlmCompactionAttempt(fallback_reason="no_body")
@@ -795,7 +807,7 @@ Output exactly these sections when applicable:
         _, tail = self._split_compaction_head_and_tail(body)
 
         try:
-            response = await self.provider.chat(
+            response = await active_provider.chat(
                 messages=compaction_messages,
                 tools=None,
                 status_callback=None,
@@ -1014,29 +1026,25 @@ Output exactly these sections when applicable:
         work_state_summary: str = "",
     ) -> ExecutionResult:
         """Execute the prepared messages, including tool calls when enabled."""
-        original_provider = self.provider
-        active_provider = provider_override or original_provider
-        self.provider = active_provider
-        try:
-            return await self._execute_messages_with_provider(
-                log_id,
-                chat_messages,
-                allow_tools=allow_tools,
-                tool_result_session_id=tool_result_session_id,
-                tool_registry=tool_registry,
-                on_tool_before_execute=on_tool_before_execute,
-                on_tool_after_execute=on_tool_after_execute,
-                on_llm_status=on_llm_status,
-                on_response_delta=on_response_delta,
-                on_tool_input_delta=on_tool_input_delta,
-                on_reasoning_delta=on_reasoning_delta,
-                refresh_system_prompt=refresh_system_prompt,
-                max_tool_iterations=max_tool_iterations,
-                should_cancel=should_cancel,
-                work_state_summary=work_state_summary,
-            )
-        finally:
-            self.provider = original_provider
+        active_provider = provider_override or self.provider
+        return await self._execute_messages_with_provider(
+            log_id,
+            chat_messages,
+            allow_tools=allow_tools,
+            active_provider=active_provider,
+            tool_result_session_id=tool_result_session_id,
+            tool_registry=tool_registry,
+            on_tool_before_execute=on_tool_before_execute,
+            on_tool_after_execute=on_tool_after_execute,
+            on_llm_status=on_llm_status,
+            on_response_delta=on_response_delta,
+            on_tool_input_delta=on_tool_input_delta,
+            on_reasoning_delta=on_reasoning_delta,
+            refresh_system_prompt=refresh_system_prompt,
+            max_tool_iterations=max_tool_iterations,
+            should_cancel=should_cancel,
+            work_state_summary=work_state_summary,
+        )
 
     async def _execute_messages_with_provider(
         self,
@@ -1044,6 +1052,7 @@ Output exactly these sections when applicable:
         chat_messages: list[ChatMessage],
         *,
         allow_tools: bool,
+        active_provider: LLMProvider | None = None,
         tool_result_session_id: str | None = None,
         tool_registry: ToolRegistry | None = None,
         on_tool_before_execute: Callable[..., Awaitable[None]] | None = None,
@@ -1058,6 +1067,7 @@ Output exactly these sections when applicable:
         work_state_summary: str = "",
     ) -> ExecutionResult:
         """Provider-bound execution body used by execute_messages()."""
+        active_provider = active_provider or self.provider
         active_tools = tool_registry or self.tools
         tools = None
         if allow_tools and active_tools.tool_names:
@@ -1096,6 +1106,7 @@ Output exactly these sections when applicable:
                     tools=tools,
                     tool_results_history=tool_results_history,
                     work_state_summary=work_state_summary,
+                    provider=active_provider,
                 )
                 if proactive_compaction is not None:
                     proactive_context_compactions += 1
@@ -1163,7 +1174,11 @@ Output exactly these sections when applicable:
             while True:
                 self._raise_if_cancel_requested(should_cancel)
                 request_attempt = len([event for event in llm_step_events if event.iteration == iteration + 1]) + 1
-                estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(chat_messages, tools)
+                estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(
+                    chat_messages,
+                    tools,
+                    provider=active_provider,
+                )
                 started_at = time.perf_counter()
                 try:
                     if self.pass_decoding_params:
@@ -1176,7 +1191,7 @@ Output exactly these sections when applicable:
                         dec_temp = dec_max = dec_top_p = dec_freq = dec_pres = None
                     logger.info(
                         f"[{log_id}] llm.request.attempt | iter={iteration + 1} attempt={request_attempt} "
-                        f"provider={type(self.provider).__name__} model={self._get_token_model() or '-'} "
+                        f"provider={type(active_provider).__name__} model={self._get_token_model(active_provider) or '-'} "
                         f"messages={len(chat_messages)} tools={len(tools or [])} "
                         f"estimated_tokens={estimated_tokens} message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens} "
                         f"temperature={dec_temp if dec_temp is not None else '-'} "
@@ -1184,7 +1199,7 @@ Output exactly these sections when applicable:
                         f"frequency_penalty={dec_freq if dec_freq is not None else '-'} "
                         f"presence_penalty={dec_pres if dec_pres is not None else '-'}"
                     )
-                    response = await self.provider.chat(
+                    response = await active_provider.chat(
                         messages=chat_messages,
                         tools=tools,
                         temperature=dec_temp,
@@ -1232,7 +1247,7 @@ Output exactly these sections when applicable:
                             iteration=iteration + 1,
                             attempt=request_attempt,
                             status="error",
-                            model=self._get_token_model(),
+                            model=self._get_token_model(active_provider),
                             duration_ms=duration_ms,
                             estimated_input_tokens=estimated_tokens,
                             message_tokens=message_tokens,
@@ -1256,7 +1271,11 @@ Output exactly these sections when applicable:
                             overflow_context_compactions += 1
                             context_compactions += 1
                             before_count = len(chat_messages)
-                            compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools)
+                            compacted_tokens, _, _ = self._estimate_request_tokens(
+                                compacted_messages,
+                                tools,
+                                provider=active_provider,
+                            )
                             chat_messages[:] = compacted_messages
                             context_compaction_events.append(
                                 ContextCompactionEvent(
@@ -1291,7 +1310,7 @@ Output exactly these sections when applicable:
 
                     if retry_delay.retryable and request_attempt <= self.PROVIDER_RETRY_LIMIT:
                         recovered = False
-                        recover_after_error = getattr(self.provider, "recover_after_error", None)
+                        recover_after_error = getattr(active_provider, "recover_after_error", None)
                         if callable(recover_after_error):
                             try:
                                 recovered = bool(recover_after_error(exc))
@@ -1526,7 +1545,7 @@ Output exactly these sections when applicable:
                     if tool_failed:
                         had_tool_error = True
                     tool_evidence.append(
-                        build_tool_evidence(
+                        active_tools.build_evidence(
                             tool_name,
                             display_tool_args,
                             result,

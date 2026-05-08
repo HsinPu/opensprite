@@ -7,6 +7,8 @@ from opensprite.config.schema import Config, ToolsConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
 from opensprite.tools.base import Tool
 from opensprite.tools.credential_store import CredentialStoreTool
+from opensprite.tools.evidence import ToolEvidence
+from opensprite.tools.image import AnalyzeImageTool
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -25,6 +27,32 @@ class DummyTool(Tool):
 
     async def _execute(self, value: str, **kwargs) -> str:
         return f"tool:{value}"
+
+
+class EvidenceTool(Tool):
+    @property
+    def name(self) -> str:
+        return "evidence_tool"
+
+    @property
+    def description(self) -> str:
+        return "Tool with custom evidence"
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {"resource": {"type": "string"}}}
+
+    async def _execute(self, resource: str, **kwargs) -> str:
+        return f"read:{resource}"
+
+    def build_evidence(self, params, result: str, *, ok: bool) -> ToolEvidence:
+        return ToolEvidence(
+            name=self.name,
+            args=dict(params or {}),
+            ok=ok,
+            resource_ids=(f"custom:{params.get('resource')}",),
+            result_preview=str(result or "")[:240],
+        )
 
 
 class FailingTool(Tool):
@@ -92,6 +120,24 @@ class StreamingProvider:
             await callback(self.content[:5])
             await callback(self.content[5:])
         return LLMResponse(content=self.content, model="fake-model")
+
+
+class BlockingOverrideProvider:
+    def __init__(self):
+        self.calls = 0
+        self.entered = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls += 1
+        if self.calls == 1:
+            self.entered.set()
+            await self.release.wait()
+            return LLMResponse(content="override-first", model="override-model")
+        return LLMResponse(content="override-extra", model="override-model")
+
+    def get_default_model(self) -> str:
+        return "override-model"
 
 
 class ToolInputStreamingProvider:
@@ -240,6 +286,110 @@ def test_execution_engine_runs_tool_loop_and_persists_tool_result():
     ]
     assert [message.role for message in messages] == ["user", "assistant", "tool"]
     assert messages[1].tool_calls[0]["function"]["name"] == "demo_tool"
+
+
+def test_execution_engine_provider_override_does_not_mutate_concurrent_runs():
+    async def run_case():
+        registry = ToolRegistry()
+        base_provider = FakeProvider([LLMResponse(content="base", model="base-model")])
+        override_provider = BlockingOverrideProvider()
+        engine = _make_engine(base_provider, registry, [])
+
+        first = asyncio.create_task(
+            engine.execute_messages(
+                "chat-override",
+                [ChatMessage(role="user", content="override")],
+                allow_tools=False,
+                provider_override=override_provider,
+            )
+        )
+        await asyncio.wait_for(override_provider.entered.wait(), timeout=1)
+
+        second = await engine.execute_messages(
+            "chat-base",
+            [ChatMessage(role="user", content="base")],
+            allow_tools=False,
+        )
+        override_provider.release.set()
+        first_result = await first
+        return first_result, second, base_provider, override_provider, engine
+
+    first_result, second, base_provider, override_provider, engine = asyncio.run(run_case())
+
+    assert first_result.content == "override-first"
+    assert second.content == "base"
+    assert len(base_provider.calls) == 1
+    assert override_provider.calls == 1
+    assert engine.provider is base_provider
+
+
+def test_execution_engine_uses_tool_defined_evidence():
+    registry = ToolRegistry()
+    registry.register(EvidenceTool())
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="need evidence",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="evidence_tool", arguments={"resource": "a"})],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="read resource")],
+            allow_tools=True,
+        )
+    )
+
+    assert result.content == "done"
+    assert result.tool_evidence[0].name == "evidence_tool"
+    assert result.tool_evidence[0].resource_ids == ("custom:a",)
+
+
+def test_execution_engine_records_evidence_for_invalid_media_tool_args():
+    registry = ToolRegistry()
+    registry.register(
+        AnalyzeImageTool(
+            media_router=object(),
+            get_current_images=lambda: ["data:image/png;base64,abc"],
+        )
+    )
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="try image",
+                model="fake-model",
+                tool_calls=[
+                    ToolCall(
+                        id="tc1",
+                        name="analyze_image",
+                        arguments={"instruction": "read", "image_index": "bad"},
+                    )
+                ],
+            ),
+            LLMResponse(content="done", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, registry, [])
+
+    result = asyncio.run(
+        engine.execute_messages(
+            "chat-1",
+            [ChatMessage(role="user", content="read the image")],
+            allow_tools=True,
+        )
+    )
+
+    assert result.content == "done"
+    assert result.had_tool_error is True
+    assert result.tool_evidence[0].name == "analyze_image"
+    assert result.tool_evidence[0].ok is False
+    assert result.tool_evidence[0].resource_ids == ("image_index:0",)
 
 
 def test_execution_engine_blocks_repeated_identical_tool_failures():

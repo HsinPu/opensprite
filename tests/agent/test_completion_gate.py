@@ -1,9 +1,10 @@
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.task_contract import TaskContractService, ToolEvidence
+from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
+from opensprite.tools.evidence import ToolEvidence
 
 
 def test_completion_gate_requires_requested_verification_before_completion():
@@ -270,6 +271,35 @@ def test_completion_gate_completes_media_contract_when_all_images_have_evidence(
             tool_evidence=(
                 ToolEvidence(name="ocr_image", resource_ids=("image:images/a.jpg",), ok=True),
                 ToolEvidence(name="analyze_image", resource_ids=("image:images/b.jpg",), ok=True),
+            ),
+        ),
+    )
+
+    assert completion.status == "complete"
+    assert completion.missing_evidence == ()
+
+
+def test_completion_gate_accepts_current_turn_media_index_evidence_for_saved_files():
+    intent = TaskIntentService().classify(
+        "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理",
+        images=["data:image/jpeg;base64,abc", "data:image/jpeg;base64,def"],
+    )
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        current_image_files=["images/a.jpg", "images/b.jpg"],
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Prompt 1: ...\nPrompt 2: ...\n\n整合版：...",
+        execution_result=ExecutionResult(
+            content="Prompt 1: ...\nPrompt 2: ...\n\n整合版：...",
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(
+                ToolEvidence(name="ocr_image", resource_ids=("image_index:0",), ok=True),
+                ToolEvidence(name="ocr_image", resource_ids=("image_index:1",), ok=True),
             ),
         ),
     )

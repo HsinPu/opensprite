@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
+from .evidence import ToolEvidence, indexed_resource_id
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -62,6 +63,22 @@ def _resolve_images(
     if image is None:
         return [], f"Error: saved image '{image_path}' was not found or is not a supported image file."
     return [image], None
+
+
+def _image_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok: bool) -> ToolEvidence:
+    resource_ids: list[str] = []
+    image_path = str(args.get("image_path") or "").strip().replace("\\", "/")
+    if image_path:
+        resource_ids.append(f"image:{image_path}")
+    else:
+        resource_ids.append(indexed_resource_id("image_index", args.get("image_index")))
+    return ToolEvidence(
+        name=tool_name,
+        args=dict(args or {}),
+        ok=ok,
+        resource_ids=tuple(dict.fromkeys(resource_ids)),
+        result_preview=str(result or "")[:240],
+    )
 
 
 class AnalyzeImageTool(Tool):
@@ -127,6 +144,10 @@ class AnalyzeImageTool(Tool):
             images=images,
             image_index=effective_index,
         )
+
+    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
+        args = params if isinstance(params, dict) else {}
+        return _image_tool_evidence(self.name, args, result, ok=ok)
 
 
 class OCRImageTool(Tool):
@@ -198,3 +219,7 @@ class OCRImageTool(Tool):
             images=images,
             image_index=effective_index,
         )
+
+    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
+        args = params if isinstance(params, dict) else {}
+        return _image_tool_evidence(self.name, args, result, ok=ok)

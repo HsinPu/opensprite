@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from ..media import MediaRouter
 from .base import Tool
+from .evidence import ToolEvidence, indexed_resource_id
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -58,4 +59,14 @@ class AnalyzeVideoTool(Tool):
             instruction=instruction,
             videos=videos,
             video_index=video_index,
+        )
+
+    def build_evidence(self, params: Any, result: str, *, ok: bool) -> ToolEvidence:
+        args = params if isinstance(params, dict) else {}
+        return ToolEvidence(
+            name=self.name,
+            args=dict(args or {}),
+            ok=ok,
+            resource_ids=(indexed_resource_id("video_index", args.get("video_index")),),
+            result_preview=str(result or "")[:240],
         )

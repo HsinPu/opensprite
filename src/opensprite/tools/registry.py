@@ -3,6 +3,7 @@
 from typing import Any, Awaitable, Callable
 
 from .base import Tool
+from .evidence import ToolEvidence, build_tool_evidence
 from .permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
 
 
@@ -99,6 +100,14 @@ class ToolRegistry:
         if on_before_execute is not None:
             await on_before_execute(name, display_params if isinstance(display_params, dict) else {})
         return await tool.execute_validated(params)
+
+    def build_evidence(self, name: str, params: Any, result: str, *, ok: bool) -> ToolEvidence:
+        """Build tool-specific completion evidence when the tool supports it."""
+        tool = self._tools.get(name)
+        safe_params = params if isinstance(params, dict) else {}
+        if tool is None:
+            return build_tool_evidence(name, safe_params, result, ok=ok)
+        return tool.build_evidence(safe_params, result, ok=ok)
 
     @property
     def tool_names(self) -> list[str]:

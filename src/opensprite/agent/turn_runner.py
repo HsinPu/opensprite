@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
@@ -24,6 +24,17 @@ from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate
 from .worktree import WorktreeSandboxInspector
+
+
+@dataclass(frozen=True)
+class TurnPassEvaluation:
+    """Evaluation output for one normal-turn execution pass."""
+
+    aggregate_result: ExecutionResult
+    completion_result: CompletionGateResult
+    work_progress: WorkProgressUpdate
+    collected_delegated_tasks: tuple[StoredDelegatedTask, ...]
+    collected_workflow_outcomes: tuple[dict[str, Any], ...]
 
 
 class AgentTurnRunner:
@@ -304,6 +315,99 @@ class AgentTurnRunner:
             log_before_record=True,
         )
 
+    async def _evaluate_turn_pass(
+        self,
+        *,
+        turn: PreparedTurnInput,
+        run_id: str,
+        task_intent: TaskIntent,
+        execution_results: list[ExecutionResult],
+        response: str,
+        collected_delegated_tasks: tuple[StoredDelegatedTask, ...],
+        collected_workflow_outcomes: tuple[dict[str, Any], ...],
+        auto_continue_attempts: int,
+    ) -> TurnPassEvaluation:
+        """Record trace artifacts, aggregate execution, and evaluate completion for one pass."""
+        exec_result = execution_results[-1]
+        await self.run_trace.record_context_compaction_parts(
+            turn.session_id,
+            run_id,
+            exec_result.context_compaction_events,
+        )
+        await self.run_trace.record_llm_step_parts(
+            turn.session_id,
+            run_id,
+            exec_result.llm_step_events,
+        )
+        aggregate_result = self._aggregate_execution_results(execution_results, content=response)
+        delegated_task_updates = self._consume_delegated_task_updates(run_id)
+        if delegated_task_updates:
+            collected_delegated_tasks = self._merge_delegated_task_updates(
+                collected_delegated_tasks,
+                delegated_task_updates,
+            )
+        workflow_outcomes = self._consume_workflow_outcomes(run_id)
+        if workflow_outcomes:
+            collected_workflow_outcomes = self._merge_workflow_outcomes(
+                collected_workflow_outcomes,
+                workflow_outcomes,
+            )
+        if collected_delegated_tasks:
+            aggregate_result = self._with_delegated_tasks(aggregate_result, collected_delegated_tasks)
+        if collected_workflow_outcomes:
+            aggregate_result = self._with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
+
+        completion_result = self.completion_gate.evaluate(
+            task_intent=task_intent,
+            response_text=response,
+            execution_result=aggregate_result,
+        )
+        completion_metadata = completion_result.to_metadata()
+        completion_metadata["auto_continue_attempts"] = auto_continue_attempts
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "completion_gate.evaluated",
+            completion_metadata,
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+        work_progress = self.work_progress.evaluate(
+            task_intent=task_intent,
+            completion_result=completion_result,
+            execution_result=aggregate_result,
+            auto_continue_attempts=auto_continue_attempts,
+            pass_index=len(execution_results),
+        )
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "work_progress.updated",
+            work_progress.to_metadata(),
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+        if auto_continue_attempts > 0:
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                "auto_continue.completed",
+                {
+                    "attempt": auto_continue_attempts,
+                    "completion_status": completion_result.status,
+                    "completion_reason": completion_result.reason,
+                },
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+        return TurnPassEvaluation(
+            aggregate_result=aggregate_result,
+            completion_result=completion_result,
+            work_progress=work_progress,
+            collected_delegated_tasks=collected_delegated_tasks,
+            collected_workflow_outcomes=collected_workflow_outcomes,
+        )
+
     async def run_normal_turn(
         self,
         *,
@@ -380,76 +484,21 @@ class AgentTurnRunner:
                 response = exec_result.content
             execution_results.append(exec_result)
 
-            await self.run_trace.record_context_compaction_parts(
-                turn.session_id,
-                run_id,
-                exec_result.context_compaction_events,
-            )
-            await self.run_trace.record_llm_step_parts(
-                turn.session_id,
-                run_id,
-                exec_result.llm_step_events,
-            )
-            aggregate_result = self._aggregate_execution_results(execution_results, content=response)
-            delegated_task_updates = self._consume_delegated_task_updates(run_id)
-            if delegated_task_updates:
-                collected_delegated_tasks = self._merge_delegated_task_updates(
-                    collected_delegated_tasks,
-                    delegated_task_updates,
-                )
-            workflow_outcomes = self._consume_workflow_outcomes(run_id)
-            if workflow_outcomes:
-                collected_workflow_outcomes = self._merge_workflow_outcomes(
-                    collected_workflow_outcomes,
-                    workflow_outcomes,
-                )
-            if collected_delegated_tasks:
-                aggregate_result = self._with_delegated_tasks(aggregate_result, collected_delegated_tasks)
-            if collected_workflow_outcomes:
-                aggregate_result = self._with_workflow_outcomes(aggregate_result, collected_workflow_outcomes)
-            completion_result = self.completion_gate.evaluate(
+            evaluation = await self._evaluate_turn_pass(
+                turn=turn,
+                run_id=run_id,
                 task_intent=task_intent,
-                response_text=response,
-                execution_result=aggregate_result,
-            )
-            completion_metadata = completion_result.to_metadata()
-            completion_metadata["auto_continue_attempts"] = auto_continue_attempts
-            await self._emit_run_event(
-                turn.session_id,
-                run_id,
-                "completion_gate.evaluated",
-                completion_metadata,
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
-            )
-            work_progress = self.work_progress.evaluate(
-                task_intent=task_intent,
-                completion_result=completion_result,
-                execution_result=aggregate_result,
+                execution_results=execution_results,
+                response=response,
+                collected_delegated_tasks=collected_delegated_tasks,
+                collected_workflow_outcomes=collected_workflow_outcomes,
                 auto_continue_attempts=auto_continue_attempts,
-                pass_index=len(execution_results),
             )
-            await self._emit_run_event(
-                turn.session_id,
-                run_id,
-                "work_progress.updated",
-                work_progress.to_metadata(),
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
-            )
-            if auto_continue_attempts > 0:
-                await self._emit_run_event(
-                    turn.session_id,
-                    run_id,
-                    "auto_continue.completed",
-                    {
-                        "attempt": auto_continue_attempts,
-                        "completion_status": completion_result.status,
-                        "completion_reason": completion_result.reason,
-                    },
-                    channel=turn.channel,
-                    external_chat_id=turn.external_chat_id,
-                )
+            aggregate_result = evaluation.aggregate_result
+            completion_result = evaluation.completion_result
+            work_progress = evaluation.work_progress
+            collected_delegated_tasks = evaluation.collected_delegated_tasks
+            collected_workflow_outcomes = evaluation.collected_workflow_outcomes
 
             decision = self.auto_continue.decide(
                 task_intent=task_intent,
