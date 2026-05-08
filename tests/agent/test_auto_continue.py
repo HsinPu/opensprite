@@ -183,6 +183,52 @@ def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     assert decision.reason == "completion_gate_incomplete"
 
 
+def test_auto_continue_guides_retry_after_missing_task_artifacts():
+    intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required task artifacts were not produced",
+        active_task_detail="- Missing artifact for image:images/a.jpg",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I checked the image.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="I checked the image.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "typed artifacts for every required resource" in (decision.prompt or "")
+    assert "Use the relevant media/source tools" in (decision.prompt or "")
+    assert "Missing artifact for image:images/a.jpg" in (decision.prompt or "")
+
+
+def test_auto_continue_guides_retry_after_terse_final_answer():
+    intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant final answer was too terse for the task",
+        active_task_detail="Provide a substantive final answer that uses the inspected media results.",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Done.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="Done.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "previous final answer was too terse" in (decision.prompt or "")
+    assert "Do not reply with only 'done'" in (decision.prompt or "")
+    assert "substantive final answer" in (decision.prompt or "")
+
+
 def test_auto_continue_uses_step_level_follow_up_for_incomplete_workflow():
     intent = TaskIntentService().classify("Please implement the cleanup.")
     completion = CompletionGateResult(

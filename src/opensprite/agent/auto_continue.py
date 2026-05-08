@@ -160,6 +160,8 @@ class AutoContinueService:
                 "assistant did not provide the requested itemized result",
                 "assistant only emitted internal control text",
                 "required task evidence was not produced",
+                "required task artifacts were not produced",
+                "assistant final answer was too terse for the task",
             }
         ):
             return self._skip(
@@ -263,6 +265,7 @@ class AutoContinueService:
                 "Do not repeat internal tags such as <system-reminder> or <think>. "
                 "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
             )
+        quality_instruction = _quality_follow_up_instruction(completion_result)
 
         return (
             "Continue the current task without asking the user unless you are blocked.\n"
@@ -272,6 +275,7 @@ class AutoContinueService:
             f"{verification_instruction}\n"
             f"{review_instruction}\n"
             f"{incomplete_instruction}\n"
+            f"{quality_instruction}\n"
             f"{workflow_instruction}\n"
             f"{follow_up_instruction}\n"
             "- If the task is complete, provide the final answer with the evidence or verification result.\n"
@@ -378,6 +382,33 @@ def _truncate(text: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> str:
+    reason = str(completion_result.reason or "").strip()
+    if reason == "required task artifacts were not produced":
+        return (
+            "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
+            "Use the relevant media/source tools for each missing resource before finalizing. "
+            "Do not claim completion until each required resource has a concrete tool-derived result."
+        )
+    if reason == "assistant final answer was too terse for the task":
+        return (
+            "\n- Quality follow-up: the previous final answer was too terse. "
+            "Do not reply with only 'done', 'completed', '已完成', or another short acknowledgement. "
+            "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
+        )
+    if reason == "assistant did not provide the requested itemized result":
+        return (
+            "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
+            "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
+        )
+    if reason == "required task evidence was not produced":
+        return (
+            "\n- Evidence follow-up: required tool evidence is missing. "
+            "Call the appropriate tools for the requested resources or external information before giving the final answer."
+        )
+    return ""
 
 
 def _workflow_follow_up_target(completion_result: CompletionGateResult) -> str:
