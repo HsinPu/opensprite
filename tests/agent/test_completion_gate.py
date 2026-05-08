@@ -293,6 +293,45 @@ def test_completion_gate_completes_web_research_with_source_artifact_and_answer(
     assert completion.status == "complete"
 
 
+def test_completion_gate_accepts_browser_source_artifact_for_web_research():
+    intent = TaskIntentService().classify("Open https://example.com/docs and summarize the source")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="browser_navigate",
+        metadata={
+            "sources": [
+                {
+                    "url": "https://example.com/docs",
+                    "title": "Example Docs",
+                    "snippet": "Example browser automation documentation.",
+                }
+            ]
+        },
+    )
+    answer = (
+        "Example Docs at example.com says the page is documentation for browser automation. "
+        "That source is enough to summarize the requested page, and no separate search result is needed."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="browser_navigate", ok=True),),
+            task_artifacts=(artifact,),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
 

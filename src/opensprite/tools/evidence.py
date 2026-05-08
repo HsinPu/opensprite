@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-_WEB_SOURCE_TOOLS = frozenset({"web_search", "web_fetch"})
+_WEB_SOURCE_TOOLS = frozenset({"web_search", "web_fetch", "browser_navigate", "browser_snapshot"})
 _SOURCE_SNIPPET_MAX_CHARS = 500
 
 
@@ -61,8 +61,10 @@ def _build_web_source_metadata(tool_name: str, args: dict[str, Any], result: str
     payload = _parse_json_object(result)
     if tool_name == "web_search":
         sources = _web_search_sources(tool_name, args, payload, result)
-    else:
+    elif tool_name == "web_fetch":
         sources = _web_fetch_sources(tool_name, args, payload, result)
+    else:
+        sources = _browser_sources(tool_name, args, payload, result)
     if not sources:
         return {}
     return {"source_count": len(sources), "sources": sources}
@@ -135,6 +137,37 @@ def _web_fetch_sources(
         snippet=payload.get("content") or payload.get("text") or payload.get("summary"),
         query=payload.get("query") or args.get("url"),
         provider=payload.get("provider") or tool_name,
+    )
+    return [source] if source else []
+
+
+def _browser_sources(
+    tool_name: str,
+    args: dict[str, Any],
+    payload: dict[str, Any] | None,
+    result: str,
+) -> list[dict[str, str]]:
+    if payload is None:
+        return []
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+    assert isinstance(data, dict)
+    url = payload.get("final_url") or payload.get("finalUrl") or payload.get("url") or data.get("url") or args.get("url")
+    title = payload.get("title") or data.get("title")
+    snippet = (
+        payload.get("snapshot")
+        or data.get("snapshot")
+        or payload.get("content")
+        or data.get("content")
+        or payload.get("output")
+        or result
+    )
+    source = _source_record(
+        tool_name=tool_name,
+        title=title or url,
+        url=url,
+        snippet=snippet,
+        query=args.get("url") or url,
+        provider="browser",
     )
     return [source] if source else []
 

@@ -4,9 +4,11 @@ import json
 import pytest
 
 from opensprite.agent.tool_registration import register_browser_tools
+from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import BrowserToolConfig, ToolsConfig
 from opensprite.tools.browser import BrowserClickTool, BrowserNavigateTool, BrowserSnapshotTool, BrowserTypeTool
 from opensprite.tools.browser_runtime import AgentBrowserRuntime, BrowserRuntimeError
+from opensprite.tools.evidence import build_tool_evidence
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -162,3 +164,27 @@ def test_agent_browser_runtime_reports_missing_runtime(monkeypatch):
 
     with pytest.raises(BrowserRuntimeError):
         AgentBrowserRuntime()._command_prefix()
+
+
+def test_browser_navigation_evidence_builds_traceable_web_source_artifact():
+    result = json.dumps(
+        {
+            "type": "browser_navigate",
+            "success": True,
+            "data": {
+                "url": "https://example.com/docs",
+                "title": "Example Docs",
+                "snapshot": "Example documentation for browser automation.",
+            },
+        }
+    )
+
+    evidence = build_tool_evidence("browser_navigate", {"url": "https://example.com/docs"}, result, ok=True)
+    artifact = build_task_artifact(evidence)
+
+    assert artifact is not None
+    assert artifact.kind == "web_source"
+    assert artifact.source_tool == "browser_navigate"
+    assert artifact.metadata["source_count"] == 1
+    assert artifact.metadata["sources"][0]["url"] == "https://example.com/docs"
+    assert artifact.metadata["sources"][0]["title"] == "Example Docs"

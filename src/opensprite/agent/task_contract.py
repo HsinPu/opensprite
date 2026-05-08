@@ -16,7 +16,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "image_understanding": frozenset({"analyze_image"}),
     "audio_text": frozenset({"transcribe_audio"}),
     "video_understanding": frozenset({"analyze_video"}),
-    "web_research": frozenset({"web_search", "web_fetch"}),
+    "web_research": frozenset({"web_search", "web_fetch", "browser_navigate", "browser_snapshot"}),
     "history_retrieval": frozenset({"search_history", "search_knowledge"}),
     "workspace_read": frozenset({"read_file", "glob_files", "grep_files", "code_navigation"}),
     "workspace_write": frozenset({"apply_patch", "write_file", "edit_file"}),
