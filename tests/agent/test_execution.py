@@ -144,7 +144,7 @@ class FakeWebFetcher:
             "extractor": "trafilatura",
             "contentType": "text/html",
             "truncated": False,
-            "text": "SQLite FTS5 supports full text search over local tables.",
+            "text": " ".join(["SQLite FTS5 supports full text search over local tables."] * 20),
         }
 
 
@@ -435,7 +435,7 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
     registry = ToolRegistry()
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=3))
 
-    async def fake_search(query, n):
+    async def fake_search(query, n, freshness):
         return _format_results(
             query,
             [
@@ -443,6 +443,11 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
                     "title": "Reddit API docs",
                     "url": "https://www.reddit.com/dev/api/",
                     "content": "Official Reddit API documentation for listings and search.",
+                },
+                {
+                    "title": "Reddit API wiki",
+                    "url": "https://www.reddit.com/wiki/api/",
+                    "content": "Reddit API wiki with additional integration notes.",
                 }
             ],
             n,
@@ -484,7 +489,7 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
     )
 
     assert result.task_artifacts[0].kind == "web_source"
-    assert result.task_artifacts[0].metadata["source_count"] == 1
+    assert result.task_artifacts[0].metadata["source_count"] == 2
     source = result.task_artifacts[0].metadata["sources"][0]
     assert source["url"] == "https://www.reddit.com/dev/api/"
     assert source["title"] == "Reddit API docs"
@@ -496,7 +501,8 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
         response_text=result.content,
         execution_result=result,
     )
-    assert completion.status == "complete"
+    assert completion.status == "incomplete"
+    assert completion.reason == "required source material was insufficient"
 
 
 def test_execution_engine_builds_traceable_web_fetch_artifact(monkeypatch):

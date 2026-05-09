@@ -361,7 +361,9 @@ def _format_acceptance_criterion(criterion: Any) -> str:
         min_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
         return f"Write a substantive final answer using the inspected media/tool results (minimum {min_chars} visible characters)."
     if criterion.kind == "source_artifact":
-        return f"Produce at least {max(1, int(criterion.min_count or 1))} traceable source artifact from web/source tools before finalizing."
+        return f"Produce at least {max(1, int(criterion.min_count or 1))} traceable source(s) from web/source tools before finalizing."
+    if criterion.kind == "source_detail":
+        return "Fetch or inspect at least one source page before finalizing; search result snippets alone are not sufficient."
     if criterion.kind == "source_reference":
         return "Reference at least one gathered source by URL, domain, or title in the final answer."
     return criterion.description or criterion.kind

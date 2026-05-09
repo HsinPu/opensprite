@@ -14,6 +14,7 @@ from .task_intent import TaskIntent
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
 _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
+_SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,10 @@ class QualityGateService:
                     return result
             elif criterion.kind == "source_artifact":
                 result = _evaluate_source_artifact(criterion, execution_result)
+                if result is not None:
+                    return result
+            elif criterion.kind == "source_detail":
+                result = _evaluate_source_detail(criterion, execution_result)
                 if result is not None:
                     return result
             elif criterion.kind == "source_reference":
@@ -132,13 +137,7 @@ def _evaluate_source_artifact(
         for artifact in execution_result.task_artifacts
         if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
     )
-    traceable_count = sum(
-        1
-        for artifact in execution_result.task_artifacts
-        if artifact.ok
-        and artifact.kind in _SOURCE_ARTIFACT_KINDS
-        and _artifact_web_sources(artifact.metadata)
-    )
+    traceable_count = len(_execution_web_sources(execution_result))
     if traceable_count >= min_count:
         return None
     if artifact_count > 0:
@@ -156,6 +155,29 @@ def _evaluate_source_artifact(
         status="incomplete",
         reason="required task artifacts were not produced",
         active_task_detail=f"- Missing source artifact: web_source (need {min_count}, found {artifact_count})",
+    )
+
+
+def _evaluate_source_detail(
+    criterion: AcceptanceCriterion,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
+    sources = _execution_web_sources(execution_result)
+    if not sources:
+        return None
+    detailed_count = sum(1 for source in sources if _source_has_substantive_detail(source))
+    if detailed_count >= min_count:
+        return None
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="required source material was insufficient",
+        active_task_detail=(
+            "- Fetch or inspect at least one source page before finalizing; "
+            "search snippets and too-short fetches do not count "
+            f"(need {min_count}, found {detailed_count})"
+        ),
     )
 
 
@@ -182,19 +204,19 @@ def _evaluate_source_reference(
     )
 
 
-def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, str]]:
-    sources: list[dict[str, str]] = []
+def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, object]]:
+    sources: list[dict[str, object]] = []
     for artifact in execution_result.task_artifacts:
         if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS:
-            sources.extend(_artifact_web_sources(artifact.metadata))
+            sources.extend(_artifact_web_sources(artifact.metadata, source_tool=artifact.source_tool))
     return sources
 
 
-def _artifact_web_sources(metadata: dict[str, object]) -> list[dict[str, str]]:
+def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "") -> list[dict[str, object]]:
     raw_sources = metadata.get("sources") if isinstance(metadata, dict) else None
     if not isinstance(raw_sources, list):
         return []
-    sources: list[dict[str, str]] = []
+    sources: list[dict[str, object]] = []
     for raw_source in raw_sources:
         if not isinstance(raw_source, dict):
             continue
@@ -202,16 +224,54 @@ def _artifact_web_sources(metadata: dict[str, object]) -> list[dict[str, str]]:
         title = str(raw_source.get("title") or "").strip()
         snippet = str(raw_source.get("snippet") or "").strip()
         if url and (title or snippet):
-            sources.append({"url": url, "title": title, "snippet": snippet})
+            source: dict[str, object] = {
+                "url": url,
+                "title": title,
+                "snippet": snippet,
+                "tool_name": str(raw_source.get("tool_name") or source_tool or "").strip(),
+            }
+            for key in ("content_chars", "is_too_short", "min_content_chars", "truncated", "extractor"):
+                if key in raw_source:
+                    source[key] = raw_source[key]
+            sources.append(source)
     return sources
 
 
-def _source_is_referenced(source: dict[str, str], response_text: str) -> bool:
+def _source_has_substantive_detail(source: dict[str, object]) -> bool:
+    tool_name = str(source.get("tool_name") or "").strip()
+    if tool_name not in _SOURCE_DETAIL_TOOLS:
+        return False
+    if tool_name == "web_fetch":
+        if _truthy(source.get("is_too_short")):
+            return False
+        content_chars = _coerce_int(source.get("content_chars"), default=0)
+        min_content_chars = _coerce_int(source.get("min_content_chars"), default=0)
+        if min_content_chars > 0 and content_chars < min_content_chars:
+            return False
+    return True
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _coerce_int(value: object, *, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _source_is_referenced(source: dict[str, object], response_text: str) -> bool:
     normalized_response = re.sub(r"\s+", " ", (response_text or "").strip().lower())
     if not normalized_response:
         return False
 
-    url = source.get("url", "").strip().lower()
+    url = str(source.get("url") or "").strip().lower()
     if url and url in normalized_response:
         return True
 
@@ -219,7 +279,7 @@ def _source_is_referenced(source: dict[str, str], response_text: str) -> bool:
     if domain and domain in normalized_response:
         return True
 
-    title = re.sub(r"\s+", " ", source.get("title", "").strip().lower())
+    title = re.sub(r"\s+", " ", str(source.get("title") or "").strip().lower())
     return len(title) >= 6 and title in normalized_response
 
 

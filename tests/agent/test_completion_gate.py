@@ -24,11 +24,49 @@ def _web_source_artifact() -> TaskArtifact:
                     "snippet": "Official Reddit API documentation for search and listings.",
                     "query": "reddit search api",
                     "provider": "duckduckgo",
+                },
+                {
+                    "tool_name": "web_search",
+                    "url": "https://www.reddit.com/wiki/api/",
+                    "title": "Reddit API wiki",
+                    "snippet": "Reddit API wiki with additional integration notes.",
+                    "query": "reddit search api",
+                    "provider": "duckduckgo",
+                },
+            ],
+            "source_count": 2,
+        },
+    )
+
+
+def _web_fetch_artifact(*, is_too_short: bool = False) -> TaskArtifact:
+    return TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://www.reddit.com/dev/api/",
+                    "title": "Reddit API docs",
+                    "snippet": "Official Reddit API documentation for search, listings, authentication, and rate limits.",
+                    "query": "https://www.reddit.com/dev/api/",
+                    "provider": "web_fetch",
+                    "content_chars": 120 if is_too_short else 1200,
+                    "is_too_short": is_too_short,
+                    "min_content_chars": 800,
+                    "extractor": "trafilatura",
+                    "truncated": False,
                 }
             ],
             "source_count": 1,
         },
     )
+
+
+def _web_research_artifacts() -> tuple[TaskArtifact, ...]:
+    return (_web_source_artifact(), _web_fetch_artifact())
 
 
 def test_completion_gate_requires_requested_verification_before_completion():
@@ -161,8 +199,25 @@ def test_task_contract_records_web_source_acceptance_criteria():
 
     kinds = [criterion.kind for criterion in contract.acceptance_criteria]
     assert "source_artifact" in kinds
+    assert "source_detail" in kinds
     assert "substantive_final_answer" in kinds
     assert "source_reference" in kinds
+    criteria = {criterion.kind: criterion for criterion in contract.acceptance_criteria}
+    assert criteria["source_artifact"].min_count == 2
+    assert criteria["source_detail"].min_count == 1
+
+
+def test_task_contract_allows_one_source_for_explicit_url_web_tasks():
+    intent = TaskIntentService().classify("Please summarize https://example.com/docs")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    criteria = {criterion.kind: criterion for criterion in contract.acceptance_criteria}
+    assert criteria["source_artifact"].min_count == 1
+    assert criteria["source_detail"].min_count == 1
 
 
 def test_completion_gate_requires_web_source_artifacts_after_evidence():
@@ -215,6 +270,60 @@ def test_completion_gate_requires_traceable_web_source_metadata():
     assert "source metadata" in (completion.active_task_detail or "")
 
 
+def test_completion_gate_rejects_search_only_web_source_artifacts():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Reddit 官方 API 文件在 reddit.com 提供搜尋與列表相關端點，Reddit API wiki 也補充整合注意事項。"
+        "這些來源可先用來判斷授權、速率限制與資料保留策略，再決定是否需要第三方歷史資料。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True),),
+            task_artifacts=(_web_source_artifact(),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required source material was insufficient"
+
+
+def test_completion_gate_rejects_too_short_web_fetch_source_detail():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Reddit 官方 API 文件在 reddit.com 提供搜尋與列表相關端點，Reddit API wiki 也補充整合注意事項。"
+        "這些來源可先用來判斷授權、速率限制與資料保留策略，再決定是否需要第三方歷史資料。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
+            task_artifacts=(_web_source_artifact(), _web_fetch_artifact(is_too_short=True)),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required source material was insufficient"
+
+
 def test_completion_gate_rejects_terse_web_research_final_answer():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(
@@ -230,7 +339,7 @@ def test_completion_gate_rejects_terse_web_research_final_answer():
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="web_search", ok=True),),
-            task_artifacts=(_web_source_artifact(),),
+            task_artifacts=_web_research_artifacts(),
         ),
     )
 
@@ -258,7 +367,7 @@ def test_completion_gate_requires_web_source_reference_in_final_answer():
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="web_search", ok=True),),
-            task_artifacts=(_web_source_artifact(),),
+            task_artifacts=_web_research_artifacts(),
         ),
     )
 
@@ -286,7 +395,34 @@ def test_completion_gate_completes_web_research_with_source_artifact_and_answer(
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="web_search", ok=True),),
-            task_artifacts=(_web_source_artifact(),),
+            task_artifacts=_web_research_artifacts(),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_completes_explicit_url_with_substantive_fetch_source():
+    intent = TaskIntentService().classify("Please summarize https://www.reddit.com/dev/api/")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "The Reddit API docs at reddit.com describe official API access for listings, search-adjacent endpoints, "
+        "authentication, and rate-limit considerations. That is enough source material to summarize the requested URL "
+        "and recommend checking auth and rate policies before implementation."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=True),),
+            task_artifacts=(_web_fetch_artifact(),),
         ),
     )
 

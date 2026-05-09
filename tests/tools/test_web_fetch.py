@@ -58,6 +58,10 @@ def test_web_fetch_returns_unified_web_payload(monkeypatch):
         "status": 200,
         "content_type": "text/html",
         "truncated": False,
+        "content_chars": 38,
+        "has_title": True,
+        "is_too_short": True,
+        "min_content_chars": 800,
         "items": [],
     }
 

@@ -162,6 +162,7 @@ class AutoContinueService:
                 "required task evidence was not produced",
                 "required task artifacts were not produced",
                 "required task artifacts were not traceable",
+                "required source material was insufficient",
                 "assistant final answer did not reference gathered sources",
                 "assistant final answer was too terse for the task",
             }
@@ -399,6 +400,12 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
             "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
             "Use `web_search` or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
             "Do not finalize from an untraceable source artifact."
+        )
+    if reason == "required source material was insufficient":
+        return (
+            "\n- Source follow-up: the previous pass did not inspect enough source material. "
+            "Use `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
+            "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
         )
     if reason == "assistant final answer did not reference gathered sources":
         return (

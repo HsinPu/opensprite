@@ -179,6 +179,8 @@ from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from ..utils.log import logger
 
+WEB_FETCH_MIN_CONTENT_CHARS = 800
+
 # 嘗試引入 trafilatura
 try:
     from trafilatura import extract as trafilatura_extract
@@ -851,6 +853,8 @@ class WebFetchTool(Tool):
             prefer_trafilatura=self.fetcher.prefer_trafilatura,
             firecrawl_api_key=self.fetcher.firecrawl_api_key,
         ).fetch(url)
+        content = str(result.get("text") or "")
+        content_chars = len(content.strip())
         return json.dumps(
             {
                 "type": "web_fetch",
@@ -858,13 +862,17 @@ class WebFetchTool(Tool):
                 "url": result.get("url"),
                 "final_url": result.get("finalUrl"),
                 "title": result.get("title"),
-                "content": result.get("text"),
+                "content": content,
                 "summary": result.get("title") or result.get("url") or url,
                 "provider": "web_fetch",
                 "extractor": result.get("extractor"),
                 "status": result.get("status"),
                 "content_type": result.get("contentType"),
                 "truncated": result.get("truncated"),
+                "content_chars": content_chars,
+                "has_title": bool(str(result.get("title") or "").strip()),
+                "is_too_short": content_chars < WEB_FETCH_MIN_CONTENT_CHARS,
+                "min_content_chars": WEB_FETCH_MIN_CONTENT_CHARS,
                 "items": [],
             },
             ensure_ascii=False,

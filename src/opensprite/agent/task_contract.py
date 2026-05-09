@@ -182,11 +182,19 @@ class TaskContractService:
             task_type = "media_extraction"
 
         if cls._looks_like_web_task(text):
+            min_source_count = 1 if _URL_RE.search(text) else 2
             acceptance_criteria.append(
                 AcceptanceCriterion(
                     kind="source_artifact",
+                    min_count=min_source_count,
+                    description="Produce enough traceable web sources before finalizing the answer.",
+                )
+            )
+            acceptance_criteria.append(
+                AcceptanceCriterion(
+                    kind="source_detail",
                     min_count=1,
-                    description="Produce at least one web source artifact before finalizing the answer.",
+                    description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
                 )
             )
             acceptance_criteria.append(_web_final_answer_criterion())

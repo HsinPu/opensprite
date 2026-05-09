@@ -230,6 +230,30 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     assert "URL plus title or snippet" in (decision.prompt or "")
 
 
+def test_auto_continue_guides_retry_after_insufficient_source_material():
+    intent = TaskIntentService().classify("Please find current Reddit search sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required source material was insufficient",
+        active_task_detail="- Fetch or inspect at least one source page before finalizing",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I found search snippets.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="I found search snippets.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "inspect enough source material" in (decision.prompt or "")
+    assert "web_fetch" in (decision.prompt or "")
+    assert "too little content" in (decision.prompt or "")
+    assert "search snippets alone" in (decision.prompt or "")
+
+
 def test_auto_continue_guides_retry_after_missing_web_source_reference():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(

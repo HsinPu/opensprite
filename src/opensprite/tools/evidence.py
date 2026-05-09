@@ -86,7 +86,7 @@ def _web_search_sources(
     args: dict[str, Any],
     payload: dict[str, Any] | None,
     result: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if payload is None:
         return []
     query = _clean_source_text(payload.get("query") or args.get("query"))
@@ -95,7 +95,7 @@ def _web_search_sources(
     if not isinstance(raw_items, list):
         return []
 
-    sources: list[dict[str, str]] = []
+    sources: list[dict[str, Any]] = []
     for item in raw_items:
         if not isinstance(item, dict):
             continue
@@ -117,7 +117,7 @@ def _web_fetch_sources(
     args: dict[str, Any],
     payload: dict[str, Any] | None,
     result: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if payload is None:
         source = _source_record(
             tool_name=tool_name,
@@ -130,13 +130,22 @@ def _web_fetch_sources(
         return [source] if source else []
 
     url = payload.get("final_url") or payload.get("finalUrl") or payload.get("url") or args.get("url")
+    snippet = payload.get("content") or payload.get("text") or payload.get("summary")
     source = _source_record(
         tool_name=tool_name,
         title=payload.get("title"),
         url=url,
-        snippet=payload.get("content") or payload.get("text") or payload.get("summary"),
+        snippet=snippet,
         query=payload.get("query") or args.get("url"),
         provider=payload.get("provider") or tool_name,
+        extra={
+            "content_chars": _coerce_int(payload.get("content_chars"), default=len(_clean_source_text(snippet))),
+            "has_title": bool(_clean_source_text(payload.get("title"))),
+            "is_too_short": bool(payload.get("is_too_short")),
+            "min_content_chars": _coerce_int(payload.get("min_content_chars"), default=0),
+            "truncated": bool(payload.get("truncated")),
+            "extractor": _clean_source_text(payload.get("extractor")),
+        },
     )
     return [source] if source else []
 
@@ -146,7 +155,7 @@ def _browser_sources(
     args: dict[str, Any],
     payload: dict[str, Any] | None,
     result: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if payload is None:
         return []
     data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
@@ -180,13 +189,14 @@ def _source_record(
     snippet: Any,
     query: Any,
     provider: Any,
-) -> dict[str, str]:
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     clean_url = _clean_source_text(url)
     clean_title = _clean_source_text(title)
     clean_snippet = _clean_source_text(snippet)[:_SOURCE_SNIPPET_MAX_CHARS]
     if not clean_url or not (clean_title or clean_snippet):
         return {}
-    return {
+    record: dict[str, Any] = {
         "tool_name": tool_name,
         "url": clean_url,
         "title": clean_title,
@@ -194,7 +204,17 @@ def _source_record(
         "query": _clean_source_text(query),
         "provider": _clean_source_text(provider),
     }
+    if extra:
+        record.update({key: value for key, value in extra.items() if value is not None})
+    return record
 
 
 def _clean_source_text(value: Any) -> str:
     return " ".join(str(value or "").split())
+
+
+def _coerce_int(value: Any, *, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
