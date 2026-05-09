@@ -10,6 +10,9 @@
         <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
           {{ expanded ? copy.trace.collapse : copy.trace.expand }}
         </button>
+        <button class="run-block-toggle" type="button" @click="downloadDebugBundle">
+          {{ copy.trace.exportDebug }}
+        </button>
         <button
           v-if="run.status === 'running'"
           class="run-trace__cancel"
@@ -1058,6 +1061,84 @@ function inspectArtifact(artifact) {
     artifact,
     createdAt: artifact.createdAt,
   });
+}
+
+function downloadDebugBundle() {
+  if (!props.run) {
+    return;
+  }
+  const bundle = buildDebugBundle();
+  const blob = new Blob([stringifyDebugBundle(bundle)], { type: "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `opensprite-debug-${safeFileName(props.run.runId)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function buildDebugBundle() {
+  return {
+    schema_version: 1,
+    exported_at: new Date().toISOString(),
+    run: {
+      run_id: props.run.runId,
+      session_id: props.run.sessionId,
+      status: props.run.status,
+      created_at: props.run.createdAt,
+      updated_at: props.run.updatedAt,
+      finished_at: props.run.finishedAt,
+      trace_loaded: Boolean(props.run.traceLoaded),
+      trace_loading: Boolean(props.run.traceLoading),
+      trace_error: props.run.traceError || "",
+      event_counts: props.run.eventCounts || {},
+    },
+    summary: props.run.summary || null,
+    diff_summary: props.run.diffSummary || null,
+    worktree_sandbox: props.run.worktreeSandbox || null,
+    file_changes: props.run.fileChanges || [],
+    artifacts: artifacts.value,
+    parts: parts.value,
+    events: (props.run.rawEvents || []).length ? props.run.rawEvents : events.value,
+    localized_events: props.run.events || [],
+  };
+}
+
+function stringifyDebugBundle(bundle) {
+  const replacer = (key, value) => {
+    if (typeof value === "bigint") {
+      return value.toString();
+    }
+    return value;
+  };
+  try {
+    return JSON.stringify(bundle, replacer, 2);
+  } catch {
+    const seen = new WeakSet();
+    return JSON.stringify(
+      bundle,
+      (key, value) => {
+        if (typeof value === "bigint") {
+          return value.toString();
+        }
+        if (value && typeof value === "object") {
+          if (seen.has(value)) {
+            return "[Circular]";
+          }
+          seen.add(value);
+        }
+        return value;
+      },
+      2,
+    );
+  }
+}
+
+function safeFileName(value) {
+  const normalized = String(value || "run").replace(/^run[_-]?/, "");
+  return normalized.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "run";
 }
 
 function formatPayload(event) {

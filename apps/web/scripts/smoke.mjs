@@ -93,6 +93,8 @@ assertIncludes(runSummaryCard, "visibleDiffPathItems", "diff summary file links"
 assertIncludes(runSummaryCard, "cleanup-worktree", "worktree cleanup action");
 assertIncludes(runTraceViewer, "codeNavigationResults", "code navigation trace rendering");
 assertIncludes(runTraceViewer, "showRetentionSummary", "trace retention summary");
+assertIncludes(runTraceViewer, "downloadDebugBundle", "run trace debug export action");
+assertIncludes(copy, "exportDebug", "run trace debug export copy");
 assertIncludes(styles, ".run-trace__artifact-grid", "trace artifact grid styling");
 assertIncludes(styles, "grid-template-columns: 1fr", "trace artifacts render in one column");
 assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selector");
