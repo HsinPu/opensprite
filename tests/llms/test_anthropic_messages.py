@@ -81,6 +81,40 @@ def test_anthropic_messages_can_force_prompt_cache_for_compatible_endpoint():
     assert payload["messages"][-1]["content"][-1]["cache_control"] == {"type": "ephemeral"}
 
 
+def test_anthropic_messages_does_not_duplicate_v1_messages_path():
+    provider = AnthropicMessagesLLM(
+        api_key="anthropic-key",
+        base_url="https://api.example.com/v1/",
+        default_model="claude-sonnet-4-6",
+        reasoning_enabled=False,
+    )
+
+    assert provider.base_url == "https://api.example.com/v1"
+    assert provider._messages_url() == "https://api.example.com/v1/messages"
+
+
+def test_anthropic_messages_accepts_full_messages_endpoint_base_url():
+    provider = AnthropicMessagesLLM(
+        api_key="anthropic-key",
+        base_url="https://api.example.com/v1/messages/",
+        default_model="claude-sonnet-4-6",
+        reasoning_enabled=False,
+    )
+
+    assert provider._messages_url() == "https://api.example.com/v1/messages"
+
+
+def test_anthropic_messages_appends_v1_messages_to_api_root():
+    provider = AnthropicMessagesLLM(
+        api_key="minimax-key",
+        base_url="https://api.minimax.io/anthropic/",
+        default_model="MiniMax-M2.7",
+        reasoning_enabled=False,
+    )
+
+    assert provider._messages_url() == "https://api.minimax.io/anthropic/v1/messages"
+
+
 def test_anthropic_messages_response_maps_text_thinking_and_tools():
     calls = []
 

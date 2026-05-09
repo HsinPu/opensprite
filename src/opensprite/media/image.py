@@ -6,6 +6,7 @@ import httpx
 from openai import AsyncOpenAI
 
 from .base import ImageAnalysisProvider
+from ..utils.url import join_url_path
 
 
 class OpenAICompatibleImageProvider(ImageAnalysisProvider):
@@ -74,7 +75,7 @@ class MiniMaxImageProvider(ImageAnalysisProvider):
 
     @property
     def endpoint(self) -> str:
-        return f"{self.base_url}/v1/coding_plan/vlm"
+        return join_url_path(self.base_url, "/v1/coding_plan/vlm")
 
     async def _post(self, payload: dict[str, str]) -> dict:
         headers = {"Authorization": f"Bearer {self.api_key}"}

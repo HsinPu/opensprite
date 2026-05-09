@@ -227,6 +227,25 @@ def test_resolve_runtime_applies_minimax_profile_defaults():
     assert provider.base_url == "https://api.minimax.io/anthropic"
 
 
+def test_resolve_runtime_rewrites_legacy_minimax_chat_base_url_for_anthropic_mode():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="minimax",
+            api_key="minimax-key",
+            model="MiniMax-M2.7",
+            base_url="https://api.minimax.io/v1",
+            enabled=True,
+        ),
+        provider_name="minimax",
+    )
+    provider = create_llm_from_runtime(runtime)
+
+    assert runtime.api_mode == "anthropic_messages"
+    assert runtime.base_url == "https://api.minimax.io/anthropic"
+    assert isinstance(provider, AnthropicMessagesLLM)
+    assert provider.base_url == "https://api.minimax.io/anthropic"
+
+
 def test_resolve_runtime_preserves_minimax_chat_completions_default_url():
     runtime = resolve_provider_runtime(
         ProviderConfig(

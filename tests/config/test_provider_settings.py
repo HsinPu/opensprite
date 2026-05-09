@@ -346,6 +346,27 @@ def test_fetch_openai_compatible_models_probes_v1_fallback(monkeypatch):
     ]
 
 
+def test_fetch_openai_compatible_models_accepts_models_endpoint(monkeypatch):
+    seen_urls = []
+
+    def fake_read_json_url(url, *, headers=None):
+        seen_urls.append((url, headers))
+        if url == "https://example.test/v1/models":
+            return {"data": [{"id": "fallback-live"}]}
+        return {"data": []}
+
+    monkeypatch.setattr(provider_settings, "fetch_openai_compatible_models", _ORIGINAL_FETCH_OPENAI_COMPATIBLE_MODELS)
+    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+
+    models = provider_settings.fetch_openai_compatible_models("", "https://example.test/models")
+
+    assert models == ["fallback-live"]
+    assert seen_urls == [
+        ("https://example.test/models", {"Accept": "application/json"}),
+        ("https://example.test/v1/models", {"Accept": "application/json"}),
+    ]
+
+
 def test_fetch_codex_models_filters_and_sorts(monkeypatch):
     def fake_read_json_url(url, *, headers=None):
         return {

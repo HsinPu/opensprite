@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from ..utils.url import join_url_path
+
 
 SUPPORTED_BROWSER_BACKENDS = ("agent-browser", "browserbase", "browser-use", "firecrawl")
 CLOUD_BROWSER_BACKENDS = ("browserbase", "browser-use", "firecrawl")
@@ -125,7 +127,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
             body["browserSettings"] = {"advancedStealth": True}
         response = await self._request(
             "POST",
-            f"{self.base_url}/v1/sessions",
+            join_url_path(self.base_url, "/v1/sessions"),
             headers={"Content-Type": "application/json", "X-BB-API-Key": self.api_key},
             json_body=body,
             timeout=timeout,
@@ -146,7 +148,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         try:
             await self._request(
                 "POST",
-                f"{self.base_url}/v1/sessions/{provider_session_id}",
+                join_url_path(self.base_url, f"/v1/sessions/{provider_session_id}"),
                 headers={"Content-Type": "application/json", "X-BB-API-Key": self.api_key},
                 json_body={"projectId": self.project_id, "status": "REQUEST_RELEASE"},
                 timeout=timeout,
@@ -191,7 +193,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         timeout_minutes = max(1, (max(1, int(session_timeout or 300)) + 59) // 60)
         response = await self._request(
             "POST",
-            f"{self.base_url}/browsers",
+            join_url_path(self.base_url, "/browsers"),
             headers=self._headers(),
             json_body={"timeout": timeout_minutes},
             timeout=timeout,
@@ -214,7 +216,7 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         try:
             await self._request(
                 "PATCH",
-                f"{self.base_url}/browsers/{provider_session_id}",
+                join_url_path(self.base_url, f"/browsers/{provider_session_id}"),
                 headers=self._headers(),
                 json_body={"action": "stop"},
                 timeout=timeout,
@@ -259,7 +261,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         ttl = max(1, int(session_timeout or 300))
         response = await self._request(
             "POST",
-            f"{self.base_url}/v2/browser",
+            join_url_path(self.base_url, "/v2/browser"),
             headers=self._headers(),
             json_body={"ttl": ttl},
             timeout=timeout,
@@ -280,7 +282,7 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         try:
             await self._request(
                 "DELETE",
-                f"{self.base_url}/v2/browser/{provider_session_id}",
+                join_url_path(self.base_url, f"/v2/browser/{provider_session_id}"),
                 headers=self._headers(),
                 timeout=timeout,
                 error_prefix="Failed to close Firecrawl browser session",

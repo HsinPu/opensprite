@@ -12,6 +12,7 @@ import httpx
 from loguru import logger
 
 from ..config.schema import WebSearchToolConfig
+from ..utils.url import join_url_path
 from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 
@@ -405,7 +406,7 @@ class WebSearchTool(Tool):
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
-                    f"{base_url}/search",
+                    join_url_path(base_url, "/search"),
                     params={"q": query, "format": "json", **_freshness_params("searxng", freshness)},
                     timeout=10.0
                 )

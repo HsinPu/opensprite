@@ -77,6 +77,26 @@ class _StaticDuckDuckGoClient:
         return _FakeDuckDuckGoResponse(self.text, url)
 
 
+class _FakeSearxngResponse:
+    def json(self):
+        return {"results": [{"title": "One", "url": "https://example.com/one", "content": "First"}]}
+
+
+class _FakeSearxngClient:
+    def __init__(self):
+        self.requests = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def get(self, url, params=None, timeout=None):
+        self.requests.append((url, params))
+        return _FakeSearxngResponse()
+
+
 def test_format_results_returns_structured_json_payload():
     payload = _format_results(
         "sqlite fts5",
@@ -165,6 +185,20 @@ def test_web_search_freshness_aliases_and_provider_params():
     assert _freshness_params("brave", "month") == {"freshness": "pm"}
     assert _freshness_params("tavily", "year") == {"time_range": "year"}
     assert _freshness_params("searxng", "none") == {}
+
+
+def test_searxng_search_accepts_search_endpoint_base_url(monkeypatch):
+    fake_client = _FakeSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="searxng", searxng_url="https://searx.test/search"))
+
+    payload = json.loads(asyncio.run(tool._search_searxng("sqlite", 1, "none")))
+
+    assert payload["items"][0]["title"] == "One"
+    assert fake_client.requests[0][0] == "https://searx.test/search"
 
 
 def test_duckduckgo_search_follows_next_page(monkeypatch):

@@ -9,6 +9,7 @@ import httpx
 
 from .base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from .tool_args import parse_tool_arguments
+from ..utils.url import join_url_path
 
 
 THINKING_BUDGETS = {"xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000, "minimal": 4000}
@@ -228,9 +229,12 @@ class AnthropicMessagesLLM(LLMProvider):
 
     async def _post_messages(self, payload: dict[str, Any]) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=httpx.Timeout(self.timeout_seconds, connect=10.0)) as client:
-            response = await client.post(f"{self.base_url}/v1/messages", headers=self._headers(), json=payload)
+            response = await client.post(self._messages_url(), headers=self._headers(), json=payload)
             response.raise_for_status()
             return response.json()
+
+    def _messages_url(self) -> str:
+        return join_url_path(self.base_url, "/v1/messages")
 
     async def chat(
         self,

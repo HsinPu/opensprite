@@ -16,6 +16,7 @@ from ..auth.credentials import (
     resolve_credential,
     set_provider_default,
 )
+from ..utils.url import join_url_path
 from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
 from .schema import Config
 
@@ -190,16 +191,18 @@ def fetch_openai_compatible_models(api_key: str, base_url: str) -> list[str]:
     normalized = str(base_url or "").strip().rstrip("/")
     if not normalized:
         return []
+    lowered = normalized.lower()
+    probe_base = normalized[: -len("/models")] if lowered.endswith("/models") else normalized
     candidates = [normalized]
-    if normalized.endswith("/v1"):
-        candidates.append(normalized[:-3].rstrip("/"))
+    if probe_base.lower().endswith("/v1"):
+        candidates.append(probe_base[:-3].rstrip("/"))
     else:
-        candidates.append(f"{normalized}/v1")
+        candidates.append(f"{probe_base}/v1")
     headers = {"Accept": "application/json"}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     for candidate in _dedupe_models(candidates):
-        models = _models_from_openai_compatible_payload(_read_json_url(f"{candidate}/models", headers=headers))
+        models = _models_from_openai_compatible_payload(_read_json_url(join_url_path(candidate, "/models"), headers=headers))
         if models:
             return models
     return []
