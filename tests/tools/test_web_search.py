@@ -3,7 +3,7 @@ import json
 
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_search import _format_results
+from opensprite.tools.web_search import _format_results, _freshness_params, _normalize_freshness
 
 
 class _FakeDuckDuckGoResponse:
@@ -120,24 +120,51 @@ def test_web_search_count_limit_comes_from_config():
     tool = WebSearchTool(config=WebSearchToolConfig(max_results=25))
 
     count_schema = tool.parameters["properties"]["count"]
+    freshness_schema = tool.parameters["properties"]["freshness"]
 
     assert count_schema["maximum"] == 25
     assert count_schema["description"] == "Results (1-25)"
+    assert freshness_schema["default"] == "year"
+    assert freshness_schema["enum"] == ["none", "day", "week", "month", "year"]
 
 
 def test_web_search_execute_clamps_to_configured_max_results(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=25))
     requested_counts = []
 
-    async def fake_search(query, n):
-        requested_counts.append(n)
+    async def fake_search(query, n, freshness):
+        requested_counts.append((n, freshness))
         return _format_results(query, [], n, provider="duckduckgo")
 
     monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
 
     asyncio.run(tool._execute("sqlite", count=50))
 
-    assert requested_counts == [25]
+    assert requested_counts == [(25, "year")]
+
+
+def test_web_search_execute_allows_freshness_override(monkeypatch):
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="year"))
+    requested_freshness = []
+
+    async def fake_search(query, n, freshness):
+        requested_freshness.append(freshness)
+        return _format_results(query, [], n, provider="duckduckgo")
+
+    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
+
+    asyncio.run(tool._execute("sqlite docs", freshness="none"))
+
+    assert requested_freshness == ["none"]
+
+
+def test_web_search_freshness_aliases_and_provider_params():
+    assert _normalize_freshness("latest", "year") == "month"
+    assert _normalize_freshness("all", "year") == "none"
+    assert _freshness_params("duckduckgo", "week") == {"df": "w"}
+    assert _freshness_params("brave", "month") == {"freshness": "pm"}
+    assert _freshness_params("tavily", "year") == {"time_range": "year"}
+    assert _freshness_params("searxng", "none") == {}
 
 
 def test_duckduckgo_search_follows_next_page(monkeypatch):
@@ -148,12 +175,14 @@ def test_duckduckgo_search_follows_next_page(monkeypatch):
     )
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", max_results=2))
 
-    payload = json.loads(asyncio.run(tool._search_duckduckgo("sqlite", 2)))
+    payload = json.loads(asyncio.run(tool._search_duckduckgo("sqlite", 2, "year")))
 
     assert [item["title"] for item in payload["items"]] == ["One", "Two"]
     assert [item["content"] for item in payload["items"]] == ["First snippet", "Second snippet"]
     assert [request[0] for request in fake_client.requests] == ["get", "post"]
     assert fake_client.requests[1][2]["s"] == "1"
+    assert fake_client.requests[0][2]["df"] == "y"
+    assert fake_client.requests[1][2]["df"] == "y"
 
 
 def test_duckduckgo_search_respects_configured_page_limit(monkeypatch):
@@ -166,7 +195,7 @@ def test_duckduckgo_search_respects_configured_page_limit(monkeypatch):
         config=WebSearchToolConfig(provider="duckduckgo", max_results=2, duckduckgo_max_pages=1)
     )
 
-    payload = json.loads(asyncio.run(tool._search_duckduckgo("sqlite", 2)))
+    payload = json.loads(asyncio.run(tool._search_duckduckgo("sqlite", 2, "year")))
 
     assert [item["title"] for item in payload["items"]] == ["One"]
     assert [request[0] for request in fake_client.requests] == ["get"]
@@ -180,7 +209,7 @@ def test_duckduckgo_search_reports_block_page(monkeypatch):
     )
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
 
-    result = asyncio.run(tool._search_duckduckgo("sqlite", 2))
+    result = asyncio.run(tool._search_duckduckgo("sqlite", 2, "year"))
 
     assert result.startswith("Error: DuckDuckGo blocked the search for 'sqlite'")
     assert "configure another web_search provider" in result
@@ -194,6 +223,6 @@ def test_duckduckgo_search_reports_no_results(monkeypatch):
     )
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
 
-    result = asyncio.run(tool._search_duckduckgo("sqlite", 2))
+    result = asyncio.run(tool._search_duckduckgo("sqlite", 2, "year"))
 
     assert result == "Error: DuckDuckGo returned no results for 'sqlite'."

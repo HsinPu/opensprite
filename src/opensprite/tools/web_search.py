@@ -6,7 +6,7 @@ import json
 import os
 import re
 from typing import Any
-from urllib.parse import parse_qs, unquote, urljoin, urlparse
+from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlparse
 
 import httpx
 from loguru import logger
@@ -16,6 +16,9 @@ from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/537.36"
+FRESHNESS_VALUES = ("none", "day", "week", "month", "year")
+DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
+BRAVE_FRESHNESS = {"day": "pd", "week": "pw", "month": "pm", "year": "py"}
 
 
 def _detect_duckduckgo_block(text: str) -> str | None:
@@ -67,6 +70,49 @@ def _extract_duckduckgo_url(href: str) -> str:
         target = parse_qs(parsed.query).get("uddg", [""])[0]
         return unquote(target) if target else ""
     return normalized
+
+
+def _normalize_freshness(value: Any, default: str = "year") -> str:
+    """Normalize tool/config freshness into a provider-agnostic value."""
+    raw = str(value if value is not None else default).strip().lower()
+    aliases = {
+        "": default,
+        "all": "none",
+        "any": "none",
+        "off": "none",
+        "false": "none",
+        "today": "day",
+        "d": "day",
+        "daily": "day",
+        "w": "week",
+        "weekly": "week",
+        "m": "month",
+        "monthly": "month",
+        "recent": "month",
+        "latest": "month",
+        "current": "month",
+        "y": "year",
+        "yearly": "year",
+        "past_year": "year",
+    }
+    normalized = aliases.get(raw, raw)
+    return normalized if normalized in FRESHNESS_VALUES else default
+
+
+def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
+    """Return provider-specific recency parameters for supported engines."""
+    normalized = _normalize_freshness(freshness, default="none")
+    if normalized == "none":
+        return {}
+    if provider == "duckduckgo":
+        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
+    if provider == "brave":
+        return {"freshness": BRAVE_FRESHNESS[normalized]}
+    if provider in {"tavily", "searxng"}:
+        return {"time_range": normalized}
+    if provider == "jina":
+        return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
+    return {}
 
 
 def _extract_duckduckgo_results(soup: Any) -> list[dict[str, str]]:
@@ -171,7 +217,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for new external sources. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
+    description = "Search the web for new external sources. Defaults to a recent-results filter to avoid stale sources; set freshness='none' for timeless docs. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports Brave, DuckDuckGo, Tavily, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()
@@ -189,6 +235,12 @@ class WebSearchTool(Tool):
                     "description": f"Results (1-{self.max_results})",
                     "minimum": 1,
                     "maximum": self.max_results,
+                },
+                "freshness": {
+                    "type": "string",
+                    "enum": list(FRESHNESS_VALUES),
+                    "description": "Recency filter. Defaults to config (year) to reduce stale results; use none for timeless/reference docs.",
+                    "default": self.config.freshness,
                 }
             },
             "required": ["query"]
@@ -220,32 +272,33 @@ class WebSearchTool(Tool):
 
     async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         n = min(max(count or self.max_results, 1), self.max_results)
+        freshness = _normalize_freshness(kwargs.get("freshness"), self.config.freshness)
 
         provider = self.provider
 
         if provider == "duckduckgo":
-            return await self._search_duckduckgo(query, n)
+            return await self._search_duckduckgo(query, n, freshness)
         elif provider == "tavily":
-            return await self._search_tavily(query, n)
+            return await self._search_tavily(query, n, freshness)
         elif provider == "searxng":
-            return await self._search_searxng(query, n)
+            return await self._search_searxng(query, n, freshness)
         elif provider == "jina":
-            return await self._search_jina(query, n)
+            return await self._search_jina(query, n, freshness)
         elif provider == "brave":
-            return await self._search_brave(query, n)
+            return await self._search_brave(query, n, freshness)
         else:
             return f"Error: unknown search provider '{provider}'"
 
-    async def _search_brave(self, query: str, n: int) -> str:
+    async def _search_brave(self, query: str, n: int, freshness: str) -> str:
         api_key = self.brave_api_key
         if not api_key:
             logger.warning("Brave API key not set, falling back to DuckDuckGo")
-            return await self._search_duckduckgo(query, n)
+            return await self._search_duckduckgo(query, n, freshness)
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
                     "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": n},
+                    params={"q": query, "count": n, **_freshness_params("brave", freshness)},
                     headers={"Accept": "application/json", "X-Subscription-Token": api_key},
                     timeout=10.0
                 )
@@ -258,13 +311,14 @@ class WebSearchTool(Tool):
         except Exception as e:
             return f"Error: {e}"
 
-    async def _search_duckduckgo(self, query: str, n: int) -> str:
+    async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
         try:
             from bs4 import BeautifulSoup
 
             request_method = "get"
             request_url = "https://lite.duckduckgo.com/lite/"
-            request_payload = {"q": query}
+            freshness_payload = _freshness_params("duckduckgo", freshness)
+            request_payload = {"q": query, **freshness_payload}
             visited_requests = set()
             seen_results = set()
             results = []
@@ -317,6 +371,7 @@ class WebSearchTool(Tool):
                     if next_request is None:
                         break
                     request_method, request_url, request_payload = next_request
+                    request_payload = {**request_payload, **freshness_payload}
 
             if not results:
                 return f"Error: DuckDuckGo returned no results for '{query}'."
@@ -325,17 +380,17 @@ class WebSearchTool(Tool):
         except Exception as e:
             return f"Error: {e}"
 
-    async def _search_tavily(self, query: str, n: int) -> str:
+    async def _search_tavily(self, query: str, n: int, freshness: str) -> str:
         api_key = self.tavily_api_key
         if not api_key:
             logger.warning("Tavily API key not set, falling back to DuckDuckGo")
-            return await self._search_duckduckgo(query, n)
+            return await self._search_duckduckgo(query, n, freshness)
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.post(
                     "https://api.tavily.com/search",
                     headers={"Authorization": f"Bearer {api_key}"},
-                    json={"query": query, "max_results": n},
+                    json={"query": query, "max_results": n, **_freshness_params("tavily", freshness)},
                     timeout=15.0
                 )
                 r.raise_for_status()
@@ -345,13 +400,13 @@ class WebSearchTool(Tool):
         except Exception as e:
             return f"Error: {e}"
 
-    async def _search_searxng(self, query: str, n: int) -> str:
+    async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
         base_url = self.config.searxng_url
         try:
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
                     f"{base_url}/search",
-                    params={"q": query, "format": "json"},
+                    params={"q": query, "format": "json", **_freshness_params("searxng", freshness)},
                     timeout=10.0
                 )
             items = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("content", "")}
@@ -360,14 +415,18 @@ class WebSearchTool(Tool):
         except Exception as e:
             return f"Error: {e}"
 
-    async def _search_jina(self, query: str, n: int) -> str:
+    async def _search_jina(self, query: str, n: int, freshness: str) -> str:
         try:
             headers = {"User-Agent": USER_AGENT}
             if self.jina_api_key:
                 headers["Authorization"] = f"Bearer {self.jina_api_key}"
+            params = _freshness_params("jina", freshness)
+            query_string = f"q={quote_plus(query)}&format=json"
+            if params:
+                query_string += "&" + "&".join(f"{key}={quote_plus(value)}" for key, value in params.items())
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 r = await client.get(
-                    f"https://s.jina.ai/http://duckduckgo.com/?q={query}&format=json",
+                    f"https://s.jina.ai/http://duckduckgo.com/?{query_string}",
                     headers=headers,
                     timeout=10.0
                 )
