@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-_WEB_SOURCE_TOOLS = frozenset({"web_search", "web_fetch", "browser_navigate", "browser_snapshot"})
+_WEB_SOURCE_TOOLS = frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"})
 _SOURCE_SNIPPET_MAX_CHARS = 500
 
 
@@ -63,6 +63,8 @@ def _build_web_source_metadata(tool_name: str, args: dict[str, Any], result: str
         sources = _web_search_sources(tool_name, args, payload, result)
     elif tool_name == "web_fetch":
         sources = _web_fetch_sources(tool_name, args, payload, result)
+    elif tool_name == "web_research":
+        sources = _web_research_sources(tool_name, args, payload, result)
     else:
         sources = _browser_sources(tool_name, args, payload, result)
     if not sources:
@@ -148,6 +150,48 @@ def _web_fetch_sources(
         },
     )
     return [source] if source else []
+
+
+def _web_research_sources(
+    tool_name: str,
+    args: dict[str, Any],
+    payload: dict[str, Any] | None,
+    result: str,
+) -> list[dict[str, Any]]:
+    if payload is None:
+        return []
+    query = _clean_source_text(payload.get("query") or args.get("query"))
+    provider = _clean_source_text(payload.get("provider"))
+    raw_sources = payload.get("sources") or payload.get("fetched_sources") or []
+    if not isinstance(raw_sources, list):
+        return []
+
+    sources: list[dict[str, Any]] = []
+    for raw_source in raw_sources:
+        if not isinstance(raw_source, dict):
+            continue
+        raw_tool_name = _clean_source_text(raw_source.get("tool_name")) or (
+            "web_fetch" if raw_source.get("fetched") or raw_source.get("content") else "web_search"
+        )
+        source = _source_record(
+            tool_name=raw_tool_name,
+            title=raw_source.get("title"),
+            url=raw_source.get("url"),
+            snippet=raw_source.get("content") or raw_source.get("snippet") or raw_source.get("summary"),
+            query=raw_source.get("source_query") or query,
+            provider=raw_source.get("search_provider") or provider or tool_name,
+            extra={
+                "content_chars": _coerce_int(raw_source.get("content_chars"), default=len(_clean_source_text(raw_source.get("content")))),
+                "has_title": bool(_clean_source_text(raw_source.get("title"))),
+                "is_too_short": bool(raw_source.get("is_too_short")),
+                "min_content_chars": _coerce_int(raw_source.get("min_content_chars"), default=0),
+                "truncated": bool(raw_source.get("truncated")),
+                "extractor": _clean_source_text(raw_source.get("extractor")),
+            },
+        )
+        if source:
+            sources.append(source)
+    return sources
 
 
 def _browser_sources(

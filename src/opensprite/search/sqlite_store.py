@@ -1445,7 +1445,7 @@ class SQLiteSearchStore(SearchStore):
                 )
                 has_tool_knowledge_candidates = bool(
                     conn.execute(
-                        "SELECT 1 FROM messages WHERE tool_name IN ('web_search', 'web_fetch') LIMIT 1"
+                        "SELECT 1 FROM messages WHERE tool_name IN ('web_search', 'web_fetch', 'web_research') LIMIT 1"
                     ).fetchone()
                 )
             finally:

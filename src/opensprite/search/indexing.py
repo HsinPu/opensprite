@@ -119,6 +119,13 @@ def build_knowledge_documents(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
         )
+    if tool_name == "web_research":
+        return _build_web_research_documents(
+            tool_args,
+            result,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
     return []
 
 
@@ -168,6 +175,8 @@ def guess_tool_name(content: str) -> str | None:
             payload = json.loads(stripped)
         except Exception:
             return None
+        if isinstance(payload, dict) and payload.get("type") == "web_research":
+            return "web_research"
         if isinstance(payload, dict) and (
             payload.get("type") == "web_search"
             or ("query" in payload and isinstance(payload.get("items", payload.get("results")), list))
@@ -342,3 +351,93 @@ def _build_web_fetch_documents(
             chunks=chunks,
         )
     ]
+
+
+def _build_web_research_documents(
+    tool_args: dict[str, Any],
+    result: str,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[KnowledgeDocument]:
+    try:
+        payload = json.loads(result)
+    except Exception:
+        return []
+    if not isinstance(payload, dict):
+        return []
+
+    query = str(tool_args.get("query") or payload.get("query") or "")
+    provider = str(payload.get("provider") or "")
+    content_type = str(payload.get("content_type") or "application/json")
+    documents: list[KnowledgeDocument] = []
+
+    raw_items = payload.get("items")
+    if isinstance(raw_items, list):
+        for item in raw_items:
+            if not isinstance(item, dict):
+                continue
+            content = str(item.get("content") or item.get("snippet") or "")
+            chunks = chunk_text(content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            if not chunks:
+                continue
+            documents.append(
+                KnowledgeDocument(
+                    source_type="web_search",
+                    tool_name="web_research",
+                    query=query,
+                    title=str(item.get("title") or ""),
+                    url=str(item.get("url") or ""),
+                    summary=content,
+                    provider=provider,
+                    extractor="search",
+                    content_type=content_type,
+                    truncated=False,
+                    raw_result=result,
+                    chunks=chunks,
+                )
+            )
+
+    raw_fetched = payload.get("fetched_sources")
+    if not isinstance(raw_fetched, list):
+        raw_sources = payload.get("sources")
+        raw_fetched = [
+            source
+            for source in raw_sources
+            if isinstance(source, dict)
+            and (
+                str(source.get("tool_name") or "") == "web_fetch"
+                or bool(source.get("fetched"))
+                or "content_chars" in source
+            )
+        ] if isinstance(raw_sources, list) else []
+    if isinstance(raw_fetched, list):
+        for source in raw_fetched:
+            if not isinstance(source, dict):
+                continue
+            content = str(source.get("content") or source.get("snippet") or source.get("summary") or "")
+            chunks = chunk_text(content, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+            if not chunks:
+                continue
+            raw_status = source.get("status")
+            status = int(raw_status) if isinstance(raw_status, (int, float)) else None
+            raw_truncated = source.get("truncated")
+            documents.append(
+                KnowledgeDocument(
+                    source_type="web_fetch",
+                    tool_name="web_research",
+                    query=str(source.get("source_query") or query),
+                    title=str(source.get("title") or ""),
+                    url=str(source.get("url") or ""),
+                    summary=str(source.get("snippet") or source.get("summary") or ""),
+                    provider=str(source.get("search_provider") or provider),
+                    extractor=str(source.get("extractor") or "web_research"),
+                    status=status,
+                    content_type=str(source.get("content_type") or source.get("contentType") or ""),
+                    truncated=raw_truncated if isinstance(raw_truncated, bool) else None,
+                    raw_result=result,
+                    chunks=chunks,
+                )
+            )
+
+    return documents

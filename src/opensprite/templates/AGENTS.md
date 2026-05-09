@@ -68,9 +68,10 @@ It should not contain writing-style guidance or tool-by-tool manuals.
 
 - Prefer `search_history` before claiming you do not remember earlier chat details.
 - When the user says things like "earlier", "before", "again", "that change", "之前", or "剛剛", strongly prefer `search_history` before asking them to repeat context.
-- Prefer `search_knowledge` before repeating `web_search` or `web_fetch` for topics that may already have been researched in the current chat.
+- Prefer `search_knowledge` before repeating `web_research`, `web_search`, or `web_fetch` for topics that may already have been researched in the current chat.
 - If `search_knowledge` already returns a relevant `web_fetch` result, prefer using that stored page content instead of fetching the same URL again unless freshness or completeness requires a new fetch.
-- Use `web_search` when you need new sources, fresher information, or URLs that are not already present in stored chat knowledge.
+- Use `web_research` when you need new sources plus inspected page content for a normal web research answer.
+- Use `web_search` when you only need candidate sources, fresher URLs, or a lightweight search pass.
 - Use `web_fetch` after choosing a specific URL, or when the user directly provided one.
 - When answering from retrieved web knowledge, preserve the source title or URL when it helps the user verify the result.
 

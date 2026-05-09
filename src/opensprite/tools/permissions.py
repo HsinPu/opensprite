@@ -55,6 +55,7 @@ DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
     "run_workflow": frozenset({"delegation"}),
     "web_search": frozenset({"network"}),
     "web_fetch": frozenset({"network"}),
+    "web_research": frozenset({"network"}),
     "browser_navigate": frozenset({"network", "external_side_effect"}),
     "browser_snapshot": frozenset({"network"}),
     "browser_click": frozenset({"network", "external_side_effect"}),

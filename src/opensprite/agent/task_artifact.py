@@ -15,6 +15,7 @@ _TOOL_ARTIFACT_KINDS: dict[str, str] = {
     "analyze_video": "video_analysis",
     "web_search": "web_source",
     "web_fetch": "web_source",
+    "web_research": "web_source",
     "browser_navigate": "web_source",
     "browser_snapshot": "web_source",
     "verify": "verification_result",

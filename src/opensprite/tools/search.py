@@ -91,10 +91,10 @@ class SearchKnowledgeTool(_BaseSearchTool):
     @property
     def description(self) -> str:
         return (
-            "Search stored web_search and web_fetch results for the current session only. Prefer this before "
-            "repeating web_search or web_fetch on topics already researched in this session, especially when the "
-            "user is following up on earlier research. Use this for retrieved web knowledge; use search_history "
-            "for chat decisions, commands, and task outcomes."
+            "Search stored web_search, web_fetch, and web_research results for the current session only. "
+            "Prefer this before repeating web_research, web_search, or web_fetch on topics already researched "
+            "in this session, especially when the user is following up on earlier research. Use this for "
+            "retrieved web knowledge; use search_history for chat decisions, commands, and task outcomes."
         )
 
     @property
@@ -106,7 +106,7 @@ class SearchKnowledgeTool(_BaseSearchTool):
                 "limit": {"type": "integer", "description": "Maximum matches to return", "default": self.default_limit},
                 "source_type": {
                     "type": "string",
-                    "description": "Optional source filter",
+                    "description": "Optional source filter. web_research results are indexed as web_search/web_fetch sources.",
                     "enum": ["web_search", "web_fetch"],
                 },
                 "provider": {"type": "string", "description": "Optional provider filter"},

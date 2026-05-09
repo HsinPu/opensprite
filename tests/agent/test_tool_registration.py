@@ -17,6 +17,7 @@ from opensprite.tools.verify import VerifyTool
 from opensprite.tools.search import SearchKnowledgeTool
 from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool
+from opensprite.tools.web_research import WebResearchTool
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.run_trace import ListRunFileChangesTool, PreviewRunFileChangeRevertTool
@@ -84,6 +85,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
         "verify",
         "web_search",
         "web_fetch",
+        "web_research",
         "analyze_image",
         "ocr_image",
         "transcribe_audio",
@@ -137,6 +139,7 @@ def test_register_default_tools_skips_optional_skill_and_search_tools_when_depen
         "verify",
         "web_search",
         "web_fetch",
+        "web_research",
         "analyze_image",
         "ocr_image",
         "transcribe_audio",
@@ -187,6 +190,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
     verify_tool = registry.get("verify")
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
+    web_research_tool = registry.get("web_research")
     cron_tool = registry.get("cron")
     configure_mcp_tool = registry.get("configure_mcp")
 
@@ -197,6 +201,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert isinstance(configure_mcp_tool, ConfigureMCPTool)
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
+    assert isinstance(web_research_tool, WebResearchTool)
     assert exec_tool.timeout == 12
     assert exec_tool.notify_on_exit is False
     assert exec_tool.notify_on_exit_empty_success is True
@@ -208,6 +213,8 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.timeout == 9
     assert web_fetch_tool.fetcher.prefer_trafilatura is False
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
+    assert web_research_tool.search_tool.provider == "jina"
+    assert web_research_tool.fetch_tool.fetcher.max_chars == 1234
 
 
 async def _fake_preview_run_file_change_revert(session_id: str, run_id: str, change_id: int):
@@ -256,6 +263,7 @@ def test_register_default_tools_applies_permission_policy():
     assert "exec" not in registry.tool_names
     assert "web_search" not in registry.tool_names
     assert "web_fetch" not in registry.tool_names
+    assert "web_research" not in registry.tool_names
     assert "read_file" in registry.tool_names
     assert "batch" in registry.tool_names
 
@@ -279,14 +287,17 @@ def test_search_and_web_tools_describe_retrieval_preference():
 
     web_search_tool = registry.get("web_search")
     web_fetch_tool = registry.get("web_fetch")
+    web_research_tool = registry.get("web_research")
     search_knowledge_tool = registry.get("search_knowledge")
 
     assert isinstance(web_search_tool, WebSearchTool)
     assert isinstance(web_fetch_tool, WebFetchTool)
+    assert isinstance(web_research_tool, WebResearchTool)
     assert isinstance(search_knowledge_tool, SearchKnowledgeTool)
     assert "prefer search_knowledge first" in web_search_tool.description.lower()
     assert "stored web_fetch results" in web_fetch_tool.description.lower()
-    assert "prefer this before repeating web_search or web_fetch" in search_knowledge_tool.description.lower()
+    assert "instead of separate web_search + web_fetch" in web_research_tool.description.lower()
+    assert "prefer this before repeating web_research" in search_knowledge_tool.description.lower()
     assert "use search_history for chat decisions" in search_knowledge_tool.description.lower()
 
 

@@ -225,6 +225,7 @@ def test_auto_continue_guides_retry_after_untraceable_web_source_artifact():
     assert decision.should_continue is True
     assert decision.reason == "completion_gate_incomplete"
     assert "source artifact without traceable source metadata" in (decision.prompt or "")
+    assert "web_research" in (decision.prompt or "")
     assert "web_search" in (decision.prompt or "")
     assert "web_fetch" in (decision.prompt or "")
     assert "URL plus title or snippet" in (decision.prompt or "")
@@ -249,6 +250,7 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
     assert decision.should_continue is True
     assert decision.reason == "completion_gate_incomplete"
     assert "inspect enough source material" in (decision.prompt or "")
+    assert "web_research" in (decision.prompt or "")
     assert "web_fetch" in (decision.prompt or "")
     assert "too little content" in (decision.prompt or "")
     assert "search snippets alone" in (decision.prompt or "")

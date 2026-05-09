@@ -20,6 +20,7 @@ IDEMPOTENT_TOOL_NAMES = frozenset(
         "search_knowledge",
         "web_search",
         "web_fetch",
+        "web_research",
         "code_navigation",
     }
 )

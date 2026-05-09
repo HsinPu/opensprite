@@ -24,6 +24,7 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         "preview_run_file_change_revert",
         "web_search",
         "web_fetch",
+        "web_research",
         "analyze_image",
         "ocr_image",
         "transcribe_audio",

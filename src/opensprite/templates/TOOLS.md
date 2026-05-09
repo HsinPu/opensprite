@@ -98,9 +98,14 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Prefer this before `web_fetch` when you do not yet know which page to read.
   - If the topic may already have been researched in the current chat, prefer `search_knowledge` first.
 
+- `web_research`
+  - Use when the user asks for current external information and you need both search results and inspected source pages.
+  - Prefer this over manually chaining `web_search` and `web_fetch` for normal web research tasks.
+  - It searches, deduplicates candidate URLs, fetches substantive pages, and returns traceable source metadata.
+
 - `web_fetch`
   - Use to retrieve readable content from a specific URL.
-  - Prefer this after `web_search` or when the user already provided a URL.
+  - Prefer this after `web_search`, for a specific source selected from `web_research`, or when the user already provided a URL.
   - If the current chat may already contain fetched content for the same page, prefer `search_knowledge` before fetching again unless freshness matters.
 
 ## Media Tools
@@ -206,9 +211,9 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Strongly prefer this when the user references earlier turns implicitly, such as "the previous fix", "what you said before", "again", "earlier", "之前", or "剛剛".
 
 - `search_knowledge`
-  - Use to retrieve previously stored `web_search` and `web_fetch` results from the current chat.
+  - Use to retrieve previously stored `web_research`, `web_search`, and `web_fetch` results from the current chat.
   - Prefer this when the user refers to earlier research instead of current local files.
-  - Prefer this before repeating `web_search` or `web_fetch` on the same topic in the same chat.
+  - Prefer this before repeating `web_research`, `web_search`, or `web_fetch` on the same topic in the same chat.
   - Use filters such as `provider`, `extractor`, `status`, `content_type`, and `truncated` when narrowing large result sets.
   - If a topic sounds like follow-up on prior web research, check this before launching a fresh network search.
 

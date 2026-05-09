@@ -33,7 +33,7 @@ READ_ONLY_TOOLS = frozenset(
         "search_knowledge",
     }
 )
-WEB_TOOLS = frozenset({"web_search", "web_fetch"})
+WEB_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
 WRITE_TOOLS = frozenset({"apply_patch", "write_file", "edit_file"})
 EXEC_TOOLS = frozenset({"exec", "process"})
 

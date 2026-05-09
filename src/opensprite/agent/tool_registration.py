@@ -44,6 +44,7 @@ from ..tools import (
     SearchKnowledgeTool,
     WebSearchTool,
     WebFetchTool,
+    WebResearchTool,
     ReadSkillTool,
     ConfigureSkillTool,
     ConfigureMCPTool,
@@ -285,6 +286,7 @@ def register_web_tools(
             firecrawl_api_key=web_fetch_config.firecrawl_api_key,
         )
     )
+    registry.register(WebResearchTool(search_config=web_search_config, fetch_config=web_fetch_config))
 
 
 def register_browser_tools(
