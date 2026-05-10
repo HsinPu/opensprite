@@ -243,6 +243,54 @@ def test_web_research_preserves_single_query_fetch_order_across_domains():
     ]
 
 
+def test_web_research_reports_source_coverage_and_gaps():
+    search = _FakeSearchToolByQuery(
+        {
+            "ai browser": [
+                {"title": "Official Docs", "url": "https://docs.test/browser", "content": "Docs snippet"},
+            ],
+            "ai browser pricing": [
+                {"title": "Pricing", "url": "https://pricing.test/browser", "content": "Pricing snippet"},
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://docs.test/browser": _fetch_payload("https://docs.test/browser", title="Official Docs"),
+            "https://pricing.test/browser": _fetch_payload(
+                "https://pricing.test/browser",
+                title="Pricing",
+                content="short",
+                too_short=True,
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(tool._execute("ai browser", queries=["ai browser pricing"], count=2, fetch_count=2))
+    )
+
+    assert payload["fetched_count"] == 1
+    assert payload["failed_sources"][0]["reason"] == "fetched content was too short"
+    assert payload["coverage"] == {
+        "target_fetch_count": 2,
+        "target_met": False,
+        "search_result_count": 2,
+        "fetched_count": 1,
+        "failed_count": 1,
+        "too_short_count": 1,
+        "blocked_count": 0,
+        "missing_url_count": 0,
+        "fetched_domains": ["docs.test"],
+        "fetched_domain_count": 1,
+        "fetched_queries": ["ai browser"],
+        "fetched_query_count": 1,
+        "queries_with_search_results": ["ai browser", "ai browser pricing"],
+        "queries_without_successful_fetch": ["ai browser pricing"],
+    }
+
+
 def test_web_research_reuses_existing_high_quality_fetch_without_network_search():
     knowledge = _FakeKnowledgeStore(
         [
@@ -297,6 +345,8 @@ def test_web_research_reuses_existing_high_quality_fetch_without_network_search(
     assert payload["fetched_sources"][0]["reused"] is True
     assert payload["fetched_sources"][0]["reuse_source"] == "search_knowledge"
     assert payload["fetched_sources"][0]["has_main_content"] is True
+    assert payload["coverage"]["target_met"] is True
+    assert payload["coverage"]["fetched_domains"] == ["sqlite.org"]
 
 
 def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():

@@ -128,6 +128,7 @@ class WebResearchTool(Tool):
                 fetched_sources=fetched_sources[:target_fetches],
                 failed_sources=failed_sources,
                 sources=source_records[:target_fetches],
+                target_fetch_count=target_fetches,
                 search_attempts=[],
                 query_attempts=[],
                 reuse_attempt=reuse_attempt,
@@ -149,6 +150,7 @@ class WebResearchTool(Tool):
                 fetched_sources=fetched_sources,
                 failed_sources=[{"reason": "web_search returned no structured result with fetchable URLs"}],
                 sources=source_records,
+                target_fetch_count=target_fetches,
                 search_attempts=search_attempts,
                 query_attempts=query_attempts,
                 reuse_attempt=reuse_attempt,
@@ -211,6 +213,7 @@ class WebResearchTool(Tool):
             fetched_sources=fetched_sources,
             failed_sources=failed_sources,
             sources=source_records,
+            target_fetch_count=target_fetches,
             search_attempts=search_attempts,
             query_attempts=query_attempts,
             reuse_attempt=reuse_attempt,
@@ -378,6 +381,7 @@ def _research_payload(
     failed_sources: list[dict[str, Any]],
     sources: list[dict[str, Any]] | None = None,
     queries: list[str] | None = None,
+    target_fetch_count: int | None = None,
     search_attempts: list[dict[str, Any]] | None = None,
     query_attempts: list[dict[str, Any]] | None = None,
     reuse_attempt: dict[str, Any] | None = None,
@@ -385,6 +389,13 @@ def _research_payload(
 ) -> str:
     reused_count = sum(1 for item in fetched_sources if item.get("reused"))
     research_queries = queries or [query]
+    coverage = _research_coverage(
+        queries=research_queries,
+        target_fetch_count=target_fetch_count or len(fetched_sources),
+        search_items=search_items,
+        fetched_sources=fetched_sources,
+        failed_sources=failed_sources,
+    )
     return json.dumps(
         {
             "type": "web_research",
@@ -412,6 +423,7 @@ def _research_payload(
             "reuse_attempt": reuse_attempt or {"source": "search_knowledge", "ok": False, "reason": "not configured"},
             "reuse_attempts": reuse_attempts or [],
             "reused_count": reused_count,
+            "coverage": coverage,
         },
         ensure_ascii=False,
     )
@@ -462,6 +474,66 @@ def _aggregate_reuse_attempts(attempts: list[dict[str, Any]]) -> dict[str, Any]:
     if reasons and reused_count == 0:
         aggregate["reason"] = "; ".join(reasons)[:500]
     return aggregate
+
+
+def _research_coverage(
+    *,
+    queries: list[str],
+    target_fetch_count: int,
+    search_items: list[dict[str, Any]],
+    fetched_sources: list[dict[str, Any]],
+    failed_sources: list[dict[str, Any]],
+) -> dict[str, Any]:
+    fetched_queries = _ordered_clean_values(_candidate_query_label(source) for source in fetched_sources)
+    fetched_domains = _ordered_clean_values(_candidate_domain(source) for source in fetched_sources)
+    queries_with_search_results = _ordered_clean_values(_candidate_query_label(item) for item in search_items)
+    fetched_query_keys = {query.lower() for query in fetched_queries}
+    queries_without_successful_fetch = [
+        query
+        for query in queries_with_search_results
+        if query.lower() not in fetched_query_keys
+    ]
+    too_short_count = sum(
+        1
+        for source in failed_sources
+        if bool(source.get("is_too_short")) or str(source.get("reason") or "") == "fetched content was too short"
+    )
+    blocked_count = sum(
+        1
+        for source in failed_sources
+        if bool(source.get("blocked_or_challenge"))
+        or str(source.get("reason") or "") == "fetched content looked blocked or challenged"
+    )
+    missing_url_count = sum(1 for source in failed_sources if str(source.get("reason") or "") == "missing url")
+    return {
+        "target_fetch_count": max(int(target_fetch_count or 0), 0),
+        "target_met": len(fetched_sources) >= max(int(target_fetch_count or 0), 0),
+        "search_result_count": len(search_items),
+        "fetched_count": len(fetched_sources),
+        "failed_count": len(failed_sources),
+        "too_short_count": too_short_count,
+        "blocked_count": blocked_count,
+        "missing_url_count": missing_url_count,
+        "fetched_domains": fetched_domains,
+        "fetched_domain_count": len(fetched_domains),
+        "fetched_queries": fetched_queries,
+        "fetched_query_count": len(fetched_queries),
+        "queries_with_search_results": queries_with_search_results,
+        "queries_without_successful_fetch": queries_without_successful_fetch,
+    }
+
+
+def _ordered_clean_values(values: Any) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        text = _clean_text(value)
+        key = text.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
 
 
 def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
@@ -592,6 +664,10 @@ def _candidate_domain(item: dict[str, Any]) -> str:
 
 def _candidate_query(item: dict[str, Any]) -> str:
     return _clean_text(item.get("source_query") or item.get("query")).lower()
+
+
+def _candidate_query_label(item: dict[str, Any]) -> str:
+    return _clean_text(item.get("source_query") or item.get("query"))
 
 
 def _merge_fetch_source(
