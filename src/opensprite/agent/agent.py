@@ -55,6 +55,8 @@ from ..tools.approval import PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.verify import classify_verification_result
+from ..tools.web_research import WebResearchTool
+from ..tools.web_search import WebSearchTool
 from ..documents.user_overlay_identity import resolve_user_overlay_id
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
@@ -1350,6 +1352,34 @@ class AgentLoop:
             "ocr_enabled": bool(self.media_router.ocr_provider),
             "speech_enabled": bool(self.media_router.speech_provider),
             "video_enabled": bool(self.media_router.video_provider),
+        }
+
+    def reload_web_search_from_config(self, config: Config) -> dict[str, Any]:
+        """Reload web search settings and update registered web tools in-place."""
+        web_search_config = config.tools.web_search
+        self.tools_config.web_search = web_search_config
+        self.tools.register(WebSearchTool(config=web_search_config))
+
+        research_tool_updated = False
+        web_research_tool = self.tools.get("web_research")
+        if isinstance(web_research_tool, WebResearchTool):
+            web_research_tool.search_config = web_search_config
+            if not web_research_tool._custom_search_tool:
+                web_research_tool.search_tool = WebSearchTool(config=web_search_config)
+            research_tool_updated = True
+
+        logger.info(
+            "Web search tools reloaded | provider={} freshness={} max_results={}",
+            web_search_config.provider,
+            web_search_config.freshness,
+            web_search_config.max_results,
+        )
+        return {
+            "provider": web_search_config.provider,
+            "freshness": web_search_config.freshness,
+            "max_results": web_search_config.max_results,
+            "tool_updated": self.tools.get("web_search") is not None,
+            "research_tool_updated": research_tool_updated,
         }
 
     def _get_current_session_id(self) -> str | None:

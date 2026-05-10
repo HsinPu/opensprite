@@ -866,6 +866,31 @@ class WebAdapter(MessageAdapter):
         updated["runtime"] = self._json_safe(runtime)
         return updated
 
+    def _reload_web_search_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
+        """Hot-apply persisted web search settings to running web tools when possible."""
+        if not force and not payload.get("restart_required"):
+            return payload
+
+        updated = dict(payload)
+        agent = self._get_agent()
+        reload_web_search = getattr(agent, "reload_web_search_from_config", None) if agent is not None else None
+        if not callable(reload_web_search):
+            updated["runtime_reloaded"] = False
+            return updated
+
+        try:
+            runtime = reload_web_search(Config.load(self._get_config_path()))
+        except Exception as exc:
+            logger.warning("Web search runtime reload failed after settings change: {}", exc)
+            updated["runtime_reloaded"] = False
+            updated["reload_error"] = str(exc)
+            return updated
+
+        updated["restart_required"] = False
+        updated["runtime_reloaded"] = True
+        updated["runtime"] = self._json_safe(runtime)
+        return updated
+
     async def _reload_mcp_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted MCP settings to the running agent when possible."""
         if not force and not payload.get("restart_required"):
@@ -1979,7 +2004,9 @@ class WebAdapter(MessageAdapter):
         for field in ("brave_api_key", "tavily_api_key", "jina_api_key"):
             self._apply_optional_secret_field(search, body, field)
         config.save(config_path)
-        return web.json_response({"search": self._web_search_payload(config), "restart_required": True})
+        payload = {"search": self._web_search_payload(config), "restart_required": True}
+        payload = self._reload_web_search_from_config(payload)
+        return web.json_response(payload)
 
     async def _handle_settings_browser(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())

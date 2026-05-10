@@ -895,7 +895,24 @@ def test_web_adapter_browser_settings_roundtrip(tmp_path):
 async def _run_web_search_settings_roundtrip(tmp_path: Path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
-    agent = EchoAgent()
+
+    class SearchReloadAgent(EchoAgent):
+        def __init__(self):
+            super().__init__()
+            self.reloads = []
+
+        def reload_web_search_from_config(self, config):
+            search = config.tools.web_search
+            self.reloads.append(search)
+            return {
+                "provider": search.provider,
+                "freshness": search.freshness,
+                "max_results": search.max_results,
+                "tool_updated": True,
+                "research_tool_updated": True,
+            }
+
+    agent = SearchReloadAgent()
     agent.config_path = config_path
     queue = MessageQueue(agent)
     adapter = WebAdapter(
@@ -941,7 +958,15 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload["restart_required"] is True
+                assert payload["restart_required"] is False
+                assert payload["runtime_reloaded"] is True
+                assert payload["runtime"] == {
+                    "provider": "brave",
+                    "freshness": "week",
+                    "max_results": 12,
+                    "tool_updated": True,
+                    "research_tool_updated": True,
+                }
                 assert payload["search"]["provider"] == "brave"
                 assert payload["search"]["freshness"] == "week"
                 assert payload["search"]["max_results"] == 12
@@ -966,6 +991,8 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.web_search.proxy == "http://proxy.local:8080"
         assert loaded.tools.web_search.brave_api_key == "brave-secret"
         assert loaded.tools.web_search.tavily_api_key == "tavily-secret"
+        assert agent.reloads[-1].provider == "brave"
+        assert agent.reloads[-1].freshness == "week"
     finally:
         adapter_task.cancel()
         try:
