@@ -184,9 +184,16 @@ def _web_research_sources(
                 "content_chars": _coerce_int(raw_source.get("content_chars"), default=len(_clean_source_text(raw_source.get("content")))),
                 "has_title": bool(_clean_source_text(raw_source.get("title"))),
                 "is_too_short": bool(raw_source.get("is_too_short")),
+                "has_main_content": bool(raw_source.get("has_main_content")),
+                "blocked_or_challenge": bool(raw_source.get("blocked_or_challenge")),
+                "quality_score": raw_source.get("quality_score"),
                 "min_content_chars": _coerce_int(raw_source.get("min_content_chars"), default=0),
                 "truncated": bool(raw_source.get("truncated")),
                 "extractor": _clean_source_text(raw_source.get("extractor")),
+                "search_rank": raw_source.get("search_rank"),
+                "search_provider": _clean_source_text(raw_source.get("search_provider")),
+                "reused": bool(raw_source.get("reused")),
+                "reuse_source": _clean_source_text(raw_source.get("reuse_source")),
             },
         )
         if source:

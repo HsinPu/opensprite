@@ -270,6 +270,9 @@ def register_web_tools(
     registry: ToolRegistry,
     *,
     tools_config: ToolsConfig | None = None,
+    search_store: SearchStore | None = None,
+    search_config: SearchConfig | None = None,
+    get_session_id: Callable[[], str | None] | None = None,
 ) -> None:
     """Register web search and fetch tools."""
     current_tools_config = tools_config or ToolsConfig()
@@ -286,7 +289,15 @@ def register_web_tools(
             firecrawl_api_key=web_fetch_config.firecrawl_api_key,
         )
     )
-    registry.register(WebResearchTool(search_config=web_search_config, fetch_config=web_fetch_config))
+    registry.register(
+        WebResearchTool(
+            search_config=web_search_config,
+            fetch_config=web_fetch_config,
+            knowledge_store=search_store,
+            get_session_id=get_session_id,
+            knowledge_limit=(search_config or SearchConfig()).knowledge_top_k,
+        )
+    )
 
 
 def register_browser_tools(
@@ -536,7 +547,13 @@ def register_default_tools(
         storage=storage,
     )
     register_verify_tools(registry, workspace_resolver=workspace_resolver)
-    register_web_tools(registry, tools_config=current_tools_config)
+    register_web_tools(
+        registry,
+        tools_config=current_tools_config,
+        search_store=search_store,
+        search_config=search_config,
+        get_session_id=get_session_id,
+    )
     register_browser_tools(registry, get_session_id=get_session_id, tools_config=current_tools_config)
     register_media_tools(
         registry,

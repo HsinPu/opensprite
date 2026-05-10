@@ -3,6 +3,7 @@ import json
 
 from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
+from opensprite.search.base import SearchHit
 from opensprite.tools.evidence import build_tool_evidence
 from opensprite.tools.web_search import _format_results
 from opensprite.tools.web_research import WebResearchTool
@@ -31,7 +32,17 @@ class _FakeFetchTool:
         return json.dumps(payload, ensure_ascii=False)
 
 
-def _fetch_payload(url, *, title="Fetched", content="x" * 900, too_short=False):
+class _FakeKnowledgeStore:
+    def __init__(self, hits):
+        self.hits = hits
+        self.calls = []
+
+    async def search_knowledge(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.hits
+
+
+def _fetch_payload(url, *, title="Fetched", content="x" * 900, too_short=False, status=200, extractor="trafilatura"):
     return {
         "type": "web_fetch",
         "query": url,
@@ -41,8 +52,8 @@ def _fetch_payload(url, *, title="Fetched", content="x" * 900, too_short=False):
         "content": content,
         "summary": title,
         "provider": "web_fetch",
-        "extractor": "trafilatura",
-        "status": 200,
+        "extractor": extractor,
+        "status": status,
         "content_type": "text/html",
         "truncated": False,
         "content_chars": len(content),
@@ -82,7 +93,120 @@ def test_web_research_searches_and_fetches_traceable_sources():
     assert payload["fetched_count"] == 2
     assert payload["fetched_sources"][0]["source_query"] == "sqlite fts"
     assert payload["fetched_sources"][0]["search_rank"] == 1
+    assert payload["fetched_sources"][0]["has_main_content"] is True
+    assert payload["fetched_sources"][0]["blocked_or_challenge"] is False
+    assert payload["fetched_sources"][0]["quality_score"] == 1.0
+    assert payload["fetched_sources"][0]["fetch_attempts"] == [
+        {
+            "tool": "web_fetch",
+            "extractor": "trafilatura",
+            "status": 200,
+            "content_chars": 900,
+            "is_too_short": False,
+            "blocked_or_challenge": False,
+            "quality_score": 1.0,
+        }
+    ]
     assert payload["sources"][1]["tool_name"] == "web_fetch"
+
+
+def test_web_research_reuses_existing_high_quality_fetch_without_network_search():
+    knowledge = _FakeKnowledgeStore(
+        [
+            SearchHit(
+                id="1",
+                session_id="chat-1",
+                source_type="web_fetch",
+                content="SQLite FTS5 documentation " * 40,
+                created_at=123.0,
+                title="SQLite Docs",
+                url="https://sqlite.org/fts5.html",
+                query="sqlite fts",
+                summary="Official docs",
+                provider="web_fetch",
+                extractor="trafilatura",
+                status=200,
+                content_type="text/html",
+                truncated=False,
+            )
+        ]
+    )
+    search = _FakeSearchTool([{"title": "Should not run", "url": "https://example.com", "content": "unused"}])
+    fetch = _FakeFetchTool({})
+    tool = WebResearchTool(
+        search_tool=search,
+        fetch_tool=fetch,
+        knowledge_store=knowledge,
+        get_session_id=lambda: "chat-1",
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
+
+    assert knowledge.calls == [
+        {
+            "session_id": "chat-1",
+            "query": "sqlite fts",
+            "limit": 5,
+            "source_type": "web_fetch",
+        }
+    ]
+    assert search.calls == []
+    assert fetch.calls == []
+    assert payload["provider"] == "search_knowledge"
+    assert payload["fetched_count"] == 1
+    assert payload["reused_count"] == 1
+    assert payload["reuse_attempt"] == {
+        "source": "search_knowledge",
+        "ok": True,
+        "result_count": 1,
+        "reused_count": 1,
+    }
+    assert payload["fetched_sources"][0]["reused"] is True
+    assert payload["fetched_sources"][0]["reuse_source"] == "search_knowledge"
+    assert payload["fetched_sources"][0]["has_main_content"] is True
+
+
+def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():
+    knowledge = _FakeKnowledgeStore(
+        [
+            SearchHit(
+                id="1",
+                session_id="chat-1",
+                source_type="web_fetch",
+                content="short",
+                created_at=123.0,
+                title="Short Docs",
+                url="https://sqlite.org/short.html",
+                extractor="trafilatura",
+                status=200,
+                content_type="text/html",
+                truncated=False,
+            )
+        ]
+    )
+    search = _FakeSearchTool(
+        [{"title": "Fresh", "url": "https://example.com/fresh", "content": "Fresh snippet"}]
+    )
+    fetch = _FakeFetchTool({"https://example.com/fresh": _fetch_payload("https://example.com/fresh")})
+    tool = WebResearchTool(
+        search_tool=search,
+        fetch_tool=fetch,
+        knowledge_store=knowledge,
+        get_session_id=lambda: "chat-1",
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
+
+    assert search.calls == [{"query": "sqlite fts", "count": 8, "freshness": "year"}]
+    assert [call["url"] for call in fetch.calls] == ["https://example.com/fresh"]
+    assert payload["reused_count"] == 0
+    assert payload["reuse_attempt"] == {
+        "source": "search_knowledge",
+        "ok": False,
+        "result_count": 1,
+        "reused_count": 0,
+    }
+    assert payload["fetched_sources"][0]["reused"] is False
 
 
 def test_web_research_dedupes_urls_and_skips_too_short_fetches():
@@ -108,6 +232,78 @@ def test_web_research_dedupes_urls_and_skips_too_short_fetches():
     assert payload["fetched_count"] == 1
     assert payload["fetched_sources"][0]["url"] == "https://example.com/two?ref=1"
     assert payload["failed_sources"][0]["reason"] == "fetched content was too short"
+    assert payload["failed_sources"][0]["has_main_content"] is False
+
+
+def test_web_research_falls_back_to_next_search_provider(monkeypatch):
+    calls = []
+
+    async def fake_search(self, query, count=None, freshness=None):
+        calls.append(self.provider)
+        if self.provider == "duckduckgo":
+            return "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge."
+        return _format_results(
+            query,
+            [{"title": "SearXNG Result", "url": "https://example.com/searx", "content": "Fallback snippet"}],
+            count or 1,
+            provider=self.provider,
+        )
+
+    monkeypatch.setattr("opensprite.tools.web_research.WebSearchTool._execute", fake_search)
+    fetch = _FakeFetchTool({"https://example.com/searx": _fetch_payload("https://example.com/searx")})
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(provider="duckduckgo", searxng_url="https://searx.test"),
+        fetch_tool=fetch,
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("sqlite", fetch_count=1)))
+
+    assert calls == ["duckduckgo", "searxng"]
+    assert payload["provider"] == "searxng"
+    assert payload["search_attempts"] == [
+        {
+            "provider": "duckduckgo",
+            "configured_provider": "duckduckgo",
+            "ok": False,
+            "result_count": 0,
+            "fetchable_count": 0,
+            "error": "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
+        },
+        {
+            "provider": "searxng",
+            "configured_provider": "searxng",
+            "ok": True,
+            "result_count": 1,
+            "fetchable_count": 1,
+            "error": "",
+        },
+    ]
+    assert payload["fetched_sources"][0]["search_provider"] == "searxng"
+
+
+def test_web_research_marks_blocked_fetches_as_low_quality():
+    search = _FakeSearchTool(
+        [{"title": "Blocked", "url": "https://example.com/blocked", "content": "Blocked snippet"}]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/blocked": _fetch_payload(
+                "https://example.com/blocked",
+                title="Access Denied",
+                content="Captcha: verify you are human " * 80,
+                status=403,
+            )
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("sqlite", fetch_count=1)))
+
+    assert payload["fetched_count"] == 0
+    assert payload["failed_sources"][0]["reason"] == "fetched content looked blocked or challenged"
+    assert payload["failed_sources"][0]["blocked_or_challenge"] is True
+    assert payload["failed_sources"][0]["has_main_content"] is False
+    assert payload["failed_sources"][0]["quality_score"] <= 0.35
 
 
 def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
@@ -123,6 +319,9 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
                     "url": "https://sqlite.org/fts5.html",
                     "content": "SQLite FTS5 documentation " * 40,
                     "content_chars": 1000,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "quality_score": 0.95,
                     "is_too_short": False,
                     "min_content_chars": 800,
                     "extractor": "trafilatura",
@@ -137,6 +336,7 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
 
     assert evidence.metadata["source_count"] == 1
     assert evidence.metadata["sources"][0]["tool_name"] == "web_fetch"
+    assert evidence.metadata["sources"][0]["quality_score"] == 0.95
     assert artifact is not None
     assert artifact.kind == "web_source"
     assert artifact.source_tool == "web_research"

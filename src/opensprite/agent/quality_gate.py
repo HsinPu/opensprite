@@ -230,7 +230,16 @@ def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "")
                 "snippet": snippet,
                 "tool_name": str(raw_source.get("tool_name") or source_tool or "").strip(),
             }
-            for key in ("content_chars", "is_too_short", "min_content_chars", "truncated", "extractor"):
+            for key in (
+                "content_chars",
+                "is_too_short",
+                "min_content_chars",
+                "truncated",
+                "extractor",
+                "has_main_content",
+                "blocked_or_challenge",
+                "quality_score",
+            ):
                 if key in raw_source:
                     source[key] = raw_source[key]
             sources.append(source)
@@ -242,6 +251,10 @@ def _source_has_substantive_detail(source: dict[str, object]) -> bool:
     if tool_name not in _SOURCE_DETAIL_TOOLS:
         return False
     if tool_name == "web_fetch":
+        if _truthy(source.get("blocked_or_challenge")):
+            return False
+        if "has_main_content" in source and not _truthy(source.get("has_main_content")):
+            return False
         if _truthy(source.get("is_too_short")):
             return False
         content_chars = _coerce_int(source.get("content_chars"), default=0)

@@ -43,7 +43,7 @@ class FakeSearchStore:
     async def search_history(self, session_id: str, query: str, limit: int = 5):
         return []
 
-    async def search_knowledge(self, session_id: str, query: str, limit: int = 5):
+    async def search_knowledge(self, session_id: str, query: str, limit: int = 5, **kwargs):
         return []
 
 
@@ -104,6 +104,7 @@ def test_register_default_tools_includes_optional_skill_and_search_tools(tmp_pat
     assert isinstance(registry.get("configure_subagent"), ConfigureSubagentTool)
     assert isinstance(registry.get("send_media"), SendMediaTool)
     assert isinstance(registry.get("batch"), BatchTool)
+    assert registry.get("web_research").knowledge_store is not None
 
 
 def test_register_default_tools_skips_optional_skill_and_search_tools_when_dependencies_missing():
@@ -215,6 +216,7 @@ def test_register_default_tools_applies_typed_tools_config_values():
     assert web_fetch_tool.fetcher.firecrawl_api_key == "firecrawl-key"
     assert web_research_tool.search_tool.provider == "jina"
     assert web_research_tool.fetch_tool.fetcher.max_chars == 1234
+    assert web_research_tool.knowledge_store is None
 
 
 async def _fake_preview_run_file_change_revert(session_id: str, run_id: str, change_id: int):
@@ -294,6 +296,7 @@ def test_search_and_web_tools_describe_retrieval_preference():
     assert isinstance(web_fetch_tool, WebFetchTool)
     assert isinstance(web_research_tool, WebResearchTool)
     assert isinstance(search_knowledge_tool, SearchKnowledgeTool)
+    assert web_research_tool.knowledge_store is search_knowledge_tool.store
     assert "prefer search_knowledge first" in web_search_tool.description.lower()
     assert "stored web_fetch results" in web_fetch_tool.description.lower()
     assert "instead of separate web_search + web_fetch" in web_research_tool.description.lower()

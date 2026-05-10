@@ -39,7 +39,7 @@ def _web_source_artifact() -> TaskArtifact:
     )
 
 
-def _web_fetch_artifact(*, is_too_short: bool = False) -> TaskArtifact:
+def _web_fetch_artifact(*, is_too_short: bool = False, blocked_or_challenge: bool = False) -> TaskArtifact:
     return TaskArtifact(
         kind="web_source",
         source_tool="web_fetch",
@@ -55,6 +55,8 @@ def _web_fetch_artifact(*, is_too_short: bool = False) -> TaskArtifact:
                     "provider": "web_fetch",
                     "content_chars": 120 if is_too_short else 1200,
                     "is_too_short": is_too_short,
+                    "has_main_content": not is_too_short and not blocked_or_challenge,
+                    "blocked_or_challenge": blocked_or_challenge,
                     "min_content_chars": 800,
                     "extractor": "trafilatura",
                     "truncated": False,
@@ -317,6 +319,33 @@ def test_completion_gate_rejects_too_short_web_fetch_source_detail():
             executed_tool_calls=2,
             tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
             task_artifacts=(_web_source_artifact(), _web_fetch_artifact(is_too_short=True)),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required source material was insufficient"
+
+
+def test_completion_gate_rejects_blocked_web_fetch_source_detail():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Reddit 官方 API 文件在 reddit.com 提供搜尋與列表相關端點，Reddit API wiki 也補充整合注意事項。"
+        "這些來源可先用來判斷授權、速率限制與資料保留策略，再決定是否需要第三方歷史資料。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
+            task_artifacts=(_web_source_artifact(), _web_fetch_artifact(blocked_or_challenge=True)),
         ),
     )
 
