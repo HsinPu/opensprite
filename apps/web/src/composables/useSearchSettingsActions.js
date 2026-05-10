@@ -9,6 +9,7 @@ function normalizeSearchSettings(search = {}) {
     freshness_options: Array.isArray(search.freshness_options) && search.freshness_options.length ? search.freshness_options : DEFAULT_FRESHNESS_OPTIONS,
     max_results: Number(search.max_results || 25),
     duckduckgo_max_pages: Number(search.duckduckgo_max_pages || 10),
+    searxng_max_pages: Number(search.searxng_max_pages || 5),
     searxng_url: search.searxng_url || "https://searx.be",
     proxy: search.proxy || "",
     brave_api_key_configured: search.brave_api_key_configured === true,
@@ -22,6 +23,7 @@ function syncSearchForm(settingsState) {
   settingsState.searchForm.freshness = settingsState.search.freshness;
   settingsState.searchForm.maxResults = settingsState.search.max_results;
   settingsState.searchForm.duckduckgoMaxPages = settingsState.search.duckduckgo_max_pages;
+  settingsState.searchForm.searxngMaxPages = settingsState.search.searxng_max_pages;
   settingsState.searchForm.searxngUrl = settingsState.search.searxng_url;
   settingsState.searchForm.proxy = settingsState.search.proxy;
   settingsState.searchForm.braveApiKey = "";
@@ -68,6 +70,7 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
           freshness: form.freshness,
           max_results: form.maxResults,
           duckduckgo_max_pages: form.duckduckgoMaxPages,
+          searxng_max_pages: form.searxngMaxPages,
           searxng_url: form.searxngUrl,
           proxy: form.proxy,
           ...secretPayload(form),

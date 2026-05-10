@@ -45,6 +45,7 @@
       "searxng_url": "https://searx.be",
       "max_results": 25,
       "duckduckgo_max_pages": 10,
+      "searxng_max_pages": 5,
       "proxy": null
     },
     "web_fetch": {

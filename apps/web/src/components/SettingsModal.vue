@@ -1411,6 +1411,21 @@
 
             <label class="settings-row settings-row--field">
               <div>
+                <strong>{{ copy.settings.search.searxngMaxPages.title }}</strong>
+                <span>{{ copy.settings.search.searxngMaxPages.description }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.searchForm.searxngMaxPages"
+                type="number"
+                min="1"
+                max="50"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
                 <strong>{{ copy.settings.search.searxngUrl.title }}</strong>
                 <span>{{ copy.settings.search.searxngUrl.description }}</span>
               </div>

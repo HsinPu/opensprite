@@ -908,6 +908,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 "provider": search.provider,
                 "freshness": search.freshness,
                 "max_results": search.max_results,
+                "searxng_max_pages": search.searxng_max_pages,
                 "tool_updated": True,
                 "research_tool_updated": True,
             }
@@ -941,6 +942,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert payload["search"]["provider"] == "duckduckgo"
                 assert payload["search"]["freshness"] == "year"
                 assert payload["search"]["providers"] == ["duckduckgo", "brave", "tavily", "searxng", "jina"]
+                assert payload["search"]["searxng_max_pages"] == 5
                 assert payload["search"]["brave_api_key_configured"] is False
 
             async with session.put(
@@ -950,6 +952,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                     "freshness": "week",
                     "max_results": 12,
                     "duckduckgo_max_pages": 3,
+                    "searxng_max_pages": 4,
                     "searxng_url": "https://search.example.test",
                     "proxy": "http://proxy.local:8080",
                     "brave_api_key": "brave-secret",
@@ -964,6 +967,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                     "provider": "brave",
                     "freshness": "week",
                     "max_results": 12,
+                    "searxng_max_pages": 4,
                     "tool_updated": True,
                     "research_tool_updated": True,
                 }
@@ -971,6 +975,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
                 assert payload["search"]["freshness"] == "week"
                 assert payload["search"]["max_results"] == 12
                 assert payload["search"]["duckduckgo_max_pages"] == 3
+                assert payload["search"]["searxng_max_pages"] == 4
                 assert payload["search"]["brave_api_key_configured"] is True
                 assert payload["search"]["tavily_api_key_configured"] is True
                 assert "brave-secret" not in json.dumps(payload)
@@ -987,6 +992,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.web_search.freshness == "week"
         assert loaded.tools.web_search.max_results == 12
         assert loaded.tools.web_search.duckduckgo_max_pages == 3
+        assert loaded.tools.web_search.searxng_max_pages == 4
         assert loaded.tools.web_search.searxng_url == "https://search.example.test"
         assert loaded.tools.web_search.proxy == "http://proxy.local:8080"
         assert loaded.tools.web_search.brave_api_key == "brave-secret"

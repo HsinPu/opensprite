@@ -271,6 +271,10 @@ class WebSearchTool(Tool):
     def duckduckgo_max_pages(self) -> int:
         return self.config.duckduckgo_max_pages
 
+    @property
+    def searxng_max_pages(self) -> int:
+        return self.config.searxng_max_pages
+
     async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         n = min(max(count or self.max_results, 1), self.max_results)
         freshness = _normalize_freshness(kwargs.get("freshness"), self.config.freshness)
@@ -404,14 +408,39 @@ class WebSearchTool(Tool):
     async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
         base_url = self.config.searxng_url
         try:
+            seen_results = set()
+            items: list[dict[str, str]] = []
             async with httpx.AsyncClient(proxy=self.proxy) as client:
-                r = await client.get(
-                    join_url_path(base_url, "/search"),
-                    params={"q": query, "format": "json", **_freshness_params("searxng", freshness)},
-                    timeout=10.0
-                )
-            items = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("content", "")}
-                     for x in r.json().get("results", [])[:n]]
+                for page in range(1, self.searxng_max_pages + 1):
+                    r = await client.get(
+                        join_url_path(base_url, "/search"),
+                        params={
+                            "q": query,
+                            "format": "json",
+                            "pageno": page,
+                            **_freshness_params("searxng", freshness),
+                        },
+                        timeout=10.0
+                    )
+                    r.raise_for_status()
+                    page_results = r.json().get("results", [])
+                    if not page_results:
+                        break
+                    for item in page_results:
+                        normalized = {
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "content": item.get("content", ""),
+                        }
+                        dedupe_key = normalized.get("url") or normalized.get("title")
+                        if dedupe_key in seen_results:
+                            continue
+                        seen_results.add(dedupe_key)
+                        items.append(normalized)
+                        if len(items) >= n:
+                            break
+                    if len(items) >= n:
+                        break
             return _format_results(query, items, n, provider="searxng")
         except Exception as e:
             return f"Error: {e}"

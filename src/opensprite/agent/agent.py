@@ -1378,6 +1378,7 @@ class AgentLoop:
             "provider": web_search_config.provider,
             "freshness": web_search_config.freshness,
             "max_results": web_search_config.max_results,
+            "searxng_max_pages": web_search_config.searxng_max_pages,
             "tool_updated": self.tools.get("web_search") is not None,
             "research_tool_updated": research_tool_updated,
         }

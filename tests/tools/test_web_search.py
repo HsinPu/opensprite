@@ -78,8 +78,14 @@ class _StaticDuckDuckGoClient:
 
 
 class _FakeSearxngResponse:
+    def __init__(self, results=None):
+        self.results = results or [{"title": "One", "url": "https://example.com/one", "content": "First"}]
+
+    def raise_for_status(self):
+        return None
+
     def json(self):
-        return {"results": [{"title": "One", "url": "https://example.com/one", "content": "First"}]}
+        return {"results": self.results}
 
 
 class _FakeSearxngClient:
@@ -95,6 +101,27 @@ class _FakeSearxngClient:
     async def get(self, url, params=None, timeout=None):
         self.requests.append((url, params))
         return _FakeSearxngResponse()
+
+
+class _FakePagedSearxngClient:
+    def __init__(self):
+        self.requests = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def get(self, url, params=None, timeout=None):
+        self.requests.append((url, params))
+        page = int((params or {}).get("pageno") or 1)
+        results_by_page = {
+            1: [{"title": "One", "url": "https://example.com/one", "content": "First"}],
+            2: [{"title": "Two", "url": "https://example.com/two", "content": "Second"}],
+            3: [{"title": "Three", "url": "https://example.com/three", "content": "Third"}],
+        }
+        return _FakeSearxngResponse(results_by_page.get(page, []))
 
 
 def test_format_results_returns_structured_json_payload():
@@ -199,6 +226,36 @@ def test_searxng_search_accepts_search_endpoint_base_url(monkeypatch):
 
     assert payload["items"][0]["title"] == "One"
     assert fake_client.requests[0][0] == "https://searx.test/search"
+    assert fake_client.requests[0][1]["pageno"] == 1
+
+
+def test_searxng_search_fetches_multiple_pages(monkeypatch):
+    fake_client = _FakePagedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="searxng", max_results=3, searxng_max_pages=3))
+
+    payload = json.loads(asyncio.run(tool._search_searxng("sqlite", 3, "week")))
+
+    assert [item["title"] for item in payload["items"]] == ["One", "Two", "Three"]
+    assert [request[1]["pageno"] for request in fake_client.requests] == [1, 2, 3]
+    assert all(request[1]["time_range"] == "week" for request in fake_client.requests)
+
+
+def test_searxng_search_respects_configured_page_limit(monkeypatch):
+    fake_client = _FakePagedSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="searxng", max_results=3, searxng_max_pages=1))
+
+    payload = json.loads(asyncio.run(tool._search_searxng("sqlite", 3, "none")))
+
+    assert [item["title"] for item in payload["items"]] == ["One"]
+    assert [request[1]["pageno"] for request in fake_client.requests] == [1]
 
 
 def test_duckduckgo_search_follows_next_page(monkeypatch):

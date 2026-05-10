@@ -1006,6 +1006,10 @@ export const DISPLAY_COPY = {
           title: "DuckDuckGo pages",
           description: "DuckDuckGo fallback 最多翻頁數。",
         },
+        searxngMaxPages: {
+          title: "SearXNG pages",
+          description: "SearXNG JSON search 最多翻頁數。",
+        },
         searxngUrl: {
           title: "SearXNG URL",
           description: "選擇 SearXNG provider 時使用的 instance。",
@@ -2496,6 +2500,10 @@ export const DISPLAY_COPY = {
         duckduckgoMaxPages: {
           title: "DuckDuckGo pages",
           description: "Maximum pages for the DuckDuckGo fallback to inspect.",
+        },
+        searxngMaxPages: {
+          title: "SearXNG pages",
+          description: "Maximum SearXNG JSON search pages to inspect.",
         },
         searxngUrl: {
           title: "SearXNG URL",

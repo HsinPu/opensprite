@@ -520,6 +520,7 @@ class WebAdapter(MessageAdapter):
             "freshness_options": list(cls.WEB_SEARCH_FRESHNESS),
             "max_results": int(getattr(search, "max_results", 25) or 25),
             "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", 10) or 10),
+            "searxng_max_pages": int(getattr(search, "searxng_max_pages", 5) or 5),
             "searxng_url": str(getattr(search, "searxng_url", "https://searx.be") or "https://searx.be"),
             "proxy": str(getattr(search, "proxy", "") or ""),
             "brave_api_key_configured": bool(getattr(search, "brave_api_key", "") or os.environ.get("BRAVE_API_KEY", "")),
@@ -1994,6 +1995,13 @@ class WebAdapter(MessageAdapter):
             body.get("duckduckgo_max_pages"),
             field="duckduckgo_max_pages",
             default=search.duckduckgo_max_pages,
+            minimum=1,
+            maximum=50,
+        )
+        search.searxng_max_pages = self._coerce_positive_int(
+            body.get("searxng_max_pages"),
+            field="searxng_max_pages",
+            default=search.searxng_max_pages,
             minimum=1,
             maximum=50,
         )

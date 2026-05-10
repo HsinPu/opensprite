@@ -408,6 +408,7 @@ class WebSearchToolConfig(BaseModel):
     searxng_url: str = "https://searx.be"
     max_results: int = Field(default=25, ge=1)
     duckduckgo_max_pages: int = Field(default=10, ge=1)
+    searxng_max_pages: int = Field(default=5, ge=1)
     proxy: str | None = None
 
 

@@ -16,6 +16,7 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
     config.tools.web_search.freshness = "week"
     config.tools.web_search.max_results = 7
     config.tools.web_search.duckduckgo_max_pages = 3
+    config.tools.web_search.searxng_max_pages = 4
     config.tools.web_search.proxy = "http://proxy.local:8080"
     config.tools.web_search.jina_api_key = "jina-secret"
 
@@ -27,6 +28,7 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
         "provider": "jina",
         "freshness": "week",
         "max_results": 7,
+        "searxng_max_pages": 4,
         "tool_updated": True,
         "research_tool_updated": True,
     }
@@ -35,6 +37,7 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
     assert web_search_tool.provider == "jina"
     assert web_search_tool.max_results == 7
     assert web_search_tool.duckduckgo_max_pages == 3
+    assert web_search_tool.searxng_max_pages == 4
     assert web_search_tool.proxy == "http://proxy.local:8080"
     assert web_search_tool.jina_api_key == "jina-secret"
     assert isinstance(web_research_tool, WebResearchTool)
