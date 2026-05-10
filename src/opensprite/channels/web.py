@@ -522,6 +522,8 @@ class WebAdapter(MessageAdapter):
             "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", 10) or 10),
             "searxng_max_pages": int(getattr(search, "searxng_max_pages", 5) or 5),
             "searxng_url": str(getattr(search, "searxng_url", "https://searx.be") or "https://searx.be"),
+            "searxng_engines": cls._coerce_text_list(getattr(search, "searxng_engines", []), field="searxng_engines", default=[]),
+            "searxng_categories": cls._coerce_text_list(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
             "proxy": str(getattr(search, "proxy", "") or ""),
             "brave_api_key_configured": bool(getattr(search, "brave_api_key", "") or os.environ.get("BRAVE_API_KEY", "")),
             "tavily_api_key_configured": bool(getattr(search, "tavily_api_key", "") or os.environ.get("TAVILY_API_KEY", "")),
@@ -745,6 +747,23 @@ class WebAdapter(MessageAdapter):
         if freshness not in cls.WEB_SEARCH_FRESHNESS:
             raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(cls.WEB_SEARCH_FRESHNESS)}")
         return freshness
+
+    @staticmethod
+    def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
+        if value is None or value == "":
+            return list(default or [])
+        if isinstance(value, str):
+            candidates = value.replace("\n", ",").split(",")
+        elif isinstance(value, (list, tuple, set)):
+            candidates = value
+        else:
+            raise web.HTTPBadRequest(text=f"{field} must be a list or comma-separated text")
+        items: list[str] = []
+        for item in candidates:
+            text = str(item or "").strip()
+            if text and text not in items:
+                items.append(text)
+        return items
 
     def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
         clear_field = f"clear_{field}"
@@ -2007,6 +2026,10 @@ class WebAdapter(MessageAdapter):
         )
         if "searxng_url" in body:
             search.searxng_url = self._coerce_optional_text(body.get("searxng_url"), default="") or "https://searx.be"
+        if "searxng_engines" in body:
+            search.searxng_engines = self._coerce_text_list(body.get("searxng_engines"), field="searxng_engines", default=search.searxng_engines)
+        if "searxng_categories" in body:
+            search.searxng_categories = self._coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
         if "proxy" in body:
             search.proxy = self._coerce_optional_text(body.get("proxy"), default="") or None
         for field in ("brave_api_key", "tavily_api_key", "jina_api_key"):

@@ -406,6 +406,8 @@ class WebSearchToolConfig(BaseModel):
     tavily_api_key: str = ""
     jina_api_key: str = ""
     searxng_url: str = "https://searx.be"
+    searxng_engines: list[str] = Field(default_factory=list)
+    searxng_categories: list[str] = Field(default_factory=list)
     max_results: int = Field(default=25, ge=1)
     duckduckgo_max_pages: int = Field(default=10, ge=1)
     searxng_max_pages: int = Field(default=5, ge=1)

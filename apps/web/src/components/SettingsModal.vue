@@ -1440,6 +1440,34 @@
 
             <label class="settings-row settings-row--field">
               <div>
+                <strong>{{ copy.settings.search.searxngEngines.title }}</strong>
+                <span>{{ copy.settings.search.searxngEngines.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.searxngEngines"
+                type="text"
+                :placeholder="copy.settings.search.searxngEngines.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.search.searxngCategories.title }}</strong>
+                <span>{{ copy.settings.search.searxngCategories.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.searchForm.searxngCategories"
+                type="text"
+                :placeholder="copy.settings.search.searxngCategories.placeholder"
+                :disabled="settingsState.searchLoading"
+                @keydown.enter.prevent="$emit('save-search-settings')"
+              />
+            </label>
+
+            <label class="settings-row settings-row--field">
+              <div>
                 <strong>{{ copy.settings.search.proxy.title }}</strong>
                 <span>{{ copy.settings.search.proxy.description }}</span>
               </div>

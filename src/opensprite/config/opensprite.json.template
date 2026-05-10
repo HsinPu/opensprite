@@ -43,6 +43,8 @@
       "tavily_api_key": "",
       "jina_api_key": "",
       "searxng_url": "https://searx.be",
+      "searxng_engines": [],
+      "searxng_categories": [],
       "max_results": 25,
       "duckduckgo_max_pages": 10,
       "searxng_max_pages": 5,

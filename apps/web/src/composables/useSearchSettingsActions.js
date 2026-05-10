@@ -1,6 +1,15 @@
 const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "brave", "tavily", "searxng", "jina"];
 const DEFAULT_FRESHNESS_OPTIONS = ["none", "day", "week", "month", "year"];
 
+function normalizeTextList(value) {
+  const values = Array.isArray(value) ? value : String(value || "").split(/[\n,]+/);
+  return values.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function formatTextList(value) {
+  return normalizeTextList(value).join(", ");
+}
+
 function normalizeSearchSettings(search = {}) {
   return {
     provider: search.provider || "searxng",
@@ -11,6 +20,8 @@ function normalizeSearchSettings(search = {}) {
     duckduckgo_max_pages: Number(search.duckduckgo_max_pages || 10),
     searxng_max_pages: Number(search.searxng_max_pages || 5),
     searxng_url: search.searxng_url || "https://searx.be",
+    searxng_engines: normalizeTextList(search.searxng_engines),
+    searxng_categories: normalizeTextList(search.searxng_categories),
     proxy: search.proxy || "",
     brave_api_key_configured: search.brave_api_key_configured === true,
     tavily_api_key_configured: search.tavily_api_key_configured === true,
@@ -25,6 +36,8 @@ function syncSearchForm(settingsState) {
   settingsState.searchForm.duckduckgoMaxPages = settingsState.search.duckduckgo_max_pages;
   settingsState.searchForm.searxngMaxPages = settingsState.search.searxng_max_pages;
   settingsState.searchForm.searxngUrl = settingsState.search.searxng_url;
+  settingsState.searchForm.searxngEngines = formatTextList(settingsState.search.searxng_engines);
+  settingsState.searchForm.searxngCategories = formatTextList(settingsState.search.searxng_categories);
   settingsState.searchForm.proxy = settingsState.search.proxy;
   settingsState.searchForm.braveApiKey = "";
   settingsState.searchForm.tavilyApiKey = "";
@@ -72,6 +85,8 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
           duckduckgo_max_pages: form.duckduckgoMaxPages,
           searxng_max_pages: form.searxngMaxPages,
           searxng_url: form.searxngUrl,
+          searxng_engines: normalizeTextList(form.searxngEngines),
+          searxng_categories: normalizeTextList(form.searxngCategories),
           proxy: form.proxy,
           ...secretPayload(form),
         }),

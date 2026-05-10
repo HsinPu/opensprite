@@ -1017,6 +1017,16 @@ export const DISPLAY_COPY = {
           description: "選擇 SearXNG provider 時使用的 instance。",
           placeholder: "https://searx.be",
         },
+        searxngEngines: {
+          title: "SearXNG engines",
+          description: "限制 SearXNG 使用的搜尋引擎；留空使用 instance 預設。",
+          placeholder: "google, bing, duckduckgo",
+        },
+        searxngCategories: {
+          title: "SearXNG categories",
+          description: "限制 SearXNG categories；留空使用 instance 預設。",
+          placeholder: "general, news, it",
+        },
         proxy: {
           title: "Search proxy",
           description: "只套用在 web search HTTP requests；留空使用 network/system 設定。",
@@ -2513,6 +2523,16 @@ export const DISPLAY_COPY = {
           title: "SearXNG URL",
           description: "Instance URL used when SearXNG is selected.",
           placeholder: "https://searx.be",
+        },
+        searxngEngines: {
+          title: "SearXNG engines",
+          description: "Restrict SearXNG to specific engines. Leave blank to use the instance default.",
+          placeholder: "google, bing, duckduckgo",
+        },
+        searxngCategories: {
+          title: "SearXNG categories",
+          description: "Restrict SearXNG to specific categories. Leave blank to use the instance default.",
+          placeholder: "general, news, it",
         },
         proxy: {
           title: "Search proxy",

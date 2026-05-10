@@ -116,6 +116,32 @@ def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
     return {}
 
 
+def _clean_text_values(values: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(values, str):
+        candidates = values.replace("\n", ",").split(",")
+    elif isinstance(values, (list, tuple, set)):
+        candidates = values
+    else:
+        candidates = []
+    for value in candidates:
+        text = str(value or "").strip()
+        if text and text not in out:
+            out.append(text)
+    return out
+
+
+def _searxng_scope_params(engines: Any, categories: Any) -> dict[str, str]:
+    params: dict[str, str] = {}
+    engine_values = _clean_text_values(engines)
+    category_values = _clean_text_values(categories)
+    if engine_values:
+        params["engines"] = ",".join(engine_values)
+    if category_values:
+        params["categories"] = ",".join(category_values)
+    return params
+
+
 def _extract_duckduckgo_results(soup: Any) -> list[dict[str, str]]:
     """Parse result rows from DuckDuckGo Lite HTML."""
     results: list[dict[str, str]] = []
@@ -275,6 +301,14 @@ class WebSearchTool(Tool):
     def searxng_max_pages(self) -> int:
         return self.config.searxng_max_pages
 
+    @property
+    def searxng_engines(self) -> list[str]:
+        return _clean_text_values(self.config.searxng_engines)
+
+    @property
+    def searxng_categories(self) -> list[str]:
+        return _clean_text_values(self.config.searxng_categories)
+
     async def _execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
         n = min(max(count or self.max_results, 1), self.max_results)
         freshness = _normalize_freshness(kwargs.get("freshness"), self.config.freshness)
@@ -410,6 +444,7 @@ class WebSearchTool(Tool):
         try:
             seen_results = set()
             items: list[dict[str, str]] = []
+            scope_params = _searxng_scope_params(self.searxng_engines, self.searxng_categories)
             async with httpx.AsyncClient(proxy=self.proxy) as client:
                 for page in range(1, self.searxng_max_pages + 1):
                     r = await client.get(
@@ -418,6 +453,7 @@ class WebSearchTool(Tool):
                             "q": query,
                             "format": "json",
                             "pageno": page,
+                            **scope_params,
                             **_freshness_params("searxng", freshness),
                         },
                         timeout=10.0

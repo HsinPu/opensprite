@@ -298,6 +298,8 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.web_search.max_results == 25
     assert config.web_search.duckduckgo_max_pages == 10
     assert config.web_search.searxng_max_pages == 5
+    assert config.web_search.searxng_engines == []
+    assert config.web_search.searxng_categories == []
     assert config.web_fetch.max_chars == 50000
     assert config.web_fetch.max_response_size == 5242880
     assert config.web_fetch.timeout == 30
@@ -335,6 +337,8 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
                 "max_results": 7,
                 "duckduckgo_max_pages": 3,
                 "searxng_max_pages": 4,
+                "searxng_engines": ["google", "bing"],
+                "searxng_categories": ["general", "news"],
             },
             "web_fetch": {
                 "max_chars": 1234,
@@ -378,6 +382,8 @@ def test_tools_config_parses_nested_tool_sections_from_json_shape():
     assert config.web_search.max_results == 7
     assert config.web_search.duckduckgo_max_pages == 3
     assert config.web_search.searxng_max_pages == 4
+    assert config.web_search.searxng_engines == ["google", "bing"]
+    assert config.web_search.searxng_categories == ["general", "news"]
     assert config.web_fetch.max_chars == 1234
     assert config.web_fetch.max_response_size == 2048
     assert config.web_fetch.timeout == 9
@@ -632,6 +638,8 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.tools.web_search.freshness == "year"
     assert config.tools.web_search.max_results == 25
     assert config.tools.web_search.searxng_max_pages == 5
+    assert config.tools.web_search.searxng_engines == []
+    assert config.tools.web_search.searxng_categories == []
     assert config.tools.web_fetch.timeout == 30
     assert config.tools.cron.default_timezone == "UTC"
 

@@ -229,6 +229,26 @@ def test_searxng_search_accepts_search_endpoint_base_url(monkeypatch):
     assert fake_client.requests[0][1]["pageno"] == 1
 
 
+def test_searxng_search_sends_configured_engines_and_categories(monkeypatch):
+    fake_client = _FakeSearxngClient()
+    monkeypatch.setattr(
+        "opensprite.tools.web_search.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+    tool = WebSearchTool(
+        config=WebSearchToolConfig(
+            provider="searxng",
+            searxng_engines=["google", "bing"],
+            searxng_categories=["general", "news"],
+        )
+    )
+
+    json.loads(asyncio.run(tool._search_searxng("sqlite", 1, "none")))
+
+    assert fake_client.requests[0][1]["engines"] == "google,bing"
+    assert fake_client.requests[0][1]["categories"] == "general,news"
+
+
 def test_searxng_search_fetches_multiple_pages(monkeypatch):
     fake_client = _FakePagedSearxngClient()
     monkeypatch.setattr(
