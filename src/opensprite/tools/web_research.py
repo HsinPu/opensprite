@@ -156,19 +156,23 @@ class WebResearchTool(Tool):
                 queries=research_queries,
             )
 
-        for item in search_items:
-            item_search_provider = str(item.get("search_provider") or search_provider)
-            source_records.append({**item, "tool_name": "web_search", "fetched": False, "search_provider": item_search_provider})
+        fetched_by_candidate_url: dict[str, dict[str, Any]] = {}
+        fetch_candidates = _prioritize_research_candidates(
+            search_items,
+            existing_sources=fetched_sources,
+        )
+        for item in fetch_candidates:
             if len(fetched_sources) >= target_fetches:
-                continue
+                break
             url = item.get("url", "")
             if not url:
                 failed_sources.append({**item, "reason": "missing url"})
                 continue
-            canonical_url = _canonicalize_url(str(url or ""))
+            canonical_url = _candidate_url_key(item)
             if canonical_url in reused_urls:
                 continue
 
+            item_search_provider = str(item.get("search_provider") or search_provider)
             fetch_result = await self.fetch_tool._execute(url=url, max_chars=effective_max_chars)
             fetch_payload = _parse_json_object(fetch_result)
             if fetch_payload is None:
@@ -188,8 +192,16 @@ class WebResearchTool(Tool):
                 failed_sources.append({**fetched, "reason": "fetched content was too short"})
                 continue
             fetched_sources.append(fetched)
-            source_records.append({**fetched, "tool_name": "web_fetch", "fetched": True})
+            fetched_by_candidate_url[canonical_url] = fetched
+            reused_urls.add(canonical_url)
             reused_urls.add(str(fetched.get("canonical_url") or fetched.get("url") or ""))
+
+        for item in search_items:
+            item_search_provider = str(item.get("search_provider") or search_provider)
+            source_records.append({**item, "tool_name": "web_search", "fetched": False, "search_provider": item_search_provider})
+            fetched = fetched_by_candidate_url.get(_candidate_url_key(item))
+            if fetched is not None:
+                source_records.append({**fetched, "tool_name": "web_fetch", "fetched": True})
 
         return _research_payload(
             query=query,
@@ -525,6 +537,61 @@ def _dedupe_search_items(items: list[dict[str, Any]], *, limit: int) -> list[dic
         if len(out) >= limit:
             break
     return out
+
+
+def _prioritize_research_candidates(
+    items: list[dict[str, Any]],
+    *,
+    existing_sources: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if len(items) <= 1:
+        return items
+    item_queries = {_candidate_query(item) for item in items}
+    item_queries.discard("")
+    if len(item_queries) <= 1:
+        return items
+
+    selected: list[dict[str, Any]] = []
+    remaining = list(items)
+    covered_domains = {_candidate_domain(source) for source in existing_sources}
+    covered_domains.discard("")
+    covered_queries = {_candidate_query(source) for source in existing_sources}
+    covered_queries.discard("")
+
+    def take_candidates(*, require_new_query: bool, require_new_domain: bool) -> None:
+        nonlocal remaining
+        next_remaining: list[dict[str, Any]] = []
+        for item in remaining:
+            query = _candidate_query(item)
+            domain = _candidate_domain(item)
+            query_is_new = bool(query) and query not in covered_queries
+            domain_is_new = bool(domain) and domain not in covered_domains
+            if (not require_new_query or query_is_new) and (not require_new_domain or domain_is_new):
+                selected.append(item)
+                if query:
+                    covered_queries.add(query)
+                if domain:
+                    covered_domains.add(domain)
+                continue
+            next_remaining.append(item)
+        remaining = next_remaining
+
+    take_candidates(require_new_query=True, require_new_domain=True)
+    take_candidates(require_new_query=False, require_new_domain=True)
+    selected.extend(remaining)
+    return selected
+
+
+def _candidate_url_key(item: dict[str, Any]) -> str:
+    return str(item.get("canonical_url") or _canonicalize_url(str(item.get("url") or "")))
+
+
+def _candidate_domain(item: dict[str, Any]) -> str:
+    return _clean_text(item.get("domain") or _domain_from_url(str(item.get("url") or ""))).lower()
+
+
+def _candidate_query(item: dict[str, Any]) -> str:
+    return _clean_text(item.get("source_query") or item.get("query")).lower()
 
 
 def _merge_fetch_source(

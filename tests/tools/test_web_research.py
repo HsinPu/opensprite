@@ -174,6 +174,75 @@ def test_web_research_runs_manual_queries_and_dedupes_fetches():
     assert [attempt["result_count"] for attempt in payload["query_attempts"]] == [2, 2]
 
 
+def test_web_research_diversifies_fetch_candidates_across_queries_and_domains():
+    search = _FakeSearchToolByQuery(
+        {
+            "vector database": [
+                {"title": "Vendor Overview", "url": "https://vendor.test/overview", "content": "Overview snippet"},
+                {"title": "Vendor Docs", "url": "https://vendor.test/docs", "content": "Docs snippet"},
+            ],
+            "vector database benchmark": [
+                {"title": "Independent Benchmark", "url": "https://bench.test/vector", "content": "Benchmark snippet"},
+                {"title": "Vendor Benchmark", "url": "https://vendor.test/benchmark", "content": "Vendor benchmark snippet"},
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://vendor.test/overview": _fetch_payload("https://vendor.test/overview", title="Vendor Overview"),
+            "https://vendor.test/docs": _fetch_payload("https://vendor.test/docs", title="Vendor Docs"),
+            "https://bench.test/vector": _fetch_payload("https://bench.test/vector", title="Independent Benchmark"),
+            "https://vendor.test/benchmark": _fetch_payload("https://vendor.test/benchmark", title="Vendor Benchmark"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(tool._execute("vector database", queries=["vector database benchmark"], count=3, fetch_count=2))
+    )
+
+    assert [item["url"] for item in payload["items"]] == [
+        "https://vendor.test/overview",
+        "https://vendor.test/docs",
+        "https://bench.test/vector",
+        "https://vendor.test/benchmark",
+    ]
+    assert [call["url"] for call in fetch.calls] == [
+        "https://vendor.test/overview",
+        "https://bench.test/vector",
+    ]
+    assert [source["source_query"] for source in payload["fetched_sources"]] == [
+        "vector database",
+        "vector database benchmark",
+    ]
+    assert [source["domain"] for source in payload["fetched_sources"]] == ["vendor.test", "bench.test"]
+
+
+def test_web_research_preserves_single_query_fetch_order_across_domains():
+    search = _FakeSearchTool(
+        [
+            {"title": "Vendor Overview", "url": "https://vendor.test/overview", "content": "Overview snippet"},
+            {"title": "Vendor Docs", "url": "https://vendor.test/docs", "content": "Docs snippet"},
+            {"title": "Independent Benchmark", "url": "https://bench.test/vector", "content": "Benchmark snippet"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://vendor.test/overview": _fetch_payload("https://vendor.test/overview", title="Vendor Overview"),
+            "https://vendor.test/docs": _fetch_payload("https://vendor.test/docs", title="Vendor Docs"),
+            "https://bench.test/vector": _fetch_payload("https://bench.test/vector", title="Independent Benchmark"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    json.loads(asyncio.run(tool._execute("vector database", count=3, fetch_count=2)))
+
+    assert [call["url"] for call in fetch.calls] == [
+        "https://vendor.test/overview",
+        "https://vendor.test/docs",
+    ]
+
+
 def test_web_research_reuses_existing_high_quality_fetch_without_network_search():
     knowledge = _FakeKnowledgeStore(
         [
