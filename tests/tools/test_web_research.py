@@ -21,6 +21,19 @@ class _FakeSearchTool:
         return _format_results(query, self.items, count or len(self.items), provider=self.provider)
 
 
+class _FakeSearchToolByQuery:
+    provider = "duckduckgo"
+
+    def __init__(self, items_by_query):
+        self.items_by_query = items_by_query
+        self.calls = []
+
+    async def _execute(self, query, count=None, freshness=None):
+        self.calls.append({"query": query, "count": count, "freshness": freshness})
+        items = self.items_by_query.get(query, [])
+        return _format_results(query, items, count or len(items), provider=self.provider)
+
+
 class _FakeFetchTool:
     def __init__(self, payloads):
         self.payloads = payloads
@@ -108,6 +121,57 @@ def test_web_research_searches_and_fetches_traceable_sources():
         }
     ]
     assert payload["sources"][1]["tool_name"] == "web_fetch"
+
+
+def test_web_research_runs_manual_queries_and_dedupes_fetches():
+    search = _FakeSearchToolByQuery(
+        {
+            "sqlite fts": [
+                {"title": "Shared", "url": "https://example.com/shared", "content": "Shared snippet"},
+                {"title": "Primary", "url": "https://example.com/primary", "content": "Primary snippet"},
+            ],
+            "sqlite benchmark": [
+                {"title": "Shared Duplicate", "url": "https://example.com/shared/", "content": "Duplicate snippet"},
+                {"title": "Benchmark", "url": "https://example.com/benchmark", "content": "Benchmark snippet"},
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/shared": _fetch_payload("https://example.com/shared", title="Shared"),
+            "https://example.com/primary": _fetch_payload("https://example.com/primary", title="Primary"),
+            "https://example.com/benchmark": _fetch_payload("https://example.com/benchmark", title="Benchmark"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(tool._execute("sqlite fts", queries=["sqlite benchmark"], count=3, fetch_count=3))
+    )
+
+    assert search.calls == [
+        {"query": "sqlite fts", "count": 3, "freshness": "year"},
+        {"query": "sqlite benchmark", "count": 3, "freshness": "year"},
+    ]
+    assert [call["url"] for call in fetch.calls] == [
+        "https://example.com/shared",
+        "https://example.com/primary",
+        "https://example.com/benchmark",
+    ]
+    assert payload["queries"] == ["sqlite fts", "sqlite benchmark"]
+    assert [item["url"] for item in payload["items"]] == [
+        "https://example.com/shared",
+        "https://example.com/primary",
+        "https://example.com/benchmark",
+    ]
+    assert [item["source_query"] for item in payload["fetched_sources"]] == [
+        "sqlite fts",
+        "sqlite fts",
+        "sqlite benchmark",
+    ]
+    assert [attempt["query"] for attempt in payload["query_attempts"]] == ["sqlite fts", "sqlite benchmark"]
+    assert all(attempt["ok"] is True for attempt in payload["query_attempts"])
+    assert [attempt["result_count"] for attempt in payload["query_attempts"]] == [2, 2]
 
 
 def test_web_research_reuses_existing_high_quality_fetch_without_network_search():

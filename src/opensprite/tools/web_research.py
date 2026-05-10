@@ -56,6 +56,12 @@ class WebResearchTool(Tool):
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "Research query", "pattern": NON_EMPTY_STRING_PATTERN},
+                "queries": {
+                    "type": "array",
+                    "description": "Optional additional search queries to run and merge for broader research coverage",
+                    "items": {"type": "string", "pattern": NON_EMPTY_STRING_PATTERN},
+                    "maxItems": 5,
+                },
                 "count": {
                     "type": "integer",
                     "description": "Search candidates to inspect before dedupe",
@@ -93,13 +99,18 @@ class WebResearchTool(Tool):
         fetch_count: int | None = None,
         freshness: str | None = None,
         max_chars: int | None = None,
+        queries: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
         search_count = min(max(int(count or min(8, self.search_config.max_results)), 1), self.search_config.max_results)
         target_fetches = min(max(int(fetch_count or 2), 1), 5)
         effective_freshness = _normalize_freshness(freshness, self.search_config.freshness)
         effective_max_chars = max_chars if max_chars is not None else self.fetch_config.max_chars
-        reused_sources, reuse_attempt = await self._reuse_knowledge_sources(query=query, target_count=target_fetches)
+        research_queries = _research_queries(query, queries)
+        reused_sources, reuse_attempt, reuse_attempts = await self._reuse_knowledge_sources_for_queries(
+            queries=research_queries,
+            target_count=target_fetches,
+        )
         fetched_sources: list[dict[str, Any]] = list(reused_sources)
         failed_sources: list[dict[str, Any]] = []
         source_records: list[dict[str, Any]] = [
@@ -118,15 +129,18 @@ class WebResearchTool(Tool):
                 failed_sources=failed_sources,
                 sources=source_records[:target_fetches],
                 search_attempts=[],
+                query_attempts=[],
                 reuse_attempt=reuse_attempt,
+                reuse_attempts=reuse_attempts,
+                queries=research_queries,
             )
 
-        search_payload, search_items, search_provider, search_attempts = await self._search_with_fallback(
-            query=query,
+        search_items, search_provider, search_attempts, query_attempts = await self._search_queries_with_fallback(
+            queries=research_queries,
             count=search_count,
             freshness=effective_freshness,
         )
-        if search_payload is None:
+        if not search_items:
             return _research_payload(
                 query=query,
                 freshness=effective_freshness,
@@ -136,11 +150,15 @@ class WebResearchTool(Tool):
                 failed_sources=[{"reason": "web_search returned no structured result with fetchable URLs"}],
                 sources=source_records,
                 search_attempts=search_attempts,
+                query_attempts=query_attempts,
                 reuse_attempt=reuse_attempt,
+                reuse_attempts=reuse_attempts,
+                queries=research_queries,
             )
 
         for item in search_items:
-            source_records.append({**item, "tool_name": "web_search", "fetched": False, "search_provider": search_provider})
+            item_search_provider = str(item.get("search_provider") or search_provider)
+            source_records.append({**item, "tool_name": "web_search", "fetched": False, "search_provider": item_search_provider})
             if len(fetched_sources) >= target_fetches:
                 continue
             url = item.get("url", "")
@@ -160,8 +178,8 @@ class WebResearchTool(Tool):
             fetched = _merge_fetch_source(
                 item,
                 fetch_payload,
-                query=query,
-                search_provider=search_provider,
+                query=str(item.get("source_query") or query),
+                search_provider=item_search_provider,
             )
             if fetched.get("blocked_or_challenge"):
                 failed_sources.append({**fetched, "reason": "fetched content looked blocked or challenged"})
@@ -182,8 +200,37 @@ class WebResearchTool(Tool):
             failed_sources=failed_sources,
             sources=source_records,
             search_attempts=search_attempts,
+            query_attempts=query_attempts,
             reuse_attempt=reuse_attempt,
+            reuse_attempts=reuse_attempts,
+            queries=research_queries,
         )
+
+    async def _reuse_knowledge_sources_for_queries(
+        self,
+        *,
+        queries: list[str],
+        target_count: int,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]]]:
+        sources: list[dict[str, Any]] = []
+        attempts: list[dict[str, Any]] = []
+        seen_urls: set[str] = set()
+        for current_query in queries:
+            remaining = max(0, target_count - len(sources))
+            if remaining <= 0:
+                break
+            query_sources, attempt = await self._reuse_knowledge_sources(query=current_query, target_count=remaining)
+            attempts.append({"query": current_query, **attempt})
+            for source in query_sources:
+                key = str(source.get("canonical_url") or source.get("url") or "")
+                if not key or key in seen_urls:
+                    continue
+                seen_urls.add(key)
+                sources.append(source)
+                if len(sources) >= target_count:
+                    break
+
+        return sources, _aggregate_reuse_attempts(attempts), attempts
 
     async def _reuse_knowledge_sources(
         self,
@@ -227,6 +274,42 @@ class WebResearchTool(Tool):
             "reused_count": len(sources),
         }
 
+    async def _search_queries_with_fallback(
+        self,
+        *,
+        queries: list[str],
+        count: int,
+        freshness: str,
+    ) -> tuple[list[dict[str, Any]], str, list[dict[str, Any]], list[dict[str, Any]]]:
+        all_items: list[dict[str, Any]] = []
+        all_attempts: list[dict[str, Any]] = []
+        query_attempts: list[dict[str, Any]] = []
+        selected_provider = ""
+        fallback_provider = ""
+        for current_query in queries:
+            payload, items, provider, attempts = await self._search_with_fallback(
+                query=current_query,
+                count=count,
+                freshness=freshness,
+            )
+            all_attempts.extend(attempts)
+            query_attempts.append(
+                {
+                    "query": current_query,
+                    "provider": provider,
+                    "ok": payload is not None and bool(items),
+                    "result_count": len(items),
+                    "search_attempts": attempts,
+                }
+            )
+            if not fallback_provider and provider:
+                fallback_provider = provider
+            if items and not selected_provider and provider:
+                selected_provider = provider
+            all_items.extend({**item, "source_query": current_query} for item in items)
+
+        return _dedupe_search_items(all_items, limit=max(count * max(len(queries), 1), count)), selected_provider or fallback_provider, all_attempts, query_attempts
+
     async def _search_with_fallback(
         self,
         *,
@@ -262,7 +345,7 @@ class WebResearchTool(Tool):
                 }
             )
             if payload is not None and fetchable_count > 0:
-                return payload, [{**item, "search_provider": provider_name} for item in items], provider_name, attempts
+                return payload, [{**item, "search_provider": provider_name, "source_query": query} for item in items], provider_name, attempts
         return None, [], str(last_provider or ""), attempts
 
     def _search_tool_for_provider(self, provider: str) -> WebSearchTool:
@@ -282,14 +365,19 @@ def _research_payload(
     fetched_sources: list[dict[str, Any]],
     failed_sources: list[dict[str, Any]],
     sources: list[dict[str, Any]] | None = None,
+    queries: list[str] | None = None,
     search_attempts: list[dict[str, Any]] | None = None,
+    query_attempts: list[dict[str, Any]] | None = None,
     reuse_attempt: dict[str, Any] | None = None,
+    reuse_attempts: list[dict[str, Any]] | None = None,
 ) -> str:
     reused_count = sum(1 for item in fetched_sources if item.get("reused"))
+    research_queries = queries or [query]
     return json.dumps(
         {
             "type": "web_research",
             "query": query,
+            "queries": research_queries,
             "url": "",
             "final_url": "",
             "title": "",
@@ -308,11 +396,60 @@ def _research_payload(
             "source_count": len(sources if sources is not None else fetched_sources),
             "fetched_count": len(fetched_sources),
             "search_attempts": search_attempts or [],
+            "query_attempts": query_attempts or [],
             "reuse_attempt": reuse_attempt or {"source": "search_knowledge", "ok": False, "reason": "not configured"},
+            "reuse_attempts": reuse_attempts or [],
             "reused_count": reused_count,
         },
         ensure_ascii=False,
     )
+
+
+def _research_queries(query: str, queries: list[str] | None) -> list[str]:
+    values = [_clean_text(query)]
+    if isinstance(queries, list):
+        values.extend(_clean_text(value) for value in queries[:5])
+    elif queries is not None:
+        values.append(_clean_text(queries))
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for value in values:
+        key = value.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(value)
+    return out or [_clean_text(query)]
+
+
+def _aggregate_reuse_attempts(attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    if not attempts:
+        return {"source": "search_knowledge", "ok": False, "reason": "not configured"}
+    if len(attempts) == 1:
+        return {key: value for key, value in attempts[0].items() if key != "query"}
+
+    result_count = sum(_coerce_int(attempt.get("result_count"), default=0) for attempt in attempts)
+    reused_count = sum(_coerce_int(attempt.get("reused_count"), default=0) for attempt in attempts)
+    reasons: list[str] = []
+    seen_reasons: set[str] = set()
+    for attempt in attempts:
+        reason = str(attempt.get("reason") or "").strip()
+        key = reason.lower()
+        if not reason or key in seen_reasons:
+            continue
+        seen_reasons.add(key)
+        reasons.append(reason)
+    aggregate: dict[str, Any] = {
+        "source": "search_knowledge",
+        "ok": reused_count > 0,
+        "query_count": len(attempts),
+        "result_count": result_count,
+        "reused_count": reused_count,
+    }
+    if reasons and reused_count == 0:
+        aggregate["reason"] = "; ".join(reasons)[:500]
+    return aggregate
 
 
 def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
