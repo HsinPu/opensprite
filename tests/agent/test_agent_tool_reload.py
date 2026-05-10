@@ -1,6 +1,7 @@
 from agent_test_helpers import make_agent_loop
 
 from opensprite.config.schema import Config
+from opensprite.tools.browser import BrowserNavigateTool
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.web_research import WebResearchTool
 from opensprite.tools.web_search import WebSearchTool
@@ -50,3 +51,48 @@ def test_agent_reload_web_search_from_config_updates_registered_tools(tmp_path):
     assert web_research_tool.search_config.provider == "jina"
     assert web_research_tool.search_tool.provider == "jina"
     assert web_research_tool.search_tool.max_results == 7
+
+
+def test_agent_reload_browser_from_config_registers_and_removes_tools(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = make_agent_loop(tmp_path / "workspace", tools=ToolRegistry(), config_path=config_path)
+
+    config = Config.from_json(config_path)
+    config.tools.browser.enabled = True
+    config.tools.browser.backend = "agent-browser"
+    config.tools.browser.command_timeout = 45
+    config.tools.browser.session_timeout = 600
+    config.tools.browser.cdp_url = "http://127.0.0.1:9222"
+    config.tools.browser.allow_private_urls = True
+
+    payload = agent.reload_browser_from_config(config)
+
+    browser_tool = agent.tools.get("browser_navigate")
+    assert payload == {
+        "enabled": True,
+        "backend": "agent-browser",
+        "command_timeout": 45,
+        "session_timeout": 600,
+        "tool_updated": True,
+        "tool_removed": False,
+    }
+    assert agent.tools_config.browser.enabled is True
+    assert isinstance(browser_tool, BrowserNavigateTool)
+    assert browser_tool.runtime.command_timeout == 45
+    assert browser_tool.runtime.session_timeout == 600
+    assert browser_tool.runtime.cdp_url == "http://127.0.0.1:9222"
+    assert browser_tool.browser_config.allow_private_urls is True
+
+    config.tools.browser.enabled = False
+    payload = agent.reload_browser_from_config(config)
+
+    assert payload == {
+        "enabled": False,
+        "backend": "agent-browser",
+        "command_timeout": 45,
+        "session_timeout": 600,
+        "tool_updated": False,
+        "tool_removed": True,
+    }
+    assert not any(name.startswith("browser_") for name in agent.tools.tool_names)

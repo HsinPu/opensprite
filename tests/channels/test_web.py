@@ -814,7 +814,30 @@ def test_web_adapter_network_settings_roundtrip(tmp_path):
 async def _run_web_browser_settings_roundtrip(tmp_path: Path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
-    agent = EchoAgent()
+
+    class BrowserReloadAgent(EchoAgent):
+        def __init__(self):
+            super().__init__()
+            self.reloads = []
+
+        def reload_browser_from_config(self, config):
+            browser = config.tools.browser
+            self.reloads.append({
+                "enabled": browser.enabled,
+                "backend": browser.backend,
+                "command_timeout": browser.command_timeout,
+                "session_timeout": browser.session_timeout,
+            })
+            return {
+                "enabled": browser.enabled,
+                "backend": browser.backend,
+                "command_timeout": browser.command_timeout,
+                "session_timeout": browser.session_timeout,
+                "tool_updated": browser.enabled,
+                "tool_removed": False,
+            }
+
+    agent = BrowserReloadAgent()
     agent.config_path = config_path
     queue = MessageQueue(agent)
     adapter = WebAdapter(
@@ -859,7 +882,16 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload["restart_required"] is True
+                assert payload["restart_required"] is False
+                assert payload["runtime_reloaded"] is True
+                assert payload["runtime"] == {
+                    "enabled": True,
+                    "backend": "agent-browser",
+                    "command_timeout": 45,
+                    "session_timeout": 600,
+                    "tool_updated": True,
+                    "tool_removed": False,
+                }
                 assert payload["browser"]["enabled"] is True
                 assert payload["browser"]["command_timeout"] == 45
                 assert payload["browser"]["cdp_url"] == "http://127.0.0.1:9222"
@@ -870,6 +902,7 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
+                assert payload["restart_required"] is False
                 assert payload["browser"]["cdp_url"] == ""
 
             async with session.put(
@@ -887,6 +920,8 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
             ) as resp:
                 assert resp.status == 200
                 payload = await resp.json()
+                assert payload["restart_required"] is False
+                assert payload["runtime_reloaded"] is True
                 assert payload["browser"]["backend"] == "browserbase"
                 assert payload["browser"]["cloud"]["browserbase"]["configured"] is True
                 assert payload["browser"]["cloud"]["browserbase"]["api_key_configured"] is True
@@ -913,6 +948,8 @@ async def _run_web_browser_settings_roundtrip(tmp_path: Path):
         assert loaded.tools.browser.browserbase_keep_alive is False
         assert loaded.tools.browser.browser_use_api_key == "bu-key"
         assert loaded.tools.browser.firecrawl_api_key == "fc-key"
+        assert len(agent.reloads) == 3
+        assert agent.reloads[-1]["backend"] == "browserbase"
     finally:
         adapter_task.cancel()
         try:

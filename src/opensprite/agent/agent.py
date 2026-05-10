@@ -87,7 +87,12 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_intent import TaskIntent, TaskIntentService
-from .tool_registration import register_default_tools, register_memory_tool
+from .tool_registration import (
+    BROWSER_TOOL_NAMES,
+    register_browser_tools,
+    register_default_tools,
+    register_memory_tool,
+)
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
@@ -1383,6 +1388,36 @@ class AgentLoop:
             "searxng_categories": list(web_search_config.searxng_categories),
             "tool_updated": self.tools.get("web_search") is not None,
             "research_tool_updated": research_tool_updated,
+        }
+
+    def reload_browser_from_config(self, config: Config) -> dict[str, Any]:
+        """Reload browser automation settings and update registered browser tools in-place."""
+        browser_config = config.tools.browser
+        self.tools_config.browser = browser_config
+
+        removed_tools = [name for name in BROWSER_TOOL_NAMES if self.tools.unregister(name) is not None]
+        if browser_config.enabled:
+            register_browser_tools(
+                self.tools,
+                get_session_id=self._get_current_session_id,
+                tools_config=self.tools_config,
+            )
+        registered_tools = [name for name in BROWSER_TOOL_NAMES if self.tools.get(name) is not None]
+
+        logger.info(
+            "Browser tools reloaded | enabled={} backend={} registered={} removed={}",
+            browser_config.enabled,
+            browser_config.backend,
+            len(registered_tools),
+            len(removed_tools),
+        )
+        return {
+            "enabled": browser_config.enabled,
+            "backend": browser_config.backend,
+            "command_timeout": browser_config.command_timeout,
+            "session_timeout": browser_config.session_timeout,
+            "tool_updated": bool(registered_tools),
+            "tool_removed": bool(removed_tools),
         }
 
     def _get_current_session_id(self) -> str | None:

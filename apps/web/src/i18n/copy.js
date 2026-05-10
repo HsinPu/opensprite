@@ -1062,7 +1062,7 @@ export const DISPLAY_COPY = {
         title: "Browser automation",
         enabled: {
           title: "啟用 native browser tools",
-          description: "開啟 browser_navigate、browser_snapshot、browser_click 等 tools；儲存後需重啟 gateway 才會重新註冊。",
+          description: "開啟 browser_navigate、browser_snapshot、browser_click 等 tools；儲存後會套用到目前 gateway process。",
         },
         backend: {
           title: "Backend",
@@ -1505,7 +1505,8 @@ export const DISPLAY_COPY = {
       searchSaveFailed: "無法儲存搜尋設定。",
       searchSaved: "搜尋設定已儲存並套用到目前 gateway process。",
       browserSaveFailed: "無法儲存瀏覽器設定。",
-      browserSaved: "瀏覽器設定已儲存；重啟 gateway 後會重新註冊 tools。",
+      browserSaved: "瀏覽器設定已儲存並套用到目前 gateway process。",
+      browserRestartRequired: "瀏覽器設定已儲存；重啟 gateway 後會重新註冊 tools。",
       llmSettingsLoadFailed: "無法載入 LLM 設定。",
       llmSettingsSaveFailed: "無法儲存 LLM 設定。",
       llmSettingsSaved: "LLM 設定已儲存並套用。",
@@ -2583,7 +2584,7 @@ export const DISPLAY_COPY = {
         title: "Browser automation",
         enabled: {
           title: "Enable native browser tools",
-          description: "Expose browser_navigate, browser_snapshot, browser_click, and related tools. Restart the gateway after saving to re-register tools.",
+          description: "Expose browser_navigate, browser_snapshot, browser_click, and related tools. Saving applies changes to the current gateway process.",
         },
         backend: {
           title: "Backend",
@@ -3026,7 +3027,8 @@ export const DISPLAY_COPY = {
       searchSaveFailed: "Could not save search settings.",
       searchSaved: "Search settings saved and applied to the current gateway process.",
       browserSaveFailed: "Could not save browser settings.",
-      browserSaved: "Browser settings saved. Restart the gateway to re-register tools.",
+      browserSaved: "Browser settings saved and applied to the current gateway process.",
+      browserRestartRequired: "Browser settings saved. Restart the gateway to re-register tools.",
       llmSettingsLoadFailed: "Could not load LLM settings.",
       llmSettingsSaveFailed: "Could not save LLM settings.",
       llmSettingsSaved: "LLM settings saved and applied.",

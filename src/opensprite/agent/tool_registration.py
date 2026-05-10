@@ -62,6 +62,18 @@ from ..tools.process_runtime import BackgroundProcessManager
 from ..tools.permissions import ToolPermissionPolicy
 
 
+BROWSER_TOOL_NAMES = (
+    "browser_navigate",
+    "browser_snapshot",
+    "browser_click",
+    "browser_type",
+    "browser_press",
+    "browser_scroll",
+    "browser_back",
+    "browser_console",
+)
+
+
 class SaveMemoryTool(Tool):
     name = "save_memory"
     description = (

@@ -56,7 +56,10 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
       });
       settingsState.browser = normalizeBrowserSettings(payload.browser || {});
       syncBrowserForm(settingsState);
-      setSettingsSuccess("browserNotice", copy.value.notices.browserSaved);
+      setSettingsSuccess(
+        "browserNotice",
+        payload.restart_required ? copy.value.notices.browserRestartRequired : copy.value.notices.browserSaved,
+      );
     } catch (error) {
       settingsState.browserError = error?.message || copy.value.notices.browserSaveFailed;
     } finally {

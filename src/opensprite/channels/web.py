@@ -1016,6 +1016,31 @@ class WebAdapter(MessageAdapter):
         updated["runtime"] = self._json_safe(runtime)
         return updated
 
+    def _reload_browser_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
+        """Hot-apply persisted browser settings to running browser tools when possible."""
+        if not force and not payload.get("restart_required"):
+            return payload
+
+        updated = dict(payload)
+        agent = self._get_agent()
+        reload_browser = getattr(agent, "reload_browser_from_config", None) if agent is not None else None
+        if not callable(reload_browser):
+            updated["runtime_reloaded"] = False
+            return updated
+
+        try:
+            runtime = reload_browser(Config.load(self._get_config_path()))
+        except Exception as exc:
+            logger.warning("Browser runtime reload failed after settings change: {}", exc)
+            updated["runtime_reloaded"] = False
+            updated["reload_error"] = str(exc)
+            return updated
+
+        updated["restart_required"] = False
+        updated["runtime_reloaded"] = True
+        updated["runtime"] = self._json_safe(runtime)
+        return updated
+
     async def _reload_mcp_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted MCP settings to the running agent when possible."""
         if not force and not payload.get("restart_required"):
@@ -2221,7 +2246,9 @@ class WebAdapter(MessageAdapter):
             if field in body:
                 setattr(browser, field, self._coerce_bool(body.get(field), field=field, default=getattr(browser, field)))
         config.save(config_path)
-        return web.json_response({"browser": self._browser_payload(config), "restart_required": True})
+        payload = {"browser": self._browser_payload(config), "restart_required": True}
+        payload = self._reload_browser_from_config(payload)
+        return web.json_response(payload)
 
     async def _handle_settings_log(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
