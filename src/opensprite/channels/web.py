@@ -83,6 +83,24 @@ class WebAdapter(MessageAdapter):
     LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
     WEB_SEARCH_PROVIDERS = ("duckduckgo", "brave", "tavily", "searxng", "jina")
     WEB_SEARCH_FRESHNESS = ("none", "day", "week", "month", "year")
+    SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
+    SEARXNG_FALLBACK_ENGINES = (
+        "duckduckgo",
+        "google",
+        "bing",
+        "brave",
+        "qwant",
+        "startpage",
+        "wikipedia",
+        "wikidata",
+        "github",
+        "stackoverflow",
+        "reddit",
+        "youtube",
+        "arxiv",
+        "semantic scholar",
+    )
+    SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
     BROWSER_BACKENDS = SUPPORTED_BROWSER_BACKENDS
     LLM_DECODING_PRESETS = {
         "precise": {
@@ -828,6 +846,21 @@ class WebAdapter(MessageAdapter):
             "url": url,
             "engines": engines,
             "categories": categories,
+            "fallback": False,
+            "warning": "",
+        }
+
+    @classmethod
+    def _fallback_searxng_options_payload(cls, *, url: str, warning: str) -> dict[str, Any]:
+        return {
+            "url": url,
+            "engines": [
+                {"id": engine, "label": engine, "shortcut": "", "categories": [], "enabled": None}
+                for engine in cls.SEARXNG_FALLBACK_ENGINES
+            ],
+            "categories": [{"id": category, "label": category} for category in cls.SEARXNG_FALLBACK_CATEGORIES],
+            "fallback": True,
+            "warning": warning,
         }
 
     @staticmethod
@@ -2076,15 +2109,26 @@ class WebAdapter(MessageAdapter):
             async with httpx.AsyncClient(proxy=search.proxy) as client:
                 response = await client.get(
                     self._searxng_config_url(searxng_url),
-                    headers={"Accept": "application/json"},
+                    headers={"Accept": "application/json", "User-Agent": self.SEARXNG_OPTIONS_USER_AGENT},
                     timeout=10.0,
                 )
                 response.raise_for_status()
                 payload = response.json()
         except Exception as exc:
-            raise web.HTTPBadGateway(text=f"Unable to load SearXNG options: {exc}") from exc
+            logger.warning("SearXNG options metadata unavailable | url={} error={}", searxng_url, exc)
+            return web.json_response({
+                "searxng": self._fallback_searxng_options_payload(
+                    url=searxng_url,
+                    warning=f"Unable to load SearXNG /config metadata: {exc}",
+                )
+            })
         if not isinstance(payload, dict):
-            raise web.HTTPBadGateway(text="SearXNG config response must be a JSON object")
+            return web.json_response({
+                "searxng": self._fallback_searxng_options_payload(
+                    url=searxng_url,
+                    warning="SearXNG /config response was not a JSON object.",
+                )
+            })
         return web.json_response({"searxng": self._searxng_options_payload(payload, url=searxng_url)})
 
     async def _handle_settings_search_update(self, request: web.Request) -> web.Response:

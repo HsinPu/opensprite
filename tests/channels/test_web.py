@@ -36,7 +36,12 @@ class EchoAgent:
 
 
 class _FakeSearxngConfigResponse:
+    def __init__(self, *, error: Exception | None = None):
+        self.error = error
+
     def raise_for_status(self):
+        if self.error is not None:
+            raise self.error
         return None
 
     def json(self):
@@ -50,8 +55,9 @@ class _FakeSearxngConfigResponse:
 
 
 class _FakeSearxngConfigClient:
-    def __init__(self):
+    def __init__(self, *, error: Exception | None = None):
         self.requests = []
+        self.error = error
 
     async def __aenter__(self):
         return self
@@ -61,7 +67,7 @@ class _FakeSearxngConfigClient:
 
     async def get(self, url, headers=None, timeout=None):
         self.requests.append((url, headers, timeout))
-        return _FakeSearxngConfigResponse()
+        return _FakeSearxngConfigResponse(error=self.error)
 
 
 async def _run_web_roundtrip():
@@ -1092,6 +1098,8 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
                     {"id": "general", "label": "general"},
                     {"id": "news", "label": "news"},
                 ]
+                assert payload["searxng"]["fallback"] is False
+                assert payload["searxng"]["warning"] == ""
                 assert payload["searxng"]["engines"][0] == {
                     "id": "google",
                     "label": "google",
@@ -1100,6 +1108,7 @@ async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSear
                     "enabled": True,
                 }
         assert fake_client.requests[0][0] == "https://searx.test/config"
+        assert fake_client.requests[0][1]["User-Agent"]
     finally:
         adapter_task.cancel()
         try:
@@ -1114,6 +1123,57 @@ def test_web_adapter_search_searxng_options(tmp_path, monkeypatch):
     fake_client = _FakeSearxngConfigClient()
     monkeypatch.setattr("opensprite.channels.web.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
     asyncio.run(_run_web_search_searxng_options(tmp_path, fake_client))
+
+
+async def _run_web_search_searxng_options_fallback(tmp_path: Path, fake_client: _FakeSearxngConfigClient):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/search/searxng-options?url=https://searx.be") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["searxng"]["fallback"] is True
+                assert "Unable to load" in payload["searxng"]["warning"]
+                assert {entry["id"] for entry in payload["searxng"]["engines"]} >= {"duckduckgo", "google", "bing"}
+                assert {entry["id"] for entry in payload["searxng"]["categories"]} >= {"general", "news"}
+        assert fake_client.requests[0][0] == "https://searx.be/config"
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_search_searxng_options_fallback(tmp_path, monkeypatch):
+    fake_client = _FakeSearxngConfigClient(error=RuntimeError("403 Forbidden"))
+    monkeypatch.setattr("opensprite.channels.web.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
+    asyncio.run(_run_web_search_searxng_options_fallback(tmp_path, fake_client))
 
 
 async def _run_web_run_events_api():

@@ -30,6 +30,8 @@ function normalizeSearxngOptions(value = {}) {
     engines: normalizeOptionEntries(value.engines),
     categories: normalizeOptionEntries(value.categories),
     url: value.url || "",
+    fallback: value.fallback === true,
+    warning: String(value.warning || "").trim(),
   };
 }
 
@@ -103,8 +105,11 @@ export function useSearchSettingsActions({ settingsState, requestSettingsJson, c
       const searxngUrl = String(settingsState.searchForm.searxngUrl || settingsState.search.searxng_url || "").trim();
       const suffix = searxngUrl ? `?url=${encodeURIComponent(searxngUrl)}` : "";
       const payload = await requestSettingsJson(`/api/settings/search/searxng-options${suffix}`);
-      settingsState.search.searxng_options = normalizeSearxngOptions(payload.searxng || {});
-      settingsState.searchOptionsNotice = copy.value.notices.searxngOptionsLoaded;
+      const searxngOptions = normalizeSearxngOptions(payload.searxng || {});
+      settingsState.search.searxng_options = searxngOptions;
+      settingsState.searchOptionsNotice = searxngOptions.fallback
+        ? copy.value.notices.searxngOptionsFallback
+        : copy.value.notices.searxngOptionsLoaded;
     } catch (error) {
       settingsState.searchOptionsError = error?.message || copy.value.notices.searxngOptionsLoadFailed;
     } finally {
