@@ -168,7 +168,15 @@ def _evaluate_source_detail(
         return None
     detailed_count = sum(1 for source in sources if _source_has_substantive_detail(source))
     if detailed_count >= min_count:
-        return None
+        coverage_detail = _web_research_coverage_gap_detail(execution_result)
+        if coverage_detail is None:
+            return None
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="required source material was insufficient",
+            active_task_detail=coverage_detail,
+        )
     return QualityGateResult(
         passed=False,
         status="incomplete",
@@ -210,6 +218,48 @@ def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, 
         if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS:
             sources.extend(_artifact_web_sources(artifact.metadata, source_tool=artifact.source_tool))
     return sources
+
+
+def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str | None:
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok or artifact.source_tool != "web_research":
+            continue
+        coverage = artifact.metadata.get("coverage") if isinstance(artifact.metadata, dict) else None
+        if not isinstance(coverage, dict):
+            continue
+        missing_queries = _string_list(coverage.get("queries_without_successful_fetch"))
+        target_met = _truthy(coverage.get("target_met"))
+        if target_met and not missing_queries:
+            continue
+
+        target_fetch_count = _coerce_int(coverage.get("target_fetch_count"), default=0)
+        fetched_count = _coerce_int(coverage.get("fetched_count"), default=0)
+        too_short_count = _coerce_int(coverage.get("too_short_count"), default=0)
+        blocked_count = _coerce_int(coverage.get("blocked_count"), default=0)
+        fetched_domains = _string_list(coverage.get("fetched_domains"))
+        details = ["- Web research coverage gap: fetched source coverage did not satisfy the research pass."]
+        if not target_met:
+            details.append(f"- Target fetch count not met: need {target_fetch_count}, fetched {fetched_count}.")
+        if missing_queries:
+            details.append(
+                "- Queries with search results but no successful fetch: "
+                f"{', '.join(missing_queries[:5])}."
+            )
+        failure_details = []
+        if too_short_count > 0:
+            failure_details.append(f"{too_short_count} too short")
+        if blocked_count > 0:
+            failure_details.append(f"{blocked_count} blocked or challenged")
+        if failure_details:
+            details.append(f"- Failed source details: {', '.join(failure_details)}.")
+        if fetched_domains:
+            details.append(f"- Fetched domains so far: {', '.join(fetched_domains[:5])}.")
+        details.append(
+            "- Retry `web_research` with focused `queries` for the missing angles, "
+            "or fetch alternate URLs/domains before finalizing."
+        )
+        return "\n".join(details)
+    return None
 
 
 def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "") -> list[dict[str, object]]:
@@ -277,6 +327,21 @@ def _coerce_int(value: object, *, default: int) -> int:
         return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
         return default
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in value:
+        text = str(item or "").strip()
+        key = text.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(text)
+    return out
 
 
 def _source_is_referenced(source: dict[str, object], response_text: str) -> bool:

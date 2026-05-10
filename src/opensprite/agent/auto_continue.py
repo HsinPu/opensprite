@@ -389,6 +389,7 @@ def _truncate(text: str, *, max_chars: int) -> str:
 
 def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> str:
     reason = str(completion_result.reason or "").strip()
+    detail = str(completion_result.active_task_detail or "").strip()
     if reason == "required task artifacts were not produced":
         return (
             "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
@@ -402,6 +403,12 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
             "Do not finalize from an untraceable source artifact."
         )
     if reason == "required source material was insufficient":
+        if "Web research coverage gap" in detail:
+            return (
+                "\n- Source follow-up: `web_research` reported coverage gaps. "
+                "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
+                "and do not finalize until the coverage target is met or a concrete fetch blocker is stated."
+            )
         return (
             "\n- Source follow-up: the previous pass did not inspect enough source material. "
             "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "

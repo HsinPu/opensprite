@@ -495,6 +495,11 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
             "type": "web_research",
             "query": "sqlite",
             "provider": "duckduckgo",
+            "coverage": {
+                "target_fetch_count": 2,
+                "target_met": False,
+                "queries_without_successful_fetch": ["sqlite pricing"],
+            },
             "sources": [
                 {
                     "tool_name": "web_fetch",
@@ -523,3 +528,5 @@ def test_web_research_evidence_builds_web_source_artifact_with_fetch_detail():
     assert artifact is not None
     assert artifact.kind == "web_source"
     assert artifact.source_tool == "web_research"
+    assert artifact.metadata["coverage"]["target_met"] is False
+    assert artifact.metadata["coverage"]["queries_without_successful_fetch"] == ["sqlite pricing"]

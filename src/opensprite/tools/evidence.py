@@ -69,7 +69,12 @@ def _build_web_source_metadata(tool_name: str, args: dict[str, Any], result: str
         sources = _browser_sources(tool_name, args, payload, result)
     if not sources:
         return {}
-    return {"source_count": len(sources), "sources": sources}
+    metadata: dict[str, Any] = {"source_count": len(sources), "sources": sources}
+    if tool_name == "web_research" and isinstance(payload, dict):
+        coverage = payload.get("coverage")
+        if isinstance(coverage, dict):
+            metadata["coverage"] = dict(coverage)
+    return metadata
 
 
 def _parse_json_object(result: str) -> dict[str, Any] | None:

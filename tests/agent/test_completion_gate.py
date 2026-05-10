@@ -71,6 +71,58 @@ def _web_research_artifacts() -> tuple[TaskArtifact, ...]:
     return (_web_source_artifact(), _web_fetch_artifact())
 
 
+def _web_research_coverage_gap_artifact() -> TaskArtifact:
+    return TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://docs.test/browser",
+                    "title": "AI Browser Docs",
+                    "snippet": "Official AI browser documentation.",
+                    "query": "ai browser",
+                    "provider": "duckduckgo",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                    "extractor": "trafilatura",
+                    "truncated": False,
+                },
+                {
+                    "tool_name": "web_search",
+                    "url": "https://pricing.test/browser",
+                    "title": "AI Browser Pricing",
+                    "snippet": "Pricing search result.",
+                    "query": "ai browser pricing",
+                    "provider": "duckduckgo",
+                },
+            ],
+            "source_count": 2,
+            "coverage": {
+                "target_fetch_count": 2,
+                "target_met": False,
+                "search_result_count": 2,
+                "fetched_count": 1,
+                "failed_count": 1,
+                "too_short_count": 1,
+                "blocked_count": 0,
+                "missing_url_count": 0,
+                "fetched_domains": ["docs.test"],
+                "fetched_domain_count": 1,
+                "fetched_queries": ["ai browser"],
+                "fetched_query_count": 1,
+                "queries_with_search_results": ["ai browser", "ai browser pricing"],
+                "queries_without_successful_fetch": ["ai browser pricing"],
+            },
+        },
+    )
+
+
 def test_completion_gate_requires_requested_verification_before_completion():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
 
@@ -351,6 +403,36 @@ def test_completion_gate_rejects_blocked_web_fetch_source_detail():
 
     assert completion.status == "incomplete"
     assert completion.reason == "required source material was insufficient"
+
+
+def test_completion_gate_rejects_web_research_coverage_gaps():
+    intent = TaskIntentService().classify("Please search online for current AI browser pricing.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "AI Browser Docs at docs.test explains the official browser documentation, while AI Browser Pricing at pricing.test "
+        "indicates pricing information may need separate verification before a final recommendation."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_research", ok=True),),
+            task_artifacts=(_web_research_coverage_gap_artifact(),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required source material was insufficient"
+    assert "Web research coverage gap" in (completion.active_task_detail or "")
+    assert "Target fetch count not met: need 2, fetched 1" in (completion.active_task_detail or "")
+    assert "ai browser pricing" in (completion.active_task_detail or "")
 
 
 def test_completion_gate_rejects_terse_web_research_final_answer():

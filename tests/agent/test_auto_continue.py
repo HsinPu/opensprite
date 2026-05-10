@@ -256,6 +256,33 @@ def test_auto_continue_guides_retry_after_insufficient_source_material():
     assert "search snippets alone" in (decision.prompt or "")
 
 
+def test_auto_continue_guides_retry_after_web_research_coverage_gap():
+    intent = TaskIntentService().classify("Please research current AI browser pricing.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required source material was insufficient",
+        active_task_detail=(
+            "- Web research coverage gap: fetched source coverage did not satisfy the research pass.\n"
+            "- Queries with search results but no successful fetch: ai browser pricing."
+        ),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="I found partial sources.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="I found partial sources.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "`web_research` reported coverage gaps" in (decision.prompt or "")
+    assert "focused `queries`" in (decision.prompt or "")
+    assert "alternate URLs/domains" in (decision.prompt or "")
+    assert "ai browser pricing" in (decision.prompt or "")
+
+
 def test_auto_continue_guides_retry_after_missing_web_source_reference():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
