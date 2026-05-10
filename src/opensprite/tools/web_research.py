@@ -335,7 +335,7 @@ class WebResearchTool(Tool):
         attempts: list[dict[str, Any]] = []
         last_provider = getattr(self.search_tool, "provider", self.search_config.provider)
         if self._custom_search_tool:
-            providers = [str(last_provider or self.search_config.provider or "duckduckgo")]
+            providers = [str(last_provider or self.search_config.provider or "searxng")]
         else:
             providers = _search_provider_order(
                 self.search_config,
@@ -537,7 +537,7 @@ def _ordered_clean_values(values: Any) -> list[str]:
 
 
 def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: str) -> list[str]:
-    configured = (configured_provider or config.provider or "duckduckgo").strip().lower() or "duckduckgo"
+    configured = (configured_provider or config.provider or "searxng").strip().lower() or "searxng"
     candidates = [configured]
     probe_tool = WebSearchTool(config=config)
     if probe_tool.brave_api_key:

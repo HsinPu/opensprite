@@ -939,7 +939,7 @@ async def _run_web_search_settings_roundtrip(tmp_path: Path):
             async with session.get(f"http://127.0.0.1:{port}/api/settings/search") as resp:
                 assert resp.status == 200
                 payload = await resp.json()
-                assert payload["search"]["provider"] == "duckduckgo"
+                assert payload["search"]["provider"] == "searxng"
                 assert payload["search"]["freshness"] == "year"
                 assert payload["search"]["providers"] == ["duckduckgo", "brave", "tavily", "searxng", "jina"]
                 assert payload["search"]["searxng_max_pages"] == 5

@@ -400,7 +400,7 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = "duckduckgo"
+    provider: Literal["brave", "duckduckgo", "tavily", "searxng", "jina"] = "searxng"
     freshness: Literal["none", "day", "week", "month", "year"] = "year"
     brave_api_key: str = ""
     tavily_api_key: str = ""

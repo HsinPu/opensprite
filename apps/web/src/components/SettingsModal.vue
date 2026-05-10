@@ -3735,7 +3735,7 @@ function webSearchCredentialStatus(provider) {
 const webSearchSummary = computed(() => {
   const form = props.settingsState.searchForm || {};
   return props.copy.settings.search.summary(
-    webSearchProviderLabel(form.provider || "duckduckgo"),
+    webSearchProviderLabel(form.provider || "searxng"),
     webSearchFreshnessLabel(form.freshness || "year"),
     Number(form.maxResults || 25),
   );

@@ -37,7 +37,7 @@
       "timeout": 60
     },
     "web_search": {
-      "provider": "duckduckgo",
+      "provider": "searxng",
       "freshness": "year",
       "brave_api_key": "",
       "tavily_api_key": "",

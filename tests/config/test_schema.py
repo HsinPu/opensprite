@@ -293,7 +293,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.exec_tool.timeout == 60
     assert config.exec_tool.notify_on_exit is True
     assert config.exec_tool.notify_on_exit_empty_success is False
-    assert config.web_search.provider == "duckduckgo"
+    assert config.web_search.provider == "searxng"
     assert config.web_search.freshness == "year"
     assert config.web_search.max_results == 25
     assert config.web_search.duckduckgo_max_pages == 10
@@ -628,6 +628,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.context_compaction_llm.max_tokens == 4096
     assert config.agent.worktree_sandbox_enabled is False
     assert config.tools.exec_tool.timeout == 60
+    assert config.tools.web_search.provider == "searxng"
     assert config.tools.web_search.freshness == "year"
     assert config.tools.web_search.max_results == 25
     assert config.tools.web_search.searxng_max_pages == 5

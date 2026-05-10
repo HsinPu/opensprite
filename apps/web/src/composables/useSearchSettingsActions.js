@@ -3,7 +3,7 @@ const DEFAULT_FRESHNESS_OPTIONS = ["none", "day", "week", "month", "year"];
 
 function normalizeSearchSettings(search = {}) {
   return {
-    provider: search.provider || "duckduckgo",
+    provider: search.provider || "searxng",
     providers: Array.isArray(search.providers) && search.providers.length ? search.providers : DEFAULT_SEARCH_PROVIDERS,
     freshness: search.freshness || "year",
     freshness_options: Array.isArray(search.freshness_options) && search.freshness_options.length ? search.freshness_options : DEFAULT_FRESHNESS_OPTIONS,
