@@ -420,6 +420,8 @@ export const DISPLAY_COPY = {
     },
     workState: {
       title: "目前任務",
+      expand: "展開",
+      collapse: "收起",
       currentStep: "目前步驟",
       nextStep: "下一步",
       verification: "驗證",
@@ -1915,6 +1917,8 @@ export const DISPLAY_COPY = {
     },
     workState: {
       title: "Current task",
+      expand: "Expand",
+      collapse: "Collapse",
       currentStep: "Current step",
       nextStep: "Next step",
       verification: "Verification",

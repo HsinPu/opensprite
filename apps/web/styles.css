@@ -135,6 +135,7 @@
 :root[data-color-scheme="dark"] .question-card,
 :root[data-color-scheme="dark"] .run-history__select select,
 :root[data-color-scheme="dark"] .work-state-card__status,
+:root[data-color-scheme="dark"] .work-state-card__toggle,
 :root[data-color-scheme="dark"] .permission-card code,
 :root[data-color-scheme="dark"] .question-card code,
 :root[data-color-scheme="dark"] .question-card textarea,
@@ -1510,6 +1511,13 @@ button:disabled {
   gap: 14px;
 }
 
+.work-state-card__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
 .work-state-card__title {
   display: grid;
   min-width: 0;
@@ -1532,7 +1540,6 @@ button:disabled {
 }
 
 .work-state-card__status {
-  flex: 0 0 auto;
   padding: 3px 9px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
@@ -1540,6 +1547,26 @@ button:disabled {
   background: rgba(255, 255, 255, 0.78);
   font-size: 0.74rem;
   font-weight: 700;
+}
+
+.work-state-card__toggle {
+  padding: 3px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.78);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.work-state-card__toggle:hover {
+  border-color: rgba(16, 163, 127, 0.24);
+  color: var(--text);
+}
+
+.work-state-card__body {
+  display: grid;
+  gap: 12px;
 }
 
 .work-state-card__grid {
@@ -5412,6 +5439,11 @@ textarea:focus-visible {
   .run-summary-card__metrics {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .work-state-card__actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .run-trace {

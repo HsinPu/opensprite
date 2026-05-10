@@ -5,71 +5,78 @@
         <span class="work-state-card__eyebrow">{{ copy.workState.title }}</span>
         <strong>{{ workState.objective }}</strong>
       </div>
-      <span class="work-state-card__status">{{ statusLabel }}</span>
+      <div class="work-state-card__actions">
+        <span class="work-state-card__status">{{ statusLabel }}</span>
+        <button class="work-state-card__toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
+          {{ expanded ? copy.workState.collapse : copy.workState.expand }}
+        </button>
+      </div>
     </div>
 
-    <dl class="work-state-card__grid">
-      <div>
-        <dt>{{ copy.workState.currentStep }}</dt>
-        <dd>{{ displayStep(workState.currentStep) }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.workState.nextStep }}</dt>
-        <dd>{{ displayStep(workState.nextStep) }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.workState.verification }}</dt>
-        <dd>{{ verificationLabel }}</dd>
-      </div>
-      <div>
-        <dt>{{ copy.workState.files }}</dt>
-        <dd>{{ copy.workState.fileCount(workState.fileChangeCount) }}</dd>
-      </div>
-    </dl>
+    <div v-show="expanded" class="work-state-card__body">
+      <dl class="work-state-card__grid">
+        <div>
+          <dt>{{ copy.workState.currentStep }}</dt>
+          <dd>{{ displayStep(workState.currentStep) }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.workState.nextStep }}</dt>
+          <dd>{{ displayStep(workState.nextStep) }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.workState.verification }}</dt>
+          <dd>{{ verificationLabel }}</dd>
+        </div>
+        <div>
+          <dt>{{ copy.workState.files }}</dt>
+          <dd>{{ copy.workState.fileCount(workState.fileChangeCount) }}</dd>
+        </div>
+      </dl>
 
-    <div v-if="workState.blockers.length" class="work-state-card__note" data-tone="warning">
-      <strong>{{ copy.workState.blockers }}</strong>
-      <span>{{ workState.blockers[0] }}</span>
-    </div>
+      <div v-if="workState.blockers.length" class="work-state-card__note" data-tone="warning">
+        <strong>{{ copy.workState.blockers }}</strong>
+        <span>{{ workState.blockers[0] }}</span>
+      </div>
 
-    <div v-else-if="workState.resumeHint" class="work-state-card__note">
-      <strong>{{ copy.workState.resumeHint }}</strong>
-      <span>{{ workState.resumeHint }}</span>
-      <button
-        v-if="resumeFollowUpMessage"
-        class="run-summary-card__copy"
-        type="button"
-        @click="$emit('resume-follow-up', resumeFollowUpMessage)"
-      >
-        {{ copy.workState.resumeFollowUp }}
-      </button>
-      <button
-        v-if="runVerificationMessage"
-        class="run-summary-card__copy"
-        type="button"
-        @click="$emit('run-verification', runVerificationMessage)"
-      >
-        {{ copy.workState.runVerification }}
-      </button>
-    </div>
+      <div v-else-if="workState.resumeHint" class="work-state-card__note">
+        <strong>{{ copy.workState.resumeHint }}</strong>
+        <span>{{ workState.resumeHint }}</span>
+        <button
+          v-if="resumeFollowUpMessage"
+          class="run-summary-card__copy"
+          type="button"
+          @click="$emit('resume-follow-up', resumeFollowUpMessage)"
+        >
+          {{ copy.workState.resumeFollowUp }}
+        </button>
+        <button
+          v-if="runVerificationMessage"
+          class="run-summary-card__copy"
+          type="button"
+          @click="$emit('run-verification', runVerificationMessage)"
+        >
+          {{ copy.workState.runVerification }}
+        </button>
+      </div>
 
-    <div v-if="delegatedTaskCount" class="work-state-card__note">
-      <strong>{{ copy.workState.delegatedTask }}</strong>
-      <span>{{ delegatedTaskSummary }}</span>
-      <small v-if="delegatedTaskDetail">{{ delegatedTaskDetail }}</small>
-      <small v-else-if="delegatedTaskCount > 1">{{ copy.workState.moreDelegates(delegatedTaskCount - 1) }}</small>
-    </div>
+      <div v-if="delegatedTaskCount" class="work-state-card__note">
+        <strong>{{ copy.workState.delegatedTask }}</strong>
+        <span>{{ delegatedTaskSummary }}</span>
+        <small v-if="delegatedTaskDetail">{{ delegatedTaskDetail }}</small>
+        <small v-else-if="delegatedTaskCount > 1">{{ copy.workState.moreDelegates(delegatedTaskCount - 1) }}</small>
+      </div>
 
-    <div v-if="visibleTouchedPaths.length" class="work-state-card__paths">
-      <span>{{ copy.workState.touchedPaths }}</span>
-      <code v-for="path in visibleTouchedPaths" :key="path">{{ path }}</code>
-      <small v-if="hiddenTouchedPathCount > 0">{{ copy.workState.morePaths(hiddenTouchedPathCount) }}</small>
+      <div v-if="visibleTouchedPaths.length" class="work-state-card__paths">
+        <span>{{ copy.workState.touchedPaths }}</span>
+        <code v-for="path in visibleTouchedPaths" :key="path">{{ path }}</code>
+        <small v-if="hiddenTouchedPathCount > 0">{{ copy.workState.morePaths(hiddenTouchedPathCount) }}</small>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 const props = defineProps({
   copy: {
@@ -83,6 +90,8 @@ const props = defineProps({
 });
 
 defineEmits(["resume-follow-up", "run-verification"]);
+
+const expanded = ref(true);
 
 const statusLabel = computed(() => {
   return props.copy.workState.statusLabels[props.workState.status] || props.workState.status;
