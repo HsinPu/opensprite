@@ -149,6 +149,7 @@
     @apply-mcp-json="applyMcpJson"
     @save-schedule-settings="saveScheduleSettings"
     @save-network-settings="saveNetworkSettings"
+    @load-search-searxng-options="loadSearxngOptions"
     @save-search-settings="saveSearchSettings"
     @save-browser-settings="saveBrowserSettings"
     @refresh-data-settings="loadDataSettings"
@@ -302,6 +303,7 @@ const {
   applyMcpJson,
   saveScheduleSettings,
   saveNetworkSettings,
+  loadSearxngOptions,
   saveSearchSettings,
   saveBrowserSettings,
   loadDataSettings,

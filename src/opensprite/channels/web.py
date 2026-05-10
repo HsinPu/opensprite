@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import httpx
 from aiohttp import WSMsgType, web
 
 from .identity import build_session_id, normalize_identifier
@@ -71,6 +72,7 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser_runtime import SUPPORTED_BROWSER_BACKENDS, browser_cloud_status
 from ..utils.log import logger, setup_log
+from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 
 
@@ -764,6 +766,76 @@ class WebAdapter(MessageAdapter):
             if text and text not in items:
                 items.append(text)
         return items
+
+    @classmethod
+    def _normalize_searxng_engine_options(cls, engines: Any) -> list[dict[str, Any]]:
+        if not isinstance(engines, list):
+            return []
+        options: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for engine in engines:
+            if isinstance(engine, str):
+                engine_id = engine.strip()
+                label = engine_id
+                shortcut = ""
+                categories: list[str] = []
+                enabled = None
+            elif isinstance(engine, dict):
+                engine_id = str(engine.get("name") or engine.get("id") or "").strip()
+                label = str(engine.get("display_name") or engine.get("displayName") or engine_id).strip()
+                shortcut = str(engine.get("shortcut") or "").strip()
+                categories = cls._coerce_text_list(engine.get("categories", []), field="categories", default=[])
+                enabled = engine.get("enabled") if isinstance(engine.get("enabled"), bool) else None
+            else:
+                continue
+            if not engine_id or engine_id in seen:
+                continue
+            seen.add(engine_id)
+            options.append({
+                "id": engine_id,
+                "label": label or engine_id,
+                "shortcut": shortcut,
+                "categories": categories,
+                "enabled": enabled,
+            })
+        return options
+
+    @classmethod
+    def _normalize_searxng_category_options(cls, categories: Any) -> list[dict[str, str]]:
+        if isinstance(categories, dict):
+            candidates = list(categories.keys())
+        else:
+            candidates = categories
+        options: list[dict[str, str]] = []
+        seen: set[str] = set()
+        for category in cls._coerce_text_list(candidates, field="categories", default=[]):
+            if category in seen:
+                continue
+            seen.add(category)
+            options.append({"id": category, "label": category})
+        return options
+
+    @classmethod
+    def _searxng_options_payload(cls, config_payload: dict[str, Any], *, url: str) -> dict[str, Any]:
+        engines = cls._normalize_searxng_engine_options(config_payload.get("engines"))
+        categories = cls._normalize_searxng_category_options(config_payload.get("categories"))
+        if not categories:
+            category_names: list[str] = []
+            for engine in engines:
+                category_names.extend(engine.get("categories") or [])
+            categories = cls._normalize_searxng_category_options(category_names)
+        return {
+            "url": url,
+            "engines": engines,
+            "categories": categories,
+        }
+
+    @staticmethod
+    def _searxng_config_url(searxng_url: str) -> str:
+        base = str(searxng_url or "").strip().rstrip("/")
+        if base.lower().endswith("/search"):
+            base = base[:-len("/search")]
+        return join_url_path(base, "/config")
 
     def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
         clear_field = f"clear_{field}"
@@ -1996,6 +2068,25 @@ class WebAdapter(MessageAdapter):
         config = Config.load(self._get_config_path())
         return web.json_response({"search": self._web_search_payload(config)})
 
+    async def _handle_settings_search_searxng_options(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        search = config.tools.web_search
+        searxng_url = self._coerce_optional_text(request.query.get("url"), default=search.searxng_url) or "https://searx.be"
+        try:
+            async with httpx.AsyncClient(proxy=search.proxy) as client:
+                response = await client.get(
+                    self._searxng_config_url(searxng_url),
+                    headers={"Accept": "application/json"},
+                    timeout=10.0,
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except Exception as exc:
+            raise web.HTTPBadGateway(text=f"Unable to load SearXNG options: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise web.HTTPBadGateway(text="SearXNG config response must be a JSON object")
+        return web.json_response({"searxng": self._searxng_options_payload(payload, url=searxng_url)})
+
     async def _handle_settings_search_update(self, request: web.Request) -> web.Response:
         body = await self._read_json_body(request)
         config_path = self._get_config_path()
@@ -2469,6 +2560,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/settings/network", self._handle_settings_network)
         self.app.router.add_put("/api/settings/network", self._handle_settings_network_update)
         self.app.router.add_get("/api/settings/search", self._handle_settings_search)
+        self.app.router.add_get("/api/settings/search/searxng-options", self._handle_settings_search_searxng_options)
         self.app.router.add_put("/api/settings/search", self._handle_settings_search_update)
         self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
         self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)

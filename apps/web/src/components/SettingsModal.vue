@@ -1438,33 +1438,66 @@
               />
             </label>
 
-            <label class="settings-row settings-row--field">
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.search.searxngOptions.title }}</strong>
+                <span>{{ copy.settings.search.searxngOptions.description }}</span>
+                <span v-if="settingsState.searchOptionsNotice">{{ settingsState.searchOptionsNotice }}</span>
+                <span v-if="settingsState.searchOptionsError" class="settings-row__error">{{ settingsState.searchOptionsError }}</span>
+              </div>
+              <button
+                class="secondary-button"
+                type="button"
+                :disabled="settingsState.searchLoading || settingsState.searchOptionsLoading"
+                @click="$emit('load-search-searxng-options')"
+              >
+                {{ settingsState.searchOptionsLoading ? copy.settings.search.searxngOptions.loading : copy.settings.search.searxngOptions.load }}
+              </button>
+            </div>
+
+            <div class="settings-row settings-row--field settings-row--choice-list">
               <div>
                 <strong>{{ copy.settings.search.searxngEngines.title }}</strong>
                 <span>{{ copy.settings.search.searxngEngines.description }}</span>
               </div>
-              <input
-                v-model="settingsState.searchForm.searxngEngines"
-                type="text"
-                :placeholder="copy.settings.search.searxngEngines.placeholder"
-                :disabled="settingsState.searchLoading"
-                @keydown.enter.prevent="$emit('save-search-settings')"
-              />
-            </label>
+              <div v-if="webSearchSearxngEngineOptions.length" class="settings-choice-grid">
+                <label v-for="option in webSearchSearxngEngineOptions" :key="option.id" class="settings-choice">
+                  <input
+                    v-model="settingsState.searchForm.searxngEngines"
+                    type="checkbox"
+                    :value="option.id"
+                    :disabled="settingsState.searchLoading"
+                  />
+                  <span>
+                    <strong>{{ option.label }}</strong>
+                    <small>{{ searxngEngineMeta(option) }}</small>
+                  </span>
+                </label>
+              </div>
+              <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyEngines }}</p>
+            </div>
 
-            <label class="settings-row settings-row--field">
+            <div class="settings-row settings-row--field settings-row--choice-list">
               <div>
                 <strong>{{ copy.settings.search.searxngCategories.title }}</strong>
                 <span>{{ copy.settings.search.searxngCategories.description }}</span>
               </div>
-              <input
-                v-model="settingsState.searchForm.searxngCategories"
-                type="text"
-                :placeholder="copy.settings.search.searxngCategories.placeholder"
-                :disabled="settingsState.searchLoading"
-                @keydown.enter.prevent="$emit('save-search-settings')"
-              />
-            </label>
+              <div v-if="webSearchSearxngCategoryOptions.length" class="settings-choice-grid">
+                <label v-for="option in webSearchSearxngCategoryOptions" :key="option.id" class="settings-choice">
+                  <input
+                    v-model="settingsState.searchForm.searxngCategories"
+                    type="checkbox"
+                    :value="option.id"
+                    :disabled="settingsState.searchLoading"
+                  />
+                  <span>
+                    <strong>{{ option.label }}</strong>
+                    <small v-if="option.configuredOnly">{{ copy.settings.search.searxngOptions.configuredOnly }}</small>
+                  </span>
+                </label>
+              </div>
+              <p v-else class="settings-empty-inline">{{ copy.settings.search.searxngOptions.emptyCategories }}</p>
+            </div>
 
             <label class="settings-row settings-row--field">
               <div>
@@ -3755,6 +3788,44 @@ const webSearchFreshnessOptions = computed(() => {
   return values.map((id) => ({ id, label: webSearchFreshnessLabel(id) }));
 });
 
+const webSearchSearxngEngineOptions = computed(() => mergeSelectedSearchOptions(
+  props.settingsState.search?.searxng_options?.engines,
+  props.settingsState.searchForm?.searxngEngines,
+));
+
+const webSearchSearxngCategoryOptions = computed(() => mergeSelectedSearchOptions(
+  props.settingsState.search?.searxng_options?.categories,
+  props.settingsState.searchForm?.searxngCategories,
+));
+
+function mergeSelectedSearchOptions(options = [], selected = []) {
+  const merged = new Map();
+  for (const option of Array.isArray(options) ? options : []) {
+    const id = String(option?.id || "").trim();
+    if (!id) continue;
+    merged.set(id, {
+      ...option,
+      id,
+      label: String(option.label || id).trim() || id,
+      configuredOnly: false,
+    });
+  }
+  for (const id of Array.isArray(selected) ? selected : []) {
+    const value = String(id || "").trim();
+    if (!value || merged.has(value)) continue;
+    merged.set(value, { id: value, label: value, categories: [], shortcut: "", configuredOnly: true });
+  }
+  return Array.from(merged.values());
+}
+
+function searxngEngineMeta(option) {
+  const parts = [];
+  if (option.shortcut) parts.push(option.shortcut);
+  if (Array.isArray(option.categories) && option.categories.length) parts.push(option.categories.join(", "));
+  if (option.configuredOnly) parts.push(props.copy.settings.search.searxngOptions.configuredOnly);
+  return parts.join(" · ");
+}
+
 function webSearchCredentialStatus(provider) {
   const configured = props.settingsState.search?.[`${provider}_api_key_configured`] === true;
   return configured ? props.copy.settings.search.credentials.configured : props.copy.settings.search.credentials.notConfigured;
@@ -3940,6 +4011,7 @@ const emit = defineEmits([
   "apply-mcp-json",
   "save-schedule-settings",
   "save-network-settings",
+  "load-search-searxng-options",
   "save-search-settings",
   "save-browser-settings",
   "refresh-eval-status",

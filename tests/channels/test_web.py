@@ -35,6 +35,35 @@ class EchoAgent:
         )
 
 
+class _FakeSearxngConfigResponse:
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return {
+            "engines": [
+                {"name": "google", "shortcut": "go", "categories": ["general"], "enabled": True},
+                {"name": "bing", "shortcut": "bi", "categories": ["general", "news"], "enabled": True},
+            ],
+            "categories": ["general", "news"],
+        }
+
+
+class _FakeSearxngConfigClient:
+    def __init__(self):
+        self.requests = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return None
+
+    async def get(self, url, headers=None, timeout=None):
+        self.requests.append((url, headers, timeout))
+        return _FakeSearxngConfigResponse()
+
+
 async def _run_web_roundtrip():
     agent = EchoAgent()
     queue = MessageQueue(agent)
@@ -1026,6 +1055,65 @@ def test_web_adapter_search_settings_roundtrip(tmp_path, monkeypatch):
     monkeypatch.delenv("TAVILY_API_KEY", raising=False)
     monkeypatch.delenv("JINA_API_KEY", raising=False)
     asyncio.run(_run_web_search_settings_roundtrip(tmp_path))
+
+
+async def _run_web_search_searxng_options(tmp_path: Path, fake_client: _FakeSearxngConfigClient):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/search/searxng-options?url=https://searx.test/search") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["searxng"]["url"] == "https://searx.test/search"
+                assert payload["searxng"]["categories"] == [
+                    {"id": "general", "label": "general"},
+                    {"id": "news", "label": "news"},
+                ]
+                assert payload["searxng"]["engines"][0] == {
+                    "id": "google",
+                    "label": "google",
+                    "shortcut": "go",
+                    "categories": ["general"],
+                    "enabled": True,
+                }
+        assert fake_client.requests[0][0] == "https://searx.test/config"
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_search_searxng_options(tmp_path, monkeypatch):
+    fake_client = _FakeSearxngConfigClient()
+    monkeypatch.setattr("opensprite.channels.web.httpx.AsyncClient", lambda *args, **kwargs: fake_client)
+    asyncio.run(_run_web_search_searxng_options(tmp_path, fake_client))
 
 
 async def _run_web_run_events_api():

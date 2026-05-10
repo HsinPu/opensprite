@@ -2365,7 +2365,7 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
-  const { loadSearchSettings, saveSearchSettings } = useSearchSettingsActions({
+  const { loadSearchSettings, loadSearxngOptions, saveSearchSettings } = useSearchSettingsActions({
     settingsState,
     requestSettingsJson,
     copy,
@@ -4496,6 +4496,7 @@ export function useChatClient() {
     loadScheduleSettings,
     loadNetworkSettings,
     loadSearchSettings,
+    loadSearxngOptions,
     loadBrowserSettings,
     loadLogSettings,
     loadDataSettings,

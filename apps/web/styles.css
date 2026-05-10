@@ -303,6 +303,7 @@
 :root[data-color-scheme="dark"] .data-timeline-table__details-grid strong,
 :root[data-color-scheme="dark"] .settings-row select,
 :root[data-color-scheme="dark"] .settings-row input[type="text"],
+:root[data-color-scheme="dark"] .settings-choice,
 :root[data-color-scheme="dark"] .provider-connect-field input,
 :root[data-color-scheme="dark"] .custom-model-row input,
 :root[data-color-scheme="dark"] .channel-field input,
@@ -360,6 +361,7 @@
 :root[data-color-scheme="dark"] .settings-row select:focus,
 :root[data-color-scheme="dark"] .settings-row input[type="text"]:hover,
 :root[data-color-scheme="dark"] .settings-row input[type="text"]:focus,
+:root[data-color-scheme="dark"] .settings-choice,
 :root[data-color-scheme="dark"] kbd {
   border-color: var(--border);
 }
@@ -387,6 +389,7 @@
 :root[data-color-scheme="dark"] .settings-row--field input[type="text"],
 :root[data-color-scheme="dark"] .settings-row--field input[type="number"],
 :root[data-color-scheme="dark"] .settings-row--field select,
+:root[data-color-scheme="dark"] .settings-choice,
 :root[data-color-scheme="dark"] kbd {
   background: var(--surface);
 }
@@ -5051,6 +5054,10 @@ button:disabled {
   line-height: 1.45;
 }
 
+.settings-row__error {
+  color: #b42318 !important;
+}
+
 .settings-row select,
 .settings-row input[type="text"],
 .settings-row input[type="number"] {
@@ -5084,6 +5091,52 @@ button:disabled {
   min-width: 0;
   background: #ffffff;
   border-color: #d7d7d7;
+}
+
+.settings-row--choice-list {
+  align-items: start;
+}
+
+.settings-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.settings-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #d7d7d7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.settings-choice input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.settings-choice span {
+  min-width: 0;
+}
+
+.settings-choice strong {
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.85rem;
+}
+
+.settings-choice small,
+.settings-empty-inline {
+  margin: 0;
+  color: #838383;
+  font-size: 0.78rem;
+  line-height: 1.35;
 }
 
 .settings-row__actions {
