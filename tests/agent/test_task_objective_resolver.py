@@ -59,8 +59,8 @@ _BOUNDARY_ACTIVE_TASK_BLOCK = (
     "- Current step: 1. inspect\n"
     "- Next step: not set\n"
     "- Open questions:\n"
-    "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
-    "to the new request (please update README), or continue the active task."
+    "  - Reply `switch` to replace the active task (Refactor the agent in small safe steps.) "
+    "with the new request (please update README), or `continue` to keep the active task."
 )
 
 

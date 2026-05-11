@@ -490,10 +490,10 @@ def _boundary_confirmation_question(current_task: str, current_message: str) -> 
     new_request = _compact_for_prompt(current_message) or "the new request"
     if current_goal and current_goal.lower() != "not set":
         return (
-            f"Confirm whether to switch from the active task ({current_goal}) "
-            f"to the new request ({new_request}), or continue the active task."
+            f"Reply `switch` to replace the active task ({current_goal}) "
+            f"with the new request ({new_request}), or `continue` to keep the active task."
         )
-    return f"Confirm whether to switch to the new request ({new_request}) or continue the active task."
+    return f"Reply `switch` to replace it with the new request ({new_request}), or `continue` to keep the active task."
 
 
 def _compact_for_prompt(value: str, max_chars: int = 120) -> str:

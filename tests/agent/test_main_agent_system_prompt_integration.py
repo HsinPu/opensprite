@@ -575,7 +575,8 @@ def test_main_agent_call_llm_marks_ambiguous_boundary_waiting_user(tmp_path: Pat
     system_text = provider.calls[-1][0].content
     assert "Status: waiting_user" in system_text
     assert "Goal: Refactor the agent in small safe steps." in system_text
-    assert "Confirm whether to switch from the active task" in system_text
+    assert "Reply `switch` to replace the active task" in system_text
+    assert "`continue` to keep the active task" in system_text
     assert message in system_text
     assert f"Goal: {message}" not in system_text
 
@@ -630,8 +631,8 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
             "- Completed steps:\n"
             "  - none\n"
             "- Open questions:\n"
-            "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
-            "to the new request (please update README), or continue the active task."
+            "  - Reply `switch` to replace the active task (Refactor the agent in small safe steps.) "
+            "with the new request (please update README), or `continue` to keep the active task."
         )
         return await agent.call_llm(
             session_id,
@@ -649,7 +650,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     assert "Status: active" in system_text
     assert "Goal: please update README" in system_text
     assert "Original user message: switch" in system_text
-    assert "Confirm whether to switch from the active task" not in system_text
+    assert "Reply `switch` to replace the active task" not in system_text
 
 
 def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_path: Path) -> None:

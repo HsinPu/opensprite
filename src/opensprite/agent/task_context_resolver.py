@@ -34,10 +34,17 @@ _BOUNDARY_CONTINUE_CONFIRMATION_RE = re.compile(
     r"繼續原本|繼續原本的|繼續原本任務|繼續目前|繼續目前任務|維持原本|維持目前|不要切換|別切換)[。.!！?？]*$",
     re.IGNORECASE,
 )
-_BOUNDARY_REQUEST_RE = re.compile(
+_BOUNDARY_REQUEST_PATTERNS = (
+    re.compile(
+        r"Reply `switch` to replace(?: the active task \(.+?\)| it) with the new request \((?P<request>.+?)\),? "
+        r"or `continue` to keep the active task\.",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    re.compile(
     r"Confirm whether to switch(?: from the active task \(.+?\))? to the new request \((?P<request>.+?)\),? "
     r"or continue the active task\.",
     re.IGNORECASE | re.DOTALL,
+    ),
 )
 _ACTIVE_STATUS_RE = re.compile(r"^- Status:\s*(?P<status>.+)$", re.MULTILINE)
 _ALLOWED_TASK_TYPES = frozenset(
@@ -608,10 +615,12 @@ def extract_pending_boundary_request(active_task: str | None) -> str | None:
     """Return the pending new request from a boundary-confirmation ACTIVE_TASK prompt."""
     if _active_task_status(active_task) != "waiting_user":
         return None
-    match = _BOUNDARY_REQUEST_RE.search(_compact(active_task))
-    if not match:
-        return None
-    return _compact(match.group("request")) or None
+    compact = _compact(active_task)
+    for pattern in _BOUNDARY_REQUEST_PATTERNS:
+        match = pattern.search(compact)
+        if match:
+            return _compact(match.group("request")) or None
+    return None
 
 
 def _is_boundary_switch_confirmation(current_message: str) -> bool:

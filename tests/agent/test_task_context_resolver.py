@@ -83,6 +83,13 @@ _BOUNDARY_ACTIVE_TASK_BLOCK = (
     "- Completed steps:\n"
     "  - none\n"
     "- Open questions:\n"
+    "  - Reply `switch` to replace the active task (Refactor the agent in small safe steps.) "
+    "with the new request (please update README), or `continue` to keep the active task."
+)
+_LEGACY_BOUNDARY_ACTIVE_TASK_BLOCK = (
+    "- Status: waiting_user\n"
+    "- Goal: Refactor the agent in small safe steps.\n"
+    "- Open questions:\n"
     "  - Confirm whether to switch from the active task (Refactor the agent in small safe steps.) "
     "to the new request (please update README), or continue the active task."
 )
@@ -409,6 +416,24 @@ def test_task_context_confirms_pending_boundary_continue_without_llm():
     assert decision.should_inherit_active_task is True
 
 
+def test_task_context_supports_legacy_boundary_question_format():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="switch",
+            history=[],
+            task_intent=TaskIntentService().classify("switch"),
+            active_task=_LEGACY_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.continuation_type == "task_switch"
+    assert decision.should_replace_active_task is True
+
+
 def test_task_context_continue_without_active_task_inherits_recent_web_context():
     provider = _FailingProvider()
 
@@ -628,7 +653,8 @@ def test_active_task_seed_marks_ambiguous_boundary_waiting_user(tmp_path):
     updated = store.read_managed_block()
     assert "- Status: waiting_user" in updated
     assert "- Goal: Refactor the agent in small safe steps." in updated
-    assert "Confirm whether to switch from the active task" in updated
+    assert "Reply `switch` to replace the active task" in updated
+    assert "`continue` to keep the active task" in updated
     assert message in updated
     assert not any(event["event_type"] == "seed" for event in store.read_events())
     boundary_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation")
@@ -669,6 +695,6 @@ def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
     assert "- Status: active" in updated
     assert "- Goal: Refactor the agent in small safe steps." in updated
     assert "- Open questions:\n  - none" in updated
-    assert "Confirm whether to switch from the active task" not in updated
+    assert "Reply `switch` to replace the active task" not in updated
     resolved_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation_resolved")
     assert resolved_event["details"]["action"] == "continue"
