@@ -3008,6 +3008,7 @@ button:disabled {
   min-width: 0;
 }
 
+.run-trace__artifacts,
 .run-trace__code-nav,
 .run-trace__parts,
 .run-trace__debug {

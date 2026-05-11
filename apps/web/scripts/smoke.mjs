@@ -100,6 +100,7 @@ assertIncludes(copy, "exportDebug", "run trace debug export copy");
 assertIncludes(copy, "taskContextResolved", "task context timeline copy");
 assertIncludes(copy, "taskObjectiveResolved", "task objective timeline copy");
 assertIncludes(styles, ".run-trace__artifact-grid", "trace artifact grid styling");
+assertIncludes(styles, ".run-trace__artifacts,\n.run-trace__code-nav", "trace artifacts share boxed section styling");
 assertIncludes(styles, "grid-template-columns: 1fr", "trace artifacts render in one column");
 assertIncludes(styles, ".run-trace__artifact-group[open] > .run-trace__artifact-group-title::before", "collapsible artifact group open indicator");
 assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selector");
