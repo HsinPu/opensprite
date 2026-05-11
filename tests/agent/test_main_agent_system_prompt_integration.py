@@ -42,6 +42,25 @@ class CapturingProvider:
         return "fake-model"
 
 
+class TaskContextDecisionProvider(CapturingProvider):
+    """Returns a task-context JSON decision before the main assistant response."""
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append(list(messages))
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You classify whether the latest user turn inherits task context" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"is_follow_up": false, "should_inherit_active_task": false, '
+                    '"should_seed_active_task": true, "should_replace_active_task": true, '
+                    '"inherited_task_type": null, "inherited_tool_group": null, '
+                    '"confidence": 0.88, "reason": "new concrete task should replace the current task"}'
+                ),
+                model="fake-model",
+            )
+        return LLMResponse(content="done", model="fake-model")
+
+
 class _MinimalTool(Tool):
     """Single dummy tool so AgentLoop does not register the full default tool set."""
 
@@ -368,6 +387,75 @@ def test_main_agent_call_llm_replaces_active_task_when_user_explicitly_switches(
     assert result.content == "done"
     system_text = provider.calls[0][0].content
     assert "Goal: 改成先幫我檢查 MCP lifecycle" in system_text
+
+
+def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = TaskContextDecisionProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_EmptyStorage(),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    session_id = "telegram:room-1"
+    message = "好，現在請直接修掉 tests/test_app.py 的問題"
+
+    async def _run() -> str:
+        task_store = create_active_task_store(app_home, session_id, workspace_root=context_builder.tool_workspace)
+        task_store.write_managed_block(
+            "- Status: active\n"
+            "- Goal: Refactor the agent in small safe steps.\n"
+            "- Deliverable: a safe refactor and verification\n"
+            "- Definition of done:\n"
+            "  - tests pass\n"
+            "- Constraints:\n"
+            "  - minimal changes\n"
+            "- Assumptions:\n"
+            "  - none\n"
+            "- Plan:\n"
+            "  1. inspect\n"
+            "- Current step: 1. inspect\n"
+            "- Next step: not set\n"
+            "- Completed steps:\n"
+            "  - none\n"
+            "- Open questions:\n"
+            "  - none"
+        )
+        return await agent.call_llm(
+            session_id,
+            message,
+            channel="telegram",
+            allow_tools=False,
+            task_intent=agent.task_intents.classify(message),
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    assert len(provider.calls) == 2
+    system_text = provider.calls[-1][0].content
+    assert f"Goal: {message}" in system_text
 
 
 def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_path: Path) -> None:
