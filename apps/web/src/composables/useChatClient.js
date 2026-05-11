@@ -86,6 +86,7 @@ const TIMELINE_EVENT_TYPES = new Set([
   "curator.completed",
   "curator.failed",
   "execution.stopped",
+  "completion_gate.evaluated",
   "auto_continue.scheduled",
   "auto_continue.completed",
   "auto_continue.skipped",
@@ -1208,9 +1209,18 @@ function describeRunEvent(eventType, payload, copy) {
 
   if (eventType === "task_contract.semantic_classified") {
     return {
-      label: copy.run.semanticContractClassified || "Semantic contract classified",
+      label: semanticContractLabel(payload, copy),
       detail: formatSemanticContractDetail(payload),
       tone: payload.applied === true ? "running" : payload.requires_tool_evidence ? "warning" : "neutral",
+    };
+  }
+
+  if (eventType === "completion_gate.evaluated") {
+    const complete = String(payload.status || "").trim() === "complete";
+    return {
+      label: complete ? copy.run.completionGatePassed || "Completion gate passed" : copy.run.completionGateNeedsWork || "Completion gate needs work",
+      detail: formatCompletionGateDetail(payload),
+      tone: complete ? "success" : "warning",
     };
   }
 
@@ -1550,8 +1560,35 @@ function formatSemanticContractDetail(payload = {}) {
   const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
   const applied = payload.applied === true ? "applied" : payload.applied === false ? "not applied" : "";
   const requiresEvidence = payload.requires_tool_evidence || payload.requiresToolEvidence ? "requires evidence" : "";
+  const contractSources = coerceStringList(payload.contract_sources || payload.contractSources);
+  const source = contractSources.length
+    ? contractSources.join(", ")
+    : String(payload.contract_source || payload.contractSource || payload.source || "semantic classifier").trim();
   const reason = String(payload.reason || "").trim();
-  return [taskType, requiredToolGroup, requiresEvidence, applied, confidenceText, reason].filter(Boolean).join(" · ");
+  return [taskType, requiredToolGroup, requiresEvidence, applied, confidenceText, source ? `source ${source}` : "", reason].filter(Boolean).join(" · ");
+}
+
+function semanticContractLabel(payload = {}, copy) {
+  const requiresEvidence = payload.requires_tool_evidence || payload.requiresToolEvidence;
+  const requiredToolGroup = String(payload.required_tool_group || payload.requiredToolGroup || "").trim();
+  if (requiresEvidence && requiredToolGroup === "web_research") {
+    return copy.run.needsWebResearch || "Needs web research";
+  }
+  if (requiresEvidence && requiredToolGroup === "workspace_read") {
+    return copy.run.needsWorkspaceInspection || "Needs workspace inspection";
+  }
+  if (requiresEvidence && requiredToolGroup === "history_retrieval") {
+    return copy.run.needsHistoryRetrieval || "Needs history retrieval";
+  }
+  return copy.run.semanticContractClassified || "Semantic contract classified";
+}
+
+function formatCompletionGateDetail(payload = {}) {
+  const missingEvidence = coerceStringList(payload.missing_evidence || payload.missingEvidence);
+  const missingText = missingEvidence.length ? `missing evidence: ${missingEvidence.map(previewText).join("; ")}` : "";
+  const reason = String(payload.reason || "").trim();
+  const activeTaskDetail = String(payload.active_task_detail || payload.activeTaskDetail || "").trim();
+  return [missingText, reason, activeTaskDetail ? previewText(activeTaskDetail) : ""].filter(Boolean).join(" · ");
 }
 
 export function formatEventTime(timestamp) {

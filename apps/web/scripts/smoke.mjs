@@ -238,8 +238,17 @@ assertIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval
 assertIncludes(chatClient, "task_context.resolved", "task context timeline event");
 assertIncludes(chatClient, "task_objective.resolved", "task objective timeline event");
 assertIncludes(chatClient, "task_contract.semantic_classified", "semantic contract timeline event");
+assertIncludes(chatClient, "completion_gate.evaluated", "completion gate timeline event");
 assertIncludes(chatClient, "formatTaskObjectiveDetail", "task objective timeline detail");
 assertIncludes(chatClient, "formatSemanticContractDetail", "semantic contract timeline detail");
+assertIncludes(chatClient, "formatCompletionGateDetail", "completion gate timeline detail");
+assertIncludes(chatClient, "needsWebResearch", "web evidence timeline label");
+assertIncludes(chatClient, "needsWorkspaceInspection", "workspace evidence timeline label");
+assertIncludes(chatClient, "needsHistoryRetrieval", "history evidence timeline label");
+assertIncludes(chatClient, "missing evidence:", "completion missing evidence detail");
+assertIncludes(copy, "Needs web research", "web evidence trace copy");
+assertIncludes(copy, "Needs workspace inspection", "workspace evidence trace copy");
+assertIncludes(copy, "Needs history retrieval", "history evidence trace copy");
 assertIncludes(chatClient, "function previewText", "chat client trace preview helper");
 assertIncludes(chatClient, "continuation_type", "task context continuation detail");
 assertIncludes(chatClient, "formatTaskContextDetail", "task context timeline detail");

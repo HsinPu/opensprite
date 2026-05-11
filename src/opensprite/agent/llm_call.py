@@ -253,20 +253,22 @@ class LlmCallService:
                 except Exception as exc:
                     logger.warning("[{}] task.semantic_contract | failed={}", session_id, exc)
                     semantic_decision = SemanticContractDecision(reason=f"semantic classifier failed: {exc}")
-                if run_id is not None and semantic_decision is not None:
-                    await self._emit_run_event(
-                        session_id,
-                        run_id,
-                        "task_contract.semantic_classified",
-                        semantic_decision.to_metadata(),
-                        channel=channel,
-                        external_chat_id=external_chat_id,
-                    )
             task_contract = merge_semantic_contract(
                 deterministic_contract,
                 semantic_decision,
                 min_confidence=self.config.semantic_contract_classifier_confidence_threshold,
             )
+            if run_id is not None and semantic_decision is not None:
+                semantic_metadata = dict(task_contract.semantic_contract or semantic_decision.to_metadata())
+                semantic_metadata["contract_sources"] = list(task_contract.contract_sources)
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_contract.semantic_classified",
+                    semantic_metadata,
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
             guidance = _build_task_contract_guidance(task_contract)
             if guidance:
                 prompt_message = f"{prompt_message}\n\n{guidance}"
