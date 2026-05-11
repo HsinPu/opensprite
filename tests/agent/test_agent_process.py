@@ -845,6 +845,9 @@ def test_agent_process_emits_task_context_resolved_event(tmp_path):
     assert event.payload["is_follow_up"] is False
     assert event.payload["continuation_type"] == "none"
     assert event.payload["confidence"] >= 0.0
+    objective_event = next(event for event in events if event.event_type == "task_objective.resolved")
+    assert objective_event.payload["method"] == "deterministic"
+    assert objective_event.payload["should_use_resolved_objective"] is False
 
 
 def test_agent_process_emits_completion_gate_needs_verification_after_code_changes(tmp_path):

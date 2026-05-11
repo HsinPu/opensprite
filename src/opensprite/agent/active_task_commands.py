@@ -22,6 +22,7 @@ from ..utils.log import logger
 from .completion_gate import CompletionGateResult
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
+from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import WorkProgressService, WorkProgressUpdate
 
 
@@ -198,6 +199,7 @@ class ActiveTaskCommandService:
         enabled: bool,
         task_intent: TaskIntent | None = None,
         task_context_decision: TaskContextDecision | None = None,
+        task_objective_decision: TaskObjectiveDecision | None = None,
     ) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when appropriate."""
         if not enabled:
@@ -226,16 +228,27 @@ class ActiveTaskCommandService:
             should_seed = task_intent.should_seed_active_task or bool(
                 task_context_decision
                 and (task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
+            ) or bool(
+                task_objective_decision and task_objective_decision.should_use_resolved_objective
             )
             inheriting_current_task = bool(has_current_task and task_context_decision and task_context_decision.should_inherit_active_task)
             if should_seed and not inheriting_current_task:
+                goal = task_intent.objective
+                assumptions: list[str] | None = None
+                if task_objective_decision and task_objective_decision.should_use_resolved_objective:
+                    goal = task_objective_decision.resolved_objective
+                    assumptions = _objective_assumptions(task_objective_decision)
                 initial_task = build_task_block_from_intent_fields(
-                    goal=task_intent.objective,
+                    goal=goal,
                     definition_of_done=task_intent.done_criteria,
                     constraints=task_intent.constraints,
+                    assumptions=assumptions,
                 )
         else:
-            initial_task = build_initial_active_task_block(current_message)
+            initial_message = current_message
+            if task_objective_decision and task_objective_decision.should_use_resolved_objective:
+                initial_message = task_objective_decision.resolved_objective
+            initial_task = build_initial_active_task_block(initial_message)
         if not initial_task:
             return
 
@@ -251,6 +264,15 @@ class ActiveTaskCommandService:
                 {
                     "intent_kind": task_intent.kind,
                     "intent_long_running": task_intent.long_running,
+                }
+            )
+        if task_objective_decision and task_objective_decision.should_use_resolved_objective:
+            event_details.update(
+                {
+                    "original_message": task_objective_decision.original_message,
+                    "resolved_objective": task_objective_decision.resolved_objective,
+                    "objective_method": task_objective_decision.method,
+                    "objective_confidence": task_objective_decision.confidence,
                 }
             )
         store.append_event("seed", "immediate", details=event_details)
@@ -435,3 +457,10 @@ def _decision_replaces_current_task(decision: TaskContextDecision | None) -> boo
         and decision.should_replace_active_task
         and decision.continuation_type in _CURRENT_TASK_REPLACEMENT_TYPES
     )
+
+
+def _objective_assumptions(decision: TaskObjectiveDecision) -> list[str]:
+    return [
+        f"Original user message: {decision.original_message}",
+        f"Objective inferred from conversation context ({decision.method}, confidence={decision.confidence:.2f}).",
+    ]

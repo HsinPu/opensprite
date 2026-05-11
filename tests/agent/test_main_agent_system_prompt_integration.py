@@ -61,6 +61,25 @@ class TaskContextDecisionProvider(CapturingProvider):
         return LLMResponse(content="done", model="fake-model")
 
 
+class TaskObjectiveDecisionProvider(CapturingProvider):
+    """Returns an objective JSON decision before the main assistant response."""
+
+    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        self.calls.append(list(messages))
+        system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"resolved_objective": '
+                    '"Research 00981T ETF price and basic public information using web sources.", '
+                    '"should_use_resolved_objective": true, "confidence": 0.88, '
+                    '"reason": "The short turn refers to the prior ETF lookup."}'
+                ),
+                model="fake-model",
+            )
+        return LLMResponse(content="done", model="fake-model")
+
+
 class _MinimalTool(Tool):
     """Single dummy tool so AgentLoop does not register the full default tool set."""
 
@@ -115,6 +134,16 @@ class _EmptyStorage:
 
     async def get_all_sessions(self):
         return []
+
+
+class _HistoryStorage(_EmptyStorage):
+    def __init__(self, messages):
+        self.messages = list(messages)
+
+    async def get_messages(self, session_id, limit=None):
+        if limit is None:
+            return list(self.messages)
+        return list(self.messages[-limit:])
 
 
 class _FakeSearchStore:
@@ -456,6 +485,61 @@ def test_main_agent_call_llm_uses_task_context_decision_to_replace_active_task(t
     assert len(provider.calls) == 2
     system_text = provider.calls[-1][0].content
     assert f"Goal: {message}" in system_text
+
+
+def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_path: Path) -> None:
+    app_home = tmp_path / "home"
+    sync_templates(app_home, silent=True)
+
+    context_builder = FileContextBuilder(
+        app_home=app_home,
+        bootstrap_dir=app_home / "bootstrap",
+        memory_dir=app_home / "memory",
+        tool_workspace=app_home / "workspace",
+    )
+
+    registry = ToolRegistry()
+    registry.register(_MinimalTool())
+
+    provider = TaskObjectiveDecisionProvider()
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(),
+        provider=provider,
+        storage=_HistoryStorage(
+            [
+                {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
+                {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
+            ]
+        ),
+        context_builder=context_builder,
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(),
+        log_config=LogConfig(log_system_prompt=False),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+
+    session_id = "telegram:room-1"
+    message = "那00981t呢"
+
+    async def _run() -> str:
+        return await agent.call_llm(
+            session_id,
+            message,
+            channel="telegram",
+            allow_tools=False,
+            task_intent=agent.task_intents.classify(message),
+        )
+
+    result = asyncio.run(_run())
+
+    assert result.content == "done"
+    assert len(provider.calls) == 2
+    system_text = provider.calls[-1][0].content
+    assert "Goal: Research 00981T ETF price and basic public information using web sources." in system_text
+    assert "Original user message: 那00981t呢" in system_text
 
 
 def test_main_agent_call_llm_does_not_seed_active_task_for_plain_question(tmp_path: Path) -> None:

@@ -13,6 +13,7 @@ from .execution import ExecutionResult
 from .task_contract import TaskContract, TaskContractService
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
+from .task_objective_resolver import TaskObjectiveDecision
 
 
 class LlmCallService:
@@ -39,6 +40,7 @@ class LlmCallService:
         get_work_state_summary: Callable[[str], Awaitable[str]],
         read_active_task_snapshot: Callable[[str], str],
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
+        resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -70,6 +72,7 @@ class LlmCallService:
         self._get_work_state_summary = get_work_state_summary
         self._read_active_task_snapshot = read_active_task_snapshot
         self._resolve_task_context = resolve_task_context
+        self._resolve_task_objective = resolve_task_objective
         self._emit_run_event = emit_run_event
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
@@ -142,6 +145,7 @@ class LlmCallService:
         active_task_snapshot = self._read_active_task_snapshot(session_id)
         run_id = self._get_current_run_id()
         task_context_decision = None
+        task_objective_decision = None
         if task_intent is not None:
             task_context_decision = await self._resolve_task_context(
                 current_message=current_message,
@@ -167,11 +171,34 @@ class LlmCallService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
+            task_objective_decision = await self._resolve_task_objective(
+                current_message=current_message,
+                history=history_dicts,
+                task_intent=task_intent,
+                task_context_decision=task_context_decision,
+                active_task=active_task_snapshot,
+                work_state_summary=work_state_summary,
+            )
+            logger.info(
+                f"[{session_id}] task.objective | method={task_objective_decision.method} "
+                f"use_resolved={task_objective_decision.should_use_resolved_objective} "
+                f"confidence={task_objective_decision.confidence:.2f}"
+            )
+            if run_id is not None:
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_objective.resolved",
+                    task_objective_decision.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
         await self._maybe_seed_active_task(
             session_id,
             current_message,
             task_intent=task_intent,
             task_context_decision=task_context_decision,
+            task_objective_decision=task_objective_decision,
         )
         if (
             work_state_summary

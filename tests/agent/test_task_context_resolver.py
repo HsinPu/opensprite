@@ -6,6 +6,7 @@ from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
@@ -395,6 +396,50 @@ def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
     assert f"- Goal: {message}" in updated
     seed_event = next(event for event in store.read_events() if event["event_type"] == "seed")
     assert seed_event["details"]["replace"] is True
+
+
+def test_active_task_seed_uses_enriched_objective_for_short_follow_up(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    objective = TaskObjectiveDecision(
+        original_message="那00981t呢",
+        resolved_objective="Research 00981T ETF price and basic public information using web sources.",
+        should_use_resolved_objective=True,
+        confidence=0.88,
+        method="llm",
+        reason="The short turn refers to the prior ETF lookup.",
+    )
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            "那00981t呢",
+            enabled=True,
+            task_intent=TaskIntentService().classify("那00981t呢"),
+            task_context_decision=TaskContextDecision(
+                is_follow_up=True,
+                inherited_task_type="web_research",
+                inherited_tool_group="web_research",
+                continuation_type="follow_up",
+                confidence=0.75,
+            ),
+            task_objective_decision=objective,
+        )
+    )
+
+    updated = store.read_managed_block()
+    assert "- Goal: Research 00981T ETF price and basic public information using web sources." in updated
+    assert "  - Original user message: 那00981t呢" in updated
+    seed_event = next(event for event in store.read_events() if event["event_type"] == "seed")
+    assert seed_event["details"]["original_message"] == "那00981t呢"
+    assert seed_event["details"]["resolved_objective"] == objective.resolved_objective
 
 
 def test_active_task_seed_skips_continuation_of_current_task(tmp_path):
