@@ -21,7 +21,7 @@
   --radius-md: 12px;
   --radius-sm: 8px;
   --content-width: 820px;
-  --trace-sidebar-default-width: clamp(430px, 50vw, 760px);
+  --trace-sidebar-default-width: clamp(560px, 58vw, 920px);
 }
 
 :root[data-color-scheme="dark"] {
@@ -1398,11 +1398,11 @@ button:disabled {
 
 @media (max-width: 1180px) and (min-width: 861px) {
   .app-shell {
-    grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(430px, 46vw, 680px));
+    grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(560px, 52vw, 760px));
   }
 
   .app-shell--sidebar-collapsed {
-    grid-template-columns: 72px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(430px, 46vw, 680px));
+    grid-template-columns: 72px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(560px, 52vw, 760px));
   }
 
   .app-shell--trace-collapsed {

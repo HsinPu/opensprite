@@ -5,6 +5,7 @@
       'app-shell--sidebar-collapsed': sidebarCollapsed,
       'app-shell--trace-collapsed': traceInspectorCollapsed,
     }"
+    :style="traceSidebarStyle"
   >
     <button
       class="mobile-nav-toggle"
@@ -74,7 +75,6 @@
     <aside
       class="trace-sidebar"
       :data-collapsed="traceInspectorCollapsed"
-      :style="traceSidebarStyle"
       aria-label="Run trace inspector"
     >
       <button
@@ -390,7 +390,7 @@ const {
 } = useChatClient();
 
 const TRACE_WIDTH_STORAGE_KEY = "opensprite:web:traceInspectorWidth";
-const TRACE_WIDTH_MIN = 430;
+const TRACE_WIDTH_MIN = 560;
 const TRACE_CHAT_MIN = 360;
 const TRACE_LEFT_GUTTER = 72;
 
