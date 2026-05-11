@@ -2191,6 +2191,46 @@ class AgentLoop:
         """Create or replace the current ACTIVE_TASK from explicit user text."""
         return await self.active_task_commands.set_from_text(session_id, task_text)
 
+    async def set_goal_from_text(self, session_id: str, goal_text: str) -> str | None:
+        """Create a resumable session goal backed by ACTIVE_TASK and work state."""
+        goal = " ".join(str(goal_text or "").split()).strip()
+        if not goal:
+            return None
+        rendered = await self.active_task_commands.set_from_text(session_id, goal)
+        if rendered is None:
+            return None
+
+        task_intent = self._task_intent_for_explicit_goal(goal)
+        work_plan = self.work_progress.create_plan(task_intent)
+        state = self.work_progress.build_initial_state(
+            session_id=session_id,
+            task_intent=task_intent,
+            work_plan=work_plan,
+        )
+        if state is not None:
+            state.metadata.update({"source": "goal_command", "schema_version": 1})
+            await self._save_work_state(state)
+        return rendered
+
+    def _task_intent_for_explicit_goal(self, goal_text: str) -> TaskIntent:
+        """Force an explicit `/goal` objective into actionable task state."""
+        base_intent = self.task_intents.classify(goal_text)
+        kind = base_intent.kind if base_intent.should_seed_active_task else "task"
+        done_criteria = base_intent.done_criteria or (
+            "the goal is completed or a clear blocker is recorded",
+        )
+        return TaskIntent(
+            kind=kind,
+            objective=goal_text,
+            constraints=base_intent.constraints,
+            done_criteria=done_criteria,
+            needs_clarification=False,
+            verification_hint=base_intent.verification_hint,
+            long_running=True,
+            expects_code_change=base_intent.expects_code_change,
+            expects_verification=base_intent.expects_verification,
+        )
+
     async def activate_active_task(self, session_id: str) -> str | None:
         """Mark the current ACTIVE_TASK as active again."""
         return await self.active_task_commands.activate(session_id)

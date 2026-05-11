@@ -52,6 +52,12 @@ COMMAND_REGISTRY: tuple[CommandDef, ...] = (
         ),
     ),
     CommandDef(
+        "goal",
+        "Set the persistent goal for this session and make it resumable with follow-up turns.",
+        args_hint="<objective>",
+        category="Work",
+    ),
+    CommandDef(
         "curator",
         "Inspect or manually control background curation for this session, including history and optional run scopes.",
         args_hint="<status|history [limit]|run [scope]|pause|resume|help>",

@@ -6,6 +6,8 @@ def test_session_command_catalog_is_derived_from_registry():
     commands = {item["name"]: item for item in catalog["commands"]}
 
     assert commands["help"]["usage"] == "/help [command]"
+    assert commands["goal"]["usage"] == "/goal <objective>"
+    assert commands["goal"]["category"] == "Work"
     assert commands["curator"]["usage"] == "/curator <status|history [limit]|run [scope]|pause|resume|help>"
     assert commands["curator"]["subcommands"] == ["status", "history", "run", "pause", "resume", "help"]
     assert commands["cron"]["category"] == "Automation"

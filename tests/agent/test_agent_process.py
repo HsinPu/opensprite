@@ -258,6 +258,42 @@ def test_agent_loop_uses_configured_continuation_budgets(tmp_path):
     assert agent.work_progress.long_running_continuation_budget == 6
 
 
+def test_agent_goal_command_persists_resumable_work_state(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        context_builder = FakeContextBuilder(tmp_path / "workspace")
+        context_builder.app_home = tmp_path / "app_home"
+        context_builder.tool_workspace = tmp_path / "workspace"
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=context_builder,
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        rendered = await agent.set_goal_from_text("web:browser-1", "Finish phase two and run tests.")
+        return rendered, await storage.get_work_state("web:browser-1")
+
+    rendered, work_state = asyncio.run(scenario())
+
+    assert rendered is not None
+    assert "- Goal: Finish phase two and run tests." in rendered
+    assert work_state is not None
+    assert work_state.objective == "Finish phase two and run tests."
+    assert work_state.status == "active"
+    assert work_state.long_running is True
+    assert work_state.metadata["source"] == "goal_command"
+    assert work_state.resume_hint.startswith("Resume at current step:")
+
+
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):
     async def scenario():
         registry = ToolRegistry()

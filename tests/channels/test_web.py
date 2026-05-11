@@ -365,6 +365,8 @@ async def _run_web_command_catalog_api():
 
         commands = {item["name"]: item for item in payload["commands"]}
         assert commands["help"]["usage"] == "/help [command]"
+        assert commands["goal"]["usage"] == "/goal <objective>"
+        assert commands["goal"]["category"] == "Work"
         assert commands["curator"]["subcommands"] == ["status", "history", "run", "pause", "resume", "help"]
         assert commands["curator"]["category"] == "Maintenance"
     finally:

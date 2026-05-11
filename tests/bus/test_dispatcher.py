@@ -107,6 +107,7 @@ def test_command_detection_ignores_empty_text():
     assert MessageQueue.is_reset_command("") is False
     assert MessageQueue.is_cron_command("") is False
     assert MessageQueue.is_task_command("") is False
+    assert MessageQueue.is_goal_command("") is False
 
 
 def test_help_command_detection_supports_mentions_and_args():
@@ -1880,6 +1881,46 @@ def test_task_set_command_replies_immediately_without_running_agent_loop():
         ("telegram:same-chat", "已設定目前任務。\n\n# Active Task\n\n- Status: active\n- Goal: Refactor the agent carefully")
     ]
     assert seen_messages == []
+
+
+def test_goal_command_replies_immediately_without_running_agent_loop():
+    class GoalAgent(FakeAgent):
+        def __init__(self):
+            super().__init__()
+            self.goal_text = None
+
+        async def set_goal_from_text(self, session_id, goal_text):
+            self.goal_text = goal_text
+            return f"# Active Task\n\n- Status: active\n- Goal: {goal_text}"
+
+    async def scenario():
+        agent = GoalAgent()
+        queue = MessageQueue(agent)
+        responses = []
+        event = asyncio.Event()
+
+        async def handler(message, channel, external_chat_id):
+            responses.append((message.session_id, message.text))
+            event.set()
+
+        queue.register_response_handler("telegram", handler)
+        processor = asyncio.create_task(queue.process_queue())
+        try:
+            await queue.enqueue_raw(content="/goal Finish phase two", external_chat_id="same-chat", channel="telegram")
+            await asyncio.wait_for(event.wait(), timeout=2)
+        finally:
+            await queue.stop()
+            await asyncio.wait_for(processor, timeout=2)
+
+        return responses, agent.seen_messages, agent.goal_text
+
+    responses, seen_messages, goal_text = asyncio.run(scenario())
+
+    assert responses == [
+        ("telegram:same-chat", "已設定目前目標。\n\n# Active Task\n\n- Status: active\n- Goal: Finish phase two")
+    ]
+    assert seen_messages == []
+    assert goal_text == "Finish phase two"
 
 
 def test_task_show_and_done_commands_use_current_task_state_immediately():

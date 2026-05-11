@@ -201,6 +201,12 @@ class MessageQueue:
         return command is not None and command.name == "task"
 
     @staticmethod
+    def is_goal_command(text: str | None) -> bool:
+        """Return whether a message should set the persistent session goal."""
+        command = resolve_session_command(first_command_token(text))
+        return command is not None and command.name == "goal"
+
+    @staticmethod
     def _command_help_lines(command: CommandDef) -> list[str]:
         """Render one short help block for a single command."""
         lines = [render_command_usage(command), command.description]
@@ -617,6 +623,30 @@ class MessageQueue:
         return self._task_help_text()
 
     @staticmethod
+    def _parse_goal_command(text: str | None) -> tuple[str, bool]:
+        """Parse `/goal <objective>` into a user objective."""
+        try:
+            parts = shlex.split((text or "").strip())
+        except ValueError:
+            return "", False
+        if len(parts) < 2:
+            return "", True
+        return " ".join(parts[1:]).strip(), True
+
+    async def _handle_goal_command(self, session_id: str, text: str | None) -> str:
+        """Handle persistent goal setup without invoking the LLM loop."""
+        goal_text, parsed = self._parse_goal_command(text)
+        if not parsed or not goal_text:
+            return "Error: goal objective is required. Usage: /goal <objective>"
+        set_goal = getattr(self.agent, "set_goal_from_text", None)
+        if not callable(set_goal):
+            return self.messages.task.unavailable
+        rendered = await set_goal(session_id, goal_text)
+        if not rendered:
+            return "Error: goal objective is required. Usage: /goal <objective>"
+        return f"已設定目前目標。\n\n{rendered}"
+
+    @staticmethod
     def _parse_curator_command(text: str | None) -> tuple[str, list[str]]:
         """Parse the curator command into an action and remaining args."""
         try:
@@ -881,6 +911,16 @@ class MessageQueue:
 
         if command.name == "task":
             response_text = await self._handle_task_command(session_id, text)
+            await self._publish_text_response(
+                channel=channel,
+                external_chat_id=external_chat_id,
+                session_id=session_id,
+                content=response_text,
+            )
+            return
+
+        if command.name == "goal":
+            response_text = await self._handle_goal_command(session_id, text)
             await self._publish_text_response(
                 channel=channel,
                 external_chat_id=external_chat_id,
