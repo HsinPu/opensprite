@@ -3126,7 +3126,8 @@ button:disabled {
 }
 
 .run-trace__section-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   width: 100%;
@@ -3155,7 +3156,6 @@ button:disabled {
 
 .run-trace__section-head small {
   flex: 0 0 auto;
-  margin-left: auto;
   padding: 2px 7px;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
@@ -3274,7 +3274,8 @@ button:disabled {
 }
 
 .run-trace__artifact-group-title {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
   cursor: pointer;
@@ -3287,7 +3288,6 @@ button:disabled {
 
 .run-trace__artifact-group-title::after {
   flex: 0 0 auto;
-  margin-left: auto;
   color: var(--text-soft);
   content: "+";
   font-size: 0.84rem;
@@ -3354,8 +3354,10 @@ button:disabled {
 
 .run-trace__artifact-summary {
   display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 5px;
-  padding: 10px 30px 10px 10px;
+  align-items: start;
+  padding: 10px;
   cursor: pointer;
   list-style: none;
 }
@@ -3365,9 +3367,9 @@ button:disabled {
 }
 
 .run-trace__artifact-summary::after {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+  grid-column: 4;
+  grid-row: 1;
+  justify-self: end;
   color: var(--text-soft);
   content: "+";
   font-size: 0.82rem;
@@ -3450,6 +3452,7 @@ button:disabled {
 }
 
 .run-trace__artifact-card strong {
+  min-width: 0;
   color: var(--text);
   font-size: 0.8rem;
   font-weight: 700;
@@ -3459,6 +3462,7 @@ button:disabled {
 
 .run-trace__artifact-card small,
 .run-trace__artifact-detail {
+  min-width: 0;
   color: var(--text-muted);
   font-size: 0.72rem;
   line-height: 1.35;
@@ -3467,6 +3471,10 @@ button:disabled {
 
 .run-trace__artifact-detail {
   color: var(--text-soft);
+}
+
+.run-trace__artifact-summary .run-trace__artifact-detail {
+  grid-column: 1 / 4;
 }
 
 .run-trace__artifact-status {
@@ -3528,11 +3536,11 @@ button:disabled {
 }
 
 .run-trace__part summary {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  padding: 8px 30px 8px 10px;
+  padding: 8px 10px;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.8rem;
@@ -3544,8 +3552,8 @@ button:disabled {
 }
 
 .run-trace__part summary::after {
-  position: absolute;
-  right: 10px;
+  grid-column: 5;
+  justify-self: end;
   color: var(--text-soft);
   content: "+";
   font-size: 0.82rem;
@@ -3686,11 +3694,11 @@ button:disabled {
 }
 
 .run-trace__event summary {
-  position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 30px 8px 10px;
+  padding: 8px 10px;
   color: var(--text-muted);
   cursor: pointer;
   font-size: 0.8rem;
@@ -3702,8 +3710,8 @@ button:disabled {
 }
 
 .run-trace__event summary::after {
-  position: absolute;
-  right: 10px;
+  grid-column: 5;
+  justify-self: end;
   color: var(--text-soft);
   content: "+";
   font-size: 0.82rem;
@@ -5791,13 +5799,12 @@ textarea:focus-visible {
 
   .run-trace__event summary,
   .run-trace__part summary {
-    grid-template-columns: minmax(0, 1fr) auto;
     display: grid;
   }
 
   .run-trace__event-summary,
   .run-trace__part-summary {
-    grid-column: 1 / -1;
+    grid-column: 1 / -2;
   }
 
   .run-timeline__header {
