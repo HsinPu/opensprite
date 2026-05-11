@@ -2823,6 +2823,21 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/llm",
                 json={
+                    "semantic_contract_classifier_enabled": "false",
+                },
+            ) as resp:
+                assert resp.status == 200
+                semantic_disabled_payload = await resp.json()
+
+            assert semantic_disabled_payload["llm"]["semantic_contract_classifier_enabled"] is False
+            loaded_config = Config.from_json(config_path)
+            assert loaded_config.agent.semantic_contract_classifier_enabled is False
+            assert agent.config.semantic_contract_classifier_enabled is False
+            assert agent.llm_calls.config.semantic_contract_classifier_enabled is False
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/llm",
+                json={
                     "decoding_mode": "custom",
                     "decoding": {
                         "temperature": 0.4,

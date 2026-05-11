@@ -329,6 +329,47 @@ def test_task_contract_requires_web_research_for_chinese_market_lookup():
     }
 
 
+def test_task_contract_requires_web_research_for_high_confidence_chinese_external_lookups():
+    examples = [
+        "今天台北天氣",
+        "美元台幣匯率",
+        "00981T 即時報價",
+        "幫我搜尋 NVIDIA 新聞",
+        "請上網找 OpenAI 來源連結",
+    ]
+
+    for message in examples:
+        intent = TaskIntentService().classify(message)
+        contract = TaskContractService.build(
+            task_intent=intent,
+            current_message=intent.objective,
+        )
+
+        assert contract.task_type == "web_research", message
+        assert contract.allow_no_tool_final is False, message
+        assert any(requirement.tool_group == "web_research" for requirement in contract.requirements), message
+
+
+def test_task_contract_does_not_treat_ambiguous_chinese_lookup_words_as_web_research():
+    examples = [
+        "查一下這個檔案",
+        "查詢設定",
+        "整理最新進度",
+        "搜索目前專案裡的 TODO",
+        "查找剛剛提到的內容",
+    ]
+
+    for message in examples:
+        intent = TaskIntentService().classify(message)
+        contract = TaskContractService.build_deterministic(
+            task_intent=intent,
+            current_message=intent.objective,
+        )
+
+        assert contract.task_type != "web_research", message
+        assert not any(requirement.tool_group == "web_research" for requirement in contract.requirements), message
+
+
 def test_semantic_contract_can_add_web_research_requirement():
     intent = TaskIntentService().classify("2330 現在多少")
 

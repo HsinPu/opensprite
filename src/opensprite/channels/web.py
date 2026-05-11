@@ -1973,7 +1973,11 @@ class WebAdapter(MessageAdapter):
         elif "pass_decoding_params" in body:
             config.llm.pass_decoding_params = bool(body.get("pass_decoding_params"))
         if "semantic_contract_classifier_enabled" in body:
-            config.agent.semantic_contract_classifier_enabled = bool(body.get("semantic_contract_classifier_enabled"))
+            config.agent.semantic_contract_classifier_enabled = self._coerce_bool(
+                body.get("semantic_contract_classifier_enabled"),
+                field="semantic_contract_classifier_enabled",
+                default=config.agent.semantic_contract_classifier_enabled,
+            )
         if "semantic_contract_classifier_confidence_threshold" in body:
             config.agent.semantic_contract_classifier_confidence_threshold = self._coerce_float_range(
                 body.get("semantic_contract_classifier_confidence_threshold"),
