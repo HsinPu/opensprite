@@ -882,6 +882,37 @@
               </select>
             </label>
 
+            <div class="settings-row">
+              <div>
+                <strong>{{ copy.settings.models.semanticContract.title }}</strong>
+                <span>{{ copy.settings.models.semanticContract.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.llm.semantic_contract_classifier_enabled"
+                class="switch"
+                type="checkbox"
+                :disabled="settingsState.llmLoading"
+                :aria-label="copy.settings.models.semanticContract.title"
+                @change="$emit('save-llm-settings')"
+              />
+            </div>
+
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.models.semanticContract.thresholdTitle }}</strong>
+                <span>{{ copy.settings.models.semanticContract.thresholdDescription }}</span>
+              </div>
+              <input
+                v-model.number="settingsState.llm.semantic_contract_classifier_confidence_threshold"
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                :disabled="settingsState.llmLoading || !settingsState.llm.semantic_contract_classifier_enabled"
+                @change="$emit('save-llm-settings')"
+              />
+            </label>
+
             <template v-if="settingsState.llm.decoding_mode === 'custom'">
               <label class="settings-row settings-row--field">
                 <div>

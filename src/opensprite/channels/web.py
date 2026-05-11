@@ -695,6 +695,8 @@ class WebAdapter(MessageAdapter):
             "pass_decoding_params": bool(config.llm.pass_decoding_params),
             "decoding": cls._llm_decoding_payload(config),
             "effective_request": cls._effective_llm_request_payload(config),
+            "semantic_contract_classifier_enabled": bool(config.agent.semantic_contract_classifier_enabled),
+            "semantic_contract_classifier_confidence_threshold": float(config.agent.semantic_contract_classifier_confidence_threshold),
         }
 
     @classmethod
@@ -725,6 +727,20 @@ class WebAdapter(MessageAdapter):
             number = int(value)
         except (TypeError, ValueError) as exc:
             raise web.HTTPBadRequest(text=f"{field} must be an integer") from exc
+        if number < minimum:
+            raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
+        if number > maximum:
+            raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
+        return number
+
+    @staticmethod
+    def _coerce_float_range(value: Any, *, field: str, default: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+        if value is None or value == "":
+            return default
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise web.HTTPBadRequest(text=f"{field} must be a number") from exc
         if number < minimum:
             raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
         if number > maximum:
@@ -1956,12 +1972,28 @@ class WebAdapter(MessageAdapter):
                 self._apply_llm_decoding_preset(config, decoding_mode)
         elif "pass_decoding_params" in body:
             config.llm.pass_decoding_params = bool(body.get("pass_decoding_params"))
+        if "semantic_contract_classifier_enabled" in body:
+            config.agent.semantic_contract_classifier_enabled = bool(body.get("semantic_contract_classifier_enabled"))
+        if "semantic_contract_classifier_confidence_threshold" in body:
+            config.agent.semantic_contract_classifier_confidence_threshold = self._coerce_float_range(
+                body.get("semantic_contract_classifier_confidence_threshold"),
+                field="semantic_contract_classifier_confidence_threshold",
+                default=config.agent.semantic_contract_classifier_confidence_threshold,
+                minimum=0.0,
+                maximum=1.0,
+            )
         config.save(config_path)
         payload = {
             "llm": self._llm_payload(config),
             "restart_required": True,
         }
         payload = self._reload_agent_llm_from_config(payload, force=True)
+        agent = self._get_agent()
+        if agent is not None:
+            agent.config = config.agent
+            llm_calls = getattr(agent, "llm_calls", None)
+            if llm_calls is not None:
+                llm_calls.config = config.agent
         return web.json_response(payload)
 
     async def _handle_settings_media(self, request: web.Request) -> web.Response:

@@ -830,6 +830,12 @@ export const DISPLAY_COPY = {
           title: "傳送解碼參數",
           description: "開啟時會送出 temperature、max tokens、top_p 與 penalties；關閉時交給 provider 或模型預設值。",
         },
+        semanticContract: {
+          title: "語意任務合約分類",
+          description: "開啟後會用目前文字模型做一個低溫分類，用來替模糊任務加嚴工具證據需求；不會放寬既有規則。",
+          thresholdTitle: "分類信心門檻",
+          thresholdDescription: "只有信心達到門檻時才會套用語意分類結果。",
+        },
         effectiveRequest: {
           title: "實際請求參數",
           description: "依目前 provider、模型與設定計算，不包含 messages、tools 或任何 secret；上下文窗口只用於本地裁切，不會送到 provider。",
@@ -2355,6 +2361,12 @@ export const DISPLAY_COPY = {
         passDecodingParams: {
           title: "Send decoding parameters",
           description: "When enabled, requests include temperature, max tokens, top_p, and penalties. Turn it off to use provider or model defaults.",
+        },
+        semanticContract: {
+          title: "Semantic task contract classifier",
+          description: "Use the current text model for a low-temperature classification pass that can add stricter tool-evidence requirements for ambiguous tasks. It cannot weaken deterministic rules.",
+          thresholdTitle: "Classifier confidence threshold",
+          thresholdDescription: "Semantic classifier results apply only when confidence reaches this threshold.",
         },
         effectiveRequest: {
           title: "Effective request parameters",

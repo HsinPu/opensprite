@@ -2633,6 +2633,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             super().__init__()
             self.config_path = config_path
             self.reloads = []
+            self.llm_calls = SimpleNamespace(config=None)
 
         def reload_llm_from_config(self, config):
             active = config.llm.get_active()
@@ -2763,6 +2764,8 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             assert llm_payload["llm"]["decoding_mode"] == "provider_default"
             assert "precise" in llm_payload["llm"]["decoding_modes"]
             assert llm_payload["llm"]["pass_decoding_params"] is False
+            assert llm_payload["llm"]["semantic_contract_classifier_enabled"] is False
+            assert llm_payload["llm"]["semantic_contract_classifier_confidence_threshold"] == 0.7
             assert llm_payload["llm"]["decoding"] == {
                 "temperature": 0.25,
                 "max_tokens": 32768,
@@ -2798,6 +2801,24 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             loaded_config = Config.from_json(config_path)
             assert loaded_config.llm.pass_decoding_params is True
             assert loaded_config.llm.temperature == 0.7
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/llm",
+                json={
+                    "semantic_contract_classifier_enabled": True,
+                    "semantic_contract_classifier_confidence_threshold": 0.82,
+                },
+            ) as resp:
+                assert resp.status == 200
+                semantic_llm_payload = await resp.json()
+
+            assert semantic_llm_payload["llm"]["semantic_contract_classifier_enabled"] is True
+            assert semantic_llm_payload["llm"]["semantic_contract_classifier_confidence_threshold"] == 0.82
+            loaded_config = Config.from_json(config_path)
+            assert loaded_config.agent.semantic_contract_classifier_enabled is True
+            assert loaded_config.agent.semantic_contract_classifier_confidence_threshold == 0.82
+            assert agent.config.semantic_contract_classifier_enabled is True
+            assert agent.llm_calls.config.semantic_contract_classifier_enabled is True
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/llm",
