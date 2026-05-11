@@ -97,6 +97,7 @@ assertIncludes(runTraceViewer, "downloadDebugBundle", "run trace debug export ac
 assertIncludes(runTraceViewer, "payload.reason", "task context trace reason summary");
 assertIncludes(copy, "exportDebug", "run trace debug export copy");
 assertIncludes(copy, "taskContextResolved", "task context timeline copy");
+assertIncludes(copy, "taskObjectiveResolved", "task objective timeline copy");
 assertIncludes(styles, ".run-trace__artifact-grid", "trace artifact grid styling");
 assertIncludes(styles, "grid-template-columns: 1fr", "trace artifacts render in one column");
 assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selector");
@@ -232,6 +233,9 @@ assertIncludes(chatClient, "/api/curator/", "curator action fetch");
 assertIncludes(chatClient, 'params.set("scope", scope)', "curator scoped action fetch");
 assertIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval");
 assertIncludes(chatClient, "task_context.resolved", "task context timeline event");
+assertIncludes(chatClient, "task_objective.resolved", "task objective timeline event");
+assertIncludes(chatClient, "formatTaskObjectiveDetail", "task objective timeline detail");
+assertIncludes(chatClient, "continuation_type", "task context continuation detail");
 assertIncludes(chatClient, "formatTaskContextDetail", "task context timeline detail");
 assertIncludes(chatClient, "STORAGE_KEYS.showWorkState", "work state preference persistence");
 assertIncludes(chatClient, "STORAGE_KEYS.showRunHistory", "run history preference persistence");

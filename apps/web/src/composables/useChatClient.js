@@ -58,6 +58,7 @@ const RUN_EVENT_KINDS = new Set(["run", "llm", "tool", "verification", "permissi
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "task_context.resolved",
+  "task_objective.resolved",
   "llm_status",
   "tool_started",
   "file_changed",
@@ -1180,6 +1181,14 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
+  if (eventType === "task_objective.resolved") {
+    return {
+      label: copy.run.taskObjectiveResolved || "Task objective resolved",
+      detail: formatTaskObjectiveDetail(payload),
+      tone: payload.method === "fallback" ? "warning" : "running",
+    };
+  }
+
   if (eventType === "llm_status") {
     const message = String(payload.message || copy.run.thinking);
     return {
@@ -1483,11 +1492,30 @@ function describeRunEvent(eventType, payload, copy) {
 
 function formatTaskContextDetail(payload = {}) {
   const method = String(payload.method || "deterministic").trim();
+  const continuationType = String(payload.continuation_type || payload.continuationType || "").trim();
   const inheritedToolGroup = String(payload.inherited_tool_group || payload.inheritedToolGroup || "").trim();
+  const flags = [
+    payload.is_follow_up || payload.isFollowUp ? "follow-up" : "",
+    payload.should_inherit_active_task || payload.shouldInheritActiveTask ? "inherit active" : "",
+    payload.should_replace_active_task || payload.shouldReplaceActiveTask ? "replace active" : "",
+    payload.should_seed_active_task || payload.shouldSeedActiveTask ? "seed active" : "",
+  ].filter(Boolean).join(", ");
   const confidence = Number(payload.confidence);
   const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
   const reason = String(payload.reason || "").trim();
-  return [method, inheritedToolGroup, confidenceText, reason].filter(Boolean).join(" · ");
+  return [method, continuationType, inheritedToolGroup, flags, confidenceText, reason].filter(Boolean).join(" · ");
+}
+
+function formatTaskObjectiveDetail(payload = {}) {
+  const method = String(payload.method || "deterministic").trim();
+  const resolvedObjective = String(payload.resolved_objective || payload.resolvedObjective || "").trim();
+  const shouldUse = payload.should_use_resolved_objective ?? payload.shouldUseResolvedObjective;
+  const confidence = Number(payload.confidence);
+  const confidenceText = Number.isFinite(confidence) ? `confidence ${confidence.toFixed(2)}` : "";
+  const reason = String(payload.reason || "").trim();
+  const objectiveText = resolvedObjective ? previewText(resolvedObjective) : "";
+  const useText = shouldUse === true ? "use resolved objective" : shouldUse === false ? "keep original objective" : "";
+  return [method, useText, confidenceText, objectiveText, reason].filter(Boolean).join(" · ");
 }
 
 export function formatEventTime(timestamp) {
