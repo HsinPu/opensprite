@@ -107,6 +107,8 @@ assertIncludes(chatPanel, "showWorkState && workState", "work state visibility t
 assertIncludes(app, "trace-sidebar", "independent right trace sidebar shell");
 assertIncludes(app, "traceInspectorCollapsed", "right trace sidebar collapse state");
 assertIncludes(app, "toggleTraceInspectorCollapsed", "right trace sidebar collapse action");
+assertIncludes(app, "trace-sidebar__resize", "right trace sidebar resize handle");
+assertIncludes(app, "opensprite:web:traceInspectorWidth", "right trace sidebar width persistence");
 assertIncludes(app, ":show-run-history=\"state.showRunHistory\"", "run history prop wiring");
 assertIncludes(chatComposer, "composer__commands", "slash command hints rendering");
 assertIncludes(toastStack, "toast-stack", "toast stack rendering");
@@ -133,9 +135,10 @@ assertIncludes(settingsModal, "save-browser-settings", "browser settings save ev
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
-assertIncludes(styles, "grid-template-columns: 268px minmax(0, 1fr) 430px", "desktop three-column app shell");
+assertIncludes(styles, "var(--trace-sidebar-width, var(--trace-sidebar-default-width))", "desktop resizable trace sidebar width");
 assertIncludes(styles, ".app-shell--trace-collapsed", "right trace sidebar collapsed app shell");
 assertIncludes(styles, ".trace-sidebar", "right trace sidebar styling");
+assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize styling");
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");

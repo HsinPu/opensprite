@@ -71,7 +71,20 @@
       @run-verification="runVerification"
     />
 
-    <aside class="trace-sidebar" :data-collapsed="traceInspectorCollapsed" aria-label="Run trace inspector">
+    <aside
+      class="trace-sidebar"
+      :data-collapsed="traceInspectorCollapsed"
+      :style="traceSidebarStyle"
+      aria-label="Run trace inspector"
+    >
+      <button
+        v-show="!traceInspectorCollapsed"
+        class="trace-sidebar__resize"
+        type="button"
+        aria-label="Resize trace inspector"
+        title="Drag to resize trace inspector"
+        @pointerdown="beginTraceResize"
+      ></button>
       <div class="trace-sidebar__rail">
         <button
           class="trace-sidebar__toggle"
@@ -235,7 +248,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import RunDetailsPanel from "./components/RunDetailsPanel.vue";
 import SettingsModal from "./components/SettingsModal.vue";
@@ -376,6 +389,16 @@ const {
   dismissToast,
 } = useChatClient();
 
+const TRACE_WIDTH_STORAGE_KEY = "opensprite:web:traceInspectorWidth";
+const TRACE_WIDTH_MIN = 430;
+const TRACE_CHAT_MIN = 360;
+const TRACE_LEFT_GUTTER = 72;
+
+const traceInspectorWidth = ref(readStoredTraceWidth());
+const traceSidebarStyle = computed(() => ({
+  "--trace-sidebar-width": traceInspectorWidth.value ? `${traceInspectorWidth.value}px` : undefined,
+}));
+
 const confirmDialog = ref({
   open: false,
   eyebrow: "",
@@ -400,6 +423,52 @@ function openConfirmDialog({ eyebrow, title, message, detail, cancelLabel, confi
     busy: false,
     action,
   };
+}
+
+function readStoredTraceWidth() {
+  try {
+    const value = Number.parseInt(window.localStorage.getItem(TRACE_WIDTH_STORAGE_KEY) || "", 10);
+    return Number.isFinite(value) ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clampTraceWidth(width) {
+  const viewportWidth = window.innerWidth || 0;
+  const fallbackMax = Math.max(TRACE_WIDTH_MIN, Math.round(viewportWidth * 0.78));
+  const maxWidth = viewportWidth
+    ? Math.max(TRACE_WIDTH_MIN, viewportWidth - TRACE_LEFT_GUTTER - TRACE_CHAT_MIN)
+    : fallbackMax;
+  return Math.round(Math.min(Math.max(width, TRACE_WIDTH_MIN), maxWidth));
+}
+
+function beginTraceResize(event) {
+  if (traceInspectorCollapsed.value || event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+
+  const handlePointerMove = (moveEvent) => {
+    traceInspectorWidth.value = clampTraceWidth(window.innerWidth - moveEvent.clientX);
+  };
+
+  const stopResize = () => {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", stopResize);
+    window.removeEventListener("pointercancel", stopResize);
+    try {
+      window.localStorage.setItem(TRACE_WIDTH_STORAGE_KEY, String(traceInspectorWidth.value));
+    } catch {
+      // Ignore storage failures; resize still works for the active session.
+    }
+  };
+
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", stopResize, { once: true });
+  window.addEventListener("pointercancel", stopResize, { once: true });
 }
 
 function closeConfirmDialog() {

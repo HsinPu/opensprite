@@ -21,6 +21,7 @@
   --radius-md: 12px;
   --radius-sm: 8px;
   --content-width: 820px;
+  --trace-sidebar-default-width: clamp(430px, 50vw, 760px);
 }
 
 :root[data-color-scheme="dark"] {
@@ -473,7 +474,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 268px minmax(0, 1fr) 430px;
+  grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, var(--trace-sidebar-default-width));
   height: 100dvh;
   min-height: 100vh;
   background: var(--surface);
@@ -992,7 +993,7 @@ button:disabled {
 
 @media (min-width: 861px) {
   .app-shell--sidebar-collapsed {
-    grid-template-columns: 72px minmax(0, 1fr) 430px;
+    grid-template-columns: 72px minmax(360px, 1fr) var(--trace-sidebar-width, var(--trace-sidebar-default-width));
   }
 
   .app-shell--trace-collapsed {
@@ -1304,11 +1305,43 @@ button:disabled {
 }
 
 .trace-sidebar {
+  position: relative;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
   min-width: 0;
   border-left: 1px solid var(--border-soft);
   background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
+}
+
+.trace-sidebar__resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -5px;
+  z-index: 5;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.trace-sidebar__resize::after {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 4px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.trace-sidebar__resize:hover::after,
+.trace-sidebar__resize:focus-visible::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .trace-sidebar[data-collapsed="true"] {
@@ -1365,11 +1398,11 @@ button:disabled {
 
 @media (max-width: 1180px) and (min-width: 861px) {
   .app-shell {
-    grid-template-columns: 268px minmax(0, 1fr) 380px;
+    grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(430px, 46vw, 680px));
   }
 
   .app-shell--sidebar-collapsed {
-    grid-template-columns: 72px minmax(0, 1fr) 380px;
+    grid-template-columns: 72px minmax(360px, 1fr) var(--trace-sidebar-width, clamp(430px, 46vw, 680px));
   }
 
   .app-shell--trace-collapsed {
@@ -5414,6 +5447,10 @@ textarea:focus-visible {
     margin: 0 auto 18px;
     border-left: 0;
     background: transparent;
+  }
+
+  .trace-sidebar__resize {
+    display: none;
   }
 
   .trace-sidebar__rail {
