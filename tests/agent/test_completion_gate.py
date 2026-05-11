@@ -372,6 +372,81 @@ def test_task_contract_does_not_treat_ambiguous_chinese_lookup_words_as_web_rese
         assert not any(requirement.tool_group == "web_research" for requirement in contract.requirements), message
 
 
+def test_task_contract_requires_workspace_read_for_direct_repo_lookup():
+    intent = TaskIntentService().classify("search the repo for auth config")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    assert contract.task_type == "workspace_read"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "workspace_read" for requirement in contract.requirements)
+    assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
+
+
+def test_completion_gate_requires_workspace_evidence_for_direct_repo_lookup():
+    intent = TaskIntentService().classify("search the repo for auth config")
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="I will inspect the repo for auth config.",
+        execution_result=ExecutionResult(content="I will inspect the repo for auth config."),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+    assert completion.missing_evidence
+
+
+def test_completion_gate_rejects_terse_workspace_answer_after_reading():
+    intent = TaskIntentService().classify("請看 src/opensprite/agent/task_contract.py")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="看過了。",
+        execution_result=ExecutionResult(
+            content="看過了。",
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="read_file", ok=True),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer was too terse for the task"
+
+
+def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_answer():
+    intent = TaskIntentService().classify("請看 src/opensprite/agent/task_contract.py")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我看過 src/opensprite/agent/task_contract.py 了。這段邏輯會先建立 deterministic contract，"
+        "再依 task type 補 evidence requirement，最後把 acceptance criteria 一起帶進 completion gate。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="read_file", ok=True),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_semantic_contract_can_add_web_research_requirement():
     intent = TaskIntentService().classify("2330 現在多少")
 

@@ -34,6 +34,12 @@ _IMAGE_TASK_HINT_RE = re.compile(
 )
 _AUDIO_TASK_HINT_RE = re.compile(r"\b(?:audio|voice|speech|transcribe)\b|(?:音訊|語音|錄音|轉錄)", re.IGNORECASE)
 _VIDEO_TASK_HINT_RE = re.compile(r"\b(?:video|clip)\b|(?:影片|視頻|短片)", re.IGNORECASE)
+_WORKSPACE_TASK_HINT_RE = re.compile(
+    r"\b(?:repo|repository|codebase|file|files|function|class|method|traceback|pytest|src/|tests/|apps/|todo)\b"
+    r"|[\w.-]+\.(?:py|js|ts|vue|json|md|yaml|yml|toml)\b"
+    r"|(?:程式|程式碼|檔案|函式|類別|專案|錯誤|測試|建置|設定|原始碼)",
+    re.IGNORECASE,
+)
 _WEB_KEYWORD_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:web|internet|online|reddit|url|link|news)(?![A-Za-z0-9_])",
     re.IGNORECASE,
@@ -341,14 +347,19 @@ class TaskContractService:
             )
             task_type = "web_research"
 
-        if not requirements and inherited_tool_group == "workspace_read":
+        workspace_required = not requirements and cls._looks_like_workspace_task(text)
+        if not workspace_required and not requirements:
+            workspace_required = inherited_tool_group == "workspace_read"
+
+        if workspace_required:
+            acceptance_criteria.append(_workspace_final_answer_criterion())
             requirements.append(
                 EvidenceRequirement(
                     kind="tool_group",
                     tool_group="workspace_read",
                     coverage="any",
                     min_count=1,
-                    description="Inspect the referenced workspace context before answering this follow-up.",
+                    description="Inspect the relevant workspace files or code context before answering.",
                 )
             )
             task_type = "workspace_read"
@@ -418,6 +429,10 @@ class TaskContractService:
             or _WEB_TASK_HINT_RE.search(text)
             or (_WEB_SEARCH_TERM_RE.search(text) and _WEB_KEYWORD_RE.search(text))
         )
+
+    @staticmethod
+    def _looks_like_workspace_task(text: str) -> bool:
+        return bool(_WORKSPACE_TASK_HINT_RE.search(text or ""))
 
 
 def merge_semantic_contract(
@@ -733,4 +748,12 @@ def _web_source_reference_criterion() -> AcceptanceCriterion:
         kind="source_reference",
         min_count=1,
         description="Reference at least one gathered web source by URL, domain, or title.",
+    )
+
+
+def _workspace_final_answer_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind="substantive_final_answer",
+        min_response_chars=80,
+        description="Provide a substantive final answer that uses the inspected workspace context.",
     )
