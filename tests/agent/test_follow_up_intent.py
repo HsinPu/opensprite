@@ -65,3 +65,17 @@ def test_follow_up_inherits_workspace_context():
     assert result.is_follow_up is True
     assert result.inherited_task_type == "workspace_read"
     assert result.inherited_tool_group == "workspace_read"
+
+
+def test_follow_up_prefers_workspace_context_after_repo_search():
+    result = FollowUpIntentResolver.resolve(
+        current_message="那這個呢",
+        history=[
+            {"role": "user", "content": "幫我搜尋目前專案裡的 TODO"},
+            {"role": "assistant", "content": "我在 repo 裡找到幾個 TODO 註記。"},
+        ],
+    )
+
+    assert result.is_follow_up is True
+    assert result.inherited_task_type == "workspace_read"
+    assert result.inherited_tool_group == "workspace_read"

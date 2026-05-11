@@ -34,11 +34,15 @@ _IMAGE_TASK_HINT_RE = re.compile(
 )
 _AUDIO_TASK_HINT_RE = re.compile(r"\b(?:audio|voice|speech|transcribe)\b|(?:音訊|語音|錄音|轉錄)", re.IGNORECASE)
 _VIDEO_TASK_HINT_RE = re.compile(r"\b(?:video|clip)\b|(?:影片|視頻|短片)", re.IGNORECASE)
-_WEB_TASK_HINT_RE = re.compile(
-    r"\b(?:web|internet|online|reddit|url|link|search|news)\b"
-    r"|(?:上網|網路|搜尋|新聞|來源|連結|即時|市值|股價|報價|匯率|天氣)",
+_WEB_KEYWORD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:web|internet|online|reddit|url|link|news)(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
+_WEB_TASK_HINT_RE = re.compile(
+    r"(?:上網|網路|新聞|來源|連結|即時|市值|股價|報價|匯率|天氣)",
+    re.IGNORECASE,
+)
+_WEB_SEARCH_TERM_RE = re.compile(r"\b(?:search)\b|(?:搜尋)", re.IGNORECASE)
 _ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
 _ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "task", "analysis", "pure_answer"})
 _SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
@@ -407,7 +411,13 @@ class TaskContractService:
 
     @staticmethod
     def _looks_like_web_task(text: str) -> bool:
-        return bool(_URL_RE.search(text or "") or _WEB_TASK_HINT_RE.search(text or ""))
+        text = text or ""
+        return bool(
+            _URL_RE.search(text)
+            or _WEB_KEYWORD_RE.search(text)
+            or _WEB_TASK_HINT_RE.search(text)
+            or (_WEB_SEARCH_TERM_RE.search(text) and _WEB_KEYWORD_RE.search(text))
+        )
 
 
 def merge_semantic_contract(

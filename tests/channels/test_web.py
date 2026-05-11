@@ -2804,6 +2804,17 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/llm",
+                json={"pass_decoding_params": "false"},
+            ) as resp:
+                assert resp.status == 200
+                pass_decoding_disabled_payload = await resp.json()
+
+            assert pass_decoding_disabled_payload["llm"]["pass_decoding_params"] is False
+            loaded_config = Config.from_json(config_path)
+            assert loaded_config.llm.pass_decoding_params is False
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/llm",
                 json={
                     "semantic_contract_classifier_enabled": True,
                     "semantic_contract_classifier_confidence_threshold": 0.82,

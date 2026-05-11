@@ -1971,7 +1971,11 @@ class WebAdapter(MessageAdapter):
             else:
                 self._apply_llm_decoding_preset(config, decoding_mode)
         elif "pass_decoding_params" in body:
-            config.llm.pass_decoding_params = bool(body.get("pass_decoding_params"))
+            config.llm.pass_decoding_params = self._coerce_bool(
+                body.get("pass_decoding_params"),
+                field="pass_decoding_params",
+                default=config.llm.pass_decoding_params,
+            )
         if "semantic_contract_classifier_enabled" in body:
             config.agent.semantic_contract_classifier_enabled = self._coerce_bool(
                 body.get("semantic_contract_classifier_enabled"),

@@ -18,11 +18,15 @@ _NON_FOLLOW_UP_RE = re.compile(
     r"^(?:ok|okay|thanks|thank you|thx|好|好的|了解|知道了|謝謝|謝啦|感謝|不用|先不用)[。.!！?？]*$",
     re.IGNORECASE,
 )
-_WEB_HISTORY_RE = re.compile(
-    r"\b(?:web|internet|online|url|link|search|news|reddit|source|sources|twse|price|pricing)\b"
-    r"|(?:上網|網路|搜尋|查詢|查找|新聞|來源|連結|股價|股票|台股|代碼|基金|外部資料|即時|最新)",
+_WEB_KEYWORD_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:web|internet|online|url|link|news|reddit|source|sources|twse|price|pricing)(?![A-Za-z0-9_])",
     re.IGNORECASE,
 )
+_WEB_HISTORY_RE = re.compile(
+    r"(?:上網|網路|新聞|來源|連結|股價|股票|台股|代碼|基金|外部資料|即時)",
+    re.IGNORECASE,
+)
+_WEB_SEARCH_TERM_RE = re.compile(r"\b(?:search)\b|(?:搜尋)", re.IGNORECASE)
 _MEDIA_HISTORY_RE = re.compile(
     r"\b(?:image|images|photo|photos|picture|screenshot|ocr|audio|voice|video|clip|transcribe)\b"
     r"|(?:圖片|照片|截圖|這張|圖|文字辨識|音訊|語音|錄音|影片|視頻)",
@@ -97,7 +101,7 @@ def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str]
         if not content:
             continue
         weight = 2 if str(message.get("role") or "") == "user" else 1
-        if _URL_RE.search(content) or _WEB_HISTORY_RE.search(content):
+        if _URL_RE.search(content) or _WEB_KEYWORD_RE.search(content) or _WEB_HISTORY_RE.search(content) or (_WEB_SEARCH_TERM_RE.search(content) and _WEB_KEYWORD_RE.search(content)):
             scores["web_research"] += weight
         if _MEDIA_HISTORY_RE.search(content) or "[Media-only message saved to workspace]" in content:
             scores["media_extraction"] += weight

@@ -355,8 +355,10 @@ def test_task_contract_does_not_treat_ambiguous_chinese_lookup_words_as_web_rese
         "查一下這個檔案",
         "查詢設定",
         "整理最新進度",
+        "搜尋目前專案裡的 TODO",
         "搜索目前專案裡的 TODO",
         "查找剛剛提到的內容",
+        "search the repo for TODO",
     ]
 
     for message in examples:
