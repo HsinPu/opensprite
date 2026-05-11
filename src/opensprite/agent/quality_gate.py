@@ -66,6 +66,9 @@ class QualityGateService:
                 result = _evaluate_source_reference(criterion, response_text, execution_result)
                 if result is not None:
                     return result
+        workspace_result = _evaluate_workspace_grounding(contract, response_text)
+        if workspace_result is not None:
+            return workspace_result
         return QualityGateResult(passed=True)
 
 
@@ -212,6 +215,33 @@ def _evaluate_source_reference(
     )
 
 
+def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) -> QualityGateResult | None:
+    if contract.task_type != "workspace_read":
+        return None
+    objective = str(contract.objective or "")
+    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
+    if not normalized_response:
+        return None
+
+    requested_paths = _workspace_paths(objective)
+    if requested_paths and not any(_path_referenced(path, normalized_response) for path in requested_paths):
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant final answer did not reference inspected workspace context",
+            active_task_detail="- Reference the inspected workspace path or filename in the final answer.",
+        )
+
+    if _asks_for_workspace_location(objective) and not _contains_workspace_location_clue(normalized_response):
+        return QualityGateResult(
+            passed=False,
+            status="incomplete",
+            reason="assistant final answer did not identify the workspace location",
+            active_task_detail="- Include a file path, symbol, or matching config/code clue from the workspace inspection.",
+        )
+    return None
+
+
 def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, object]]:
     sources: list[dict[str, object]] = []
     for artifact in execution_result.task_artifacts:
@@ -312,6 +342,48 @@ def _source_has_substantive_detail(source: dict[str, object]) -> bool:
         if min_content_chars > 0 and content_chars < min_content_chars:
             return False
     return True
+
+
+def _workspace_paths(text: str) -> tuple[str, ...]:
+    matches = re.findall(
+        r"(?:[\w.-]+[\\/])+[\w.-]+|[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)",
+        str(text or ""),
+        flags=re.IGNORECASE,
+    )
+    seen: set[str] = set()
+    paths: list[str] = []
+    for match in matches:
+        normalized = match.strip().lower().replace("\\", "/")
+        if normalized and normalized not in seen:
+            seen.add(normalized)
+            paths.append(normalized)
+    return tuple(paths)
+
+
+def _path_referenced(path: str, normalized_response: str) -> bool:
+    normalized_path = path.lower().replace("\\", "/")
+    if normalized_path in normalized_response.replace("\\", "/"):
+        return True
+    filename = normalized_path.rsplit("/", 1)[-1]
+    return bool(filename and filename in normalized_response)
+
+
+def _asks_for_workspace_location(text: str) -> bool:
+    lowered = str(text or "").lower()
+    return bool(
+        re.search(r"\b(?:where|which|location|path|file|config|setting|function|class|symbol)\b", lowered)
+        or any(marker in lowered for marker in ("在哪", "哪裡", "哪個", "位置", "路徑", "設定", "檔案", "函式", "類別"))
+    )
+
+
+def _contains_workspace_location_clue(normalized_response: str) -> bool:
+    if _workspace_paths(normalized_response):
+        return True
+    if re.search(r"\b(?:function|class|method|symbol)\s+[`'\"]?[\w.:-]+", normalized_response):
+        return True
+    if re.search(r"[`'\"][\w.:-]+[`'\"]", normalized_response):
+        return True
+    return False
 
 
 def _truthy(value: object) -> bool:

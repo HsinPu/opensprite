@@ -422,6 +422,32 @@ def test_completion_gate_rejects_terse_workspace_answer_after_reading():
     assert completion.reason == "assistant final answer was too terse for the task"
 
 
+def test_completion_gate_requires_workspace_answer_to_reference_requested_path():
+    intent = TaskIntentService().classify("請看 src/opensprite/agent/task_contract.py")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "我看過這段邏輯了。它會先建立 deterministic contract，再依 task type 補 evidence requirement，"
+        "最後把 acceptance criteria 一起帶進 completion gate。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="read_file", ok=True),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer did not reference inspected workspace context"
+
+
 def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_answer():
     intent = TaskIntentService().classify("請看 src/opensprite/agent/task_contract.py")
     contract = TaskContractService.build(
@@ -441,6 +467,68 @@ def test_completion_gate_completes_workspace_read_with_evidence_and_substantive_
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="read_file", ok=True),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_requires_workspace_location_for_where_question():
+    intent = TaskIntentService().classify("auth config 在哪")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="workspace_read",
+            task_type="workspace_read",
+            confidence=0.9,
+            reason="repo-local config lookup",
+        ),
+    )
+    answer = "我查到 auth config 是在設定載入流程中處理，主要由設定服務負責解析與套用。"
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="grep_files", ok=True),),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer did not identify the workspace location"
+
+
+def test_completion_gate_completes_workspace_location_answer_with_path():
+    intent = TaskIntentService().classify("auth config 在哪")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="workspace_read",
+            task_type="workspace_read",
+            confidence=0.9,
+            reason="repo-local config lookup",
+        ),
+    )
+    answer = (
+        "我查到 auth config 相關邏輯在 src/opensprite/config/schema.py，"
+        "其中 Config 與 provider settings 會處理認證與模型設定的載入。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="grep_files", ok=True),),
         ),
     )
 
