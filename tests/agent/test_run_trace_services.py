@@ -362,6 +362,38 @@ def test_serialize_run_event_classifies_semantic_contract_event():
     assert payload["artifact"] is None
 
 
+def test_serialize_run_events_preserves_semantic_contract_routes():
+    events = []
+    for event_id, tool_group in enumerate(("web_research", "workspace_read", "history_retrieval"), start=1):
+        events.append(
+            SimpleNamespace(
+                event_id=event_id,
+                run_id="run-1",
+                session_id="web:browser-1",
+                event_type="task_contract.semantic_classified",
+                payload={
+                    "requires_tool_evidence": True,
+                    "required_tool_group": tool_group,
+                    "task_type": tool_group,
+                    "confidence": 0.88,
+                    "applied": True,
+                    "reason": f"Route to {tool_group}.",
+                },
+                created_at=12.0 + event_id,
+            )
+        )
+
+    payload = serialize_run_events(events)
+
+    assert [event["kind"] for event in payload] == ["work", "work", "work"]
+    assert [event["payload"]["required_tool_group"] for event in payload] == [
+        "web_research",
+        "workspace_read",
+        "history_retrieval",
+    ]
+    assert all(event["payload"]["applied"] is True for event in payload)
+
+
 def test_serialize_run_event_projects_curator_artifact():
     event = SimpleNamespace(
         event_id=45,
