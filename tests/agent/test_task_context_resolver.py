@@ -454,6 +454,50 @@ def test_task_context_continue_without_active_task_inherits_recent_web_context()
     assert decision.continuation_type == "follow_up"
 
 
+def test_task_context_inherits_recent_workspace_tool_context_without_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="那這個呢",
+            history=[
+                {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
+                {"role": "assistant", "content": "我看過 task_contract.py 的邏輯。"},
+            ],
+            task_intent=TaskIntentService().classify("那這個呢"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is True
+    assert decision.inherited_task_type == "workspace_read"
+    assert decision.inherited_tool_group == "workspace_read"
+
+
+def test_task_context_inherits_recent_history_tool_context_without_llm():
+    provider = _FailingProvider()
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message="那這個呢",
+            history=[
+                {"role": "tool", "tool_name": "search_history", "content": "matched prior discussion about thresholds"},
+                {"role": "assistant", "content": "我找到前面討論 threshold 的段落。"},
+            ],
+            task_intent=TaskIntentService().classify("那這個呢"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.is_follow_up is True
+    assert decision.inherited_task_type == "history_retrieval"
+    assert decision.inherited_tool_group == "history_retrieval"
+
+
 def test_task_contract_uses_task_context_decision_for_web_follow_up():
     intent = TaskIntentService().classify("那這個呢")
     decision = TaskContextDecision(

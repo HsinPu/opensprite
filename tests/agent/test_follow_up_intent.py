@@ -79,3 +79,31 @@ def test_follow_up_prefers_workspace_context_after_repo_search():
     assert result.is_follow_up is True
     assert result.inherited_task_type == "workspace_read"
     assert result.inherited_tool_group == "workspace_read"
+
+
+def test_follow_up_prefers_workspace_context_from_recent_read_tool():
+    result = FollowUpIntentResolver.resolve(
+        current_message="那這個呢",
+        history=[
+            {"role": "tool", "tool_name": "read_file", "content": "src/opensprite/agent/task_contract.py"},
+            {"role": "assistant", "content": "我看過 task_contract.py 的邏輯。"},
+        ],
+    )
+
+    assert result.is_follow_up is True
+    assert result.inherited_task_type == "workspace_read"
+    assert result.inherited_tool_group == "workspace_read"
+
+
+def test_follow_up_prefers_history_context_from_recent_retrieval_tool():
+    result = FollowUpIntentResolver.resolve(
+        current_message="那這個呢",
+        history=[
+            {"role": "tool", "tool_name": "search_history", "content": "matched prior discussion about thresholds"},
+            {"role": "assistant", "content": "我找到前面討論 threshold 的段落。"},
+        ],
+    )
+
+    assert result.is_follow_up is True
+    assert result.inherited_task_type == "history_retrieval"
+    assert result.inherited_tool_group == "history_retrieval"

@@ -38,6 +38,27 @@ _WORKSPACE_HISTORY_RE = re.compile(
     r"|(?:程式|程式碼|檔案|函式|類別|專案|錯誤|測試|建置)",
     re.IGNORECASE,
 )
+_HISTORY_RETRIEVAL_HISTORY_RE = re.compile(
+    r"(?:之前|先前|剛剛|上次|剛才|前面|提過|說過)",
+    re.IGNORECASE,
+)
+_TOOL_GROUP_BY_TOOL_NAME = {
+    "web_search": "web_research",
+    "web_fetch": "web_research",
+    "web_research": "web_research",
+    "browser_navigate": "web_research",
+    "browser_snapshot": "web_research",
+    "read_file": "workspace_read",
+    "glob_files": "workspace_read",
+    "grep_files": "workspace_read",
+    "code_navigation": "workspace_read",
+    "search_history": "history_retrieval",
+    "search_knowledge": "history_retrieval",
+    "ocr_image": "media_extraction",
+    "analyze_image": "media_extraction",
+    "transcribe_audio": "media_extraction",
+    "analyze_video": "media_extraction",
+}
 
 
 @dataclass(frozen=True)
@@ -95,18 +116,26 @@ def _looks_like_follow_up(text: str) -> bool:
 
 
 def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str] | None:
-    scores = {"web_research": 0, "media_extraction": 0, "workspace_read": 0}
+    scores = {"web_research": 0, "media_extraction": 0, "workspace_read": 0, "history_retrieval": 0}
     for message in reversed(history[-12:]):
         content = _compact(str(message.get("content") or ""))
+        tool_name = _compact(str(message.get("tool_name") or ""))
         if not content:
-            continue
-        weight = 2 if str(message.get("role") or "") == "user" else 1
+            content = ""
+        role = str(message.get("role") or "")
+        weight = 2 if role == "user" else 1
+        if tool_name:
+            tool_group = _TOOL_GROUP_BY_TOOL_NAME.get(tool_name)
+            if tool_group is not None:
+                scores[tool_group] += max(weight, 2)
         if _URL_RE.search(content) or _WEB_KEYWORD_RE.search(content) or _WEB_HISTORY_RE.search(content) or (_WEB_SEARCH_TERM_RE.search(content) and _WEB_KEYWORD_RE.search(content)):
             scores["web_research"] += weight
         if _MEDIA_HISTORY_RE.search(content) or "[Media-only message saved to workspace]" in content:
             scores["media_extraction"] += weight
         if _WORKSPACE_HISTORY_RE.search(content):
             scores["workspace_read"] += weight
+        if _HISTORY_RETRIEVAL_HISTORY_RE.search(content):
+            scores["history_retrieval"] += weight
 
     task_type, score = max(scores.items(), key=lambda item: item[1])
     if score <= 0:
@@ -114,6 +143,7 @@ def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str]
     tool_group = {
         "web_research": "web_research",
         "media_extraction": "image_text",
+        "history_retrieval": "history_retrieval",
         "workspace_read": "workspace_read",
     }[task_type]
     return task_type, tool_group, f"inherited {task_type} from recent conversation context"
