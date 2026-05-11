@@ -11,20 +11,8 @@ from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
+from .tool_groups import TOOL_GROUPS
 from ..tools.evidence import ToolEvidence
-
-
-TOOL_GROUPS: dict[str, frozenset[str]] = {
-    "image_text": frozenset({"ocr_image", "analyze_image"}),
-    "image_understanding": frozenset({"analyze_image"}),
-    "audio_text": frozenset({"transcribe_audio"}),
-    "video_understanding": frozenset({"analyze_video"}),
-    "web_research": frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"}),
-    "history_retrieval": frozenset({"search_history", "search_knowledge"}),
-    "workspace_read": frozenset({"read_file", "glob_files", "grep_files", "code_navigation"}),
-    "workspace_write": frozenset({"apply_patch", "write_file", "edit_file"}),
-    "verification": frozenset({"verify", "exec"}),
-}
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _IMAGE_TASK_HINT_RE = re.compile(

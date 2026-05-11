@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from .tool_groups import TOOL_GROUP_BY_TOOL_NAME
+
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 _FOLLOW_UP_RE = re.compile(
@@ -42,24 +44,6 @@ _HISTORY_RETRIEVAL_HISTORY_RE = re.compile(
     r"(?:之前|先前|剛剛|上次|剛才|前面|提過|說過)",
     re.IGNORECASE,
 )
-_TOOL_GROUP_BY_TOOL_NAME = {
-    "web_search": "web_research",
-    "web_fetch": "web_research",
-    "web_research": "web_research",
-    "browser_navigate": "web_research",
-    "browser_snapshot": "web_research",
-    "read_file": "workspace_read",
-    "glob_files": "workspace_read",
-    "grep_files": "workspace_read",
-    "code_navigation": "workspace_read",
-    "search_history": "history_retrieval",
-    "search_knowledge": "history_retrieval",
-    "ocr_image": "media_extraction",
-    "analyze_image": "media_extraction",
-    "transcribe_audio": "media_extraction",
-    "analyze_video": "media_extraction",
-}
-
 
 @dataclass(frozen=True)
 class FollowUpIntent:
@@ -125,9 +109,11 @@ def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str]
         role = str(message.get("role") or "")
         weight = 2 if role == "user" else 1
         if tool_name:
-            tool_group = _TOOL_GROUP_BY_TOOL_NAME.get(tool_name)
+            tool_group = TOOL_GROUP_BY_TOOL_NAME.get(tool_name)
             if tool_group is not None:
-                scores[tool_group] += max(weight, 2)
+                score_key = "media_extraction" if tool_group in {"image_text", "image_understanding", "audio_text", "video_understanding"} else tool_group
+                if score_key in scores:
+                    scores[score_key] += max(weight, 2)
         if _URL_RE.search(content) or _WEB_KEYWORD_RE.search(content) or _WEB_HISTORY_RE.search(content) or (_WEB_SEARCH_TERM_RE.search(content) and _WEB_KEYWORD_RE.search(content)):
             scores["web_research"] += weight
         if _MEDIA_HISTORY_RE.search(content) or "[Media-only message saved to workspace]" in content:
