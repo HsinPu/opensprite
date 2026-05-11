@@ -1308,7 +1308,10 @@ button:disabled {
   position: relative;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr);
+  min-height: 0;
   min-width: 0;
+  max-height: 100dvh;
+  overflow: hidden;
   border-left: 1px solid var(--border-soft);
   background: color-mix(in srgb, var(--surface-muted) 64%, var(--surface));
 }
@@ -1387,9 +1390,13 @@ button:disabled {
 }
 
 .trace-sidebar__body {
+  height: 100%;
+  min-height: 0;
   min-width: 0;
   padding: 18px 18px 22px;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .trace-sidebar__body > * + * {
