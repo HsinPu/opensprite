@@ -34,6 +34,7 @@ from .subagent_policy import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_re
 
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
+DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,7 @@ class SubagentRunService:
         current_run_id_getter: Callable[[], str | None],
         current_channel_getter: Callable[[], str | None],
         current_external_chat_id_getter: Callable[[], str | None],
+        max_tool_iterations_getter: Callable[[], int],
         provider_getter: Callable[[], Any],
         llm_config_getter: Callable[[], Any | None],
         should_cancel_parent_run: Callable[[str, str | None], bool],
@@ -118,6 +120,7 @@ class SubagentRunService:
         self._current_run_id_getter = current_run_id_getter
         self._current_channel_getter = current_channel_getter
         self._current_external_chat_id_getter = current_external_chat_id_getter
+        self._max_tool_iterations_getter = max_tool_iterations_getter
         self._provider_getter = provider_getter
         self._llm_config_getter = llm_config_getter
         self._should_cancel_parent_run = should_cancel_parent_run
@@ -197,6 +200,12 @@ class SubagentRunService:
         if parent_run_id is None:
             return False
         return self._should_cancel_parent_run(parent_session_id, parent_run_id)
+
+    def _max_tool_iterations(self) -> int:
+        try:
+            return max(1, int(self._max_tool_iterations_getter()))
+        except (TypeError, ValueError):
+            return DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS
 
     @staticmethod
     def _parse_optional_float(value: Any) -> float | None:
@@ -548,6 +557,7 @@ class SubagentRunService:
         should_cancel: Callable[[], bool] | None,
         raise_on_failure: bool,
     ) -> SubagentTaskOutcome:
+        max_tool_iterations = self._max_tool_iterations()
         run_metadata = {
             "kind": "subagent",
             "objective": prepared.task_preview,
@@ -556,6 +566,7 @@ class SubagentRunService:
             "parent_session_id": prepared.parent_session_id,
             "parent_run_id": prepared.parent_run_id,
             "resume": prepared.is_resume,
+            "max_tool_iterations": max_tool_iterations,
             **self._delegation_metadata(prepared),
         }
         started_at = time.time()
@@ -568,6 +579,7 @@ class SubagentRunService:
             "parent_session_id": prepared.parent_session_id,
             "parent_run_id": prepared.parent_run_id,
             "resume": prepared.is_resume,
+            "max_tool_iterations": max_tool_iterations,
             "task_preview": prepared.task_preview,
             "message": f"Started {prepared.prompt_type} subagent task {prepared.task_id}.",
             **self._delegation_metadata(prepared),
@@ -670,6 +682,7 @@ class SubagentRunService:
                 on_tool_after_execute=tool_result_hook,
                 on_llm_status=llm_status_hook,
                 on_response_delta=llm_delta_hook,
+                max_tool_iterations=max_tool_iterations,
                 should_cancel=should_cancel,
             )
             await self.run_trace.record_context_compaction_parts(
@@ -699,6 +712,7 @@ class SubagentRunService:
                 "prompt_type": prepared.prompt_type,
                 "run_id": prepared.child_run_id,
                 "summary": result_summary,
+                "max_tool_iterations": max_tool_iterations,
                 **self._delegation_metadata(prepared),
             }
             if compact_structured_output is not None:
@@ -739,6 +753,7 @@ class SubagentRunService:
                 "had_tool_error": sub_result.had_tool_error,
                 "verification_attempted": sub_result.verification_attempted,
                 "verification_passed": sub_result.verification_passed,
+                "max_tool_iterations": max_tool_iterations,
                 **self._delegation_metadata(prepared),
             }
             if compact_structured_output is not None:
@@ -794,6 +809,7 @@ class SubagentRunService:
                 "parent_run_id": prepared.parent_run_id,
                 "resume": prepared.is_resume,
                 "error": "cancelled",
+                "max_tool_iterations": max_tool_iterations,
                 **self._delegation_metadata(prepared),
             }
             await self.run_trace.fail_run(
@@ -828,6 +844,7 @@ class SubagentRunService:
                 "parent_run_id": prepared.parent_run_id,
                 "resume": prepared.is_resume,
                 "error": error_preview,
+                "max_tool_iterations": max_tool_iterations,
                 **self._delegation_metadata(prepared),
             }
             await self.run_trace.fail_run(

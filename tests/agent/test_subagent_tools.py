@@ -158,6 +158,33 @@ def test_implementer_subagent_can_use_profile_tools_but_not_delegate(tmp_path):
     assert storage.saved[0][4]["parent_session_id"] == "telegram:user-a"
 
 
+def test_subagent_uses_independent_tool_iteration_budget(tmp_path):
+    provider = FakeProvider()
+    storage = FakeStorage()
+    registry = ToolRegistry()
+    registry.register(DummyTool("read_file"))
+    agent = AgentLoop(
+        config=Config.load_agent_template_config(subagent_max_tool_iterations=2),
+        provider=provider,
+        storage=storage,
+        context_builder=FakeContextBuilder(tmp_path / "workspace"),
+        tools=registry,
+        memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+        tools_config=ToolsConfig(max_tool_iterations=1),
+        log_config=LogConfig(),
+        search_config=SearchConfig(),
+        user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+        **Config.packaged_agent_llm_chat_kwargs(),
+    )
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(agent.run_subagent("do the task", prompt_type="implementer"))
+
+    assert "Result:\ndone" in result
+    assert len(provider.calls) == 2
+
+
 def test_code_reviewer_subagent_is_read_only(tmp_path):
     provider = ResumeProvider()
     storage = FakeStorage()
@@ -675,6 +702,7 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
     assert child_run.metadata["child_session_id"] == child_session_id
     assert child_run.metadata["child_run_id"] == child_run.run_id
     assert child_run.metadata["summary"] == "done"
+    assert child_run.metadata["max_tool_iterations"] == 100
 
     child_trace = asyncio.run(storage.get_run_trace(child_session_id, child_run.run_id))
     assert child_trace is not None
@@ -712,6 +740,7 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
         "had_tool_error": False,
         "verification_attempted": False,
         "verification_passed": False,
+        "max_tool_iterations": 100,
         "delegation_mode": "serial",
     }
     assert artifacts[0]["source"] == "event"

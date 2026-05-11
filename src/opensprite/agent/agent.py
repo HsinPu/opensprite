@@ -769,6 +769,7 @@ class AgentLoop:
             current_run_id_getter=self.turn_context.current_run_id,
             current_channel_getter=self.turn_context.current_channel,
             current_external_chat_id_getter=self.turn_context.current_external_chat_id,
+            max_tool_iterations_getter=lambda: self.config.subagent_max_tool_iterations,
             provider_getter=lambda: self.provider,
             llm_config_getter=lambda: self.llm_config,
             should_cancel_parent_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),
