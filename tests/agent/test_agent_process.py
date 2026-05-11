@@ -10,6 +10,7 @@ import sys
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
+from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
 from opensprite.config.schema import AgentConfig, Config, LogConfig, MemoryConfig, MessagesConfig, RecentSummaryConfig, SearchConfig, ToolsConfig, UserProfileConfig
@@ -66,6 +67,26 @@ class FakeProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+def test_aggregate_execution_results_keeps_only_latest_stop_reason():
+    aggregate = AgentTurnRunner._aggregate_execution_results(
+        [
+            ExecutionResult(
+                content="stopped",
+                executed_tool_calls=1,
+                stop_reason="max_tool_iterations",
+                stop_metadata={"iteration_limit": 1},
+            ),
+            ExecutionResult(content="done", executed_tool_calls=0),
+        ],
+        content="done",
+    )
+
+    assert aggregate.content == "done"
+    assert aggregate.executed_tool_calls == 1
+    assert aggregate.stop_reason is None
+    assert aggregate.stop_metadata == {}
 
 
 class WorkflowAuthorityProvider:

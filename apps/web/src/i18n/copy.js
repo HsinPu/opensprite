@@ -541,6 +541,7 @@ export const DISPLAY_COPY = {
         exitCode: "Exit code",
         notifyMode: "Notify mode",
         outputTail: "Output tail",
+        outputPath: "Output path",
       },
       structuredOutputEmpty: "沒有可顯示的結構化輸出。",
       artifactSections: {
@@ -2065,6 +2066,7 @@ export const DISPLAY_COPY = {
         exitCode: "Exit code",
         notifyMode: "Notify mode",
         outputTail: "Output tail",
+        outputPath: "Output path",
       },
       structuredOutputEmpty: "No structured output available.",
       artifactSections: {

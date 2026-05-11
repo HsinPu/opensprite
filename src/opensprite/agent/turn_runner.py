@@ -922,6 +922,7 @@ class AgentTurnRunner:
         """Aggregate multi-pass execution telemetry while keeping the final response."""
         delegated_tasks = tuple(task for result in results for task in result.delegated_tasks)
         selected_task = selected_delegated_task(delegated_tasks)
+        latest_result = results[-1]
         return ExecutionResult(
             content=content,
             executed_tool_calls=sum(result.executed_tool_calls for result in results),
@@ -955,8 +956,8 @@ class AgentTurnRunner:
             had_tool_error=any(result.had_tool_error for result in results),
             verification_attempted=any(result.verification_attempted for result in results),
             verification_passed=any(result.verification_passed for result in results),
-            stop_reason=next((result.stop_reason for result in reversed(results) if result.stop_reason), None),
-            stop_metadata=next((dict(result.stop_metadata or {}) for result in reversed(results) if result.stop_reason), {}),
+            stop_reason=latest_result.stop_reason,
+            stop_metadata=dict(latest_result.stop_metadata or {}) if latest_result.stop_reason else {},
             compaction_handoff=next(
                 (
                     result.compaction_handoff

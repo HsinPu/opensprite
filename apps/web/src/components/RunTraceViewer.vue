@@ -927,6 +927,7 @@ function processDetailRows(artifact) {
     { label: labels.exitCode, value: metadata.exit_code ?? metadata.exitCode, tone: Number(metadata.exit_code ?? metadata.exitCode ?? 0) === 0 ? "neutral" : "error" },
     { label: labels.notifyMode, value: metadata.notify_mode || metadata.notifyMode },
     { label: labels.outputTail, value: metadata.output_tail || metadata.outputTail },
+    { label: labels.outputPath, value: metadata.output_path || metadata.outputPath },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 }

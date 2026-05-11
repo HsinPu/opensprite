@@ -526,6 +526,7 @@ function normalizeBackgroundProcessArtifact(eventType, payload, fallback = {}) {
       exit_code: exitCode ?? null,
       notify_mode: String(payload.notify_mode || payload.notifyMode || "").trim(),
       output_tail: String(payload.output_tail || payload.outputTail || "").trim(),
+      output_path: String(payload.output_path || payload.outputPath || "").trim(),
     },
   };
 }
