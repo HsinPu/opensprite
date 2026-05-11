@@ -553,6 +553,52 @@ def test_semantic_contract_can_add_web_research_requirement():
     }
 
 
+def test_semantic_contract_can_add_workspace_read_requirement():
+    intent = TaskIntentService().classify("auth config 在哪")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="workspace_read",
+            task_type="workspace_read",
+            allow_no_tool_final=False,
+            confidence=0.84,
+            reason="User is asking for a repo-local config location.",
+        ),
+    )
+
+    assert contract.task_type == "workspace_read"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "workspace_read" for requirement in contract.requirements)
+    assert contract.semantic_contract
+    assert contract.semantic_contract["applied"] is True
+
+
+def test_semantic_contract_can_add_history_retrieval_requirement():
+    intent = TaskIntentService().classify("那個 threshold 呢")
+
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+        semantic_decision=SemanticContractDecision(
+            requires_tool_evidence=True,
+            required_tool_group="history_retrieval",
+            task_type="history_retrieval",
+            allow_no_tool_final=False,
+            confidence=0.83,
+            reason="User is referring to a previously discussed threshold.",
+        ),
+    )
+
+    assert contract.task_type == "history_retrieval"
+    assert contract.allow_no_tool_final is False
+    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
+    assert contract.semantic_contract
+    assert contract.semantic_contract["applied"] is True
+
+
 def test_semantic_contract_classifier_parses_web_research_decision():
     provider = _JsonProvider(
         '{"requires_tool_evidence": true, "required_tool_group": "web_research", '
@@ -583,6 +629,64 @@ def test_semantic_contract_classifier_parses_web_research_decision():
     assert decision.task_type == "web_research"
     assert decision.allow_no_tool_final is False
     assert decision.confidence == 0.88
+
+
+def test_semantic_contract_classifier_parses_workspace_read_decision():
+    provider = _JsonProvider(
+        '{"requires_tool_evidence": true, "required_tool_group": "workspace_read", '
+        '"task_type": "workspace_read", "allow_no_tool_final": false, '
+        '"confidence": 0.81, "reason": "Repo-local config lookup needs workspace inspection."}'
+    )
+    intent = TaskIntentService().classify("auth config 在哪")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    decision = asyncio.run(
+        SemanticContractClassifier().classify(
+            provider=provider,
+            model=provider.get_default_model(),
+            task_intent=intent,
+            current_message=intent.objective,
+            history=[],
+            deterministic_contract=deterministic,
+        )
+    )
+
+    assert decision is not None
+    assert decision.required_tool_group == "workspace_read"
+    assert decision.task_type == "workspace_read"
+    assert decision.confidence == 0.81
+
+
+def test_semantic_contract_classifier_parses_history_retrieval_decision():
+    provider = _JsonProvider(
+        '{"requires_tool_evidence": true, "required_tool_group": "history_retrieval", '
+        '"task_type": "history_retrieval", "allow_no_tool_final": false, '
+        '"confidence": 0.82, "reason": "Prior chat recall needs retrieval evidence."}'
+    )
+    intent = TaskIntentService().classify("那個 threshold 呢")
+    deterministic = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+
+    decision = asyncio.run(
+        SemanticContractClassifier().classify(
+            provider=provider,
+            model=provider.get_default_model(),
+            task_intent=intent,
+            current_message=intent.objective,
+            history=[],
+            deterministic_contract=deterministic,
+        )
+    )
+
+    assert decision is not None
+    assert decision.required_tool_group == "history_retrieval"
+    assert decision.task_type == "history_retrieval"
+    assert decision.confidence == 0.82
 
 
 def test_semantic_contract_classifier_skips_deterministic_requirements():

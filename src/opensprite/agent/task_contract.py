@@ -55,7 +55,7 @@ _WEB_TASK_HINT_RE = re.compile(
 )
 _WEB_SEARCH_TERM_RE = re.compile(r"\b(?:search)\b|(?:搜尋)", re.IGNORECASE)
 _ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
-_ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "task", "analysis", "pure_answer"})
+_ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "history_retrieval", "task", "analysis", "pure_answer"})
 _SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
     "Classify whether a user request needs tool-derived evidence before the final answer. "
     "Return only JSON. You may only add stricter requirements; never remove deterministic evidence requirements."
@@ -666,10 +666,12 @@ def _build_semantic_contract_prompt(
         "Decide if the latest user request requires tool-derived evidence before the final answer.\n"
         "Use this for ambiguous, multilingual, shorthand, typo-heavy, or code-mixed requests.\n"
         "Classify requests for current/external facts, prices, finance/stock data, weather, news, web pages, or public data as web_research.\n"
+        "Classify requests about local files, repo contents, code paths, configs, TODOs, or project structure as workspace_read.\n"
+        "Classify requests about earlier chat decisions, previously mentioned items, or prior fetched session knowledge as history_retrieval.\n"
         "Do not require tools for opinions, brainstorming, casual chat, or answers that can be completed from existing context.\n"
         "Return only JSON with keys: requires_tool_evidence, required_tool_group, task_type, allow_no_tool_final, confidence, reason.\n"
         "required_tool_group must be one of: web_research, workspace_read, history_retrieval, or null.\n"
-        "task_type must be one of: web_research, workspace_read, task, analysis, pure_answer, or null.\n"
+        "task_type must be one of: web_research, workspace_read, history_retrieval, task, analysis, pure_answer, or null.\n"
         "If unsure, use confidence below 0.7.\n\n"
         f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
@@ -721,7 +723,26 @@ def _looks_like_semantic_lookup_candidate(text: str) -> bool:
     return bool(
         re.search(r"\d", lowered)
         or lowered.endswith(("?", "？"))
-        or any(marker in lowered for marker in ("多少", "哪", "什麼", "現在", "current", "latest"))
+        or any(
+            marker in lowered
+            for marker in (
+                "多少",
+                "哪",
+                "哪裡",
+                "什麼",
+                "現在",
+                "剛剛",
+                "前面",
+                "之前",
+                "repo",
+                "config",
+                "todo",
+                "threshold",
+                "current",
+                "latest",
+                "history",
+            )
+        )
     )
 
 
