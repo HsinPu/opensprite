@@ -5,7 +5,7 @@ from opensprite.agent.task_contract import TaskContractService
 from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.documents.active_task import create_active_task_store
-from opensprite.llms.base import LLMResponse
+from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
 
 class _Storage:
@@ -42,6 +42,27 @@ class _FailingProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+_ACTIVE_TASK_BLOCK = (
+    "- Status: active\n"
+    "- Goal: Refactor the agent in small safe steps.\n"
+    "- Deliverable: safe refactor\n"
+    "- Definition of done:\n"
+    "  - tests pass\n"
+    "- Constraints:\n"
+    "  - none\n"
+    "- Assumptions:\n"
+    "  - none\n"
+    "- Plan:\n"
+    "  1. inspect\n"
+    "- Current step: 1. inspect\n"
+    "- Next step: not set\n"
+    "- Completed steps:\n"
+    "  - none\n"
+    "- Open questions:\n"
+    "  - none"
+)
 
 
 def test_task_context_uses_deterministic_follow_up_without_llm():
@@ -132,6 +153,49 @@ def test_task_context_ignores_low_confidence_llm_decision():
     assert decision.inherited_tool_group is None
 
 
+def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
+    provider = _JsonProvider(
+        '{"is_follow_up": false, "should_inherit_active_task": false, '
+        '"should_seed_active_task": true, "should_replace_active_task": true, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.83, "reason": "new concrete task should replace current task"}'
+    )
+    message = "好，現在請直接修掉 tests/test_app.py 的問題"
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.should_seed_active_task is True
+    assert decision.should_replace_active_task is True
+
+
+def test_task_context_skips_llm_when_provider_is_unconfigured():
+    message = "那這個呢"
+
+    decision = asyncio.run(
+        TaskContextResolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            provider=UnconfiguredLLM(),
+            model="unconfigured",
+        )
+    )
+
+    assert decision.method == "fallback"
+    assert decision.reason.startswith("llm unavailable")
+
+
 def test_task_contract_uses_task_context_decision_for_web_follow_up():
     intent = TaskIntentService().classify("那這個呢")
     decision = TaskContextDecision(
@@ -164,25 +228,7 @@ def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
         workspace_root_getter=lambda: workspace,
     )
     store = create_active_task_store(app_home, session_id, workspace_root=workspace)
-    store.write_managed_block(
-        "- Status: active\n"
-        "- Goal: Refactor the agent in small safe steps.\n"
-        "- Deliverable: safe refactor\n"
-        "- Definition of done:\n"
-        "  - tests pass\n"
-        "- Constraints:\n"
-        "  - none\n"
-        "- Assumptions:\n"
-        "  - none\n"
-        "- Plan:\n"
-        "  1. inspect\n"
-        "- Current step: 1. inspect\n"
-        "- Next step: not set\n"
-        "- Completed steps:\n"
-        "  - none\n"
-        "- Open questions:\n"
-        "  - none"
-    )
+    store.write_managed_block(_ACTIVE_TASK_BLOCK)
     message = "好，現在請直接修掉 tests/test_app.py 的問題"
     decision = TaskContextDecision(
         should_seed_active_task=True,

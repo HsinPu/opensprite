@@ -110,9 +110,9 @@ class TaskContextResolver:
             active_task=active_task,
             work_state_summary=work_state_summary,
         )
-        if not _should_consult_llm(current_message, deterministic, active_task):
+        if not _should_consult_llm(current_message, deterministic, active_task, task_intent):
             return deterministic
-        if provider is None:
+        if provider is None or str(model or "").strip().lower() == "unconfigured":
             return replace(deterministic, method="fallback", reason=f"llm unavailable; {deterministic.reason}")
 
         try:
@@ -225,13 +225,24 @@ class TaskContextResolver:
         return _decision_from_payload(payload)
 
 
-def _should_consult_llm(current_message: str, decision: TaskContextDecision, active_task: str | None) -> bool:
+def _should_consult_llm(
+    current_message: str,
+    decision: TaskContextDecision,
+    active_task: str | None,
+    task_intent: TaskIntent | None,
+) -> bool:
     current = _compact(current_message)
     if not current or len(current) > 80 or _ACK_RE.match(current):
         return False
     if decision.confidence >= 0.7:
         return False
-    return decision.is_follow_up or (_has_active_task(active_task) and decision.should_inherit_active_task)
+    if decision.is_follow_up:
+        return True
+    if not _has_active_task(active_task):
+        return False
+    if decision.should_inherit_active_task:
+        return True
+    return bool(task_intent and task_intent.should_seed_active_task)
 
 
 def _build_llm_prompt(
