@@ -115,6 +115,14 @@ function readStoredValue(key, fallback) {
   }
 }
 
+function previewText(value) {
+  const normalized = String(value || "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+  return normalized.length > 96 ? `${normalized.slice(0, 96)}...` : normalized;
+}
+
 function normalizeChoice(value, fallback, allowedValues) {
   const normalized = String(value || "").trim();
   return allowedValues.has(normalized) ? normalized : fallback;

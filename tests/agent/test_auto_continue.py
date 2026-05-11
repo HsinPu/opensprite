@@ -152,7 +152,10 @@ def test_auto_continue_stops_at_max_attempts():
 
 def test_auto_continue_skips_incomplete_without_tool_progress():
     intent = TaskIntentService().classify("Please analyze the incident timeline.")
-    completion = CompletionGateResult(status="incomplete", reason="not explicit")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant response did not explicitly complete the task",
+    )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
@@ -165,6 +168,26 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     assert decision.should_continue is False
     assert decision.reason == "no_tool_progress_after_incomplete_response"
     assert decision.emit_skipped_event is True
+
+
+def test_auto_continue_allows_concrete_pending_lookup_once():
+    intent = TaskIntentService().classify("幫我找 2330市值")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant response did not explicitly complete the task",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="讓我查一下最新市值："),
+        attempts_used=0,
+        previous_response="讓我查一下最新市值：",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "previous response announced a concrete next action" in (decision.prompt or "")
 
 
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():

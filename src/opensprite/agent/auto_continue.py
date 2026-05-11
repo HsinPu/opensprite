@@ -13,6 +13,63 @@ from .work_progress import WorkProgressUpdate
 
 _CONTINUABLE_STATUSES = {"incomplete", "needs_verification", "needs_review"}
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
+_INCOMPLETE_PENDING_WORK_REASON = "assistant response did not explicitly complete the task"
+_PENDING_WORK_ACTION_MARKERS = (
+    "let me check",
+    "let me look",
+    "let me search",
+    "let me fetch",
+    "let me research",
+    "i will check",
+    "i will look",
+    "i will search",
+    "i will fetch",
+    "i will research",
+    "i'll check",
+    "i'll look",
+    "i'll search",
+    "i'll fetch",
+    "i'll research",
+    "checking",
+    "searching",
+    "looking up",
+    "fetching",
+    "讓我查",
+    "我查",
+    "我來查",
+    "我去查",
+    "查一下",
+    "查詢",
+    "搜尋",
+    "搜索",
+    "找一下",
+    "我來找",
+    "我去找",
+)
+_PENDING_WORK_BLOCKER_MARKERS = (
+    "cannot",
+    "can't",
+    "could not",
+    "unable",
+    "blocked",
+    "disabled",
+    "無法",
+    "不能",
+    "沒辦法",
+)
+_GENERIC_PENDING_RESPONSES = frozenset(
+    {
+        "i will do that",
+        "i'll do that",
+        "i will handle it",
+        "i'll handle it",
+        "i will take care of it",
+        "i'll take care of it",
+        "let me handle that",
+        "我會處理",
+        "我來處理",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -155,6 +212,12 @@ class AutoContinueService:
             and execution_result.executed_tool_calls == 0
             and not task_intent.expects_code_change
             and not direct_action_available
+            and not _can_continue_pending_work_response(
+                task_intent=task_intent,
+                completion_result=completion_result,
+                previous_response=previous_response,
+                attempts_used=attempts_used,
+            )
             and completion_result.reason
             not in {
                 "assistant only reported progress without performing requested work",
@@ -271,6 +334,11 @@ class AutoContinueService:
                 "\n- The previous response only contained internal control text and no user-visible work. "
                 "Do not repeat internal tags such as <system-reminder> or <think>. "
                 "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
+            )
+        if completion_result.reason == _INCOMPLETE_PENDING_WORK_REASON and _looks_like_concrete_pending_work(previous_response):
+            incomplete_instruction += (
+                "\n- The previous response announced a concrete next action but did not perform it. "
+                "Perform that work now before giving the final answer."
             )
         handoff = _truncate(compaction_handoff or "", max_chars=2400).strip()
         handoff_section = ""
@@ -398,6 +466,34 @@ def _truncate(text: str, *, max_chars: int) -> str:
     if len(compact) <= max_chars:
         return compact
     return compact[: max_chars - 3].rstrip() + "..."
+
+
+def _can_continue_pending_work_response(
+    *,
+    task_intent: TaskIntent,
+    completion_result: CompletionGateResult,
+    previous_response: str,
+    attempts_used: int,
+) -> bool:
+    if attempts_used > 0:
+        return False
+    if not task_intent.should_seed_active_task:
+        return False
+    if completion_result.reason != _INCOMPLETE_PENDING_WORK_REASON:
+        return False
+    return _looks_like_concrete_pending_work(previous_response)
+
+
+def _looks_like_concrete_pending_work(text: str) -> bool:
+    normalized = " ".join(str(text or "").strip().lower().split())
+    if not normalized:
+        return False
+    generic = normalized.strip(" .:;!?。！？：；")
+    if generic in _GENERIC_PENDING_RESPONSES:
+        return False
+    if any(marker in normalized for marker in _PENDING_WORK_BLOCKER_MARKERS):
+        return False
+    return any(marker in normalized for marker in _PENDING_WORK_ACTION_MARKERS)
 
 
 def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> str:
