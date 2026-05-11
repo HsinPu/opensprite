@@ -11,6 +11,7 @@ from ..tools import ToolRegistry
 from ..utils.log import logger
 from .execution import ExecutionResult
 from .task_contract import TaskContract, TaskContractService
+from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
 
@@ -36,6 +37,8 @@ class LlmCallService:
         build_system_prompt: Callable[[str], str],
         log_prepared_messages: Callable[[str, list[dict[str, Any]]], None],
         get_work_state_summary: Callable[[str], Awaitable[str]],
+        read_active_task_snapshot: Callable[[str], str],
+        resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
         get_current_run_id: Callable[[], str | None],
@@ -64,6 +67,8 @@ class LlmCallService:
         self._build_system_prompt = build_system_prompt
         self._log_prepared_messages = log_prepared_messages
         self._get_work_state_summary = get_work_state_summary
+        self._read_active_task_snapshot = read_active_task_snapshot
+        self._resolve_task_context = resolve_task_context
         self._build_proactive_retrieval_context = build_proactive_retrieval_context
         self._get_tool_registry = get_tool_registry
         self._get_current_run_id = get_current_run_id
@@ -92,8 +97,6 @@ class LlmCallService:
         task_intent: TaskIntent | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
-        await self._maybe_seed_active_task(session_id, current_message, task_intent=task_intent)
-
         logger.info(f"[{session_id}] history.load | requested=true")
         history_messages = await self._load_history(session_id)
 
@@ -134,6 +137,30 @@ class LlmCallService:
             f"[{session_id}] prompt.build | history={len(history_dicts)} channel={channel or '-'} images={len(user_images or [])}"
         )
         work_state_summary = await self._get_work_state_summary(session_id)
+        active_task_snapshot = self._read_active_task_snapshot(session_id)
+        task_context_decision = None
+        if task_intent is not None:
+            task_context_decision = await self._resolve_task_context(
+                current_message=current_message,
+                history=history_dicts,
+                task_intent=task_intent,
+                active_task=active_task_snapshot,
+                work_state_summary=work_state_summary,
+            )
+            logger.info(
+                f"[{session_id}] task.context | method={task_context_decision.method} "
+                f"follow_up={task_context_decision.is_follow_up} "
+                f"inherit_active={task_context_decision.should_inherit_active_task} "
+                f"replace_active={task_context_decision.should_replace_active_task} "
+                f"tool_group={task_context_decision.inherited_tool_group or '-'} "
+                f"confidence={task_context_decision.confidence:.2f}"
+            )
+        await self._maybe_seed_active_task(
+            session_id,
+            current_message,
+            task_intent=task_intent,
+            task_context_decision=task_context_decision,
+        )
         if (
             work_state_summary
             and task_intent is not None
@@ -164,6 +191,7 @@ class LlmCallService:
                 current_image_files=user_image_files,
                 current_audio_files=user_audio_files,
                 current_video_files=user_video_files,
+                task_context_decision=task_context_decision,
             )
             guidance = _build_task_contract_guidance(task_contract)
             if guidance:

@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .follow_up_intent import FollowUpIntentResolver
 from .resource_index import ResourceIndex, ResourceRef
+from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
 from ..tools.evidence import ToolEvidence
 
@@ -119,9 +119,15 @@ class TaskContractService:
         current_image_files: list[str] | None = None,
         current_audio_files: list[str] | None = None,
         current_video_files: list[str] | None = None,
+        task_context_decision: TaskContextDecision | None = None,
     ) -> TaskContract:
         objective = str(task_intent.objective or current_message or "").strip()
         text = f"{objective}\n{current_message or ''}"
+        task_context_decision = task_context_decision or TaskContextResolver.resolve_deterministic(
+            current_message=current_message,
+            history=history,
+            task_intent=task_intent,
+        )
         resource_index = ResourceIndex.from_turn_and_history(
             current_message=current_message,
             history=history,
@@ -138,8 +144,12 @@ class TaskContractService:
         image_resources = resource_index.by_kind("image")
         audio_resources = resource_index.by_kind("audio")
         video_resources = resource_index.by_kind("video")
+        inherited_tool_group = task_context_decision.inherited_tool_group
 
-        if image_resources and cls._looks_like_image_task(text, task_intent, current_image_files):
+        if image_resources and (
+            cls._looks_like_image_task(text, task_intent, current_image_files)
+            or inherited_tool_group == "image_text"
+        ):
             selected.extend(image_resources)
             acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
@@ -153,7 +163,10 @@ class TaskContractService:
                 )
             )
             task_type = "media_extraction"
-        elif audio_resources and cls._looks_like_audio_task(text, current_audio_files):
+        elif audio_resources and (
+            cls._looks_like_audio_task(text, current_audio_files)
+            or inherited_tool_group == "audio_text"
+        ):
             selected.extend(audio_resources)
             acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
@@ -167,7 +180,10 @@ class TaskContractService:
                 )
             )
             task_type = "media_extraction"
-        elif video_resources and cls._looks_like_video_task(text, current_video_files):
+        elif video_resources and (
+            cls._looks_like_video_task(text, current_video_files)
+            or inherited_tool_group == "video_understanding"
+        ):
             selected.extend(video_resources)
             acceptance_criteria.append(_media_final_answer_criterion())
             requirements.append(
@@ -182,11 +198,9 @@ class TaskContractService:
             )
             task_type = "media_extraction"
 
-        follow_up = None
         web_required = cls._looks_like_web_task(text)
         if not web_required and not requirements:
-            follow_up = FollowUpIntentResolver.resolve(current_message=current_message, history=history)
-            web_required = follow_up.inherited_tool_group == "web_research"
+            web_required = inherited_tool_group == "web_research"
 
         if web_required:
             min_source_count = 1 if _URL_RE.search(text) else 2
@@ -215,8 +229,20 @@ class TaskContractService:
                     description="Use web research tools before answering this external information request.",
                 )
             )
-            if task_type == "pure_answer" or (follow_up and follow_up.inherited_task_type == "web_research"):
+            if task_type == "pure_answer" or task_context_decision.inherited_task_type == "web_research":
                 task_type = "web_research"
+
+        if not requirements and inherited_tool_group == "workspace_read":
+            requirements.append(
+                EvidenceRequirement(
+                    kind="tool_group",
+                    tool_group="workspace_read",
+                    coverage="any",
+                    min_count=1,
+                    description="Inspect the referenced workspace context before answering this follow-up.",
+                )
+            )
+            task_type = "workspace_read"
 
         if task_intent.expects_code_change:
             requirements.append(

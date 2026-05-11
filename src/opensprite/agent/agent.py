@@ -86,6 +86,7 @@ from .run_trace import RunTraceRecorder
 from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
+from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent, TaskIntentService
 from .tool_registration import (
     BROWSER_TOOL_NAMES,
@@ -651,6 +652,7 @@ class AgentLoop:
             log_config=self.log_config,
         )
         self.task_intents = TaskIntentService()
+        self.task_context_resolver = TaskContextResolver()
         self.completion_gate = CompletionGateService()
         self.auto_continue = AutoContinueService(max_auto_continues=1)
         self.work_progress = WorkProgressService()
@@ -848,10 +850,11 @@ class AgentLoop:
         self._maintenance_rerun = self.curator.rerun_keys
         self.llm_calls = LlmCallService(
             config=self.config,
-            maybe_seed_active_task=lambda session_id, message, task_intent=None: self._maybe_seed_active_task(
+            maybe_seed_active_task=lambda session_id, message, task_intent=None, task_context_decision=None: self._maybe_seed_active_task(
                 session_id,
                 message,
                 task_intent=task_intent,
+                task_context_decision=task_context_decision,
             ),
             load_history=lambda session_id: self._load_history(session_id),
             get_current_audios=self._get_current_audios,
@@ -867,6 +870,12 @@ class AgentLoop:
             build_system_prompt=lambda session_id: self._context_builder.build_system_prompt(session_id),
             log_prepared_messages=self._log_prepared_messages,
             get_work_state_summary=lambda session_id: self._get_work_state_summary(session_id),
+            read_active_task_snapshot=self._read_active_task_snapshot,
+            resolve_task_context=lambda **kwargs: self.task_context_resolver.resolve(
+                provider=self.provider,
+                model=self.provider.get_default_model(),
+                **kwargs,
+            ),
             build_proactive_retrieval_context=lambda session_id, current_message: self.retrieval.build_context(
                 session_id=session_id,
                 current_message=current_message,
@@ -1237,6 +1246,7 @@ class AgentLoop:
         current_message: str,
         *,
         task_intent: TaskIntent | None = None,
+        task_context_decision: TaskContextDecision | None = None,
     ) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
         if task_intent is None:
@@ -1246,6 +1256,7 @@ class AgentLoop:
             current_message,
             enabled=self.active_task_config.enabled,
             task_intent=task_intent,
+            task_context_decision=task_context_decision,
         )
 
     async def reload_mcp_from_config(self) -> str:

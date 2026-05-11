@@ -20,6 +20,7 @@ from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..utils.log import logger
 from .completion_gate import CompletionGateResult
+from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressService, WorkProgressUpdate
 
@@ -184,6 +185,7 @@ class ActiveTaskCommandService:
         *,
         enabled: bool,
         task_intent: TaskIntent | None = None,
+        task_context_decision: TaskContextDecision | None = None,
     ) -> None:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when appropriate."""
         if not enabled:
@@ -194,14 +196,25 @@ class ActiveTaskCommandService:
 
         current_status = store.read_status()
         replacing = False
-        if current_status in {"active", "blocked", "waiting_user"}:
-            if not should_replace_active_task(store.read_managed_block(), current_message):
+        has_current_task = current_status in {"active", "blocked", "waiting_user"}
+        if has_current_task:
+            current_task = store.read_managed_block()
+            explicit_replace = should_replace_active_task(current_task, current_message)
+            llm_replace = bool(task_context_decision and task_context_decision.should_replace_active_task)
+            if task_context_decision and task_context_decision.should_inherit_active_task and not (explicit_replace or llm_replace):
+                return
+            if not (explicit_replace or llm_replace):
                 return
             replacing = True
 
         initial_task = None
         if task_intent is not None:
-            if task_intent.should_seed_active_task:
+            should_seed = task_intent.should_seed_active_task or bool(
+                task_context_decision
+                and (task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
+            )
+            inheriting_current_task = bool(has_current_task and task_context_decision and task_context_decision.should_inherit_active_task)
+            if should_seed and not inheriting_current_task:
                 initial_task = build_task_block_from_intent_fields(
                     goal=task_intent.objective,
                     definition_of_done=task_intent.done_criteria,
