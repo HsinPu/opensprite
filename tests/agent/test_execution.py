@@ -1464,6 +1464,7 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
             messages,
             allow_tools=False,
             on_llm_status=status_hook,
+            work_state_summary="## Structured Work State\n- Objective: Finish compaction handoff\n- Resume hint: Continue validation",
         )
     )
 
@@ -1492,9 +1493,14 @@ def test_execution_proactively_compacts_before_llm_request_when_near_budget():
     assert "approaching the configured context budget" in sent_messages[1].content
     assert "handoff from a previous context window" in sent_messages[1].content
     assert "Treat summarized older context as reference only" in sent_messages[1].content
+    assert "This handoff is not completion evidence" in sent_messages[1].content
+    assert "## Structured Work State" in sent_messages[1].content
     assert "## Preserved Recent Tail" in sent_messages[1].content
     assert "latest instruction" in sent_messages[1].content
     assert "A" * 2000 not in sent_messages[1].content
+    assert result.compaction_handoff is not None
+    assert "Finish compaction handoff" in result.compaction_handoff
+    assert "This handoff is not completion evidence" in result.compaction_handoff
     assert sent_messages[2].content == "intermediate answer"
     assert sent_messages[3].content == "latest instruction"
     assert statuses == [ExecutionEngine.PROACTIVE_CONTEXT_COMPACTION_STATUS_MESSAGE]
@@ -1569,6 +1575,7 @@ def test_execution_uses_llm_compactor_when_configured():
     assert compactor_call["max_tokens"] == 4096
     assert compactor_call["messages"][0].role == "system"
     assert "context compaction engine" in compactor_call["messages"][0].content
+    assert "Preserve verification requirements" in compactor_call["messages"][0].content
     sent_messages = provider.calls[1]["messages"]
     assert [message.role for message in sent_messages] == ["system", "system", "assistant", "user"]
     assert sent_messages[0].content == "SYSTEM"

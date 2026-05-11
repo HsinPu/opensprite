@@ -529,6 +529,7 @@ class AgentTurnRunner:
                 last_direct_verify_pytest_args=last_direct_verify_pytest_args,
                 same_target_verify_attempts=same_target_verify_attempts,
                 verification_available=self._verification_available(),
+                compaction_handoff=aggregate_result.compaction_handoff,
             )
             if decision.should_continue and decision.direct_workflow and decision.direct_start_step:
                 await self._emit_run_event(
@@ -956,6 +957,14 @@ class AgentTurnRunner:
             verification_passed=any(result.verification_passed for result in results),
             stop_reason=next((result.stop_reason for result in reversed(results) if result.stop_reason), None),
             stop_metadata=next((dict(result.stop_metadata or {}) for result in reversed(results) if result.stop_reason), {}),
+            compaction_handoff=next(
+                (
+                    result.compaction_handoff
+                    for result in reversed(results)
+                    if result.compaction_handoff
+                ),
+                None,
+            ),
             context_compactions=sum(result.context_compactions for result in results),
             context_compaction_events=[
                 event

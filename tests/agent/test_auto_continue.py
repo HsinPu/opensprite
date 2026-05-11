@@ -508,3 +508,26 @@ def test_auto_continue_uses_work_progress_budget_and_stops_without_progress():
     assert decision.reason == "no_progress_during_continuation"
     assert decision.max_attempts == 3
     assert decision.emit_skipped_event is True
+
+
+def test_auto_continue_includes_compaction_handoff_in_prompt():
+    intent = TaskIntentService().classify("Please research the topic and cite sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="required task evidence was not produced",
+        active_task_detail="Need traceable source evidence.",
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Need more source work.", executed_tool_calls=1),
+        attempts_used=0,
+        previous_response="Need more source work.",
+        compaction_handoff="# Compacted Conversation State\n## Remaining Work\nCollect source evidence.",
+    )
+
+    assert decision.should_continue is True
+    assert "Compaction handoff from the previous context window" in (decision.prompt or "")
+    assert "Collect source evidence." in (decision.prompt or "")
+    assert "does not satisfy missing verification, review, evidence, or quality requirements" in (decision.prompt or "")

@@ -86,6 +86,7 @@ class AutoContinueService:
         last_direct_verify_pytest_args: tuple[str, ...] = (),
         same_target_verify_attempts: int = 0,
         verification_available: bool = True,
+        compaction_handoff: str | None = None,
     ) -> AutoContinueDecision:
         """Return whether another bounded pass should run."""
         next_attempt = attempts_used + 1
@@ -191,6 +192,7 @@ class AutoContinueService:
                 task_intent=task_intent,
                 completion_result=completion_result,
                 previous_response=previous_response,
+                compaction_handoff=compaction_handoff,
             ),
             direct_workflow=direct_workflow,
             direct_start_step=direct_start_step,
@@ -205,6 +207,7 @@ class AutoContinueService:
         task_intent: TaskIntent,
         completion_result: CompletionGateResult,
         previous_response: str,
+        compaction_handoff: str | None = None,
     ) -> str:
         """Build the synthetic continuation instruction for the next pass."""
         previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
@@ -269,6 +272,14 @@ class AutoContinueService:
                 "Do not repeat internal tags such as <system-reminder> or <think>. "
                 "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
             )
+        handoff = _truncate(compaction_handoff or "", max_chars=2400).strip()
+        handoff_section = ""
+        if handoff:
+            handoff_section = (
+                "\n\nCompaction handoff from the previous context window:\n"
+                f"{handoff}\n"
+                "Use this as continuity context only. It does not satisfy missing verification, review, evidence, or quality requirements."
+            )
         quality_instruction = _quality_follow_up_instruction(completion_result)
 
         return (
@@ -286,6 +297,7 @@ class AutoContinueService:
             "- If the task cannot proceed, state the blocker clearly.\n\n"
             "Previous assistant response:\n"
             f"{previous}"
+            f"{handoff_section}"
         )
 
     def build_post_workflow_resume_prompt(

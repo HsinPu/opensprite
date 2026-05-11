@@ -88,6 +88,7 @@ class ExecutionResult:
     verification_passed: bool = False
     stop_reason: str | None = None
     stop_metadata: dict[str, Any] = field(default_factory=dict)
+    compaction_handoff: str | None = None
     context_compactions: int = 0
     context_compaction_events: list[ContextCompactionEvent] = field(default_factory=list)
     llm_step_events: list[LlmStepEvent] = field(default_factory=list)
@@ -183,6 +184,7 @@ class ExecutionEngine:
     COMPACTED_MESSAGE_MAX_CHARS = 900
     COMPACTED_LATEST_USER_MAX_CHARS = 1600
     COMPACTED_TRANSCRIPT_MAX_CHARS = 10_000
+    COMPACTION_HANDOFF_MAX_CHARS = 6_000
     COMPACTED_TAIL_MESSAGE_LIMIT = 2
     COMPACTED_TAIL_MESSAGE_MAX_CHARS = 1200
     LLM_COMPACTION_TRANSCRIPT_MAX_CHARS = 30_000
@@ -206,6 +208,7 @@ class ExecutionEngine:
         "Treat it as reference state from a previous context window, not as a fresh user request. "
         "Do not ask the user to repeat information that is already preserved there. "
         "Prefer the preserved recent tail and current active task state when deciding the next step. "
+        "Do not treat this handoff as completion evidence; verification, review, and evidence gates still apply. "
         "If more tool work is needed, continue using tools; otherwise provide the final answer."
     )
     CONTEXT_OVERFLOW_STATUS_MESSAGE = "上下文已接近上限，正在壓縮目前任務並繼續…"
@@ -218,6 +221,7 @@ Do not solve the user's task. Do not ask questions. Do not invent facts.
 Treat this as a handoff to a future context window of the same assistant.
 Preserve enough state to continue work without asking the user to repeat details.
 Do not turn old requests into new instructions. Distinguish clearly between completed work and remaining work.
+Preserve verification requirements, missing evidence, review findings, quality gaps, and blockers exactly. Never convert incomplete work into completed work.
 
 Output exactly these sections when applicable:
 # Compacted Task State
@@ -724,6 +728,17 @@ Output exactly these sections when applicable:
         return compacted
 
     @classmethod
+    def _extract_compaction_handoff(cls, messages: list[ChatMessage]) -> str | None:
+        """Return the latest compacted-state system handoff for continuation prompts."""
+        for message in reversed(messages):
+            if getattr(message, "role", None) != "system":
+                continue
+            content = cls._message_content_to_text(getattr(message, "content", ""))
+            if "# Compacted Conversation State" in content or "# Compacted Task State" in content:
+                return cls._truncate_text(content, cls.COMPACTION_HANDOFF_MAX_CHARS)
+        return None
+
+    @classmethod
     def _latest_user_text(cls, messages: list[ChatMessage], *, max_chars: int) -> str:
         latest_user = next((message for message in reversed(messages) if getattr(message, "role", None) == "user"), None)
         if latest_user is None:
@@ -835,6 +850,7 @@ Output exactly these sections when applicable:
             "The in-turn context was compacted by an LLM before the next request because it was approaching the configured context budget.",
             "This summary is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
             "Treat summarized older context as reference only. Prefer the preserved recent tail and current active task state if they conflict with the summary.",
+            "This handoff is not completion evidence. Preserve verification, review, evidence, and quality-gate gaps until tools or final answers satisfy them.",
             "Do not ask the user to repeat details already summarized here.",
             "",
             summary,
@@ -982,6 +998,7 @@ Output exactly these sections when applicable:
             or "The previous in-turn context was compacted automatically after the LLM reported a context-window error.",
             "This is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
             "Treat summarized older context as reference only. Prefer the preserved recent tail and current active task state if they conflict with the summary.",
+            "This handoff is not completion evidence. Preserve verification, review, evidence, and quality-gate gaps until tools or final answers satisfy them.",
             "Do not ask the user to repeat details already summarized here.",
         ]
         if latest_user_text:
@@ -1096,6 +1113,7 @@ Output exactly these sections when applicable:
         context_compactions = 0
         context_compaction_events: list[ContextCompactionEvent] = []
         llm_step_events: list[LlmStepEvent] = []
+        latest_compaction_handoff: str | None = None
         proactive_context_compactions = 0
         overflow_context_compactions = 0
         iteration_limit = (
@@ -1118,6 +1136,7 @@ Output exactly these sections when applicable:
                     context_compactions += 1
                     before_count = len(chat_messages)
                     chat_messages[:] = proactive_compaction.messages
+                    latest_compaction_handoff = self._extract_compaction_handoff(chat_messages)
                     context_compaction_events.append(
                         ContextCompactionEvent(
                             trigger="proactive",
@@ -1282,6 +1301,7 @@ Output exactly these sections when applicable:
                                 provider=active_provider,
                             )
                             chat_messages[:] = compacted_messages
+                            latest_compaction_handoff = self._extract_compaction_handoff(chat_messages)
                             context_compaction_events.append(
                                 ContextCompactionEvent(
                                     trigger="overflow",
@@ -1405,6 +1425,7 @@ Output exactly these sections when applicable:
                             active_delegate_prompt_type=active_delegate_prompt_type,
                             verification_attempted=verification_attempted,
                             verification_passed=verification_passed,
+                            compaction_handoff=latest_compaction_handoff,
                             context_compactions=context_compactions,
                             context_compaction_events=context_compaction_events,
                             llm_step_events=llm_step_events,
@@ -1428,6 +1449,7 @@ Output exactly these sections when applicable:
                         active_delegate_prompt_type=active_delegate_prompt_type,
                         verification_attempted=verification_attempted,
                         verification_passed=verification_passed,
+                        compaction_handoff=latest_compaction_handoff,
                         context_compactions=context_compactions,
                         context_compaction_events=context_compaction_events,
                         llm_step_events=llm_step_events,
@@ -1638,6 +1660,7 @@ Output exactly these sections when applicable:
                                 active_delegate_prompt_type=active_delegate_prompt_type,
                                 verification_attempted=verification_attempted,
                                 verification_passed=verification_passed,
+                                compaction_handoff=latest_compaction_handoff,
                                 context_compactions=context_compactions,
                                 context_compaction_events=context_compaction_events,
                                 llm_step_events=llm_step_events,
@@ -1723,6 +1746,7 @@ Output exactly these sections when applicable:
                     active_delegate_prompt_type=active_delegate_prompt_type,
                     verification_attempted=verification_attempted,
                     verification_passed=verification_passed,
+                    compaction_handoff=latest_compaction_handoff,
                     context_compactions=context_compactions,
                     context_compaction_events=context_compaction_events,
                     llm_step_events=llm_step_events,
@@ -1747,6 +1771,7 @@ Output exactly these sections when applicable:
                 active_delegate_prompt_type=active_delegate_prompt_type,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
+                compaction_handoff=latest_compaction_handoff,
                 context_compactions=context_compactions,
                 context_compaction_events=context_compaction_events,
                 llm_step_events=llm_step_events,
@@ -1793,6 +1818,7 @@ Output exactly these sections when applicable:
             verification_passed=verification_passed,
             stop_reason="max_tool_iterations",
             stop_metadata=stop_metadata,
+            compaction_handoff=latest_compaction_handoff,
             context_compactions=context_compactions,
             context_compaction_events=context_compaction_events,
             llm_step_events=llm_step_events,
