@@ -12,7 +12,7 @@ from ..utils.log import logger
 from .execution import ExecutionResult
 from .task_contract import TaskContract, TaskContractService
 from .task_context_resolver import TaskContextDecision
-from .task_intent import TaskIntent
+from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision
 
 
@@ -193,27 +193,29 @@ class LlmCallService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
+        effective_task_intent = _effective_task_intent(task_intent, task_objective_decision)
         await self._maybe_seed_active_task(
             session_id,
             current_message,
-            task_intent=task_intent,
+            task_intent=effective_task_intent,
             task_context_decision=task_context_decision,
             task_objective_decision=task_objective_decision,
         )
+        effective_current_message = _message_with_resolved_objective(current_message, task_objective_decision)
         if (
             work_state_summary
-            and task_intent is not None
-            and task_intent.objective.strip() != str(current_message or "").strip()
+            and effective_task_intent is not None
+            and effective_task_intent.objective.strip() != str(effective_current_message or "").strip()
         ):
-            current_message = (
-                f"{current_message}\n\n"
+            effective_current_message = (
+                f"{effective_current_message}\n\n"
                 "Use the existing structured work state below as the source of truth for continuing the task.\n"
                 f"{work_state_summary}"
             )
         current_audios = self._get_current_audios()
         current_videos = self._get_current_videos()
         prompt_message = self._augment_message_for_media(
-            current_message,
+            effective_current_message,
             user_images,
             current_audios,
             current_videos,
@@ -222,9 +224,9 @@ class LlmCallService:
             user_video_files=user_video_files,
         )
         task_contract = None
-        if task_intent is not None:
+        if effective_task_intent is not None:
             task_contract = TaskContractService.build(
-                task_intent=task_intent,
+                task_intent=effective_task_intent,
                 current_message=prompt_message,
                 history=history_dicts,
                 current_image_files=user_image_files,
@@ -241,7 +243,7 @@ class LlmCallService:
                 f"acceptance_criteria={len(task_contract.acceptance_criteria)} "
                 f"allow_no_tool_final={task_contract.allow_no_tool_final}"
             )
-        planning_mode = resolve_planning_mode(current_message, base_registry=self._get_tool_registry())
+        planning_mode = resolve_planning_mode(effective_current_message, base_registry=self._get_tool_registry())
         selected_tool_registry = planning_mode.tool_registry
         if planning_mode.enabled and selected_tool_registry is not None:
             logger.info(
@@ -260,7 +262,7 @@ class LlmCallService:
         )
         proactive_retrieval_context = await self._build_proactive_retrieval_context(
             session_id=session_id,
-            current_message=current_message,
+            current_message=effective_current_message,
         )
         if proactive_retrieval_context:
             history_dicts = [{"role": "system", "content": proactive_retrieval_context}, *history_dicts]
@@ -379,6 +381,37 @@ class LlmCallService:
             result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
             result.task_contract = task_contract
             return result
+
+
+def _effective_task_intent(
+    task_intent: TaskIntent | None,
+    task_objective_decision: TaskObjectiveDecision | None,
+) -> TaskIntent | None:
+    if task_intent is None:
+        return None
+    if not (task_objective_decision and task_objective_decision.should_use_resolved_objective):
+        return task_intent
+    resolved_objective = str(task_objective_decision.resolved_objective or "").strip()
+    if not resolved_objective:
+        return task_intent
+    return TaskIntentService().classify(resolved_objective)
+
+
+def _message_with_resolved_objective(
+    current_message: str,
+    task_objective_decision: TaskObjectiveDecision | None,
+) -> str:
+    if not (task_objective_decision and task_objective_decision.should_use_resolved_objective):
+        return current_message
+    resolved_objective = str(task_objective_decision.resolved_objective or "").strip()
+    original_message = str(current_message or "").strip()
+    if not resolved_objective or resolved_objective.lower() == original_message.lower():
+        return current_message
+    return (
+        f"{current_message}\n\n"
+        f"Resolved task objective: {resolved_objective}\n"
+        "Use the resolved objective as the concrete task for this turn while preserving the original user wording above."
+    )
 
 
 def _build_task_contract_guidance(contract: TaskContract) -> str:

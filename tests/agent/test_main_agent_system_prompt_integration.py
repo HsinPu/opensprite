@@ -645,12 +645,19 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
     result = asyncio.run(_run())
 
     assert result.content == "done"
+    assert result.task_contract is not None
+    assert result.task_contract.task_type == "code_change"
+    assert any(requirement.kind == "file_change" for requirement in result.task_contract.requirements)
     assert len(provider.calls) == 1
-    system_text = provider.calls[-1][0].content
+    final_messages = provider.calls[-1]
+    system_text = final_messages[0].content
+    prompt_text = "\n".join(str(getattr(message, "content", "") or "") for message in final_messages)
     assert "Status: active" in system_text
     assert "Goal: please update README" in system_text
     assert "Original user message: switch" in system_text
     assert "Reply `switch` to replace the active task" not in system_text
+    assert "Resolved task objective: please update README" in prompt_text
+    assert "Record at least one workspace file change" in prompt_text
 
 
 def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_path: Path) -> None:
