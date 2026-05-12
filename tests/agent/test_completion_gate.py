@@ -1233,6 +1233,46 @@ def test_completion_gate_rejects_too_short_web_fetch_source_detail():
     assert completion.reason == "required source material was insufficient"
 
 
+def test_completion_gate_rejects_failed_web_fetch_source_artifact():
+    intent = TaskIntentService().classify("幫我找 2330 市值")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = "台積電市值資料來源是 Yahoo Finance。這個回答故意引用失敗 fetch，應被 gate 擋下。"
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=False),),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    ok=False,
+                    content_preview="Error executing web_fetch: HTTP Error: 404 Not Found",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://finance.yahoo.com/quote/2330.TW/",
+                                "snippet": "Error executing web_fetch: HTTP Error: 404 Not Found",
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "required task evidence was not produced"
+
+
 def test_completion_gate_rejects_blocked_web_fetch_source_detail():
     intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
     contract = TaskContractService.build(

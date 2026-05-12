@@ -1120,6 +1120,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     parallel_delegation = _summarize_parallel_delegation(events)
     structured_subagents = _summarize_structured_subagents(events)
     workflows = _summarize_workflows(events)
+    artifacts = serialize_run_artifacts(trace)
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
     if had_tool_error:
@@ -1134,13 +1135,14 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         warnings.append("parallel_delegation_cancelled")
     if getattr(run, "status", None) in {"failed", "cancelled"}:
         warnings.append(run.status)
+    if _has_external_http_exec_artifact(artifacts):
+        warnings.append("external_http_via_exec")
 
     duration_seconds = None
     if getattr(run, "finished_at", None) is not None:
         duration_seconds = max(0.0, float(run.finished_at) - float(run.created_at))
 
     objective = str(task_intent.get("objective") or run_metadata.get("objective") or "").strip()
-    artifacts = serialize_run_artifacts(trace)
     return {
         "schema_version": RUN_SCHEMA_VERSION,
         "run_id": getattr(run, "run_id", None),
@@ -1175,3 +1177,11 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
             "file_changes": len(file_changes),
         },
     }
+
+
+def _has_external_http_exec_artifact(artifacts: list[dict[str, Any]]) -> bool:
+    for artifact in artifacts:
+        metadata = artifact.get("metadata") if isinstance(artifact, dict) else None
+        if isinstance(metadata, dict) and metadata.get("external_http_via_exec"):
+            return True
+    return False

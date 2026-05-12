@@ -1161,6 +1161,43 @@ def test_serialize_run_summary_builds_stable_card_payload():
     assert summary["counts"] == {"events": 4, "parts": 1, "tool_calls": 1, "file_changes": 1}
 
 
+def test_serialize_run_summary_warns_on_external_http_exec():
+    trace = SimpleNamespace(
+        run=SimpleNamespace(
+            run_id="run-http-exec",
+            session_id="web:browser-1",
+            status="completed",
+            metadata={"objective": "Fetch market data"},
+            created_at=10.0,
+            updated_at=12.0,
+            finished_at=12.0,
+        ),
+        events=[],
+        parts=[
+            SimpleNamespace(
+                part_id=1,
+                run_id="run-http-exec",
+                session_id="web:browser-1",
+                part_type="tool_result",
+                tool_name="exec",
+                content='{"stat":"OK"}',
+                metadata={
+                    "ok": True,
+                    "tool_call_id": "call-http",
+                    "external_http_via_exec": True,
+                    "warning": "external HTTP fetched via exec instead of web_fetch",
+                },
+                created_at=11.0,
+            )
+        ],
+        file_changes=[],
+    )
+
+    summary = serialize_run_summary(trace)
+
+    assert "external_http_via_exec" in summary["warnings"]
+
+
 def test_serialize_run_summary_collects_structured_subagent_results():
     trace = SimpleNamespace(
         run=SimpleNamespace(

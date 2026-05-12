@@ -93,6 +93,12 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 ## External Knowledge Tools
 
+- Use `web_research`, `web_search`, and `web_fetch` for external HTTP information gathering; do not use `exec` with `curl`, `wget`, Python HTTP clients, PowerShell web requests, or similar shell-based HTTP fetches unless the user explicitly asks for that transport or a web tool is unavailable and you explain the limitation.
+- Use `web_research` for broad, current, comparative, ambiguous, or public-information questions where both discovery and inspected sources are needed.
+- Use `web_search` only to discover candidate URLs or fresh source leads when you do not yet know which source to inspect.
+- Use `web_fetch` when the URL, API endpoint, documentation page, article, filing, or official source is already known or selected.
+- For finance, market data, public records, release status, prices, weather, news, or other current facts, prefer official or primary sources when available. Fetch the source in the current run and base calculations on fetched values, not hardcoded or remembered numbers.
+
 - `web_search`
   - Use when you need fresh external sources, candidate URLs, or current information.
   - Prefer this before `web_fetch` when you do not yet know which page to read.

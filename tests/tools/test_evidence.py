@@ -34,3 +34,30 @@ def test_web_fetch_evidence_includes_source_quality_metadata():
     assert source["min_content_chars"] == 800
     assert source["truncated"] is False
     assert source["extractor"] == "trafilatura"
+
+
+def test_web_fetch_http_error_marks_evidence_failed():
+    evidence = build_tool_evidence(
+        "web_fetch",
+        {"url": "https://finance.yahoo.com/quote/2330.TW/"},
+        "Error executing web_fetch: HTTP Error: 404 Not Found",
+        ok=True,
+    )
+
+    assert evidence.ok is False
+    assert "sources" not in evidence.metadata
+    assert "HTTP Error: 404" in evidence.metadata["error"]
+
+
+def test_exec_http_command_records_external_warning_metadata():
+    evidence = build_tool_evidence(
+        "exec",
+        {"command": 'curl -s "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json"'},
+        '{"stat":"OK"}',
+        ok=True,
+    )
+
+    assert evidence.ok is True
+    assert evidence.metadata["external_http_via_exec"] is True
+    assert evidence.metadata["warning"] == "external HTTP fetched via exec instead of web_fetch"
+    assert evidence.metadata["urls"] == ["https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json"]

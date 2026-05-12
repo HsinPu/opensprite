@@ -315,6 +315,7 @@ Output exactly these sections when applicable:
         lowered = result.lower()
         return (
             result.startswith("Error:")
+            or result.startswith("Error executing ")
             or "timed out" in lowered
             or " failed" in lowered
             or lowered.startswith("(mcp tool call failed")

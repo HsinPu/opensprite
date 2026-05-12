@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -35,14 +36,49 @@ class ToolEvidence:
 
 def build_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok: bool) -> ToolEvidence:
     """Create default evidence for tools without resource-specific metadata."""
-    metadata = _build_web_source_metadata(tool_name, args, result) if ok else {}
+    effective_ok = bool(ok) and not _tool_result_is_error(tool_name, result)
+    metadata = _build_metadata(tool_name, args, result) if effective_ok else _build_failed_metadata(tool_name, args, result)
     return ToolEvidence(
         name=tool_name,
         args=dict(args or {}),
-        ok=ok,
+        ok=effective_ok,
         result_preview=str(result or "")[:240],
         metadata=metadata,
     )
+
+
+def _build_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
+    if tool_name == "exec":
+        return _exec_metadata(args)
+    return _build_web_source_metadata(tool_name, args, result)
+
+
+def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
+    metadata = _exec_metadata(args) if tool_name == "exec" else {}
+    if _tool_result_is_error(tool_name, result):
+        metadata["error"] = str(result or "")[:500]
+    return metadata
+
+
+def _tool_result_is_error(tool_name: str, result: str) -> bool:
+    text = str(result or "").strip()
+    if not text:
+        return False
+    if text.startswith("Error:") or text.startswith("Error executing "):
+        return True
+    return tool_name == "web_fetch" and "http error:" in text.lower()
+
+
+def _exec_metadata(args: dict[str, Any]) -> dict[str, Any]:
+    command = str((args or {}).get("command") or "")
+    urls = tuple(dict.fromkeys(re.findall(r"https?://[^\s'\"<>]+", command)))
+    if not urls:
+        return {}
+    return {
+        "external_http_via_exec": True,
+        "warning": "external HTTP fetched via exec instead of web_fetch",
+        "urls": list(urls[:5]),
+    }
 
 
 def indexed_resource_id(prefix: str, value: Any) -> str:
