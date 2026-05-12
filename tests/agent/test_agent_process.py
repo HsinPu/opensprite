@@ -18,6 +18,7 @@ from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
 from opensprite.tools.base import Tool
@@ -67,6 +68,11 @@ class FakeProvider:
 
     def get_default_model(self) -> str:
         return "fake-model"
+
+
+class FakeSpeechProvider:
+    async def transcribe(self, audio_data_url, *, model=None, language=None):
+        return "請幫我整理這段語音重點"
 
 
 def test_aggregate_execution_results_keeps_only_latest_stop_reason():
@@ -766,6 +772,130 @@ def test_agent_process_persists_media_only_message_without_llm(tmp_path):
     assert f"Videos: {video_files[0]}" in storage.saved[0][2]
 
 
+def test_agent_process_routes_audio_only_message_to_llm(tmp_path):
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        context_builder = FakeContextBuilder(tmp_path / "workspace")
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=context_builder,
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            media_router=MediaRouter(speech_provider=FakeSpeechProvider()),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        captured = {}
+
+        async def fake_call_llm(
+            session_id,
+            current_message,
+            channel=None,
+            user_images=None,
+            user_image_files=None,
+            user_audio_files=None,
+            user_video_files=None,
+            allow_tools=True,
+            **kwargs,
+        ):
+            captured.setdefault("current_message", current_message)
+            captured.setdefault("current_audios", list(agent._get_current_audios() or []))
+            captured.setdefault("user_audio_files", list(user_audio_files or []))
+            return ExecutionResult(content="transcript reply", executed_tool_calls=1, used_configure_skill=False)
+
+        async def fake_maintenance(session_id):
+            return None
+
+        agent.call_llm = fake_call_llm
+        agent._maybe_consolidate_memory = fake_maintenance
+        agent._maybe_update_recent_summary = fake_maintenance
+        agent._maybe_update_user_profile = fake_maintenance
+        agent._maybe_update_active_task = fake_maintenance
+
+        response = await agent.process(
+            UserMessage(
+                text="",
+                channel="telegram",
+                external_chat_id="room-1",
+                session_id="telegram:room-1",
+                audios=[_media_data_url(b"audio-bytes", "audio/ogg")],
+                metadata={"audio_kinds": ["voice"]},
+            )
+        )
+        await agent.wait_for_background_maintenance()
+        return response, captured, storage
+
+    response, captured, storage = asyncio.run(scenario())
+
+    assert response.text == "transcript reply"
+    assert captured["current_message"].startswith("請幫我整理這段語音重點")
+    assert "[Uploaded file path(s): audios/inbound-" in captured["current_message"]
+    assert captured["current_audios"] == []
+    assert captured["user_audio_files"] == []
+    assert [entry[1] for entry in storage.saved] == ["user", "assistant"]
+
+
+def test_agent_process_saves_uploaded_audio_without_pretranscribing(tmp_path):
+    async def scenario():
+        registry = ToolRegistry()
+        registry.register(DummyTool())
+        storage = FakeStorage()
+        context_builder = FakeContextBuilder(tmp_path / "workspace")
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=context_builder,
+            tools=registry,
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            media_router=MediaRouter(speech_provider=FakeSpeechProvider()),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fail_call_llm(*args, **kwargs):
+            raise AssertionError("uploaded audio files without text should not call the LLM")
+
+        async def fake_maintenance(session_id):
+            return None
+
+        agent.call_llm = fail_call_llm
+        agent._maybe_consolidate_memory = fake_maintenance
+        agent._maybe_update_recent_summary = fake_maintenance
+        agent._maybe_update_user_profile = fake_maintenance
+        agent._maybe_update_active_task = fake_maintenance
+
+        response = await agent.process(
+            UserMessage(
+                text="",
+                channel="telegram",
+                external_chat_id="room-1",
+                session_id="telegram:room-1",
+                audios=[_media_data_url(b"audio-bytes", "audio/mpeg")],
+                metadata={"audio_kinds": ["audio"]},
+            )
+        )
+        await agent.wait_for_background_maintenance()
+        return response, storage
+
+    response, storage = asyncio.run(scenario())
+
+    assert response.text == "已收到並保存媒體檔案。需要我分析內容時，請直接告訴我要看哪一個檔案。"
+    assert storage.saved[0][3]["audio_files"][0].startswith("audios/inbound-")
+    assert storage.saved[0][3]["audio_kinds"] == ["audio"]
+
+
 def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_path):
     async def scenario():
         registry = ToolRegistry()
@@ -799,10 +929,10 @@ def test_agent_process_passes_saved_media_paths_when_text_requests_analysis(tmp_
             allow_tools=True,
             **kwargs,
         ):
-            captured["current_message"] = current_message
-            captured["user_image_files"] = list(user_image_files or [])
-            captured["user_audio_files"] = list(user_audio_files or [])
-            captured["user_video_files"] = list(user_video_files or [])
+            captured.setdefault("current_message", current_message)
+            captured.setdefault("user_image_files", list(user_image_files or []))
+            captured.setdefault("user_audio_files", list(user_audio_files or []))
+            captured.setdefault("user_video_files", list(user_video_files or []))
             return ExecutionResult(content="analysis reply", executed_tool_calls=0, used_configure_skill=False)
 
         async def fake_maintenance(session_id):

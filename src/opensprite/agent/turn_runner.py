@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
 from ..utils.log import logger
+from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
@@ -55,6 +56,7 @@ class AgentTurnRunner:
         save_message: Callable[..., Awaitable[None]],
         emit_run_event: Callable[..., Awaitable[None]],
         call_llm: Callable[..., Awaitable[ExecutionResult]],
+        transcribe_audio: Callable[[list[str]], Awaitable[str]],
         run_workflow: Callable[[str, str, str | None], Awaitable[str]],
         run_verify: Callable[[str, str, tuple[str, ...]], Awaitable[ExecutionResult]],
         verification_available: Callable[[], bool],
@@ -88,6 +90,7 @@ class AgentTurnRunner:
         self._save_message = save_message
         self._emit_run_event = emit_run_event
         self._call_llm = call_llm
+        self.audio_input = AudioInputPreprocessor(transcribe_audio)
         self._run_workflow = run_workflow
         self._run_verify = run_verify
         self._verification_available = verification_available
@@ -112,11 +115,36 @@ class AgentTurnRunner:
     @staticmethod
     def is_media_only_message(user_message: UserMessage) -> bool:
         """Return whether a turn only carries media without user instructions."""
+        if AudioInputPreprocessor.should_pretranscribe(user_message):
+            return False
         return AgentMediaService.is_media_only_message(
             text=user_message.text,
             images=user_message.images,
             audios=user_message.audios,
             videos=user_message.videos,
+        )
+
+    async def _preprocess_audio_only_message(
+        self,
+        user_message: UserMessage,
+        turn: PreparedTurnInput,
+        run_id: str,
+    ) -> None:
+        """Turn pure voice input into text before it reaches the LLM."""
+        result = await self.audio_input.preprocess(user_message, turn)
+        if not result.transcribed:
+            return
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "audio_input.transcribed",
+            {
+                "status": result.status,
+                "audio_files": list(result.audio_files),
+                "transcript_len": result.transcript_len,
+            },
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
         )
 
     async def _maybe_record_worktree_sandbox(self, session_id: str, run_id: str, task_intent: TaskIntent) -> None:
@@ -153,6 +181,7 @@ class AgentTurnRunner:
             audios=user_message.audios,
             videos=user_message.videos,
         )
+        await self._preprocess_audio_only_message(user_message, turn, run_id)
         task_intent = self.task_intents.classify(
             user_message.text,
             images=user_message.images,
@@ -488,7 +517,7 @@ class AgentTurnRunner:
                     channel=turn.channel,
                     user_images=user_message.images,
                     user_image_files=turn.image_files,
-                    user_audio_files=turn.audio_files,
+                    user_audio_files=self.audio_input.audio_files_for_llm(user_message, turn),
                     user_video_files=turn.video_files,
                     external_chat_id=turn.external_chat_id,
                     emit_tool_progress=True,

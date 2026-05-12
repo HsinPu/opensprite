@@ -360,16 +360,19 @@ class TelegramAdapter(MessageAdapter):
 
         # 處理音訊 / 語音
         audios = []
+        audio_kinds = []
         voice = getattr(message, "voice", None)
         if voice and telegram_bot is not None:
             audio = await self._download_audio(voice, telegram_bot, default_mime_type="audio/ogg")
             if audio:
                 audios.append(audio)
+                audio_kinds.append("voice")
         audio_message = getattr(message, "audio", None)
         if audio_message and telegram_bot is not None:
             audio = await self._download_audio(audio_message, telegram_bot, default_mime_type="audio/mpeg")
             if audio:
                 audios.append(audio)
+                audio_kinds.append("audio")
 
         # 處理影片
         videos = []
@@ -405,6 +408,8 @@ class TelegramAdapter(MessageAdapter):
                 metadata["_bypass_commands"] = True
         if message.from_user is not None:
             metadata["username"] = message.from_user.username
+        if audio_kinds:
+            metadata["audio_kinds"] = audio_kinds
 
         return UserMessage(
             text=text,

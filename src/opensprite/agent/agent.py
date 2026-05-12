@@ -686,6 +686,7 @@ class AgentLoop:
             save_message=lambda *args, **kwargs: self._save_message(*args, **kwargs),
             emit_run_event=lambda *args, **kwargs: self._emit_run_event(*args, **kwargs),
             call_llm=lambda *args, **kwargs: self.call_llm(*args, **kwargs),
+            transcribe_audio=lambda audios: self._transcribe_audio_input(audios),
             run_workflow=lambda workflow, task, start_step=None: self.run_workflow(workflow, task, start_step),
             run_verify=lambda action, path, pytest_args=(): self.run_verify(action=action, path=path, pytest_args=pytest_args),
             verification_available=lambda: self.tools.get("verify") is not None,
@@ -1708,6 +1709,11 @@ class AgentLoop:
     def _get_current_videos(self) -> list[str] | None:
         """Return videos attached to the current active turn."""
         return self.turn_context.current_videos()
+
+    async def _transcribe_audio_input(self, audios: list[str]) -> str:
+        """Transcribe inbound audio before treating it as user text."""
+        router = self.media_router or MediaRouter()
+        return await router.transcribe_audio(audios)
 
     def _queue_outbound_media(self, kind: str, payload: str) -> str | None:
         """Queue one media payload to be attached to the current assistant reply."""
