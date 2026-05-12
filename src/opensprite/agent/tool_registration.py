@@ -368,12 +368,14 @@ def register_media_tools(
         TranscribeAudioTool(
             media_router or MediaRouter(),
             get_current_audios=get_current_audios,
+            workspace_resolver=workspace_resolver,
         )
     )
     registry.register(
         AnalyzeVideoTool(
             media_router or MediaRouter(),
             get_current_videos=get_current_videos,
+            workspace_resolver=workspace_resolver,
         )
     )
     registry.register(
