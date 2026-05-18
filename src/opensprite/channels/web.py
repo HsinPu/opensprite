@@ -70,7 +70,8 @@ from ..cron.presentation import format_cron_timestamp, format_cron_timing
 from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize_work_state_todos
 from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
-from ..tools.browser_runtime import SUPPORTED_BROWSER_BACKENDS, browser_cloud_status
+from ..tools.browser import _validate_navigation_url
+from ..tools.browser_runtime import AgentBrowserRuntime, SUPPORTED_BROWSER_BACKENDS, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -2290,6 +2291,48 @@ class WebAdapter(MessageAdapter):
         payload = self._reload_browser_from_config(payload)
         return web.json_response(payload)
 
+    async def _handle_settings_browser_test(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        config = Config.load(self._get_config_path())
+        browser = config.tools.browser
+        url = str(body.get("url") or "https://quotes.toscrape.com/js/").strip()
+        blocked = _validate_navigation_url(url, allow_private_urls=bool(browser.allow_private_urls))
+        if blocked:
+            raise web.HTTPBadRequest(text=blocked)
+        if not browser.enabled:
+            return web.json_response(
+                {
+                    "ok": False,
+                    "url": url,
+                    "backend": browser.backend,
+                    "error": "Browser tools are disabled. Enable and save browser settings before running the manual test.",
+                    "browser": self._browser_payload(config),
+                }
+            )
+
+        runtime = AgentBrowserRuntime(
+            command_timeout=browser.command_timeout,
+            session_timeout=browser.session_timeout,
+            cdp_url=browser.cdp_url,
+            cloud_provider=cloud_provider_from_config(browser),
+        )
+        session_key = f"settings-test-{uuid4().hex[:8]}"
+        open_result = await runtime.run(session_key=session_key, command="open", args=[url], timeout=max(30, browser.command_timeout))
+        snapshot_result: dict[str, Any] | None = None
+        if bool(open_result.get("success")):
+            snapshot_result = await runtime.run(session_key=session_key, command="snapshot", args=["-c"], timeout=browser.command_timeout)
+        ok = bool(open_result.get("success")) and bool((snapshot_result or {}).get("success"))
+        return web.json_response(
+            {
+                "ok": ok,
+                "url": url,
+                "backend": browser.backend,
+                "open": self._json_safe(open_result),
+                "snapshot": self._json_safe(snapshot_result) if snapshot_result is not None else None,
+                "browser": self._browser_payload(config),
+            }
+        )
+
     async def _handle_settings_log(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"log": self._log_payload(config)})
@@ -2683,6 +2726,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/search", self._handle_settings_search_update)
         self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
         self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
+        self.app.router.add_post("/api/settings/browser/test", self._handle_settings_browser_test)
         self.app.router.add_get("/api/settings/log", self._handle_settings_log)
         self.app.router.add_put("/api/settings/log", self._handle_settings_log_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)

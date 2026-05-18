@@ -141,6 +141,8 @@ assertIncludes(app, "confirmClearHistoryTitle", "eval history clear custom confi
 assertIncludes(settingsModal, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
+assertIncludes(settingsModal, "run-browser-test", "browser settings manual test event");
+assertIncludes(settingsModal, "browserTestSummary", "browser settings manual test summary");
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
@@ -255,6 +257,7 @@ assertNotIncludes(chatClient, "copy.value.settings.general.clearWebChats.confirm
 assertNotIncludes(chatClient, "copy.value.settings.eval.confirmClearHistory", "eval history clear does not use native confirm in client action");
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch");
+assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");

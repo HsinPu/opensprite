@@ -193,6 +193,7 @@
     @load-search-searxng-options="loadSearxngOptions"
     @save-search-settings="saveSearchSettings"
     @save-browser-settings="saveBrowserSettings"
+    @run-browser-test="runBrowserTest"
     @refresh-data-settings="loadDataSettings"
     @refresh-eval-status="loadEvalStatus"
     @run-eval-smoke="runEvalSmokeCheck"
@@ -349,6 +350,7 @@ const {
   loadSearxngOptions,
   saveSearchSettings,
   saveBrowserSettings,
+  runBrowserTest,
   loadDataSettings,
   loadEvalStatus,
   runEvalSmokeCheck,

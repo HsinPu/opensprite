@@ -196,8 +196,10 @@ export function createSettingsState() {
       jinaApiKey: "",
     },
     browserLoading: false,
+    browserTestLoading: false,
     browserError: "",
     browserNotice: "",
+    browserTestResult: null,
     browser: {
       enabled: false,
       backend: "agent-browser",
@@ -220,6 +222,7 @@ export function createSettingsState() {
       sessionTimeout: 300,
       cdpUrl: "",
       allowPrivateUrls: false,
+      testUrl: "https://quotes.toscrape.com/js/",
     },
     logLoading: false,
     logError: "",

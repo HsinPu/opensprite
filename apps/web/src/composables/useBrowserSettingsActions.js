@@ -23,6 +23,14 @@ function syncBrowserForm(settingsState) {
   settingsState.browserForm.allowPrivateUrls = settingsState.browser.allow_private_urls;
 }
 
+function summarizeBrowserTest(payload, copy) {
+  const browserCopy = copy.value.settings.browser;
+  if (payload?.ok) {
+    return browserCopy.testPassed(payload.url || "");
+  }
+  return browserCopy.testFailed(payload?.error || payload?.open?.error || payload?.snapshot?.error || "");
+}
+
 export function useBrowserSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
   async function loadBrowserSettings() {
     settingsState.browserLoading = true;
@@ -67,8 +75,31 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
     }
   }
 
+  async function runBrowserTest() {
+    settingsState.browserTestLoading = true;
+    settingsState.browserError = "";
+    settingsState.browserNotice = "";
+    settingsState.browserTestResult = null;
+    try {
+      const payload = await requestSettingsJson("/api/settings/browser/test", {
+        method: "POST",
+        body: JSON.stringify({
+          url: settingsState.browserForm.testUrl,
+        }),
+      });
+      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
+      settingsState.browserTestResult = payload;
+      settingsState.browserNotice = summarizeBrowserTest(payload, copy);
+    } catch (error) {
+      settingsState.browserError = error?.message || copy.value.notices.browserTestFailed;
+    } finally {
+      settingsState.browserTestLoading = false;
+    }
+  }
+
   return {
     loadBrowserSettings,
     saveBrowserSettings,
+    runBrowserTest,
   };
 }

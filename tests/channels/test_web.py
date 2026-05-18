@@ -966,6 +966,77 @@ def test_web_adapter_browser_settings_roundtrip(tmp_path):
     asyncio.run(_run_web_browser_settings_roundtrip(tmp_path))
 
 
+async def _run_web_browser_settings_manual_test(tmp_path: Path, monkeypatch):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    config = Config.from_json(config_path)
+    config.tools.browser.enabled = True
+    config.save(config_path)
+
+    calls = []
+
+    async def fake_run(self, *, session_key, command, args=None, timeout=None):
+        calls.append({"session_key": session_key, "command": command, "args": args or [], "timeout": timeout})
+        if command == "open":
+            return {"success": True, "url": (args or [""])[0]}
+        if command == "snapshot":
+            return {"success": True, "text": "Quotes to Scrape @e1"}
+        return {"success": False, "error": "unexpected command"}
+
+    monkeypatch.setattr("opensprite.channels.web.AgentBrowserRuntime.run", fake_run)
+
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.post(
+                f"http://127.0.0.1:{port}/api/settings/browser/test",
+                json={"url": "https://quotes.toscrape.com/js/"},
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["ok"] is True
+                assert payload["url"] == "https://quotes.toscrape.com/js/"
+                assert payload["open"]["success"] is True
+                assert payload["snapshot"]["success"] is True
+                assert payload["browser"]["enabled"] is True
+
+        assert [call["command"] for call in calls] == ["open", "snapshot"]
+        assert calls[0]["args"] == ["https://quotes.toscrape.com/js/"]
+        assert calls[1]["args"] == ["-c"]
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_browser_settings_manual_test(tmp_path, monkeypatch):
+    asyncio.run(_run_web_browser_settings_manual_test(tmp_path, monkeypatch))
+
+
 async def _run_web_search_settings_roundtrip(tmp_path: Path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)

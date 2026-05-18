@@ -1735,6 +1735,40 @@
             </div>
           </div>
 
+          <h3>{{ copy.settings.browser.test.title }}</h3>
+          <div class="settings-card settings-card--form">
+            <label class="settings-row settings-row--field">
+              <div>
+                <strong>{{ copy.settings.browser.test.urlTitle }}</strong>
+                <span>{{ copy.settings.browser.test.description }}</span>
+              </div>
+              <input
+                v-model="settingsState.browserForm.testUrl"
+                type="url"
+                spellcheck="false"
+                :placeholder="copy.settings.browser.test.placeholder"
+                :disabled="settingsState.browserTestLoading"
+                @keydown.enter.prevent="$emit('run-browser-test')"
+              />
+            </label>
+            <div class="settings-row settings-row--update">
+              <div>
+                <strong>{{ copy.settings.browser.test.currentTitle }}</strong>
+                <span>{{ browserTestSummary }}</span>
+              </div>
+              <div class="settings-row__actions">
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.browserTestLoading || settingsState.browserLoading"
+                  @click="$emit('run-browser-test')"
+                >
+                  {{ settingsState.browserTestLoading ? copy.settings.browser.test.running : copy.settings.browser.test.run }}
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div class="settings-card">
             <div class="settings-row">
               <div>
@@ -3946,6 +3980,17 @@ const browserSummary = computed(() => {
   return props.copy.settings.browser.enabledSummary;
 });
 
+const browserTestSummary = computed(() => {
+  const result = props.settingsState.browserTestResult;
+  if (!result) {
+    return props.copy.settings.browser.test.notRun;
+  }
+  if (result.ok) {
+    return props.copy.settings.browser.test.resultPassed(result.url || "");
+  }
+  return props.copy.settings.browser.test.resultFailed(result.error || result.open?.error || result.snapshot?.error || "");
+});
+
 const networkSummary = computed(() => {
   const form = props.settingsState.networkForm || {};
   const active = [form.httpProxy, form.httpsProxy].map((value) => String(value || "").trim()).filter(Boolean).length;
@@ -4075,6 +4120,7 @@ const emit = defineEmits([
   "load-search-searxng-options",
   "save-search-settings",
   "save-browser-settings",
+  "run-browser-test",
   "refresh-eval-status",
   "run-eval-smoke",
   "run-task-completion-smoke",

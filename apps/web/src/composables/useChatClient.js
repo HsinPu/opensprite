@@ -2504,7 +2504,7 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
-  const { loadBrowserSettings, saveBrowserSettings } = useBrowserSettingsActions({
+  const { loadBrowserSettings, saveBrowserSettings, runBrowserTest } = useBrowserSettingsActions({
     settingsState,
     requestSettingsJson,
     copy,
@@ -4686,6 +4686,7 @@ export function useChatClient() {
     saveNetworkSettings,
     saveSearchSettings,
     saveBrowserSettings,
+    runBrowserTest,
     saveLogSettings,
     beginCronJobEdit,
     beginCronJobCreate,
