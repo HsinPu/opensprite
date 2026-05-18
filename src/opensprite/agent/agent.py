@@ -808,6 +808,11 @@ class AgentLoop:
             tools_config=self.tools_config,
             context_builder=self._context_builder,
             config_path_getter=self._get_config_path,
+            current_session_id_getter=self._get_current_session_id,
+            current_run_id_getter=self.turn_context.current_run_id,
+            current_channel_getter=self.turn_context.current_channel,
+            current_external_chat_id_getter=self.turn_context.current_external_chat_id,
+            emit_run_event=self._emit_run_event,
         )
         self.memory = self._setup_memory_store()
         self.memory_consolidation = self._setup_memory_consolidation()

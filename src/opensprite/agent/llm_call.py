@@ -427,8 +427,19 @@ class LlmCallService:
                 },
                 channel=channel,
                 external_chat_id=external_chat_id,
-            )
+        )
         self._sync_runtime_mcp_tools_context()
+        if run_id is not None:
+            tool_names = list(selected_tool_registry.tool_names) if selected_tool_registry is not None else []
+            mcp_tool_names = sorted(name for name in tool_names if str(name).startswith("mcp_"))
+            await self._emit_run_event(
+                session_id,
+                run_id,
+                "mcp.tools_synced",
+                {"tool_names": mcp_tool_names, "tool_count": len(mcp_tool_names)},
+                channel=channel,
+                external_chat_id=external_chat_id,
+            )
         full_messages = self._build_messages(
             history=history_dicts,
             current_message=prompt_message,

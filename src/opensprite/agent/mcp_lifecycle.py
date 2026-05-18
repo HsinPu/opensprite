@@ -6,7 +6,7 @@ import asyncio
 import time
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from ..config import Config, ToolsConfig
 from ..tools import ToolRegistry
@@ -26,11 +26,21 @@ class McpLifecycleService:
         tools_config: ToolsConfig,
         context_builder: Any,
         config_path_getter: Callable[[], Path | None],
+        current_session_id_getter: Callable[[], str | None],
+        current_run_id_getter: Callable[[], str | None],
+        current_channel_getter: Callable[[], str | None],
+        current_external_chat_id_getter: Callable[[], str | None],
+        emit_run_event: Callable[..., Awaitable[None]],
     ):
         self.tools = tools
         self.tools_config = tools_config
         self.context_builder = context_builder
         self._config_path_getter = config_path_getter
+        self._current_session_id_getter = current_session_id_getter
+        self._current_run_id_getter = current_run_id_getter
+        self._current_channel_getter = current_channel_getter
+        self._current_external_chat_id_getter = current_external_chat_id_getter
+        self._emit_run_event = emit_run_event
         self.servers = dict(tools_config.mcp_servers)
         self.tool_names: set[str] = set()
         self.stack: AsyncExitStack | None = None
@@ -39,6 +49,20 @@ class McpLifecycleService:
         self.connect_failures = 0
         self.retry_after = 0.0
         self._connect_lock = asyncio.Lock()
+
+    async def _emit_event(self, event_type: str, payload: dict[str, Any]) -> None:
+        session_id = self._current_session_id_getter()
+        run_id = self._current_run_id_getter()
+        if session_id is None or run_id is None:
+            return
+        await self._emit_run_event(
+            session_id,
+            run_id,
+            event_type,
+            payload,
+            channel=self._current_channel_getter(),
+            external_chat_id=self._current_external_chat_id_getter(),
+        )
 
     def sync_runtime_tools_context(self) -> None:
         """Expose connected MCP tools to context builders that support prompt summaries."""
@@ -85,6 +109,14 @@ class McpLifecycleService:
                     if name.startswith("mcp_") and name not in preexisting_tool_names
                 }
                 self.sync_runtime_tools_context()
+                await self._emit_event(
+                    "mcp.connected",
+                    {
+                        "server_count": len(self.servers),
+                        "tool_names": sorted(self.tool_names),
+                        "registered_tool_count": len(self.tool_names),
+                    },
+                )
                 logger.info("agent.mcp.connected | tools={}", ", ".join(self.tools.tool_names))
             except BaseException as exc:
                 for name in list(self.tools.tool_names):
@@ -103,6 +135,15 @@ class McpLifecycleService:
                     exc,
                     retry_delay,
                     self.connect_failures,
+                )
+                await self._emit_event(
+                    "mcp.connection_failed",
+                    {
+                        "server_count": len(self.servers),
+                        "error": str(exc),
+                        "connect_failures": self.connect_failures,
+                        "retry_in_seconds": retry_delay,
+                    },
                 )
                 if stack is not None:
                     try:
