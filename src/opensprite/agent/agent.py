@@ -1283,6 +1283,8 @@ class AgentLoop:
         """Create a minimal ACTIVE_TASK.md before the first heavy turn when no task is active yet."""
         if task_intent is None:
             task_intent = self.task_intents.classify(current_message)
+        store = self.active_task_commands.get_store(session_id)
+        before_status = store.read_status() if store is not None else "unavailable"
         await self.active_task_commands.maybe_seed(
             session_id,
             current_message,
@@ -1290,6 +1292,32 @@ class AgentLoop:
             task_intent=task_intent,
             task_context_decision=task_context_decision,
             task_objective_decision=task_objective_decision,
+        )
+        if store is None:
+            return
+        after_status = store.read_status()
+        run_id = self.turn_context.current_run_id()
+        if run_id is None:
+            return
+        changed = before_status != after_status
+        replacing = before_status in {"active", "blocked", "waiting_user"} and changed
+        event_type = "active_task.replaced" if replacing else "active_task.seeded" if changed else "active_task.unchanged"
+        await self._emit_run_event(
+            session_id,
+            run_id,
+            event_type,
+            {
+                "before_status": before_status,
+                "after_status": after_status,
+                "changed": changed,
+                "intent_kind": task_intent.kind if task_intent is not None else None,
+                "context_method": task_context_decision.method if task_context_decision is not None else None,
+                "context_continuation_type": task_context_decision.continuation_type if task_context_decision is not None else None,
+                "objective_method": task_objective_decision.method if task_objective_decision is not None else None,
+                "objective_used": bool(task_objective_decision and task_objective_decision.should_use_resolved_objective),
+            },
+            channel=self.turn_context.current_channel(),
+            external_chat_id=self.turn_context.current_external_chat_id(),
         )
 
     async def reload_mcp_from_config(self) -> str:

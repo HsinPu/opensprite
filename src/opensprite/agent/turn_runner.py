@@ -506,6 +506,14 @@ class AgentTurnRunner:
             direct_resume_context: dict[str, str] | None = None
             if pending_direct_resume is not None:
                 direct_resume_context = dict(pending_direct_resume)
+                await self._emit_run_event(
+                    turn.session_id,
+                    run_id,
+                    "direct_workflow_resume.started",
+                    {"schema_version": 1, **direct_resume_context},
+                    channel=turn.channel,
+                    external_chat_id=turn.external_chat_id,
+                )
                 response, exec_result, collected_delegated_tasks, collected_workflow_outcomes = await self._run_direct_workflow_resume(
                     run_id=run_id,
                     task_intent=task_intent,
@@ -515,6 +523,14 @@ class AgentTurnRunner:
                 )
                 pending_direct_resume = None
             elif pending_direct_verify is not None:
+                await self._emit_run_event(
+                    turn.session_id,
+                    run_id,
+                    "direct_verification.started",
+                    {"schema_version": 1, **dict(pending_direct_verify)},
+                    channel=turn.channel,
+                    external_chat_id=turn.external_chat_id,
+                )
                 response, exec_result = await self._run_direct_verification(
                     direct_verify=pending_direct_verify,
                 )
