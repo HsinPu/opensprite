@@ -65,7 +65,9 @@ def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) ->
     if tool_name == "web_research":
         metadata.update(_web_research_failure_metadata(args, result))
     if _tool_result_is_error(tool_name, result):
-        metadata["error"] = str(result or "")[:500]
+        payload = _parse_json_object(result)
+        error = payload.get("error") if isinstance(payload, dict) else None
+        metadata["error"] = str(error or result or "")[:500]
     return metadata
 
 
@@ -74,6 +76,9 @@ def _tool_result_is_error(tool_name: str, result: str) -> bool:
     if not text:
         return False
     if text.startswith("Error:") or text.startswith("Error executing "):
+        return True
+    payload = _parse_json_object(text)
+    if isinstance(payload, dict) and payload.get("ok") is False and payload.get("error"):
         return True
     return tool_name == "web_fetch" and "http error:" in text.lower()
 

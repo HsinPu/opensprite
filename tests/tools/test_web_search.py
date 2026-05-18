@@ -3,7 +3,7 @@ import json
 
 from opensprite.config.schema import WebSearchToolConfig
 from opensprite.tools.web_search import WebSearchTool
-from opensprite.tools.web_search import _format_results, _freshness_params, _normalize_freshness
+from opensprite.tools.web_search import _format_error, _format_results, _freshness_params, _normalize_freshness
 
 
 class _FakeDuckDuckGoResponse:
@@ -161,6 +161,19 @@ def test_format_results_returns_structured_json_payload():
             }
         ],
     }
+
+
+def test_format_error_returns_structured_json_payload():
+    payload = _format_error("sqlite fts", "duckduckgo", "DuckDuckGo returned no results")
+
+    parsed = json.loads(payload)
+
+    assert parsed["type"] == "web_search"
+    assert parsed["ok"] is False
+    assert parsed["query"] == "sqlite fts"
+    assert parsed["provider"] == "duckduckgo"
+    assert parsed["items"] == []
+    assert parsed["error"] == "Error: DuckDuckGo returned no results"
 
 
 def test_web_search_count_limit_comes_from_config():
@@ -321,9 +334,14 @@ def test_duckduckgo_search_reports_block_page(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
 
     result = asyncio.run(tool._search_duckduckgo("sqlite", 2, "year"))
+    payload = json.loads(result)
 
-    assert result.startswith("Error: DuckDuckGo blocked the search for 'sqlite'")
-    assert "configure another web_search provider" in result
+    assert payload["ok"] is False
+    assert payload["provider"] == "duckduckgo"
+    assert payload["items"] == []
+    assert payload["error"].startswith("Error: DuckDuckGo blocked the search for 'sqlite'")
+    assert "configure another web_search provider" in payload["error"]
+    assert payload["block_reason"] == "bot or rate-limit challenge"
 
 
 def test_duckduckgo_search_reports_no_results(monkeypatch):
@@ -335,5 +353,9 @@ def test_duckduckgo_search_reports_no_results(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo"))
 
     result = asyncio.run(tool._search_duckduckgo("sqlite", 2, "year"))
+    payload = json.loads(result)
 
-    assert result == "Error: DuckDuckGo returned no results for 'sqlite'."
+    assert payload["ok"] is False
+    assert payload["provider"] == "duckduckgo"
+    assert payload["items"] == []
+    assert payload["error"] == "Error: DuckDuckGo returned no results for 'sqlite'."

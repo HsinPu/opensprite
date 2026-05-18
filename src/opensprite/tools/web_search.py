@@ -240,6 +240,29 @@ def _format_results(query: str, items: list[dict[str, Any]], n: int, *, provider
     )
 
 
+def _format_error(query: str, provider: str, error: str, **metadata: Any) -> str:
+    """Format provider failures into the shared web payload schema."""
+    payload = {
+        "type": "web_search",
+        "ok": False,
+        "query": query,
+        "url": "",
+        "final_url": "",
+        "title": "",
+        "content": "",
+        "summary": f"Search failed for: {query}",
+        "provider": provider,
+        "extractor": "search",
+        "status": metadata.pop("status", None),
+        "truncated": False,
+        "content_type": "application/json",
+        "items": [],
+        "error": f"Error: {error}" if not str(error or "").startswith("Error:") else str(error),
+    }
+    payload.update({key: value for key, value in metadata.items() if value is not None})
+    return json.dumps(payload, ensure_ascii=False)
+
+
 class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
@@ -326,7 +349,7 @@ class WebSearchTool(Tool):
         elif provider == "brave":
             return await self._search_brave(query, n, freshness)
         else:
-            return f"Error: unknown search provider '{provider}'"
+            return _format_error(query, provider, f"unknown search provider '{provider}'")
 
     async def _search_brave(self, query: str, n: int, freshness: str) -> str:
         api_key = self.brave_api_key
@@ -348,7 +371,7 @@ class WebSearchTool(Tool):
             ]
             return _format_results(query, items, n, provider="brave")
         except Exception as e:
-            return f"Error: {e}"
+            return _format_error(query, "brave", str(e))
 
     async def _search_duckduckgo(self, query: str, n: int, freshness: str) -> str:
         try:
@@ -387,9 +410,14 @@ class WebSearchTool(Tool):
 
                     block_reason = _detect_duckduckgo_block(r.text)
                     if block_reason:
-                        return (
-                            f"Error: DuckDuckGo blocked the search for '{query}' "
-                            f"with a {block_reason}. Try again later or configure another web_search provider."
+                        return _format_error(
+                            query,
+                            "duckduckgo",
+                            (
+                                f"DuckDuckGo blocked the search for '{query}' with a {block_reason}. "
+                                "Try again later or configure another web_search provider."
+                            ),
+                            block_reason=block_reason,
                         )
 
                     current_url = str(getattr(r, "url", request_url))
@@ -413,11 +441,11 @@ class WebSearchTool(Tool):
                     request_payload = {**request_payload, **freshness_payload}
 
             if not results:
-                return f"Error: DuckDuckGo returned no results for '{query}'."
+                return _format_error(query, "duckduckgo", f"DuckDuckGo returned no results for '{query}'.")
 
             return _format_results(query, results, n, provider="duckduckgo")
         except Exception as e:
-            return f"Error: {e}"
+            return _format_error(query, "duckduckgo", str(e))
 
     async def _search_tavily(self, query: str, n: int, freshness: str) -> str:
         api_key = self.tavily_api_key
@@ -437,7 +465,7 @@ class WebSearchTool(Tool):
                      for x in r.json().get("results", [])]
             return _format_results(query, items, n, provider="tavily")
         except Exception as e:
-            return f"Error: {e}"
+            return _format_error(query, "tavily", str(e))
 
     async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
         base_url = self.config.searxng_url
@@ -479,7 +507,7 @@ class WebSearchTool(Tool):
                         break
             return _format_results(query, items, n, provider="searxng")
         except Exception as e:
-            return f"Error: {e}"
+            return _format_error(query, "searxng", str(e))
 
     async def _search_jina(self, query: str, n: int, freshness: str) -> str:
         try:
@@ -508,4 +536,4 @@ class WebSearchTool(Tool):
                 provider="jina",
             )
         except Exception as e:
-            return f"Error: {e}"
+            return _format_error(query, "jina", str(e))

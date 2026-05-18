@@ -424,7 +424,16 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
     async def fake_search(self, query, count=None, freshness=None):
         calls.append(self.provider)
         if self.provider == "duckduckgo":
-            return "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge."
+            return json.dumps(
+                {
+                    "type": "web_search",
+                    "ok": False,
+                    "query": query,
+                    "provider": "duckduckgo",
+                    "items": [],
+                    "error": "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
+                }
+            )
         return _format_results(
             query,
             [{"title": "SearXNG Result", "url": "https://example.com/searx", "content": "Fallback snippet"}],

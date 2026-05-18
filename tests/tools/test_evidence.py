@@ -49,6 +49,24 @@ def test_web_fetch_http_error_marks_evidence_failed():
     assert "HTTP Error: 404" in evidence.metadata["error"]
 
 
+def test_structured_web_search_error_marks_evidence_failed():
+    result = json.dumps(
+        {
+            "type": "web_search",
+            "ok": False,
+            "query": "sqlite fts",
+            "provider": "duckduckgo",
+            "items": [],
+            "error": "Error: DuckDuckGo returned no results for 'sqlite fts'.",
+        }
+    )
+
+    evidence = build_tool_evidence("web_search", {"query": "sqlite fts"}, result, ok=True)
+
+    assert evidence.ok is False
+    assert evidence.metadata["error"] == "Error: DuckDuckGo returned no results for 'sqlite fts'."
+
+
 def test_web_search_without_traceable_sources_marks_evidence_failed():
     result = json.dumps(
         {

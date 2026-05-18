@@ -356,7 +356,7 @@ class WebResearchTool(Tool):
                     "ok": payload is not None and fetchable_count > 0,
                     "result_count": len(items),
                     "fetchable_count": fetchable_count,
-                    "error": "" if payload is not None else str(result or "")[:500],
+                    "error": str((payload or {}).get("error") or ("" if payload is not None else result or ""))[:500],
                 }
             )
             if payload is not None and fetchable_count > 0:
