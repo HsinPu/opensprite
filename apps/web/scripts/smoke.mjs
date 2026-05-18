@@ -143,6 +143,7 @@ assertIncludes(settingsModal, "section === 'browser'", "browser settings section
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
 assertIncludes(settingsModal, "run-browser-test", "browser settings manual test event");
 assertIncludes(settingsModal, "run-browser-doctor", "browser settings doctor event");
+assertIncludes(settingsModal, "run-browser-install", "browser settings install event");
 assertIncludes(settingsModal, "settingsState.browserForm.launchArgs", "browser launch args field");
 assertIncludes(settingsModal, "browserTestSummary", "browser settings manual test summary");
 assertIncludes(settingsModal, "browserDoctorSummary", "browser settings doctor summary");
@@ -262,6 +263,7 @@ assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch
 assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/doctor", "browser settings doctor fetch");
+assertIncludes(settingsLogic, "/api/settings/browser/install", "browser settings install fetch");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");

@@ -195,6 +195,7 @@
     @save-browser-settings="saveBrowserSettings"
     @run-browser-test="runBrowserTest"
     @run-browser-doctor="runBrowserDoctor"
+    @run-browser-install="runBrowserInstall"
     @refresh-data-settings="loadDataSettings"
     @refresh-eval-status="loadEvalStatus"
     @run-eval-smoke="runEvalSmokeCheck"
@@ -353,6 +354,7 @@ const {
   saveBrowserSettings,
   runBrowserTest,
   runBrowserDoctor,
+  runBrowserInstall,
   loadDataSettings,
   loadEvalStatus,
   runEvalSmokeCheck,

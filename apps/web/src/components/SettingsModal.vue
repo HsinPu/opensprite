@@ -1810,6 +1810,14 @@
                 >
                   {{ settingsState.browserDoctorLoading ? copy.settings.browser.doctor.running : copy.settings.browser.doctor.run }}
                 </button>
+                <button
+                  class="secondary-button"
+                  type="button"
+                  :disabled="settingsState.browserInstallLoading || settingsState.browserDoctorLoading || settingsState.browserLoading"
+                  @click="$emit('run-browser-install')"
+                >
+                  {{ settingsState.browserInstallLoading ? copy.settings.browser.install.running : copy.settings.browser.install.run }}
+                </button>
               </div>
             </div>
             <div v-if="settingsState.browserDoctorResult?.checks?.length" class="settings-stack">
@@ -4183,6 +4191,7 @@ const emit = defineEmits([
   "save-browser-settings",
   "run-browser-test",
   "run-browser-doctor",
+  "run-browser-install",
   "refresh-eval-status",
   "run-eval-smoke",
   "run-task-completion-smoke",

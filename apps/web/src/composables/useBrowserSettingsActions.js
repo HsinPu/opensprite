@@ -41,6 +41,14 @@ function summarizeBrowserDoctor(payload, copy) {
   return payload?.ok ? browserCopy.doctorPassed(passed, checks.length) : browserCopy.doctorFailed(passed, checks.length);
 }
 
+function summarizeBrowserInstall(payload, copy) {
+  const browserCopy = copy.value.settings.browser;
+  if (payload?.already_installed) {
+    return browserCopy.installAlreadyInstalled;
+  }
+  return payload?.ok ? browserCopy.installPassed : browserCopy.installFailed(payload?.after?.suggestion || payload?.install?.suggestion || "");
+}
+
 export function useBrowserSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess }) {
   async function loadBrowserSettings() {
     settingsState.browserLoading = true;
@@ -125,10 +133,29 @@ export function useBrowserSettingsActions({ settingsState, requestSettingsJson, 
     }
   }
 
+  async function runBrowserInstall() {
+    settingsState.browserInstallLoading = true;
+    settingsState.browserError = "";
+    settingsState.browserNotice = "";
+    settingsState.browserInstallResult = null;
+    try {
+      const payload = await requestSettingsJson("/api/settings/browser/install", { method: "POST" });
+      settingsState.browser = normalizeBrowserSettings(payload.browser || settingsState.browser || {});
+      settingsState.browserInstallResult = payload;
+      settingsState.browserDoctorResult = payload.after ? { ok: payload.ok, browser: payload.browser, runtime: payload.runtime, checks: [payload.after] } : settingsState.browserDoctorResult;
+      settingsState.browserNotice = summarizeBrowserInstall(payload, copy);
+    } catch (error) {
+      settingsState.browserError = error?.message || copy.value.notices.browserInstallFailed;
+    } finally {
+      settingsState.browserInstallLoading = false;
+    }
+  }
+
   return {
     loadBrowserSettings,
     saveBrowserSettings,
     runBrowserTest,
     runBrowserDoctor,
+    runBrowserInstall,
   };
 }

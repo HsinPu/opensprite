@@ -1149,6 +1149,13 @@ export const DISPLAY_COPY = {
         },
         doctorPassed: (passed, total) => `Browser install check 通過：${passed}/${total}`,
         doctorFailed: (passed, total) => `Browser install check 未通過：${passed}/${total}`,
+        install: {
+          run: "安裝 browser",
+          running: "安裝中...",
+        },
+        installPassed: "Browser 安裝完成，已重新檢查狀態。",
+        installAlreadyInstalled: "Browser 已安裝，不需要重新安裝。",
+        installFailed: (suggestion) => `Browser 安裝未完成${suggestion ? `：${suggestion}` : "。"}`,
         save: "儲存瀏覽器設定",
       },
       log: {
@@ -1554,6 +1561,7 @@ export const DISPLAY_COPY = {
       browserSaveFailed: "無法儲存瀏覽器設定。",
       browserTestFailed: "無法執行 browser test。",
       browserDoctorFailed: "無法檢查 browser install 狀態。",
+      browserInstallFailed: "無法安裝 browser。",
       browserSaved: "瀏覽器設定已儲存並套用到目前 gateway process。",
       browserRestartRequired: "瀏覽器設定已儲存；重啟 gateway 後會重新註冊 tools。",
       llmSettingsLoadFailed: "無法載入 LLM 設定。",
@@ -2720,6 +2728,13 @@ export const DISPLAY_COPY = {
         },
         doctorPassed: (passed, total) => `Browser install check passed: ${passed}/${total}`,
         doctorFailed: (passed, total) => `Browser install check failed: ${passed}/${total}`,
+        install: {
+          run: "Install browser",
+          running: "Installing...",
+        },
+        installPassed: "Browser install completed and status was checked again.",
+        installAlreadyInstalled: "Browser is already installed; no install was needed.",
+        installFailed: (suggestion) => `Browser install did not complete${suggestion ? `: ${suggestion}` : "."}`,
         save: "Save browser settings",
       },
       log: {
@@ -3125,6 +3140,7 @@ export const DISPLAY_COPY = {
       browserSaveFailed: "Could not save browser settings.",
       browserTestFailed: "Could not run the browser test.",
       browserDoctorFailed: "Could not check browser install status.",
+      browserInstallFailed: "Could not install browser.",
       browserSaved: "Browser settings saved and applied to the current gateway process.",
       browserRestartRequired: "Browser settings saved. Restart the gateway to re-register tools.",
       llmSettingsLoadFailed: "Could not load LLM settings.",
