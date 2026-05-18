@@ -5,7 +5,18 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..channels.registry import coerce_channel_instances, default_channel_instances
-from .defaults import DEFAULT_SEARXNG_URL, DEFAULT_WEB_SEARCH_FRESHNESS, DEFAULT_WEB_SEARCH_PROVIDER
+from .defaults import (
+    DEFAULT_BROWSER_BACKEND,
+    DEFAULT_BROWSER_COMMAND_TIMEOUT,
+    DEFAULT_BROWSER_LAUNCH_ARGS,
+    DEFAULT_BROWSER_SESSION_TIMEOUT,
+    DEFAULT_BROWSER_USE_BASE_URL,
+    DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
+    DEFAULT_SEARXNG_URL,
+    DEFAULT_WEB_SEARCH_FRESHNESS,
+    DEFAULT_WEB_SEARCH_PROVIDER,
+)
 from .llm_presets import provider_profile_defaults
 
 
@@ -435,22 +446,22 @@ class BrowserToolConfig(BaseModel):
     """Browser automation tool configuration."""
 
     enabled: bool = False
-    backend: Literal["agent-browser", "browserbase", "browser-use", "firecrawl"] = "agent-browser"
-    command_timeout: int = Field(default=30, ge=1)
-    session_timeout: int = Field(default=1800, ge=1)
+    backend: Literal["agent-browser", "browserbase", "browser-use", "firecrawl"] = DEFAULT_BROWSER_BACKEND
+    command_timeout: int = Field(default=DEFAULT_BROWSER_COMMAND_TIMEOUT, ge=1)
+    session_timeout: int = Field(default=DEFAULT_BROWSER_SESSION_TIMEOUT, ge=1)
     cdp_url: str = ""
-    launch_args: str = "--no-sandbox"
+    launch_args: str = DEFAULT_BROWSER_LAUNCH_ARGS
     allow_private_urls: bool = False
     browserbase_api_key: str = ""
     browserbase_project_id: str = ""
-    browserbase_base_url: str = "https://api.browserbase.com"
+    browserbase_base_url: str = DEFAULT_BROWSERBASE_BASE_URL
     browserbase_proxies: bool = True
     browserbase_advanced_stealth: bool = False
     browserbase_keep_alive: bool = True
     browser_use_api_key: str = ""
-    browser_use_base_url: str = "https://api.browser-use.com/api/v3"
+    browser_use_base_url: str = DEFAULT_BROWSER_USE_BASE_URL
     firecrawl_api_key: str = ""
-    firecrawl_base_url: str = "https://api.firecrawl.dev"
+    firecrawl_base_url: str = DEFAULT_FIRECRAWL_BROWSER_BASE_URL
 
 
 class CronToolConfig(BaseModel):

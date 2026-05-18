@@ -15,12 +15,19 @@ from urllib.parse import urlparse
 
 import httpx
 
+from ..config.defaults import (
+    BROWSER_BACKENDS,
+    CLOUD_BROWSER_BACKENDS,
+    DEFAULT_BROWSER_BACKEND,
+    DEFAULT_BROWSER_SESSION_TIMEOUT,
+    DEFAULT_BROWSER_USE_BASE_URL,
+    DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
+)
 from ..utils.url import join_url_path
 
 
-SUPPORTED_BROWSER_BACKENDS = ("agent-browser", "browserbase", "browser-use", "firecrawl")
-CLOUD_BROWSER_BACKENDS = ("browserbase", "browser-use", "firecrawl")
-DEFAULT_BROWSER_SESSION_TIMEOUT = 1800
+SUPPORTED_BROWSER_BACKENDS = BROWSER_BACKENDS
 
 
 class BrowserRuntimeError(RuntimeError):
@@ -88,7 +95,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         *,
         api_key: str = "",
         project_id: str = "",
-        base_url: str = "https://api.browserbase.com",
+        base_url: str = DEFAULT_BROWSERBASE_BASE_URL,
         proxies: bool = True,
         advanced_stealth: bool = False,
         keep_alive: bool = True,
@@ -97,7 +104,7 @@ class BrowserbaseCloudProvider(CloudBrowserProvider):
         super().__init__(transport=transport)
         self.api_key = _first_text(api_key, os.getenv("BROWSERBASE_API_KEY"))
         self.project_id = _first_text(project_id, os.getenv("BROWSERBASE_PROJECT_ID"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSERBASE_BASE_URL")), "https://api.browserbase.com")
+        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSERBASE_BASE_URL")), DEFAULT_BROWSERBASE_BASE_URL)
         self.proxies = bool(proxies)
         self.advanced_stealth = bool(advanced_stealth)
         self.keep_alive = bool(keep_alive)
@@ -168,12 +175,12 @@ class BrowserUseCloudProvider(CloudBrowserProvider):
         self,
         *,
         api_key: str = "",
-        base_url: str = "https://api.browser-use.com/api/v3",
+        base_url: str = DEFAULT_BROWSER_USE_BASE_URL,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
         self.api_key = _first_text(api_key, os.getenv("BROWSER_USE_API_KEY"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSER_USE_BASE_URL")), "https://api.browser-use.com/api/v3")
+        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("BROWSER_USE_BASE_URL")), DEFAULT_BROWSER_USE_BASE_URL)
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -236,12 +243,12 @@ class FirecrawlCloudProvider(CloudBrowserProvider):
         self,
         *,
         api_key: str = "",
-        base_url: str = "https://api.firecrawl.dev",
+        base_url: str = DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
         transport: httpx.AsyncBaseTransport | None = None,
     ):
         super().__init__(transport=transport)
         self.api_key = _first_text(api_key, os.getenv("FIRECRAWL_API_KEY"))
-        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("FIRECRAWL_API_URL")), "https://api.firecrawl.dev")
+        self.base_url = _clean_base_url(_first_text(base_url, os.getenv("FIRECRAWL_API_URL")), DEFAULT_FIRECRAWL_BROWSER_BASE_URL)
 
     def is_configured(self) -> bool:
         return bool(self.api_key)
@@ -423,7 +430,7 @@ def cloud_provider_from_config(
     *,
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> CloudBrowserProvider | None:
-    backend = str(getattr(browser_config, "backend", "agent-browser") or "agent-browser").strip()
+    backend = str(getattr(browser_config, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND).strip()
     if backend == "browserbase":
         return BrowserbaseCloudProvider(
             api_key=getattr(browser_config, "browserbase_api_key", ""),

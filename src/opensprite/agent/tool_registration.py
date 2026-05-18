@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from ..config import CronMessagesConfig, SearchConfig, ToolsConfig
+from ..config.defaults import DEFAULT_BROWSER_COMMAND_TIMEOUT, DEFAULT_BROWSER_SESSION_TIMEOUT
 from ..documents.memory import MemoryStore
 from ..documents.safety import DurableMemorySafetyError
 from ..cron import CronManager
@@ -323,8 +324,8 @@ def register_browser_tools(
     if browser_config is not None and not browser_config.enabled:
         return
     runtime = AgentBrowserRuntime(
-        command_timeout=getattr(browser_config, "command_timeout", 30),
-        session_timeout=getattr(browser_config, "session_timeout", 1800),
+        command_timeout=getattr(browser_config, "command_timeout", DEFAULT_BROWSER_COMMAND_TIMEOUT),
+        session_timeout=getattr(browser_config, "session_timeout", DEFAULT_BROWSER_SESSION_TIMEOUT),
         cdp_url=getattr(browser_config, "cdp_url", ""),
         launch_args=getattr(browser_config, "launch_args", ""),
         cloud_provider=cloud_provider_from_config(browser_config) if browser_config is not None else None,

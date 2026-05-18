@@ -39,10 +39,15 @@ from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig
 from ..config.defaults import (
+    DEFAULT_BROWSER_BACKEND,
+    DEFAULT_BROWSER_COMMAND_TIMEOUT,
+    DEFAULT_BROWSER_LAUNCH_ARGS,
+    DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_SEARXNG_URL,
     DEFAULT_WEB_SEARCH_FRESHNESS,
     DEFAULT_WEB_SEARCH_PROVIDER,
     WEB_SEARCH_FRESHNESS_OPTIONS,
+    BROWSER_BACKENDS as DEFAULT_BROWSER_BACKENDS,
     WEB_SEARCH_PROVIDERS as DEFAULT_WEB_SEARCH_PROVIDERS,
 )
 from ..config.channel_settings import (
@@ -78,7 +83,7 @@ from ..runs.schema import serialize_diff_summary, serialize_run_event, serialize
 from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
-from ..tools.browser_runtime import AgentBrowserRuntime, SUPPORTED_BROWSER_BACKENDS, browser_cloud_status, cloud_provider_from_config
+from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -109,7 +114,7 @@ class WebAdapter(MessageAdapter):
         "semantic scholar",
     )
     SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
-    BROWSER_BACKENDS = SUPPORTED_BROWSER_BACKENDS
+    BROWSER_BACKENDS = DEFAULT_BROWSER_BACKENDS
     LLM_DECODING_PRESETS = {
         "precise": {
             "temperature": 0.25,
@@ -607,12 +612,12 @@ class WebAdapter(MessageAdapter):
         browser = getattr(getattr(config, "tools", None), "browser", None)
         return {
             "enabled": bool(getattr(browser, "enabled", False)),
-            "backend": str(getattr(browser, "backend", "agent-browser") or "agent-browser"),
+            "backend": str(getattr(browser, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND),
             "backends": list(cls.BROWSER_BACKENDS),
-            "command_timeout": int(getattr(browser, "command_timeout", 30) or 30),
-            "session_timeout": int(getattr(browser, "session_timeout", 1800) or 1800),
+            "command_timeout": int(getattr(browser, "command_timeout", DEFAULT_BROWSER_COMMAND_TIMEOUT) or DEFAULT_BROWSER_COMMAND_TIMEOUT),
+            "session_timeout": int(getattr(browser, "session_timeout", DEFAULT_BROWSER_SESSION_TIMEOUT) or DEFAULT_BROWSER_SESSION_TIMEOUT),
             "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
-            "launch_args": str(getattr(browser, "launch_args", "") or ""),
+            "launch_args": str(getattr(browser, "launch_args", DEFAULT_BROWSER_LAUNCH_ARGS) or ""),
             "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),
             "cloud": browser_cloud_status(browser),
             "runtime": cls._browser_runtime_status(),
@@ -853,7 +858,7 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _coerce_browser_backend(cls, value: Any) -> str:
-        backend = str(value or "agent-browser").strip() or "agent-browser"
+        backend = str(value or DEFAULT_BROWSER_BACKEND).strip() or DEFAULT_BROWSER_BACKEND
         if backend not in cls.BROWSER_BACKENDS:
             raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(cls.BROWSER_BACKENDS)}")
         return backend
@@ -2482,7 +2487,7 @@ class WebAdapter(MessageAdapter):
             install_ok
             and not after_ok
             and after.get("diagnostic_code") == "sandbox_unavailable"
-            and "--no-sandbox" in str(browser.launch_args or "")
+            and DEFAULT_BROWSER_LAUNCH_ARGS in str(browser.launch_args or "")
         )
         return web.json_response(
             {
