@@ -494,26 +494,61 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     def _browser_runtime_status() -> dict[str, Any]:
-        agent_browser = shutil.which("agent-browser")
-        if agent_browser:
+        command = WebAdapter._browser_command_prefix()
+        if command and len(command) == 1:
             return {
                 "available": True,
-                "command": agent_browser,
+                "command": command[0],
                 "install_hint": "",
             }
-
-        npx = shutil.which("npx") or shutil.which("npx.cmd")
-        if npx:
+        if command:
             return {
                 "available": True,
-                "command": f"{npx} agent-browser",
+                "command": " ".join(command),
                 "install_hint": "agent-browser is not on PATH; OpenSprite will fall back to npx agent-browser.",
             }
-
         return {
             "available": False,
             "command": "",
             "install_hint": "Install agent-browser on PATH, or install Node.js/npm so npx agent-browser can run.",
+        }
+
+    @staticmethod
+    def _browser_command_prefix() -> list[str]:
+        agent_browser = shutil.which("agent-browser")
+        if agent_browser:
+            return [agent_browser]
+
+        npx = shutil.which("npx") or shutil.which("npx.cmd")
+        if npx:
+            return [npx, "agent-browser"]
+        return []
+
+    @classmethod
+    async def _run_browser_doctor_command(cls, args: list[str], *, timeout: int = 20) -> dict[str, Any]:
+        command_prefix = cls._browser_command_prefix()
+        if not command_prefix:
+            return {"ok": False, "exit_code": None, "stdout": "", "stderr": "agent-browser and npx were not found."}
+        argv = [*command_prefix, *args]
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *argv,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(1, timeout))
+        except asyncio.TimeoutError:
+            return {"ok": False, "exit_code": None, "stdout": "", "stderr": f"command timed out after {timeout}s"}
+        except OSError as exc:
+            return {"ok": False, "exit_code": None, "stdout": "", "stderr": str(exc)}
+        stdout_text = stdout.decode("utf-8", errors="replace").strip()
+        stderr_text = stderr.decode("utf-8", errors="replace").strip()
+        return {
+            "ok": proc.returncode == 0,
+            "exit_code": proc.returncode,
+            "stdout": stdout_text[-4000:],
+            "stderr": stderr_text[-4000:],
         }
 
     @classmethod
@@ -2337,6 +2372,23 @@ class WebAdapter(MessageAdapter):
             }
         )
 
+    async def _handle_settings_browser_doctor(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        version_result = await self._run_browser_doctor_command(["--version"], timeout=10)
+        doctor_result = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        checks = [
+            {"name": "version", "command": "agent-browser --version", **version_result},
+            {"name": "doctor", "command": "agent-browser doctor", **doctor_result},
+        ]
+        return web.json_response(
+            {
+                "ok": all(bool(check.get("ok")) for check in checks),
+                "browser": self._browser_payload(config),
+                "runtime": self._browser_runtime_status(),
+                "checks": checks,
+            }
+        )
+
     async def _handle_settings_log(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"log": self._log_payload(config)})
@@ -2731,6 +2783,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
         self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
         self.app.router.add_post("/api/settings/browser/test", self._handle_settings_browser_test)
+        self.app.router.add_post("/api/settings/browser/doctor", self._handle_settings_browser_doctor)
         self.app.router.add_get("/api/settings/log", self._handle_settings_log)
         self.app.router.add_put("/api/settings/log", self._handle_settings_log_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
