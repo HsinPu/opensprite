@@ -1021,9 +1021,12 @@ async def _run_web_browser_settings_manual_test(tmp_path: Path, monkeypatch):
                 assert resp.status == 200
                 payload = await resp.json()
                 assert payload["ok"] is True
+                assert payload["diagnostic_code"] == "ok"
                 assert payload["url"] == "https://quotes.toscrape.com/js/"
                 assert payload["open"]["success"] is True
+                assert payload["open"]["diagnostic_code"] == "ok"
                 assert payload["snapshot"]["success"] is True
+                assert payload["snapshot"]["diagnostic_code"] == "ok"
                 assert payload["browser"]["enabled"] is True
 
         assert [call["command"] for call in calls] == ["open", "snapshot"]
@@ -1041,6 +1044,34 @@ async def _run_web_browser_settings_manual_test(tmp_path: Path, monkeypatch):
 
 def test_web_adapter_browser_settings_manual_test(tmp_path, monkeypatch):
     asyncio.run(_run_web_browser_settings_manual_test(tmp_path, monkeypatch))
+
+
+def test_browser_diagnostic_classifies_common_failures():
+    sandbox = WebAdapter._with_browser_diagnostic(
+        {
+            "ok": False,
+            "stderr": "FATAL: No usable sandbox! Hint: try --args \"--no-sandbox\"",
+        }
+    )
+    missing = WebAdapter._with_browser_diagnostic(
+        {
+            "ok": False,
+            "stderr": "Executable doesn't exist at /tmp/chromium",
+        }
+    )
+    deps = WebAdapter._with_browser_diagnostic(
+        {
+            "ok": False,
+            "stderr": "Missing dependencies. Please run install --with-deps.",
+        }
+    )
+
+    assert sandbox["diagnostic_code"] == "sandbox_unavailable"
+    assert "--no-sandbox" in sandbox["suggestion"]
+    assert missing["diagnostic_code"] == "browser_missing"
+    assert "agent-browser install" in missing["suggestion"]
+    assert deps["diagnostic_code"] == "system_deps_missing"
+    assert "install --with-deps" in deps["suggestion"]
 
 
 async def _run_web_browser_settings_doctor(tmp_path: Path, monkeypatch):

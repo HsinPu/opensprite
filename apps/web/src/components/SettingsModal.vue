@@ -4048,7 +4048,7 @@ const browserDoctorSummary = computed(() => {
 
 function browserDoctorCheckSummary(check) {
   const status = check?.ok ? props.copy.settings.browser.doctor.checkPassed : props.copy.settings.browser.doctor.checkFailed;
-  const detail = String(check?.stderr || check?.stdout || "").trim();
+  const detail = String(check?.suggestion || check?.stderr || check?.stdout || "").trim();
   return detail ? `${status}: ${detail}` : status;
 }
 

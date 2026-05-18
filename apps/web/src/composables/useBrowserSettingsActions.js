@@ -31,7 +31,7 @@ function summarizeBrowserTest(payload, copy) {
   if (payload?.ok) {
     return browserCopy.testPassed(payload.url || "");
   }
-  return browserCopy.testFailed(payload?.error || payload?.open?.error || payload?.snapshot?.error || "");
+  return browserCopy.testFailed(payload?.suggestion || payload?.error || payload?.open?.suggestion || payload?.open?.error || payload?.snapshot?.suggestion || payload?.snapshot?.error || "");
 }
 
 function summarizeBrowserDoctor(payload, copy) {

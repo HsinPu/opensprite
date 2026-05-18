@@ -539,17 +539,49 @@ class WebAdapter(MessageAdapter):
             )
             stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(1, timeout))
         except asyncio.TimeoutError:
-            return {"ok": False, "exit_code": None, "stdout": "", "stderr": f"command timed out after {timeout}s"}
+            return cls._with_browser_diagnostic({"ok": False, "exit_code": None, "stdout": "", "stderr": f"command timed out after {timeout}s"})
         except OSError as exc:
-            return {"ok": False, "exit_code": None, "stdout": "", "stderr": str(exc)}
+            return cls._with_browser_diagnostic({"ok": False, "exit_code": None, "stdout": "", "stderr": str(exc)})
         stdout_text = stdout.decode("utf-8", errors="replace").strip()
         stderr_text = stderr.decode("utf-8", errors="replace").strip()
-        return {
-            "ok": proc.returncode == 0,
-            "exit_code": proc.returncode,
-            "stdout": stdout_text[-4000:],
-            "stderr": stderr_text[-4000:],
-        }
+        return cls._with_browser_diagnostic(
+            {
+                "ok": proc.returncode == 0,
+                "exit_code": proc.returncode,
+                "stdout": stdout_text[-4000:],
+                "stderr": stderr_text[-4000:],
+            }
+        )
+
+    @staticmethod
+    def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
+        payload = dict(result or {})
+        text = "\n".join(str(payload.get(key) or "") for key in ("error", "stderr", "stdout")).lower()
+        if payload.get("ok") is True or payload.get("success") is True:
+            payload["diagnostic_code"] = "ok"
+            payload["suggestion"] = ""
+        elif "agent-browser and npx were not found" in text or "agent-browser cli was not found" in text:
+            payload["diagnostic_code"] = "cli_missing"
+            payload["suggestion"] = "Install agent-browser on PATH, or install Node.js/npm so OpenSprite can run npx agent-browser."
+        elif "timed out" in text or "timeout" in text:
+            payload["diagnostic_code"] = "timeout"
+            payload["suggestion"] = "Increase command timeout or retry after closing stale browser sessions."
+        elif "no usable sandbox" in text or "--no-sandbox" in text:
+            payload["diagnostic_code"] = "sandbox_unavailable"
+            payload["suggestion"] = "Use Browser launch args: --no-sandbox, or fix Linux Chromium sandbox support."
+        elif "install --with-deps" in text or "missing dependencies" in text or "system dependencies" in text:
+            payload["diagnostic_code"] = "system_deps_missing"
+            payload["suggestion"] = "Run agent-browser install --with-deps on Linux, then retry the browser test."
+        elif "executable" in text and ("not found" in text or "doesn't exist" in text or "missing" in text):
+            payload["diagnostic_code"] = "browser_missing"
+            payload["suggestion"] = "Run agent-browser install to download the managed Chromium browser."
+        elif "cdp" in text and ("refused" in text or "unreachable" in text or "failed" in text or "could not" in text):
+            payload["diagnostic_code"] = "cdp_unreachable"
+            payload["suggestion"] = "Check the Chrome CDP URL or start Chrome with remote debugging enabled."
+        else:
+            payload["diagnostic_code"] = "unknown"
+            payload["suggestion"] = "Review stdout/stderr and run agent-browser doctor locally for more detail."
+        return payload
 
     @classmethod
     def _browser_payload(cls, config: Config) -> dict[str, Any]:
@@ -2338,12 +2370,20 @@ class WebAdapter(MessageAdapter):
         if blocked:
             raise web.HTTPBadRequest(text=blocked)
         if not browser.enabled:
+            diagnostic = self._with_browser_diagnostic(
+                {
+                    "ok": False,
+                    "error": "Browser tools are disabled. Enable and save browser settings before running the manual test.",
+                }
+            )
             return web.json_response(
                 {
                     "ok": False,
                     "url": url,
                     "backend": browser.backend,
-                    "error": "Browser tools are disabled. Enable and save browser settings before running the manual test.",
+                    "error": diagnostic["error"],
+                    "diagnostic_code": diagnostic["diagnostic_code"],
+                    "suggestion": diagnostic["suggestion"],
                     "browser": self._browser_payload(config),
                 }
             )
@@ -2356,16 +2396,23 @@ class WebAdapter(MessageAdapter):
             cloud_provider=cloud_provider_from_config(browser),
         )
         session_key = f"settings-test-{uuid4().hex[:8]}"
-        open_result = await runtime.run(session_key=session_key, command="open", args=[url], timeout=max(30, browser.command_timeout))
+        open_result = self._with_browser_diagnostic(
+            await runtime.run(session_key=session_key, command="open", args=[url], timeout=max(30, browser.command_timeout))
+        )
         snapshot_result: dict[str, Any] | None = None
         if bool(open_result.get("success")):
-            snapshot_result = await runtime.run(session_key=session_key, command="snapshot", args=["-c"], timeout=browser.command_timeout)
+            snapshot_result = self._with_browser_diagnostic(
+                await runtime.run(session_key=session_key, command="snapshot", args=["-c"], timeout=browser.command_timeout)
+            )
         ok = bool(open_result.get("success")) and bool((snapshot_result or {}).get("success"))
+        diagnostic_source = snapshot_result if snapshot_result is not None and not snapshot_result.get("success") else open_result
         return web.json_response(
             {
                 "ok": ok,
                 "url": url,
                 "backend": browser.backend,
+                "diagnostic_code": "ok" if ok else diagnostic_source.get("diagnostic_code", "unknown"),
+                "suggestion": "" if ok else diagnostic_source.get("suggestion", ""),
                 "open": self._json_safe(open_result),
                 "snapshot": self._json_safe(snapshot_result) if snapshot_result is not None else None,
                 "browser": self._browser_payload(config),
