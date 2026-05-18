@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from opensprite.auth.codex import CodexToken, save_codex_token
+from opensprite.config.defaults import DEFAULT_SEARXNG_URL, DEFAULT_WEB_SEARCH_PROVIDER, WEB_SEARCH_PROVIDERS
 from opensprite.config.schema import (
     AgentConfig,
     ChannelsConfig,
@@ -322,6 +323,16 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.permissions.allowed_tools == ["*"]
     assert config.permissions.denied_tools == []
     assert config.mcp_servers_file == "mcp_servers.json"
+
+
+def test_template_web_search_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+    web_search = template["tools"]["web_search"]
+
+    assert web_search["provider"] == DEFAULT_WEB_SEARCH_PROVIDER
+    assert web_search["provider"] in WEB_SEARCH_PROVIDERS
+    assert web_search["searxng_url"] == DEFAULT_SEARXNG_URL
 
 
 def test_tools_config_parses_nested_tool_sections_from_json_shape():
