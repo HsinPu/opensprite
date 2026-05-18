@@ -244,19 +244,25 @@ class CompletionGateService:
                     review_prompt_types=review["prompt_types"],
                     review_finding_count=review["finding_count"],
                 )
-            return CompletionGateResult(
-                status="incomplete",
-                reason="tool execution reported an error without a clear blocker handoff",
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
+            if not self._tool_errors_are_non_blocking(
+                task_intent=task_intent,
+                response_text=response_text,
+                execution_result=execution_result,
                 verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
+            ):
+                return CompletionGateResult(
+                    status="incomplete",
+                    reason="tool execution reported an error without a clear blocker handoff",
+                    verification_required=verification_required,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
+                    review_required=review_required,
+                    review_attempted=review["attempted"],
+                    review_passed=review["passed"],
+                    review_summary=review["summary"],
+                    review_prompt_types=review["prompt_types"],
+                    review_finding_count=review["finding_count"],
+                )
 
         if workflow_gate is not None:
             workflow_verification_attempted = bool(workflow_gate.get("verification_attempted", verification_attempted))
@@ -531,9 +537,68 @@ class CompletionGateService:
             review_finding_count=review["finding_count"],
         )
 
+    def _tool_errors_are_non_blocking(
+        self,
+        *,
+        task_intent: TaskIntent,
+        response_text: str,
+        execution_result: ExecutionResult,
+        verification_passed: bool,
+    ) -> bool:
+        """Allow optional web discovery failures after required web sources are satisfied."""
+        if not _has_only_optional_web_discovery_failures(execution_result):
+            return False
+
+        evidence_result = self.evidence_gate.evaluate(
+            task_intent=task_intent,
+            execution_result=execution_result,
+            verification_passed=verification_passed,
+        )
+        if not evidence_result.passed or not _requires_web_research_evidence(evidence_result.task_contract):
+            return False
+
+        if not _has_successful_fetched_web_source_artifact(execution_result):
+            return False
+
+        quality_result = self.quality_gate.evaluate(
+            task_intent=task_intent,
+            response_text=response_text,
+            execution_result=execution_result,
+            task_contract=evidence_result.task_contract,
+        )
+        return quality_result.passed
+
 
 def _requires_verification(task_intent: TaskIntent) -> bool:
     return task_intent.expects_verification
+
+
+def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult) -> bool:
+    failed_evidence = tuple(item for item in execution_result.tool_evidence if not item.ok)
+    if not failed_evidence:
+        return False
+    return all(item.name in {"web_search", "web_research"} for item in failed_evidence)
+
+
+def _requires_web_research_evidence(task_contract: Any) -> bool:
+    if getattr(task_contract, "task_type", None) == "web_research":
+        return True
+    return any(
+        getattr(requirement, "tool_group", None) == "web_research"
+        for requirement in getattr(task_contract, "requirements", ())
+    )
+
+
+def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResult) -> bool:
+    for artifact in execution_result.task_artifacts:
+        if artifact.kind != "web_source" or not artifact.ok:
+            continue
+        if artifact.source_tool not in {"web_fetch", "browser_navigate", "browser_snapshot"}:
+            continue
+        sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
+        if isinstance(sources, list) and sources:
+            return True
+    return False
 
 
 def _looks_complete(response_text: str) -> bool:

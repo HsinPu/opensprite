@@ -1470,6 +1470,87 @@ def test_completion_gate_completes_explicit_url_with_substantive_fetch_source():
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_optional_search_errors_after_successful_fetch_sources():
+    intent = TaskIntentService().classify("那幫我找找有沒有可以在reddit 搜尋的")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Reddit API docs at reddit.com describe official API access for listings, search-adjacent endpoints, "
+        "authentication, and rate-limit considerations. A Reddit search guide at example.com adds practical query "
+        "guidance, so these fetched sources are enough even though a broad search provider returned no results."
+    )
+    second_fetch_artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://example.com/reddit-search-guide",
+                    "title": "Reddit Search Guide",
+                    "snippet": "Practical guidance for searching Reddit content from web sources.",
+                    "query": "https://example.com/reddit-search-guide",
+                    "provider": "web_fetch",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                    "extractor": "trafilatura",
+                    "truncated": False,
+                }
+            ],
+            "source_count": 1,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_search", ok=False, metadata={"error": "DuckDuckGo returned no results"}),
+                ToolEvidence(name="web_fetch", ok=True),
+            ),
+            task_artifacts=(_web_fetch_artifact(), second_fetch_artifact),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_still_blocks_failed_fetch_tool_errors():
+    intent = TaskIntentService().classify("Please summarize https://www.reddit.com/dev/api/")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = "I could not fetch reddit.com, so I cannot summarize the source."
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            had_tool_error=True,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=False, metadata={"error": "HTTP 404"}),),
+            task_artifacts=(),
+        ),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "tool execution reported an error without a clear blocker handoff"
+
+
 def test_completion_gate_accepts_browser_source_artifact_for_web_research():
     intent = TaskIntentService().classify("Open https://example.com/docs and summarize the source")
     contract = TaskContractService.build(
