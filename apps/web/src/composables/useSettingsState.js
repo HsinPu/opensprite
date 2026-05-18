@@ -1,3 +1,4 @@
+import { createDefaultBrowserForm, createDefaultBrowserState } from "./browserDefaults";
 import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
 
 export function createSettingsForm(state) {
@@ -174,32 +175,8 @@ export function createSettingsState() {
     browserTestResult: null,
     browserDoctorResult: null,
     browserInstallResult: null,
-    browser: {
-      enabled: false,
-      backend: "agent-browser",
-      backends: ["agent-browser", "browserbase", "browser-use", "firecrawl"],
-      command_timeout: 30,
-      session_timeout: 1800,
-      cdp_url: "",
-      launch_args: "--no-sandbox",
-      allow_private_urls: false,
-      cloud: {},
-      runtime: {
-        available: false,
-        command: "",
-        install_hint: "",
-      },
-    },
-    browserForm: {
-      enabled: false,
-      backend: "agent-browser",
-      commandTimeout: 30,
-      sessionTimeout: 1800,
-      cdpUrl: "",
-      launchArgs: "--no-sandbox",
-      allowPrivateUrls: false,
-      testUrl: "https://quotes.toscrape.com/js/",
-    },
+    browser: createDefaultBrowserState(),
+    browserForm: createDefaultBrowserForm(),
     logLoading: false,
     logError: "",
     logNotice: "",
