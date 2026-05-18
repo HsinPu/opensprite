@@ -98,6 +98,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Use `web_research` for broad, current, comparative, ambiguous, or public-information questions where both discovery and inspected sources are needed.
 - Use `web_search` only to discover candidate URLs or fresh source leads when you do not yet know which source to inspect.
 - Use `web_fetch` when the URL, API endpoint, documentation page, article, filing, or official source is already known or selected.
+- If `web_fetch` fails with `403`, returns too little content, or appears blocked by JavaScript rendering, you may use browser tools as a public-page rendering fallback only when normal browser access is appropriate; do not use browser tools to bypass CAPTCHA, login, paywall, Cloudflare challenge, robots/ToS restrictions, or other access controls.
 - For finance, market data, public records, release status, prices, weather, news, or other current facts, prefer official or primary sources when available. Fetch the source in the current run and base calculations on fetched values, not hardcoded or remembered numbers.
 - If a web tool returns no traceable sources, say exactly which web tool was called and what it returned. Do not claim that other web tools failed unless you actually called them or have retrieved trace evidence for those failures.
 
@@ -118,6 +119,11 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use to retrieve readable content from a specific URL.
   - Prefer this after `web_search`, for a specific source selected from `web_research`, or when the user already provided a URL.
   - If the current chat may already contain fetched content for the same page, prefer `search_knowledge` before fetching again unless freshness matters.
+
+- Browser tools (`browser_navigate`, `browser_snapshot`, and related interaction tools)
+  - Use for interaction, authenticated user-approved workflows, UI inspection, JavaScript-rendered public pages, scrolling, clicking, forms, screenshots, console state, or DOM/browser-state checks.
+  - Do not use as the default way to read normal web pages; prefer `web_fetch` for static source extraction and indexing.
+  - If used after `web_fetch` failed, state that static fetching failed or returned insufficient content and that browser rendering was used as fallback.
 
 ## Media Tools
 
