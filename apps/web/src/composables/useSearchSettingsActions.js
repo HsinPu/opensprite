@@ -1,9 +1,12 @@
 import {
   DEFAULT_FRESHNESS_OPTIONS,
+  DEFAULT_DUCKDUCKGO_MAX_PAGES,
   DEFAULT_SEARCH_FRESHNESS,
+  DEFAULT_SEARCH_MAX_RESULTS,
   DEFAULT_SEARCH_PROVIDER,
   DEFAULT_SEARCH_PROVIDERS,
   DEFAULT_SEARXNG_URL,
+  DEFAULT_SEARXNG_MAX_PAGES,
 } from "./searchDefaults";
 
 function normalizeTextList(value) {
@@ -46,9 +49,9 @@ function normalizeSearchSettings(search = {}) {
     providers: Array.isArray(search.providers) && search.providers.length ? search.providers : DEFAULT_SEARCH_PROVIDERS,
     freshness: search.freshness || DEFAULT_SEARCH_FRESHNESS,
     freshness_options: Array.isArray(search.freshness_options) && search.freshness_options.length ? search.freshness_options : DEFAULT_FRESHNESS_OPTIONS,
-    max_results: Number(search.max_results || 25),
-    duckduckgo_max_pages: Number(search.duckduckgo_max_pages || 10),
-    searxng_max_pages: Number(search.searxng_max_pages || 5),
+    max_results: Number(search.max_results || DEFAULT_SEARCH_MAX_RESULTS),
+    duckduckgo_max_pages: Number(search.duckduckgo_max_pages || DEFAULT_DUCKDUCKGO_MAX_PAGES),
+    searxng_max_pages: Number(search.searxng_max_pages || DEFAULT_SEARXNG_MAX_PAGES),
     searxng_url: search.searxng_url || DEFAULT_SEARXNG_URL,
     searxng_engines: normalizeTextList(search.searxng_engines),
     searxng_categories: normalizeTextList(search.searxng_categories),

@@ -14,6 +14,9 @@ from .defaults import (
     DEFAULT_BROWSERBASE_BASE_URL,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
     DEFAULT_SEARXNG_URL,
+    DEFAULT_DUCKDUCKGO_MAX_PAGES,
+    DEFAULT_SEARXNG_MAX_PAGES,
+    DEFAULT_WEB_SEARCH_MAX_RESULTS,
     DEFAULT_WEB_SEARCH_FRESHNESS,
     DEFAULT_WEB_SEARCH_PROVIDER,
 )
@@ -426,9 +429,9 @@ class WebSearchToolConfig(BaseModel):
     searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)
     searxng_categories: list[str] = Field(default_factory=list)
-    max_results: int = Field(default=25, ge=1)
-    duckduckgo_max_pages: int = Field(default=10, ge=1)
-    searxng_max_pages: int = Field(default=5, ge=1)
+    max_results: int = Field(default=DEFAULT_WEB_SEARCH_MAX_RESULTS, ge=1)
+    duckduckgo_max_pages: int = Field(default=DEFAULT_DUCKDUCKGO_MAX_PAGES, ge=1)
+    searxng_max_pages: int = Field(default=DEFAULT_SEARXNG_MAX_PAGES, ge=1)
     proxy: str | None = None
 
 

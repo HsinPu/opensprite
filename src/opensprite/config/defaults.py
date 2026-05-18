@@ -7,6 +7,9 @@ WEB_SEARCH_PROVIDERS = ("duckduckgo", "brave", "tavily", "searxng", "jina")
 DEFAULT_WEB_SEARCH_FRESHNESS = "year"
 WEB_SEARCH_FRESHNESS_OPTIONS = ("none", "day", "week", "month", "year")
 DEFAULT_SEARXNG_URL = "https://searx.be"
+DEFAULT_WEB_SEARCH_MAX_RESULTS = 25
+DEFAULT_DUCKDUCKGO_MAX_PAGES = 10
+DEFAULT_SEARXNG_MAX_PAGES = 5
 
 DEFAULT_BROWSER_BACKEND = "agent-browser"
 BROWSER_BACKENDS = ("agent-browser", "browserbase", "browser-use", "firecrawl")

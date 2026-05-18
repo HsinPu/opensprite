@@ -13,9 +13,12 @@ from opensprite.config.defaults import (
     DEFAULT_BROWSER_SESSION_TIMEOUT,
     DEFAULT_BROWSER_USE_BASE_URL,
     DEFAULT_BROWSERBASE_BASE_URL,
+    DEFAULT_DUCKDUCKGO_MAX_PAGES,
     DEFAULT_FIRECRAWL_BROWSER_BASE_URL,
     DEFAULT_SEARXNG_URL,
+    DEFAULT_SEARXNG_MAX_PAGES,
     DEFAULT_WEB_SEARCH_PROVIDER,
+    DEFAULT_WEB_SEARCH_MAX_RESULTS,
     WEB_SEARCH_PROVIDERS,
 )
 from opensprite.config.schema import (
@@ -345,6 +348,9 @@ def test_template_web_search_defaults_match_backend_defaults():
     assert web_search["provider"] == DEFAULT_WEB_SEARCH_PROVIDER
     assert web_search["provider"] in WEB_SEARCH_PROVIDERS
     assert web_search["searxng_url"] == DEFAULT_SEARXNG_URL
+    assert web_search["max_results"] == DEFAULT_WEB_SEARCH_MAX_RESULTS
+    assert web_search["duckduckgo_max_pages"] == DEFAULT_DUCKDUCKGO_MAX_PAGES
+    assert web_search["searxng_max_pages"] == DEFAULT_SEARXNG_MAX_PAGES
 
 
 def test_template_browser_defaults_match_backend_defaults():

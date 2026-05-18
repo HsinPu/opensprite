@@ -3,6 +3,9 @@ export const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "brave", "tavily", "searx
 export const DEFAULT_SEARCH_FRESHNESS = "year";
 export const DEFAULT_FRESHNESS_OPTIONS = ["none", "day", "week", "month", "year"];
 export const DEFAULT_SEARXNG_URL = "https://searx.be";
+export const DEFAULT_SEARCH_MAX_RESULTS = 25;
+export const DEFAULT_DUCKDUCKGO_MAX_PAGES = 10;
+export const DEFAULT_SEARXNG_MAX_PAGES = 5;
 
 export function createDefaultSearchState() {
   return {
@@ -10,9 +13,9 @@ export function createDefaultSearchState() {
     providers: [...DEFAULT_SEARCH_PROVIDERS],
     freshness: DEFAULT_SEARCH_FRESHNESS,
     freshness_options: [...DEFAULT_FRESHNESS_OPTIONS],
-    max_results: 25,
-    duckduckgo_max_pages: 10,
-    searxng_max_pages: 5,
+    max_results: DEFAULT_SEARCH_MAX_RESULTS,
+    duckduckgo_max_pages: DEFAULT_DUCKDUCKGO_MAX_PAGES,
+    searxng_max_pages: DEFAULT_SEARXNG_MAX_PAGES,
     searxng_url: DEFAULT_SEARXNG_URL,
     searxng_engines: [],
     searxng_categories: [],
@@ -31,9 +34,9 @@ export function createDefaultSearchForm() {
   return {
     provider: DEFAULT_SEARCH_PROVIDER,
     freshness: DEFAULT_SEARCH_FRESHNESS,
-    maxResults: 25,
-    duckduckgoMaxPages: 10,
-    searxngMaxPages: 5,
+    maxResults: DEFAULT_SEARCH_MAX_RESULTS,
+    duckduckgoMaxPages: DEFAULT_DUCKDUCKGO_MAX_PAGES,
+    searxngMaxPages: DEFAULT_SEARXNG_MAX_PAGES,
     searxngUrl: DEFAULT_SEARXNG_URL,
     searxngEngines: [],
     searxngCategories: [],
