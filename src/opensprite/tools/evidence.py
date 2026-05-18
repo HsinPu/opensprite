@@ -36,7 +36,7 @@ class ToolEvidence:
 
 def build_tool_evidence(tool_name: str, args: dict[str, Any], result: str, *, ok: bool) -> ToolEvidence:
     """Create default evidence for tools without resource-specific metadata."""
-    effective_ok = bool(ok) and not _tool_result_is_error(tool_name, result)
+    effective_ok = bool(ok) and not _tool_result_is_error(tool_name, result) and not _web_research_has_no_sources(tool_name, result)
     metadata = _build_metadata(tool_name, args, result) if effective_ok else _build_failed_metadata(tool_name, args, result)
     return ToolEvidence(
         name=tool_name,
@@ -55,6 +55,8 @@ def _build_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[s
 
 def _build_failed_metadata(tool_name: str, args: dict[str, Any], result: str) -> dict[str, Any]:
     metadata = _exec_metadata(args) if tool_name == "exec" else {}
+    if tool_name == "web_research":
+        metadata.update(_web_research_failure_metadata(args, result))
     if _tool_result_is_error(tool_name, result):
         metadata["error"] = str(result or "")[:500]
     return metadata
@@ -67,6 +69,48 @@ def _tool_result_is_error(tool_name: str, result: str) -> bool:
     if text.startswith("Error:") or text.startswith("Error executing "):
         return True
     return tool_name == "web_fetch" and "http error:" in text.lower()
+
+
+def _web_research_has_no_sources(tool_name: str, result: str) -> bool:
+    if tool_name != "web_research":
+        return False
+    payload = _parse_json_object(result)
+    if not isinstance(payload, dict):
+        return False
+    source_count = _coerce_int(payload.get("source_count"), default=0)
+    fetched_count = _coerce_int(payload.get("fetched_count"), default=0)
+    sources = payload.get("sources")
+    fetched_sources = payload.get("fetched_sources")
+    coverage = payload.get("coverage") if isinstance(payload.get("coverage"), dict) else {}
+    target_met = bool(coverage.get("target_met")) if isinstance(coverage, dict) else False
+    has_sources = source_count > 0 or _non_empty_list(sources) or _non_empty_list(fetched_sources)
+    return not has_sources or (not target_met and fetched_count <= 0)
+
+
+def _web_research_failure_metadata(args: dict[str, Any], result: str) -> dict[str, Any]:
+    payload = _parse_json_object(result)
+    if not isinstance(payload, dict):
+        return {}
+    metadata: dict[str, Any] = {
+        "source_count": _coerce_int(payload.get("source_count"), default=0),
+        "fetched_count": _coerce_int(payload.get("fetched_count"), default=0),
+    }
+    coverage = payload.get("coverage")
+    if isinstance(coverage, dict):
+        metadata["coverage"] = dict(coverage)
+    for key in ("failed_sources", "search_attempts", "query_attempts", "reuse_attempt", "reuse_attempts"):
+        value = payload.get(key)
+        if value:
+            metadata[key] = value
+    query = _clean_source_text(payload.get("query") or args.get("query"))
+    if query:
+        metadata["query"] = query
+    metadata["error"] = "web_research returned no traceable sources"
+    return metadata
+
+
+def _non_empty_list(value: Any) -> bool:
+    return isinstance(value, list) and bool(value)
 
 
 def _exec_metadata(args: dict[str, Any]) -> dict[str, Any]:
