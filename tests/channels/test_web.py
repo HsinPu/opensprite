@@ -1148,6 +1148,77 @@ def test_web_adapter_browser_settings_doctor(tmp_path, monkeypatch):
     asyncio.run(_run_web_browser_settings_doctor(tmp_path, monkeypatch))
 
 
+async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    doctor_calls = []
+
+    async def fake_doctor_command(args, *, timeout=20):
+        doctor_calls.append(list(args))
+        if len(doctor_calls) == 1:
+            return WebAdapter._with_browser_diagnostic(
+                {"ok": False, "exit_code": 1, "stdout": "", "stderr": "Executable doesn't exist at /tmp/chromium"}
+            )
+        return WebAdapter._with_browser_diagnostic(
+            {"ok": True, "exit_code": 0, "stdout": "Browser install looks good", "stderr": ""}
+        )
+
+    async def fake_install_command(*, timeout=300):
+        return WebAdapter._with_browser_diagnostic(
+            {"ok": True, "exit_code": 0, "stdout": "Installed Chromium", "stderr": ""}
+        )
+
+    monkeypatch.setattr(WebAdapter, "_browser_command_prefix", staticmethod(lambda: ["agent-browser"]))
+    monkeypatch.setattr(WebAdapter, "_run_browser_doctor_command", staticmethod(fake_doctor_command))
+    monkeypatch.setattr(WebAdapter, "_run_browser_install_command", staticmethod(fake_install_command))
+
+    agent = EchoAgent()
+    agent.config_path = config_path
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.post(f"http://127.0.0.1:{port}/api/settings/browser/install") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["ok"] is True
+                assert payload["installed"] is True
+                assert payload["already_installed"] is False
+                assert payload["before"]["diagnostic_code"] == "browser_missing"
+                assert payload["install"]["diagnostic_code"] == "ok"
+                assert payload["after"]["diagnostic_code"] == "ok"
+        assert doctor_calls == [["doctor"], ["doctor"]]
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_browser_settings_install(tmp_path, monkeypatch):
+    asyncio.run(_run_web_browser_settings_install(tmp_path, monkeypatch))
+
+
 async def _run_web_search_settings_roundtrip(tmp_path: Path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)

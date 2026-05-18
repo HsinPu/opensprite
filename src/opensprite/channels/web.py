@@ -553,6 +553,10 @@ class WebAdapter(MessageAdapter):
             }
         )
 
+    @classmethod
+    async def _run_browser_install_command(cls, *, timeout: int = 300) -> dict[str, Any]:
+        return await cls._run_browser_doctor_command(["install"], timeout=timeout)
+
     @staticmethod
     def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
         payload = dict(result or {})
@@ -2436,6 +2440,38 @@ class WebAdapter(MessageAdapter):
             }
         )
 
+    async def _handle_settings_browser_install(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        before = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        if bool(before.get("ok")):
+            return web.json_response(
+                {
+                    "ok": True,
+                    "installed": False,
+                    "already_installed": True,
+                    "browser": self._browser_payload(config),
+                    "runtime": self._browser_runtime_status(),
+                    "before": before,
+                    "install": None,
+                    "after": before,
+                }
+            )
+
+        install_result = await self._run_browser_install_command(timeout=300)
+        after = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        return web.json_response(
+            {
+                "ok": bool(after.get("ok")),
+                "installed": bool(install_result.get("ok")),
+                "already_installed": False,
+                "browser": self._browser_payload(config),
+                "runtime": self._browser_runtime_status(),
+                "before": before,
+                "install": install_result,
+                "after": after,
+            }
+        )
+
     async def _handle_settings_log(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"log": self._log_payload(config)})
@@ -2831,6 +2867,7 @@ class WebAdapter(MessageAdapter):
         self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
         self.app.router.add_post("/api/settings/browser/test", self._handle_settings_browser_test)
         self.app.router.add_post("/api/settings/browser/doctor", self._handle_settings_browser_doctor)
+        self.app.router.add_post("/api/settings/browser/install", self._handle_settings_browser_install)
         self.app.router.add_get("/api/settings/log", self._handle_settings_log)
         self.app.router.add_put("/api/settings/log", self._handle_settings_log_update)
         self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
