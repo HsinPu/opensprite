@@ -1,3 +1,5 @@
+import { createDefaultSearchForm, createDefaultSearchState } from "./searchDefaults";
+
 export function createSettingsForm(state) {
   return {
     wsUrl: state.wsUrl,
@@ -161,40 +163,8 @@ export function createSettingsState() {
     searchOptionsError: "",
     searchNotice: "",
     searchOptionsNotice: "",
-    search: {
-      provider: "duckduckgo",
-      providers: ["duckduckgo", "brave", "tavily", "searxng", "jina"],
-      freshness: "year",
-      freshness_options: ["none", "day", "week", "month", "year"],
-      max_results: 25,
-      duckduckgo_max_pages: 10,
-      searxng_max_pages: 5,
-      searxng_url: "https://searx.be",
-      searxng_engines: [],
-      searxng_categories: [],
-      searxng_options: {
-        engines: [],
-        categories: [],
-      },
-      proxy: "",
-      brave_api_key_configured: false,
-      tavily_api_key_configured: false,
-      jina_api_key_configured: false,
-    },
-    searchForm: {
-      provider: "duckduckgo",
-      freshness: "year",
-      maxResults: 25,
-      duckduckgoMaxPages: 10,
-      searxngMaxPages: 5,
-      searxngUrl: "https://searx.be",
-      searxngEngines: [],
-      searxngCategories: [],
-      proxy: "",
-      braveApiKey: "",
-      tavilyApiKey: "",
-      jinaApiKey: "",
-    },
+    search: createDefaultSearchState(),
+    searchForm: createDefaultSearchForm(),
     browserLoading: false,
     browserTestLoading: false,
     browserDoctorLoading: false,

@@ -1,5 +1,10 @@
-const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "brave", "tavily", "searxng", "jina"];
-const DEFAULT_FRESHNESS_OPTIONS = ["none", "day", "week", "month", "year"];
+import {
+  DEFAULT_FRESHNESS_OPTIONS,
+  DEFAULT_SEARCH_FRESHNESS,
+  DEFAULT_SEARCH_PROVIDER,
+  DEFAULT_SEARCH_PROVIDERS,
+  DEFAULT_SEARXNG_URL,
+} from "./searchDefaults";
 
 function normalizeTextList(value) {
   const values = Array.isArray(value) ? value : String(value || "").split(/[\n,]+/);
@@ -37,14 +42,14 @@ function normalizeSearxngOptions(value = {}) {
 
 function normalizeSearchSettings(search = {}) {
   return {
-    provider: search.provider || "duckduckgo",
+    provider: search.provider || DEFAULT_SEARCH_PROVIDER,
     providers: Array.isArray(search.providers) && search.providers.length ? search.providers : DEFAULT_SEARCH_PROVIDERS,
-    freshness: search.freshness || "year",
+    freshness: search.freshness || DEFAULT_SEARCH_FRESHNESS,
     freshness_options: Array.isArray(search.freshness_options) && search.freshness_options.length ? search.freshness_options : DEFAULT_FRESHNESS_OPTIONS,
     max_results: Number(search.max_results || 25),
     duckduckgo_max_pages: Number(search.duckduckgo_max_pages || 10),
     searxng_max_pages: Number(search.searxng_max_pages || 5),
-    searxng_url: search.searxng_url || "https://searx.be",
+    searxng_url: search.searxng_url || DEFAULT_SEARXNG_URL,
     searxng_engines: normalizeTextList(search.searxng_engines),
     searxng_categories: normalizeTextList(search.searxng_categories),
     searxng_options: normalizeSearxngOptions(search.searxng_options || {}),
