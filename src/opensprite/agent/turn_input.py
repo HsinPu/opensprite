@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from ..bus.message import UserMessage
 from ..utils.log import logger
-from .media import AgentMediaService
+from .media import AgentMediaService, INBOUND_AUDIO_EXTENSIONS, INBOUND_IMAGE_EXTENSIONS, INBOUND_VIDEO_EXTENSIONS
 
 
 @dataclass(frozen=True)
@@ -20,6 +20,7 @@ class PreparedTurnInput:
     image_files: list[str]
     audio_files: list[str]
     video_files: list[str]
+    media_events: list[dict[str, Any]]
     user_metadata: dict[str, Any]
     assistant_metadata: dict[str, Any]
 
@@ -52,9 +53,31 @@ class TurnInputPreparer:
             f"[{session_id}] inbound | channel={channel or '-'} sender={sender} images={len(user_message.images or [])} "
             f"text={self._format_log_preview(user_message.text, max_chars=200)}"
         )
-        image_files = self.media_service.persist_inbound_images(session_id, user_message.images)
-        audio_files = self.media_service.persist_inbound_audios(session_id, user_message.audios)
-        video_files = self.media_service.persist_inbound_videos(session_id, user_message.videos)
+        image_result = self.media_service.persist_inbound_media_with_events(
+            session_id,
+            user_message.images,
+            media_prefix="image",
+            directory_name="images",
+            extensions=INBOUND_IMAGE_EXTENSIONS,
+        )
+        audio_result = self.media_service.persist_inbound_media_with_events(
+            session_id,
+            user_message.audios,
+            media_prefix="audio",
+            directory_name="audios",
+            extensions=INBOUND_AUDIO_EXTENSIONS,
+        )
+        video_result = self.media_service.persist_inbound_media_with_events(
+            session_id,
+            user_message.videos,
+            media_prefix="video",
+            directory_name="videos",
+            extensions=INBOUND_VIDEO_EXTENSIONS,
+        )
+        image_files = image_result.files
+        audio_files = audio_result.files
+        video_files = video_result.files
+        media_events = [*image_result.events, *audio_result.events, *video_result.events]
 
         user_metadata = {
             **dict(user_message.metadata or {}),
@@ -87,6 +110,7 @@ class TurnInputPreparer:
             image_files=image_files,
             audio_files=audio_files,
             video_files=video_files,
+            media_events=media_events,
             user_metadata=user_metadata,
             assistant_metadata=assistant_metadata,
         )

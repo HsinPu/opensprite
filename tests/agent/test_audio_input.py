@@ -13,6 +13,7 @@ def _turn(audio_files=None):
         image_files=[],
         audio_files=list(audio_files or []),
         video_files=[],
+        media_events=[],
         user_metadata={},
         assistant_metadata={},
     )

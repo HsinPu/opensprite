@@ -5,8 +5,9 @@ from __future__ import annotations
 import base64
 import binascii
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from ..context.paths import get_session_workspace
 from ..utils.log import logger
@@ -43,6 +44,12 @@ INBOUND_VIDEO_EXTENSIONS = {
     "video/quicktime": "mov",
     "video/x-matroska": "mkv",
 }
+
+
+@dataclass(frozen=True)
+class InboundMediaPersistResult:
+    files: list[str] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
 
 
 class AgentMediaService:
@@ -87,8 +94,26 @@ class AgentMediaService:
         extensions: dict[str, str],
     ) -> list[str]:
         """Persist inbound media data URLs under a session workspace directory."""
+        return self.persist_inbound_media_with_events(
+            session_id,
+            media_items,
+            media_prefix=media_prefix,
+            directory_name=directory_name,
+            extensions=extensions,
+        ).files
+
+    def persist_inbound_media_with_events(
+        self,
+        session_id: str,
+        media_items: list[str] | None,
+        *,
+        media_prefix: str,
+        directory_name: str,
+        extensions: dict[str, str],
+    ) -> InboundMediaPersistResult:
+        """Persist inbound media and return traceable lifecycle events."""
         if not media_items:
-            return []
+            return InboundMediaPersistResult()
 
         workspace = get_session_workspace(
             session_id,
@@ -97,10 +122,12 @@ class AgentMediaService:
         )
         media_dir = workspace / directory_name
         saved_files: list[str] = []
+        events: list[dict[str, Any]] = []
 
         for index, item in enumerate(media_items, start=1):
             decoded = self.decode_data_url(item, media_prefix)
             if decoded is None:
+                events.append({"media_type": media_prefix, "status": "skipped", "index": index, "reason": "unsupported-payload"})
                 logger.warning(
                     "[{}] inbound.{}.persist.skip | index={} reason=unsupported-payload",
                     session_id,
@@ -117,7 +144,18 @@ class AgentMediaService:
                 filename = f"inbound-{timestamp}-{time.time_ns()}-{index}.{extension}"
                 target = media_dir / filename
                 target.write_bytes(media_bytes)
-                saved_files.append(target.relative_to(workspace).as_posix())
+                relative_path = target.relative_to(workspace).as_posix()
+                saved_files.append(relative_path)
+                events.append(
+                    {
+                        "media_type": media_prefix,
+                        "status": "persisted",
+                        "index": index,
+                        "mime_type": mime_type,
+                        "file": relative_path,
+                        "bytes": len(media_bytes),
+                    }
+                )
                 logger.info(
                     "[{}] inbound.{}.persisted | file={}",
                     session_id,
@@ -125,6 +163,7 @@ class AgentMediaService:
                     target,
                 )
             except Exception as exc:
+                events.append({"media_type": media_prefix, "status": "failed", "index": index, "mime_type": mime_type, "error": str(exc)})
                 logger.warning(
                     "[{}] inbound.{}.persist.failed | index={} error={}",
                     session_id,
@@ -133,7 +172,7 @@ class AgentMediaService:
                     exc,
                 )
 
-        return saved_files
+        return InboundMediaPersistResult(files=saved_files, events=events)
 
     def persist_inbound_images(self, session_id: str, images: list[str] | None) -> list[str]:
         """Persist inbound image data URLs under the session workspace images directory."""

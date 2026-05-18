@@ -181,6 +181,15 @@ class AgentTurnRunner:
             audios=user_message.audios,
             videos=user_message.videos,
         )
+        for media_event in turn.media_events:
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                "inbound_media.persisted" if media_event.get("status") == "persisted" else "inbound_media." + str(media_event.get("status") or "unknown"),
+                {"schema_version": 1, **dict(media_event)},
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
         await self._preprocess_audio_only_message(user_message, turn, run_id)
         task_intent = self.task_intents.classify(
             user_message.text,
