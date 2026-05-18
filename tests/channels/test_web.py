@@ -1078,7 +1078,10 @@ async def _run_web_browser_settings_doctor(tmp_path: Path, monkeypatch):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
 
-    async def fake_doctor_command(args, *, timeout=20):
+    doctor_calls = []
+
+    async def fake_doctor_command(args, *, timeout=20, launch_args=""):
+        doctor_calls.append({"args": list(args), "launch_args": launch_args})
         if args == ["--version"]:
             return {"ok": True, "exit_code": 0, "stdout": "agent-browser 1.2.3", "stderr": ""}
         if args == ["doctor"]:
@@ -1134,6 +1137,10 @@ async def _run_web_browser_settings_doctor(tmp_path: Path, monkeypatch):
                         "stderr": "",
                     },
                 ]
+        assert doctor_calls == [
+            {"args": ["--version"], "launch_args": ""},
+            {"args": ["doctor"], "launch_args": "--no-sandbox"},
+        ]
     finally:
         adapter_task.cancel()
         try:
@@ -1153,8 +1160,8 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
     Config.copy_template(config_path)
     doctor_calls = []
 
-    async def fake_doctor_command(args, *, timeout=20):
-        doctor_calls.append(list(args))
+    async def fake_doctor_command(args, *, timeout=20, launch_args=""):
+        doctor_calls.append({"args": list(args), "launch_args": launch_args})
         if len(doctor_calls) == 1:
             return WebAdapter._with_browser_diagnostic(
                 {"ok": False, "exit_code": 1, "stdout": "", "stderr": "Executable doesn't exist at /tmp/chromium"}
@@ -1204,7 +1211,10 @@ async def _run_web_browser_settings_install(tmp_path: Path, monkeypatch):
                 assert payload["before"]["diagnostic_code"] == "browser_missing"
                 assert payload["install"]["diagnostic_code"] == "ok"
                 assert payload["after"]["diagnostic_code"] == "ok"
-        assert doctor_calls == [["doctor"], ["doctor"]]
+        assert doctor_calls == [
+            {"args": ["doctor"], "launch_args": "--no-sandbox"},
+            {"args": ["doctor"], "launch_args": "--no-sandbox"},
+        ]
     finally:
         adapter_task.cancel()
         try:

@@ -525,11 +525,19 @@ class WebAdapter(MessageAdapter):
         return []
 
     @classmethod
-    async def _run_browser_doctor_command(cls, args: list[str], *, timeout: int = 20) -> dict[str, Any]:
+    async def _run_browser_doctor_command(
+        cls,
+        args: list[str],
+        *,
+        timeout: int = 20,
+        launch_args: str = "",
+    ) -> dict[str, Any]:
         command_prefix = cls._browser_command_prefix()
         if not command_prefix:
             return {"ok": False, "exit_code": None, "stdout": "", "stderr": "agent-browser and npx were not found."}
-        argv = [*command_prefix, *args]
+        effective_launch_args = str(launch_args or "").strip()
+        global_args = ["--args", effective_launch_args] if effective_launch_args and args != ["--version"] else []
+        argv = [*command_prefix, *global_args, *args]
         try:
             proc = await asyncio.create_subprocess_exec(
                 *argv,
@@ -2425,8 +2433,9 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_browser_doctor(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
+        browser = config.tools.browser
         version_result = await self._run_browser_doctor_command(["--version"], timeout=10)
-        doctor_result = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        doctor_result = await self._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
         checks = [
             {"name": "version", "command": "agent-browser --version", **version_result},
             {"name": "doctor", "command": "agent-browser doctor", **doctor_result},
@@ -2442,7 +2451,8 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_browser_install(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
-        before = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        browser = config.tools.browser
+        before = await self._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
         if bool(before.get("ok")):
             return web.json_response(
                 {
@@ -2458,7 +2468,7 @@ class WebAdapter(MessageAdapter):
             )
 
         install_result = await self._run_browser_install_command(timeout=300)
-        after = await self._run_browser_doctor_command(["doctor"], timeout=30)
+        after = await self._run_browser_doctor_command(["doctor"], timeout=30, launch_args=browser.launch_args)
         return web.json_response(
             {
                 "ok": bool(after.get("ok")),
