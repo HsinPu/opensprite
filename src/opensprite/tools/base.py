@@ -29,6 +29,11 @@ class Tool(ABC):
         """JSON Schema for tool parameters."""
         pass
 
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        """Optional risk metadata used by runtime permission policies."""
+        return None
+
     async def execute(self, **kwargs: Any) -> str:
         """
         Validate and execute the tool with given parameters.

@@ -7,8 +7,9 @@ from opensprite.tools.registry import ToolRegistry
 
 
 class EchoTool(Tool):
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, risk_levels: frozenset[str] | None = None):
         self._name = name
+        self._risk_levels = risk_levels
 
     @property
     def name(self) -> str:
@@ -21,6 +22,10 @@ class EchoTool(Tool):
     @property
     def parameters(self) -> dict:
         return {"type": "object", "properties": {}}
+
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        return self._risk_levels
 
     async def _execute(self, **kwargs):
         return f"ran:{self.name}"
@@ -68,6 +73,21 @@ def test_browser_actions_are_network_side_effect_tools():
         {"network", "external_side_effect"}
     )
     assert ToolPermissionPolicy.risk_levels_for_tool("browser_snapshot") == frozenset({"network"})
+
+
+def test_registry_uses_declared_tool_risk_levels():
+    registry = ToolRegistry(
+        permission_policy=ToolPermissionPolicy(allowed_risk_levels=["read"])
+    )
+    registry.register(EchoTool("custom_read", risk_levels=frozenset({"read"})))
+    registry.register(EchoTool("custom_unknown"))
+
+    assert registry.tool_names == ["custom_read"]
+    assert asyncio.run(registry.execute("custom_read", {})) == "ran:custom_read"
+    assert asyncio.run(registry.execute("custom_unknown", {})) == (
+        "Error: Tool 'custom_unknown' blocked by permission policy: "
+        "risk level(s) not allowed: external_side_effect."
+    )
 
 
 def test_registry_restricts_allowed_tools_by_glob():

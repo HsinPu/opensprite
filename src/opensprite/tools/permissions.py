@@ -139,21 +139,30 @@ class ToolPermissionPolicy:
         return any(fnmatch.fnmatch(value, pattern) for pattern in patterns)
 
     @staticmethod
-    def risk_levels_for_tool(tool_name: str) -> frozenset[str]:
+    def risk_levels_for_tool(tool_name: str, tool_risk_levels: Any = None) -> frozenset[str]:
+        declared_risks = _normalize_tool_risk_levels(tool_risk_levels)
+        if declared_risks is not None:
+            return declared_risks
         if tool_name.startswith("mcp_"):
             return frozenset({"mcp", "external_side_effect"})
         return DEFAULT_TOOL_RISKS.get(tool_name, frozenset({"external_side_effect"}))
 
-    def is_tool_exposed(self, tool_name: str) -> bool:
-        decision = self._check(tool_name, {}, include_approval=self.approval_mode in {None, "block"})
+    def is_tool_exposed(self, tool_name: str, tool_risk_levels: Any = None) -> bool:
+        decision = self._check(
+            tool_name,
+            {},
+            include_approval=self.approval_mode in {None, "block"},
+            tool_risk_levels=tool_risk_levels,
+        )
         return decision.allowed
 
-    def check(self, tool_name: str, params: Any) -> PermissionDecision:
+    def check(self, tool_name: str, params: Any, tool_risk_levels: Any = None) -> PermissionDecision:
         return self._check(
             tool_name,
             params,
             include_approval=self.approval_mode != "auto",
             approval_requires_callback=self.approval_mode == "ask",
+            tool_risk_levels=tool_risk_levels,
         )
 
     def _check(
@@ -163,11 +172,12 @@ class ToolPermissionPolicy:
         *,
         include_approval: bool,
         approval_requires_callback: bool = False,
+        tool_risk_levels: Any = None,
     ) -> PermissionDecision:
         if not self.enabled:
             return PermissionDecision(True)
 
-        risks = self.risk_levels_for_tool(tool_name)
+        risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
         if not self._matches_any(tool_name, self.allowed_tools):
             return PermissionDecision(False, f"tool '{tool_name}' is not in allowed_tools")
         if self._matches_any(tool_name, self.denied_tools):
@@ -202,12 +212,28 @@ class CompositeToolPermissionPolicy(ToolPermissionPolicy):
     def __init__(self, *policies: ToolPermissionPolicy):
         self.policies = tuple(policy for policy in policies if policy is not None)
 
-    def is_tool_exposed(self, tool_name: str) -> bool:
-        return all(policy.is_tool_exposed(tool_name) for policy in self.policies)
+    def is_tool_exposed(self, tool_name: str, tool_risk_levels: Any = None) -> bool:
+        return all(policy.is_tool_exposed(tool_name, tool_risk_levels=tool_risk_levels) for policy in self.policies)
 
-    def check(self, tool_name: str, params: Any) -> PermissionDecision:
+    def check(self, tool_name: str, params: Any, tool_risk_levels: Any = None) -> PermissionDecision:
         for policy in self.policies:
-            decision = policy.check(tool_name, params)
+            decision = policy.check(tool_name, params, tool_risk_levels=tool_risk_levels)
             if not decision.allowed:
                 return decision
         return PermissionDecision(True)
+
+
+def _normalize_tool_risk_levels(value: Any) -> frozenset[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        values = [value]
+    else:
+        try:
+            values = list(value)
+        except TypeError:
+            return None
+    risks = frozenset(str(item).strip() for item in values if str(item).strip())
+    if not risks:
+        return frozenset({"external_side_effect"})
+    return risks

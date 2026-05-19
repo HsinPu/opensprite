@@ -21,12 +21,11 @@ _READ_ONLY_TOOLS = (
     "search_knowledge",
     "list_run_file_changes",
     "preview_run_file_change_revert",
-    "dummy",
     "batch",
 )
 _WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, "web_search", "web_fetch", "web_research", "browser_snapshot", "browser_scroll")
 _MEDIA_TOOLS = (*_READ_ONLY_TOOLS, "analyze_image", "ocr_image", "transcribe_audio", "analyze_video", "send_media")
-_CHAT_RISKS = ("read", "external_side_effect")
+_CHAT_RISKS = ("read",)
 _RESEARCH_RISKS = ("read", "network")
 _MEDIA_RISKS = ("read", "network", "external_side_effect")
 _WORKSPACE_ANALYSIS_RISKS = ("read", "network", "delegation")
@@ -135,9 +134,9 @@ class HarnessPolicyService:
         return HarnessPolicy(
             name="chat_read_policy",
             harness_profile_name=profile_name,
-            allowed_tools=_READ_ONLY_TOOLS,
+            allowed_tools=("*",),
             allowed_risk_levels=_CHAT_RISKS,
-            denied_risk_levels=("write", "execute", "network", "configuration", "delegation", "memory", "mcp"),
+            denied_risk_levels=("write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"),
             max_tool_iterations=3,
             reason="chat turns default to read-only local context and avoid external side effects",
         )

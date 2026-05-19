@@ -6,8 +6,9 @@ from opensprite.tools.registry import ToolRegistry
 
 
 class DummyTool(Tool):
-    def __init__(self, name: str):
+    def __init__(self, name: str, *, risk_levels: frozenset[str] | None = None):
         self._name = name
+        self._risk_levels = risk_levels
 
     @property
     def name(self) -> str:
@@ -20,6 +21,10 @@ class DummyTool(Tool):
     @property
     def parameters(self) -> dict:
         return {"type": "object", "properties": {}}
+
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        return self._risk_levels
 
     async def _execute(self, **kwargs) -> str:
         return "ok"
@@ -111,3 +116,14 @@ def test_harness_policy_filters_tool_registry_for_research_turns():
     assert "web_fetch" in filtered.tool_names
     assert "edit_file" not in filtered.tool_names
     assert "verify" not in filtered.tool_names
+
+
+def test_chat_harness_policy_uses_declared_read_only_tool_metadata():
+    registry = ToolRegistry()
+    registry.register(DummyTool("custom_read", risk_levels=frozenset({"read"})))
+    registry.register(DummyTool("custom_unknown"))
+    policy = _policy("hello")
+
+    filtered = HarnessPolicyService().build_tool_registry(registry, policy)
+
+    assert filtered.tool_names == ["custom_read"]

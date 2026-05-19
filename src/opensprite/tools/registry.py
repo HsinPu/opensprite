@@ -69,7 +69,7 @@ class ToolRegistry:
         return [
             tool.to_schema()
             for tool in self._tools.values()
-            if self._permission_policy.is_tool_exposed(tool.name)
+            if self._permission_policy.is_tool_exposed(tool.name, tool_risk_levels=tool.risk_levels)
         ]
 
     async def execute(
@@ -85,7 +85,7 @@ class ToolRegistry:
             return f"Error: Tool '{name}' not found. Available: {', '.join(self.tool_names)}"
         display_params = tool.sanitize_params_for_display(params)
 
-        decision = self._permission_policy.check(name, display_params)
+        decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
         if not decision.allowed:
             if decision.requires_approval and self._permission_request_handler is not None:
                 approval = await self._permission_request_handler(name, display_params, decision)
@@ -114,6 +114,6 @@ class ToolRegistry:
         """Get list of registered tool names."""
         return [
             name
-            for name in self._tools.keys()
-            if self._permission_policy.is_tool_exposed(name)
+            for name, tool in self._tools.items()
+            if self._permission_policy.is_tool_exposed(name, tool_risk_levels=tool.risk_levels)
         ]

@@ -102,6 +102,10 @@ class DummyTool(Tool):
     def parameters(self) -> dict:
         return {"type": "object", "properties": {"value": {"type": "string"}}}
 
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        return frozenset({"read"})
+
     async def _execute(self, value: str = "", **kwargs):
         if self._echo_value:
             return f"tool:{value}"
