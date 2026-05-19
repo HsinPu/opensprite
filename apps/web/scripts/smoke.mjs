@@ -117,6 +117,10 @@ assertIncludes(runTraceViewer, "run-trace__harness-dashboard", "harness dashboar
 assertIncludes(runTraceViewer, "data-kind", "harness dashboard card categories");
 assertIncludes(runTraceViewer, "formatProfileSelection", "harness profile selection explanation rendering");
 assertIncludes(runTraceViewer, "formatOperationAudit", "operation audit trace rendering");
+assertIncludes(runTraceViewer, "formatToolDecisionCounts", "harness tool decision summary rendering");
+assertIncludes(runTraceViewer, "formatApprovalCounts", "harness approval lifecycle summary rendering");
+assertIncludes(runTraceViewer, "formatPolicyResolution", "harness policy resolution summary rendering");
+assertIncludes(runTraceViewer, "formatHarnessEvalResult", "harness eval result summary rendering");
 assertIncludes(runTraceViewer, "const artifactsExpanded = ref(false)", "run artifacts default collapsed");
 assertIncludes(runTraceViewer, "<summary class=\"run-trace__artifact-group-title\">", "run artifact groups are collapsible");
 assertNotIncludes(runTraceViewer, "class=\"run-trace__artifact-group\" open", "run artifact groups default collapsed");

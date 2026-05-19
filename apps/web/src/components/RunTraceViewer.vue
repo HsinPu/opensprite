@@ -453,6 +453,11 @@ const harnessSummaryRows = computed(() => {
   const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
   const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
   const operationAuditPayload = latestPartMetadata("operation_audit");
+  const policyResolutionPayload = latestEventPayload("harness_policy.merge_resolved");
+  const evalPayload = latestEventPayload("harness_eval.completed");
+  const failedEvalPayload = latestEventPayload("harness_eval.failed");
+  const evalPartPayload = latestPartMetadata("harness_eval_result");
+  const evalSource = Object.keys(evalPayload).length ? evalPayload : (Object.keys(failedEvalPayload).length ? failedEvalPayload : evalPartPayload);
   const hasEventCheckpoint = Object.keys(eventCheckpointPayload).length > 0;
   const checkpointPayload = hasEventCheckpoint ? eventCheckpointPayload : partCheckpointPayload;
   const checkpointSource = hasEventCheckpoint ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
@@ -469,9 +474,12 @@ const harnessSummaryRows = computed(() => {
   const profileName = profilePayload.name || contractProfile.name || "";
   const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
   const profileSelection = profilePayload.selection || contractProfile.selection || {};
-  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length) {
+  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length) {
     return [];
   }
+  const toolPermissionCounts = countToolPermissionDecisions();
+  const approvalCounts = countToolApprovalEvents();
+  const evalSummary = evalSource.summary || {};
   const rows = [
     { label: labels.profile || "Profile", value: profileName, kind: "profile" },
     { label: labels.taskType || "Task", value: taskType, kind: "profile" },
@@ -483,12 +491,16 @@ const harnessSummaryRows = computed(() => {
     { label: labels.criteria || "Criteria", value: countPayloadItems(contractSource.acceptance_criteria || contractSource.acceptanceCriteria), kind: "contract" },
     { label: labels.missingEvidence || "Missing", value: formatMissingEvidence(completionSource.missing_evidence || completionSource.missingEvidence), kind: "completion" },
     { label: labels.policyRisks || "Risk", value: formatPolicyRisks(policySource, labels), kind: "policy" },
+    { label: labels.policyResolution || "Policy resolution", value: formatPolicyResolution(policyResolutionPayload, labels), kind: "policy" },
+    { label: labels.toolDecisions || "Tool decisions", value: formatToolDecisionCounts(toolPermissionCounts, labels), kind: "policy" },
+    { label: labels.approvals || "Approvals", value: formatApprovalCounts(approvalCounts, labels), kind: "policy" },
     { label: labels.completion || "Completion", value: compactJoin([completionSource.status, completionSource.reason], " · "), kind: "completion" },
     { label: labels.nextAction || "Next", value: checkpointPayload.next_action || checkpointPayload.nextAction || checkpointProgress.next_action || checkpointProgress.nextAction, kind: "next" },
     { label: labels.artifacts || "Artifacts", value: checkpointPayload.task_artifact_count ?? checkpointPayload.taskArtifactCount, kind: "evidence" },
     { label: labels.checkpoint || "Checkpoint", value: formatCheckpoint(checkpointPayload, checkpointSource, labels), kind: "checkpoint" },
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "", kind: "next" },
     { label: labels.operationAudit || "Audit", value: formatOperationAudit(operationAuditPayload), kind: "checkpoint" },
+    { label: labels.evalResults || "Eval", value: formatHarnessEvalResult(evalSource, evalSummary, labels), kind: "checkpoint" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 });
@@ -623,6 +635,33 @@ function countEventsByCategory(category) {
   return events.value.filter((event) => eventCategory(event) === category).length;
 }
 
+function countToolPermissionDecisions() {
+  const counts = { checked: 0, allowed: 0, denied: 0, approvalRequired: 0 };
+  for (const event of events.value) {
+    const eventType = String(event?.eventType || "");
+    if (!eventType.startsWith("tool_permission.")) {
+      continue;
+    }
+    if (eventType.endsWith(".checked")) counts.checked += 1;
+    if (eventType.endsWith(".allowed")) counts.allowed += 1;
+    if (eventType.endsWith(".denied")) counts.denied += 1;
+    if (eventType.endsWith(".approval_required")) counts.approvalRequired += 1;
+  }
+  return counts;
+}
+
+function countToolApprovalEvents() {
+  const counts = { requested: 0, approved: 0, denied: 0, expired: 0 };
+  for (const event of events.value) {
+    const eventType = String(event?.eventType || "");
+    if (eventType === "tool_approval.requested") counts.requested += 1;
+    if (eventType === "tool_approval.approved") counts.approved += 1;
+    if (eventType === "tool_approval.denied") counts.denied += 1;
+    if (eventType === "tool_approval.expired") counts.expired += 1;
+  }
+  return counts;
+}
+
 function eventCategory(eventType) {
   const event = typeof eventType === "object" ? eventType : null;
   if (["run", "llm", "tool", "verification", "permission", "process", "text", "system", "work", "harness"].includes(event?.kind)) {
@@ -660,6 +699,51 @@ function eventCategory(eventType) {
     return "process";
   }
   return "other";
+}
+
+function formatPolicyResolution(payload, labels) {
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+  return compactJoin([
+    `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} ${labels.constraints || "constraints"}`,
+    `${countPayloadItems(payload.blocked_relaxations || payload.blockedRelaxations)} ${labels.blockedRelaxations || "blocked relaxations"}`,
+  ], " · ");
+}
+
+function formatToolDecisionCounts(counts, labels) {
+  if (!counts.checked && !counts.allowed && !counts.denied && !counts.approvalRequired) {
+    return "";
+  }
+  return compactJoin([
+    `${counts.checked} ${labels.checked || "checked"}`,
+    `${counts.allowed} ${labels.allowed || "allowed"}`,
+    `${counts.denied} ${labels.denied || "denied"}`,
+    `${counts.approvalRequired} ${labels.approvalRequired || "approval"}`,
+  ], " · ");
+}
+
+function formatApprovalCounts(counts, labels) {
+  if (!counts.requested && !counts.approved && !counts.denied && !counts.expired) {
+    return "";
+  }
+  return compactJoin([
+    `${counts.requested} ${labels.requested || "requested"}`,
+    `${counts.approved} ${labels.approved || "approved"}`,
+    `${counts.denied} ${labels.rejected || "denied"}`,
+    `${counts.expired} ${labels.expired || "expired"}`,
+  ], " · ");
+}
+
+function formatHarnessEvalResult(payload, summary, labels) {
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+  return compactJoin([
+    payload.ok === true ? (labels.checkpointPass || "pass") : "fail",
+    summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} ${labels.cases || "cases"}` : "",
+    summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks} ${labels.checks || "checks"}` : "",
+  ], " · ");
 }
 
 function eventSummary(event) {
