@@ -2680,7 +2680,7 @@ import {
   providerSupportsRequestOption,
   providerSupportsRequestOptions,
 } from "../composables/settingsNormalizers";
-import { PERMISSION_PROFILES } from "../composables/permissionsDefaults";
+import { applyPermissionProfilePreset, PERMISSION_PROFILE_PRESETS, PERMISSION_PROFILES } from "../composables/permissionsDefaults";
 
 const props = defineProps({
   copy: {
@@ -3925,6 +3925,7 @@ const permissionApprovalModeOptions = computed(() => {
 });
 
 const permissionProfiles = PERMISSION_PROFILES;
+const permissionProfilePresets = PERMISSION_PROFILE_PRESETS;
 
 const permissionSummary = computed(() => {
   const form = props.settingsState.permissionsForm || {};

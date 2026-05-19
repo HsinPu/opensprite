@@ -1,5 +1,6 @@
 const DEFAULT_RISK_LEVELS = ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"];
 export const PERMISSION_PROFILES = ["chat", "research", "coding", "media", "ops"];
+export const PERMISSION_PROFILE_PRESETS = ["fast", "balanced", "strict"];
 
 function createDefaultProfileOverrides() {
   return {
@@ -101,6 +102,27 @@ export function syncPermissionsForm(settingsState) {
 export function serializeProfileOverrides(profileOverrides) {
   const normalized = normalizeProfileOverrides(profileOverrides);
   return Object.fromEntries(PERMISSION_PROFILES.map((profile) => [profile, normalized[profile]]));
+}
+
+export function applyPermissionProfilePreset(settingsState, preset) {
+  const profiles = createDefaultProfileOverrides();
+  if (preset === "fast") {
+    for (const profile of PERMISSION_PROFILES) {
+      profiles[profile].approval_mode = "auto";
+      profiles[profile].approval_required_risk_levels = [];
+    }
+  } else if (preset === "strict") {
+    profiles.chat.approval_mode = "auto";
+    profiles.research.approval_mode = "ask";
+    profiles.research.approval_required_risk_levels = ["network"];
+    profiles.coding.approval_mode = "ask";
+    profiles.coding.approval_required_risk_levels = ["write", "execute", "external_side_effect", "configuration"];
+    profiles.media.approval_mode = "ask";
+    profiles.media.approval_required_risk_levels = ["external_side_effect"];
+    profiles.ops.approval_mode = "ask";
+    profiles.ops.approval_required_risk_levels = ["external_side_effect", "configuration", "mcp"];
+  }
+  settingsState.permissionsForm.profileOverrides = profiles;
 }
 
 export function splitPermissionList(value) {

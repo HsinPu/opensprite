@@ -5478,6 +5478,28 @@ button:disabled {
   background: rgba(255, 255, 255, 0.78);
 }
 
+.settings-preset-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #dddddd;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.settings-preset-row > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.settings-preset-row > div:first-child span {
+  color: #777777;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .settings-profile-card > div:first-child {
   display: grid;
   gap: 3px;
