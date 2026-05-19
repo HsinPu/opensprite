@@ -143,7 +143,8 @@ class WritePathPermissionPolicy(ToolPermissionPolicy):
     def __init__(self, allowed_patterns: frozenset[str]):
         self.allowed_patterns = allowed_patterns
 
-    def is_tool_exposed(self, tool_name: str) -> bool:
+    def is_tool_exposed(self, tool_name: str, tool_risk_levels: Any = None) -> bool:
+        del tool_name, tool_risk_levels
         return True
 
     @staticmethod
@@ -169,7 +170,8 @@ class WritePathPermissionPolicy(ToolPermissionPolicy):
             return []
         return [str(change.get("path") or "") for change in changes if isinstance(change, dict)]
 
-    def check(self, tool_name: str, params: Any) -> PermissionDecision:
+    def check(self, tool_name: str, params: Any, tool_risk_levels: Any = None) -> PermissionDecision:
+        del tool_risk_levels
         if tool_name not in WRITE_TOOLS or not self.allowed_patterns:
             return PermissionDecision(True)
         for path in self._write_paths(tool_name, params):
