@@ -1481,6 +1481,7 @@ class Config:
                 "web_fetch": self.tools.web_fetch.model_dump(by_alias=True),
                 "browser": self.tools.browser.model_dump(by_alias=True),
                 "cron": self.tools.cron.model_dump(by_alias=True),
+                "permissions": self.tools.permissions.model_dump(by_alias=True),
                 "mcp_servers_file": self.tools.mcp_servers_file,
             },
             "agent": {

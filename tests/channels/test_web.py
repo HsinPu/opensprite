@@ -16,6 +16,7 @@ import opensprite.auth.codex as codex_module
 from opensprite.context.paths import get_session_workspace
 from opensprite.cron import CronManager, CronSchedule, CronService
 from opensprite.storage import MemoryStorage, StoredDelegatedTask, StoredMessage, StoredWorkState
+from opensprite.tools.registry import ToolRegistry
 from opensprite.storage.base import StoredBackgroundProcess
 from opensprite.tools.process_runtime import BackgroundProcessManager
 
@@ -811,6 +812,83 @@ async def _run_web_network_settings_roundtrip(tmp_path: Path):
 
 def test_web_adapter_network_settings_roundtrip(tmp_path):
     asyncio.run(_run_web_network_settings_roundtrip(tmp_path))
+
+
+async def _run_web_permission_settings_roundtrip(tmp_path: Path):
+    config_path = tmp_path / "opensprite.json"
+    Config.copy_template(config_path)
+    agent = EchoAgent()
+    agent.config_path = config_path
+    agent.tools = ToolRegistry()
+    queue = MessageQueue(agent)
+    adapter = WebAdapter(
+        mq=queue,
+        config={
+            "host": "127.0.0.1",
+            "port": 0,
+            "path": "/ws",
+            "health_path": "/healthz",
+            "frontend_auto_build": False,
+        },
+    )
+
+    processor = asyncio.create_task(queue.process_queue())
+    adapter_task = asyncio.create_task(adapter.run())
+
+    try:
+        await adapter.wait_until_started()
+        port = adapter.bound_port
+        assert port is not None
+
+        async with ClientSession() as session:
+            async with session.get(f"http://127.0.0.1:{port}/api/settings/permissions") as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["permissions"]["enabled"] is True
+                assert "external_side_effect" in payload["permissions"]["risk_level_options"]
+
+            async with session.put(
+                f"http://127.0.0.1:{port}/api/settings/permissions",
+                json={
+                    "enabled": True,
+                    "approval_mode": "ask",
+                    "allowed_tools": ["*"],
+                    "denied_tools": ["dangerous_tool"],
+                    "allowed_risk_levels": ["read", "write", "execute", "network", "external_side_effect", "configuration"],
+                    "denied_risk_levels": ["mcp"],
+                    "approval_required_tools": ["credential_store"],
+                    "approval_required_risk_levels": ["external_side_effect", "configuration"],
+                },
+            ) as resp:
+                assert resp.status == 200
+                payload = await resp.json()
+                assert payload["restart_required"] is False
+                assert payload["runtime_reloaded"] is True
+                assert payload["permissions"]["approval_mode"] == "ask"
+                assert payload["permissions"]["denied_tools"] == ["dangerous_tool"]
+                assert payload["permissions"]["approval_required_risk_levels"] == ["external_side_effect", "configuration"]
+
+        loaded = Config.load(config_path)
+        assert loaded.tools.permissions.approval_mode == "ask"
+        assert loaded.tools.permissions.denied_tools == ["dangerous_tool"]
+        assert loaded.tools.permissions.denied_risk_levels == ["mcp"]
+        assert loaded.tools.permissions.approval_required_tools == ["credential_store"]
+        assert agent.tools_config.permissions.approval_required_risk_levels == ["external_side_effect", "configuration"]
+        decision = agent.tools.permission_policy.check("browser_click", {})
+        assert decision.allowed is False
+        assert decision.requires_approval is True
+    finally:
+        adapter_task.cancel()
+        try:
+            await adapter_task
+        except asyncio.CancelledError:
+            pass
+        await queue.stop()
+        await asyncio.wait_for(processor, timeout=2)
+
+
+def test_web_adapter_permission_settings_roundtrip(tmp_path):
+    asyncio.run(_run_web_permission_settings_roundtrip(tmp_path))
 
 
 async def _run_web_browser_settings_roundtrip(tmp_path: Path):

@@ -80,6 +80,8 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_put("/api/settings/schedule", adapter._handle_settings_schedule_update)
     router.add_get("/api/settings/network", adapter._handle_settings_network)
     router.add_put("/api/settings/network", adapter._handle_settings_network_update)
+    router.add_get("/api/settings/permissions", adapter._handle_settings_permissions)
+    router.add_put("/api/settings/permissions", adapter._handle_settings_permissions_update)
     router.add_get("/api/settings/search", adapter._handle_settings_search)
     router.add_get("/api/settings/search/searxng-options", adapter._handle_settings_search_searxng_options)
     router.add_put("/api/settings/search", adapter._handle_settings_search_update)

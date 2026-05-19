@@ -98,6 +98,7 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
+from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, ToolPermissionPolicy
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -821,6 +822,40 @@ class WebAdapter(MessageAdapter):
         }
 
     @classmethod
+    def _permissions_payload(cls, config: Config) -> dict[str, Any]:
+        permissions = getattr(getattr(config, "tools", None), "permissions", None)
+        return {
+            "enabled": bool(getattr(permissions, "enabled", True)),
+            "approval_mode": getattr(permissions, "approval_mode", None),
+            "approval_timeout_seconds": float(getattr(permissions, "approval_timeout_seconds", 300.0) or 300.0),
+            "allowed_tools": list(getattr(permissions, "allowed_tools", ["*"]) or ["*"]),
+            "denied_tools": list(getattr(permissions, "denied_tools", []) or []),
+            "allowed_risk_levels": list(getattr(permissions, "allowed_risk_levels", sorted(ALL_RISK_LEVELS)) or []),
+            "denied_risk_levels": list(getattr(permissions, "denied_risk_levels", []) or []),
+            "approval_required_tools": list(getattr(permissions, "approval_required_tools", []) or []),
+            "approval_required_risk_levels": list(getattr(permissions, "approval_required_risk_levels", []) or []),
+            "risk_level_options": sorted(ALL_RISK_LEVELS),
+            "approval_mode_options": sorted(APPROVAL_MODES),
+        }
+
+    @classmethod
+    def _coerce_approval_mode(cls, value: Any) -> str | None:
+        if value is None or value == "":
+            return None
+        mode = str(value or "").strip().lower()
+        if mode not in APPROVAL_MODES:
+            raise web.HTTPBadRequest(text=f"approval_mode must be one of: {', '.join(sorted(APPROVAL_MODES))}")
+        return mode
+
+    @classmethod
+    def _coerce_risk_level_list(cls, value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
+        values = cls._coerce_text_list(value, field=field, default=default)
+        invalid = [item for item in values if item not in ALL_RISK_LEVELS]
+        if invalid:
+            raise web.HTTPBadRequest(text=f"{field} contains invalid risk level(s): {', '.join(invalid)}")
+        return values
+
+    @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
         level = str(value or DEFAULT_LOG_LEVEL).strip().upper()
         if level not in cls.LOG_LEVELS:
@@ -1088,6 +1123,33 @@ class WebAdapter(MessageAdapter):
             "default_timezone": config.tools.cron.default_timezone,
             "tool_updated": tool_updated,
         }
+        return updated
+
+    def _reload_permissions_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
+        """Hot-apply persisted tool permission settings to the running agent when possible."""
+        if not force and not payload.get("restart_required"):
+            return payload
+
+        updated = dict(payload)
+        agent = self._get_agent()
+        tools = getattr(agent, "tools", None) if agent is not None else None
+        set_permission_policy = getattr(tools, "set_permission_policy", None)
+        if agent is None or not callable(set_permission_policy):
+            updated["runtime_reloaded"] = False
+            return updated
+
+        try:
+            config = Config.load(self._get_config_path())
+            agent.tools_config = config.tools
+            set_permission_policy(ToolPermissionPolicy.from_config(config.tools.permissions))
+        except Exception as exc:
+            logger.warning("Tool permission runtime reload failed after settings change: {}", exc)
+            updated["runtime_reloaded"] = False
+            updated["reload_error"] = str(exc)
+            return updated
+
+        updated["restart_required"] = False
+        updated["runtime_reloaded"] = True
         return updated
 
     def _reload_media_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
@@ -2269,6 +2331,53 @@ class WebAdapter(MessageAdapter):
         config.save(config_path)
         self._apply_network_environment(config)
         return web.json_response({"network": self._network_payload(config), "restart_required": False})
+
+    async def _handle_settings_permissions(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        return web.json_response({"permissions": self._permissions_payload(config)})
+
+    async def _handle_settings_permissions_update(self, request: web.Request) -> web.Response:
+        body = await self._read_json_body(request)
+        config_path = self._get_config_path()
+        config = Config.load(config_path)
+        permissions = config.tools.permissions
+        permissions.enabled = self._coerce_bool(body.get("enabled"), field="enabled", default=permissions.enabled)
+        permissions.approval_mode = self._coerce_approval_mode(body.get("approval_mode", permissions.approval_mode))
+        permissions.approval_timeout_seconds = self._coerce_float_range(
+            body.get("approval_timeout_seconds"),
+            field="approval_timeout_seconds",
+            default=permissions.approval_timeout_seconds,
+            minimum=1.0,
+            maximum=86400.0,
+        )
+        permissions.allowed_tools = self._coerce_text_list(body.get("allowed_tools"), field="allowed_tools", default=permissions.allowed_tools)
+        if not permissions.allowed_tools:
+            permissions.allowed_tools = ["*"]
+        permissions.denied_tools = self._coerce_text_list(body.get("denied_tools"), field="denied_tools", default=permissions.denied_tools)
+        permissions.allowed_risk_levels = self._coerce_risk_level_list(
+            body.get("allowed_risk_levels"),
+            field="allowed_risk_levels",
+            default=permissions.allowed_risk_levels,
+        )
+        permissions.denied_risk_levels = self._coerce_risk_level_list(
+            body.get("denied_risk_levels"),
+            field="denied_risk_levels",
+            default=permissions.denied_risk_levels,
+        )
+        permissions.approval_required_tools = self._coerce_text_list(
+            body.get("approval_required_tools"),
+            field="approval_required_tools",
+            default=permissions.approval_required_tools,
+        )
+        permissions.approval_required_risk_levels = self._coerce_risk_level_list(
+            body.get("approval_required_risk_levels"),
+            field="approval_required_risk_levels",
+            default=permissions.approval_required_risk_levels,
+        )
+        config.save(config_path)
+        payload = {"permissions": self._permissions_payload(config), "restart_required": True}
+        payload = self._reload_permissions_from_config(payload)
+        return web.json_response(payload)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
