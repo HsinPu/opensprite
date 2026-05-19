@@ -430,6 +430,10 @@
   color: var(--text);
 }
 
+:root[data-color-scheme="dark"] .settings-policy-preview {
+  color: var(--text-muted);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -5390,6 +5394,15 @@ button:disabled {
   background: #ffffff;
   color: #242424;
   font-size: 0.85rem;
+}
+
+.settings-policy-preview {
+  display: grid;
+  gap: 6px;
+  padding: 0 0 2px 44px;
+  color: #686868;
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .settings-row--choice-list {

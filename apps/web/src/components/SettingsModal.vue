@@ -1209,6 +1209,35 @@
               </button>
             </div>
           </div>
+
+          <h3>{{ copy.settings.permissions.harnessPreview.title }}</h3>
+          <div class="settings-card provider-card">
+            <div class="provider-row provider-row--empty">
+              <div>
+                <strong>{{ copy.settings.permissions.harnessPreview.effectiveTitle }}</strong>
+                <span>{{ copy.settings.permissions.harnessPreview.effectiveDescription }}</span>
+              </div>
+            </div>
+            <div v-for="row in harnessPolicyPreviewRows" :key="row.profile" class="provider-row provider-row--stacked">
+              <div class="provider-row__content">
+                <div class="provider-row__main">
+                  <span class="provider-row__mark" aria-hidden="true">{{ row.profile.slice(0, 2) }}</span>
+                  <div>
+                    <div class="provider-row__title">
+                      <strong>{{ row.title }}</strong>
+                      <span class="provider-row__badge">{{ row.policy }}</span>
+                    </div>
+                    <span>{{ row.description }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="settings-policy-preview">
+                <span>{{ copy.settings.permissions.harnessPreview.allowed(row.allowed) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.denied(row.denied) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.approval(row.approval) }}</span>
+              </div>
+            </div>
+          </div>
         </section>
 
         <section v-if="section === 'search'" class="settings-page">
@@ -3902,6 +3931,8 @@ const permissionSummary = computed(() => {
 function permissionRiskLabel(riskLevel) {
   return props.copy.settings.permissions.riskLevels?.[riskLevel] || riskLevel;
 }
+
+const harnessPolicyPreviewRows = computed(() => props.copy.settings.permissions.harnessPreview.rows);
 
 const logLevelOptions = computed(() => {
   const levels = props.settingsState.log?.levels;

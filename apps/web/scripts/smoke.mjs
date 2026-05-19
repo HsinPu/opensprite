@@ -296,7 +296,10 @@ assertIncludes(settingsLogic, "createDefaultPermissionsForm", "settings state us
 assertIncludes(settingsModal, "section === 'permissions'", "permissions settings section");
 assertIncludes(settingsModal, "save-permissions-settings", "permissions settings save event");
 assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
+assertIncludes(settingsModal, "harnessPolicyPreviewRows", "permissions harness policy preview rendering");
 assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
+assertIncludes(copy, "operations_approval_policy", "harness policy preview copy");
+assertIncludes(styles, ".settings-policy-preview", "harness policy preview styling");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
 assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
 assertIncludes(chatClient, "/api/curator/", "curator action fetch");
