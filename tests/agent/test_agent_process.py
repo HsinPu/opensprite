@@ -645,8 +645,12 @@ def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):
     assert "+++ b/notes.txt" in changes[0].diff
     assert changes[0].metadata["diff_len"] == len(changes[0].diff)
     assert changes[0].metadata["after_content_available"] is True
-    assert [event.event_type for event in events] == ["file_changed"]
-    assert events[0].payload["path"] == "notes.txt"
+    assert [event.event_type for event in events] == [
+        "tool_permission.checked",
+        "tool_permission.allowed",
+        "file_changed",
+    ]
+    assert events[2].payload["path"] == "notes.txt"
 
 
 def test_agent_tool_permission_requests_emit_run_events(tmp_path):

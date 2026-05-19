@@ -717,7 +717,12 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
 
     parent_trace = asyncio.run(storage.get_run_trace("telegram:user-a", "run_parent"))
     assert parent_trace is not None
-    assert [event.event_type for event in parent_trace.events] == ["subagent.started", "subagent.completed"]
+    assert [event.event_type for event in parent_trace.events] == [
+        "subagent.started",
+        "tool_permission.checked",
+        "tool_permission.allowed",
+        "subagent.completed",
+    ]
     artifacts = serialize_run_artifacts(parent_trace)
     assert len(artifacts) == 1
     assert artifacts[0]["artifact_id"] == f"subagent:{task_id}"
@@ -744,7 +749,7 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
         "delegation_mode": "serial",
     }
     assert artifacts[0]["source"] == "event"
-    assert artifacts[0]["source_id"] == 2
+    assert artifacts[0]["source_id"] == 4
     assert artifacts[0]["sources"] == ["event"]
 
 
