@@ -1,0 +1,234 @@
+"""Harness profile selection for one agent turn."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Any
+
+from .task_intent import TaskIntent
+
+
+_URL_RE = re.compile(r"https?://", re.IGNORECASE)
+_RESEARCH_MARKERS = (
+    "web",
+    "internet",
+    "online",
+    "search",
+    "source",
+    "sources",
+    "citation",
+    "cite",
+    "news",
+    "current",
+    "latest",
+    "url",
+    "link",
+    "website",
+    "site",
+    "上網",
+    "網路",
+    "搜尋",
+    "查一下",
+    "來源",
+    "引用",
+    "連結",
+    "網站",
+    "新聞",
+    "最新",
+)
+_CODING_MARKERS = (
+    "repo",
+    "repository",
+    "codebase",
+    "code",
+    "file",
+    "files",
+    "function",
+    "class",
+    "method",
+    "test",
+    "tests",
+    "pytest",
+    "build",
+    "compile",
+    "traceback",
+    "stack trace",
+    "src/",
+    "tests/",
+    "apps/",
+    "程式",
+    "程式碼",
+    "檔案",
+    "函式",
+    "類別",
+    "專案",
+    "測試",
+    "建置",
+    "編譯",
+)
+_CODE_PATH_RE = re.compile(
+    r"(?:^|\s)(?:[\w.-]+[\\/])+[\w.-]+|"
+    r"(?:^|\s)[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)(?:\s|$)",
+    re.IGNORECASE,
+)
+_MEDIA_MARKERS = (
+    "image",
+    "images",
+    "photo",
+    "picture",
+    "screenshot",
+    "audio",
+    "voice",
+    "speech",
+    "transcribe",
+    "video",
+    "clip",
+    "ocr",
+    "圖片",
+    "照片",
+    "截圖",
+    "音訊",
+    "語音",
+    "錄音",
+    "轉錄",
+    "影片",
+    "視頻",
+    "辨識",
+)
+_OPS_MARKERS = (
+    "credential",
+    "credentials",
+    "api key",
+    "token",
+    "secret",
+    "provider",
+    "schedule",
+    "cron",
+    "deploy",
+    "restart",
+    "service",
+    "settings",
+    "configuration",
+    "configure",
+    "mcp server",
+    "憑證",
+    "金鑰",
+    "密鑰",
+    "排程",
+    "部署",
+    "重啟",
+    "設定",
+    "配置",
+)
+
+
+@dataclass(frozen=True)
+class HarnessProfile:
+    """Selected harness strategy for one task."""
+
+    name: str
+    task_type: str
+    required_tool_groups: tuple[str, ...] = ()
+    required_evidence: tuple[str, ...] = ()
+    verification_policy: str = "none"
+    continuation_policy: str = "bounded"
+    approval_required_risk_levels: tuple[str, ...] = ()
+    reason: str = ""
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return a JSON-safe run event payload."""
+        return {
+            "schema_version": 1,
+            "name": self.name,
+            "task_type": self.task_type,
+            "required_tool_groups": list(self.required_tool_groups),
+            "required_evidence": list(self.required_evidence),
+            "verification_policy": self.verification_policy,
+            "continuation_policy": self.continuation_policy,
+            "approval_required_risk_levels": list(self.approval_required_risk_levels),
+            "reason": self.reason,
+        }
+
+
+class HarnessProfileService:
+    """Choose the narrowest harness profile that fits the current task."""
+
+    def select(self, task_intent: TaskIntent) -> HarnessProfile:
+        """Select a profile from deterministic intent and objective hints."""
+        text = task_intent.objective or ""
+        lowered = text.lower()
+        if _looks_like_ops(lowered):
+            return HarnessProfile(
+                name="ops",
+                task_type="operations",
+                required_tool_groups=("workspace_read",),
+                required_evidence=("audit_trace",),
+                verification_policy="validate_or_report",
+                continuation_policy="approval_bounded",
+                approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
+                reason="objective references configuration, credentials, scheduling, services, or external side effects",
+            )
+        if _looks_like_media(task_intent, lowered):
+            return HarnessProfile(
+                name="media",
+                task_type="media_extraction",
+                required_tool_groups=("media",),
+                required_evidence=("media_artifact",),
+                verification_policy="artifact_required",
+                continuation_policy="bounded",
+                reason="objective references media analysis or an attachment-only media turn",
+            )
+        if _looks_like_coding(task_intent, lowered, text):
+            return HarnessProfile(
+                name="coding",
+                task_type="workspace_change" if task_intent.expects_code_change else "workspace_analysis",
+                required_tool_groups=("workspace_read", "workspace_write") if task_intent.expects_code_change else ("workspace_read",),
+                required_evidence=("file_change",) if task_intent.expects_code_change else ("workspace_evidence",),
+                verification_policy="focused_if_possible",
+                continuation_policy="bounded_with_verification",
+                approval_required_risk_levels=("external_side_effect", "configuration"),
+                reason="objective references code, files, tests, or a repository task",
+            )
+        if _looks_like_research(lowered):
+            return HarnessProfile(
+                name="research",
+                task_type="web_research",
+                required_tool_groups=("web_research",),
+                required_evidence=("web_source", "source_reference"),
+                verification_policy="source_grounded",
+                continuation_policy="bounded_with_source_fetch",
+                approval_required_risk_levels=("external_side_effect",),
+                reason="objective references web research, URLs, sources, or current information",
+            )
+        return HarnessProfile(
+            name="chat",
+            task_type=task_intent.kind,
+            verification_policy="none",
+            continuation_policy="minimal",
+            reason="no tool-backed harness profile matched",
+        )
+
+
+def _has_marker(lowered: str, markers: tuple[str, ...]) -> bool:
+    return any(marker in lowered for marker in markers)
+
+
+def _looks_like_research(lowered: str) -> bool:
+    return bool(_URL_RE.search(lowered)) or _has_marker(lowered, _RESEARCH_MARKERS)
+
+
+def _looks_like_coding(task_intent: TaskIntent, lowered: str, text: str) -> bool:
+    if task_intent.expects_code_change:
+        return True
+    if task_intent.kind in {"debug", "refactor", "implementation"}:
+        return True
+    return bool(_CODE_PATH_RE.search(text)) or _has_marker(lowered, _CODING_MARKERS)
+
+
+def _looks_like_media(task_intent: TaskIntent, lowered: str) -> bool:
+    return task_intent.kind == "media_upload" or _has_marker(lowered, _MEDIA_MARKERS)
+
+
+def _looks_like_ops(lowered: str) -> bool:
+    return _has_marker(lowered, _OPS_MARKERS)

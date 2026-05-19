@@ -70,6 +70,7 @@ from .curator import CuratorService, fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
 from .history_reset import HistoryResetService
+from .harness_profile import HarnessProfileService
 from .learning_ledger import LearningLedger
 from .llm_call import LlmCallService
 from .media import AgentMediaService
@@ -655,6 +656,7 @@ class AgentLoop:
             log_config=self.log_config,
         )
         self.task_intents = TaskIntentService()
+        self.harness_profiles = HarnessProfileService()
         self.task_context_resolver = TaskContextResolver()
         self.task_objective_resolver = TaskObjectiveResolver()
         self.semantic_contract_classifier = SemanticContractClassifier()
@@ -680,6 +682,7 @@ class AgentLoop:
             turn_context=self.turn_context,
             run_state=self.run_state,
             task_intents=self.task_intents,
+            harness_profiles=self.harness_profiles,
             completion_gate=self.completion_gate,
             auto_continue=self.auto_continue,
             work_progress=self.work_progress,

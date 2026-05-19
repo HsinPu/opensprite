@@ -14,6 +14,7 @@ from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
+from .harness_profile import HarnessProfileService
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
@@ -49,6 +50,7 @@ class AgentTurnRunner:
         turn_context: TurnContextService,
         run_state: AgentRunStateService,
         task_intents: TaskIntentService,
+        harness_profiles: HarnessProfileService,
         completion_gate: CompletionGateService,
         auto_continue: AutoContinueService,
         work_progress: WorkProgressService,
@@ -83,6 +85,7 @@ class AgentTurnRunner:
         self.turn_context = turn_context
         self.run_state = run_state
         self.task_intents = task_intents
+        self.harness_profiles = harness_profiles
         self.completion_gate = completion_gate
         self.auto_continue = auto_continue
         self.work_progress = work_progress
@@ -207,6 +210,15 @@ class AgentTurnRunner:
             run_id,
             "task_intent.detected",
             task_intent.to_metadata(),
+            channel=turn.channel,
+            external_chat_id=turn.external_chat_id,
+        )
+        harness_profile = self.harness_profiles.select(task_intent)
+        await self._emit_run_event(
+            turn.session_id,
+            run_id,
+            "harness_profile.selected",
+            harness_profile.to_metadata(),
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
