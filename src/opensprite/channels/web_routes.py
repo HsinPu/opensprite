@@ -31,6 +31,7 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_get("/api/evals/long-task", api.handle_long_task_eval_status)
     router.add_post("/api/evals/long-task/smoke", api.handle_long_task_eval_smoke)
     router.add_post("/api/evals/long-task/controlled", api.handle_long_task_eval_controlled)
+    router.add_post("/api/evals/harness/controlled", api.handle_harness_controlled_eval)
     router.add_post("/api/evals/task-completion/smoke", api.handle_task_completion_eval_smoke)
     router.add_post("/api/evals/task-completion/run", api.handle_task_completion_eval_run)
     router.add_get("/api/evals/task-completion/history", api.handle_task_completion_eval_history)

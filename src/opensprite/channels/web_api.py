@@ -15,6 +15,7 @@ from aiohttp import web
 
 from ..bus.session_commands import session_command_catalog
 from ..config import Config
+from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
 from ..runs.schema import (
     serialize_file_change,
@@ -392,6 +393,9 @@ class WebApiHandlers:
             model_info=_active_llm_model_info(adapter),
         )
         return web.json_response(payload)
+
+    async def handle_harness_controlled_eval(self, request: web.Request) -> web.Response:
+        return web.json_response(run_controlled_harness_scenarios())
 
     async def handle_task_completion_eval_history(self, request: web.Request) -> web.Response:
         adapter = self.adapter

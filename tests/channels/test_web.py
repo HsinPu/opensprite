@@ -1852,6 +1852,14 @@ async def _run_web_run_events_api():
             assert "background_process.started" in controlled_payload["event_types"]
             assert "background_process.completed" in controlled_payload["event_types"]
 
+            async with session.post(f"http://127.0.0.1:{port}/api/evals/harness/controlled") as resp:
+                assert resp.status == 200
+                harness_payload = await resp.json()
+
+            assert harness_payload["ok"] is True
+            assert harness_payload["kind"] == "controlled_harness_scenarios"
+            assert harness_payload["summary"]["passed_cases"] == 5
+
             async with session.post(f"http://127.0.0.1:{port}/api/evals/task-completion/smoke") as resp:
                 assert resp.status == 200
                 task_completion_payload = await resp.json()
