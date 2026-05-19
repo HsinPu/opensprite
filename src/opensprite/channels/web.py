@@ -101,6 +101,7 @@ from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, c
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
+from .web_routes import register_web_routes
 
 
 class WebAdapter(MessageAdapter):
@@ -2831,106 +2832,7 @@ class WebAdapter(MessageAdapter):
 
         middlewares = [self._auth_middleware] if self._get_auth_token() else []
         self.app = web.Application(middlewares=middlewares)
-        self.app.router.add_get(ws_path, self._handle_websocket)
-        self.app.router.add_get(health_path, self._handle_health)
-        self.app.router.add_get("/api/commands", self._api.handle_command_catalog)
-        self.app.router.add_get("/api/curator/status", self._api.handle_curator_status)
-        self.app.router.add_get("/api/curator/history", self._api.handle_curator_history)
-        self.app.router.add_post("/api/curator/{action}", self._api.handle_curator_action)
-        self.app.router.add_get("/api/sessions/status", self._api.handle_session_status)
-        self.app.router.add_get("/api/sessions/timeline", self._api.handle_session_timeline)
-        self.app.router.add_get("/api/sessions", self._api.handle_sessions)
-        self.app.router.add_delete("/api/sessions", self._api.handle_sessions_delete)
-        self.app.router.add_delete("/api/sessions/{session_id}", self._api.handle_sessions_delete)
-        self.app.router.add_get("/api/storage/status", self._api.handle_storage_status)
-        self.app.router.add_get("/api/background-processes", self._api.handle_background_processes)
-        self.app.router.add_get("/api/evals/long-task", self._api.handle_long_task_eval_status)
-        self.app.router.add_post("/api/evals/long-task/smoke", self._api.handle_long_task_eval_smoke)
-        self.app.router.add_post("/api/evals/long-task/controlled", self._api.handle_long_task_eval_controlled)
-        self.app.router.add_post("/api/evals/task-completion/smoke", self._api.handle_task_completion_eval_smoke)
-        self.app.router.add_post("/api/evals/task-completion/run", self._api.handle_task_completion_eval_run)
-        self.app.router.add_get("/api/evals/task-completion/history", self._api.handle_task_completion_eval_history)
-        self.app.router.add_delete("/api/evals/task-completion/history", self._api.handle_task_completion_eval_history_clear)
-        self.app.router.add_delete(
-            "/api/evals/task-completion/history/{eval_id}",
-            self._api.handle_task_completion_eval_history_delete,
-        )
-        self.app.router.add_get("/api/runs", self._api.handle_runs)
-        self.app.router.add_get("/api/runs/{run_id}/summary", self._api.handle_run_summary)
-        self.app.router.add_get("/api/runs/{run_id}", self._api.handle_run_trace)
-        self.app.router.add_get("/api/runs/{run_id}/events", self._api.handle_run_events)
-        self.app.router.add_post("/api/runs/{run_id}/cancel", self._api.handle_run_cancel)
-        self.app.router.add_post(
-            "/api/runs/{run_id}/file-changes/{change_id}/revert",
-            self._api.handle_run_file_change_revert,
-        )
-        self.app.router.add_get("/api/permissions", self._api.handle_permissions)
-        self.app.router.add_post("/api/permissions/{request_id}/approve", self._api.handle_permission_approve)
-        self.app.router.add_post("/api/permissions/{request_id}/deny", self._api.handle_permission_deny)
-        self.app.router.add_post("/api/worktrees/cleanup", self._api.handle_worktree_cleanup)
-        self.app.router.add_get("/api/settings/channels", self._handle_settings_channels)
-        self.app.router.add_post("/api/settings/channels", self._handle_settings_channel_create)
-        self.app.router.add_put("/api/settings/channels/{channel_id}", self._handle_settings_channel_update)
-        self.app.router.add_put("/api/settings/channels/{channel_id}/connect", self._handle_settings_channel_connect)
-        self.app.router.add_post("/api/settings/channels/{channel_id}/disconnect", self._handle_settings_channel_disconnect)
-        self.app.router.add_get("/api/settings/providers", self._handle_settings_providers)
-        self.app.router.add_get("/api/settings/auth/openai-codex", self._handle_settings_codex_auth_status)
-        self.app.router.add_post("/api/settings/auth/openai-codex/login", self._handle_settings_codex_auth_login)
-        self.app.router.add_post("/api/settings/auth/openai-codex/poll", self._handle_settings_codex_auth_poll)
-        self.app.router.add_post("/api/settings/auth/openai-codex/logout", self._handle_settings_codex_auth_logout)
-        self.app.router.add_get("/api/settings/auth/copilot", self._handle_settings_copilot_auth_status)
-        self.app.router.add_post("/api/settings/auth/copilot/login", self._handle_settings_copilot_auth_login)
-        self.app.router.add_post("/api/settings/auth/copilot/poll", self._handle_settings_copilot_auth_poll)
-        self.app.router.add_post("/api/settings/auth/copilot/logout", self._handle_settings_copilot_auth_logout)
-        self.app.router.add_get("/api/settings/credentials", self._handle_settings_credentials)
-        self.app.router.add_post("/api/settings/credentials", self._handle_settings_credential_create)
-        self.app.router.add_delete(
-            "/api/settings/credentials/{provider}/{credential_id}",
-            self._handle_settings_credential_delete,
-        )
-        self.app.router.add_post("/api/settings/credentials/default", self._handle_settings_credential_default)
-        self.app.router.add_put("/api/settings/providers/{provider_id}/connect", self._handle_settings_provider_connect)
-        self.app.router.add_post("/api/settings/providers/{provider_id}/credential", self._handle_settings_provider_credential)
-        self.app.router.add_post("/api/settings/providers/{provider_id}/disconnect", self._handle_settings_provider_disconnect)
-        self.app.router.add_put("/api/settings/providers/{provider_id}/options", self._handle_settings_provider_options_update)
-        self.app.router.add_get("/api/settings/models", self._handle_settings_models)
-        self.app.router.add_post("/api/settings/models/select", self._handle_settings_model_select)
-        self.app.router.add_get("/api/settings/llm", self._handle_settings_llm)
-        self.app.router.add_put("/api/settings/llm", self._handle_settings_llm_update)
-        self.app.router.add_get("/api/settings/update", self._handle_settings_update_status)
-        self.app.router.add_post("/api/settings/update", self._handle_settings_update_apply)
-        self.app.router.add_get("/api/settings/media", self._handle_settings_media)
-        self.app.router.add_put("/api/settings/media", self._handle_settings_media_update)
-        self.app.router.add_get("/api/settings/schedule", self._handle_settings_schedule)
-        self.app.router.add_put("/api/settings/schedule", self._handle_settings_schedule_update)
-        self.app.router.add_get("/api/settings/network", self._handle_settings_network)
-        self.app.router.add_put("/api/settings/network", self._handle_settings_network_update)
-        self.app.router.add_get("/api/settings/search", self._handle_settings_search)
-        self.app.router.add_get("/api/settings/search/searxng-options", self._handle_settings_search_searxng_options)
-        self.app.router.add_put("/api/settings/search", self._handle_settings_search_update)
-        self.app.router.add_get("/api/settings/browser", self._handle_settings_browser)
-        self.app.router.add_put("/api/settings/browser", self._handle_settings_browser_update)
-        self.app.router.add_post("/api/settings/browser/test", self._handle_settings_browser_test)
-        self.app.router.add_post("/api/settings/browser/doctor", self._handle_settings_browser_doctor)
-        self.app.router.add_post("/api/settings/browser/install", self._handle_settings_browser_install)
-        self.app.router.add_get("/api/settings/log", self._handle_settings_log)
-        self.app.router.add_put("/api/settings/log", self._handle_settings_log_update)
-        self.app.router.add_get("/api/settings/mcp", self._handle_settings_mcp)
-        self.app.router.add_post("/api/settings/mcp", self._handle_settings_mcp_create)
-        self.app.router.add_post("/api/settings/mcp/reload", self._handle_settings_mcp_reload)
-        self.app.router.add_put("/api/settings/mcp/{server_id}", self._handle_settings_mcp_update)
-        self.app.router.add_delete("/api/settings/mcp/{server_id}", self._handle_settings_mcp_delete)
-        self.app.router.add_get("/api/cron/jobs", self._handle_cron_jobs)
-        self.app.router.add_post("/api/cron/jobs", self._handle_cron_job_create)
-        self.app.router.add_put("/api/cron/jobs/{job_id}", self._handle_cron_job_update)
-        self.app.router.add_delete("/api/cron/jobs/{job_id}", self._handle_cron_job_delete)
-        self.app.router.add_post("/api/cron/jobs/{job_id}/{action}", self._handle_cron_job_action)
-        self.app.router.add_get("/", self._handle_frontend_index)
-        self.app.router.add_get("/index.html", self._handle_frontend_index)
-        if self._frontend_dir is not None:
-            self.app.router.add_get(r"/{asset_path:.+\..+}", self._handle_frontend_asset)
-        else:
-            logger.info("Web adapter did not find a frontend directory; serving API endpoints only")
+        register_web_routes(self, ws_path=ws_path, health_path=health_path)
 
         self.mq.register_response_handler(self.channel_instance_id, self._on_response)
         self.mq.register_run_event_handler(self.channel_instance_id, self._on_run_event)
