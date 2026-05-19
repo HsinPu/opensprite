@@ -489,6 +489,51 @@ class CronToolConfig(BaseModel):
     default_timezone: str = DEFAULT_CRON_TIMEZONE
 
 
+class ToolPermissionProfileOverrideConfig(BaseModel):
+    """Per-harness-profile tool permission override."""
+
+    enabled: bool = True
+    approval_mode: Literal["auto", "ask", "block"] | None = None
+    allowed_tools: list[str] = Field(default_factory=lambda: ["*"])
+    denied_tools: list[str] = Field(default_factory=list)
+    allowed_risk_levels: list[str] = Field(default_factory=lambda: [
+        "read",
+        "write",
+        "execute",
+        "network",
+        "external_side_effect",
+        "configuration",
+        "delegation",
+        "memory",
+        "mcp",
+    ])
+    denied_risk_levels: list[str] = Field(default_factory=list)
+    approval_required_tools: list[str] = Field(default_factory=list)
+    approval_required_risk_levels: list[str] = Field(default_factory=list)
+
+
+def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOverrideConfig]:
+    return {
+        "chat": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read"]),
+        "research": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read", "network"]),
+        "coding": ToolPermissionProfileOverrideConfig(allowed_risk_levels=[
+            "read",
+            "write",
+            "execute",
+            "network",
+            "external_side_effect",
+            "configuration",
+            "delegation",
+            "memory",
+        ], denied_risk_levels=["mcp"]),
+        "media": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read", "network", "external_side_effect"]),
+        "ops": ToolPermissionProfileOverrideConfig(
+            approval_mode="ask",
+            approval_required_risk_levels=["external_side_effect", "configuration", "mcp"],
+        ),
+    }
+
+
 class ToolPermissionsConfig(BaseModel):
     """Centralized tool exposure and execution policy."""
 
@@ -513,6 +558,7 @@ class ToolPermissionsConfig(BaseModel):
     denied_risk_levels: list[str] = Field(default_factory=list)
     approval_required_tools: list[str] = Field(default_factory=list)
     approval_required_risk_levels: list[str] = Field(default_factory=list)
+    profile_overrides: dict[str, ToolPermissionProfileOverrideConfig] = Field(default_factory=_default_permission_profile_overrides)
 
 
 class ToolsConfig(BaseModel):

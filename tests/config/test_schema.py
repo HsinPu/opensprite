@@ -353,6 +353,9 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.permissions.approval_timeout_seconds == 300.0
     assert config.permissions.allowed_tools == ["*"]
     assert config.permissions.denied_tools == []
+    assert config.permissions.profile_overrides["chat"].allowed_risk_levels == ["read"]
+    assert config.permissions.profile_overrides["ops"].approval_mode == "ask"
+    assert "mcp" in config.permissions.profile_overrides["ops"].approval_required_risk_levels
     assert config.mcp_servers_file == "mcp_servers.json"
 
 

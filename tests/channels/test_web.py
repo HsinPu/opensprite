@@ -846,6 +846,8 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 payload = await resp.json()
                 assert payload["permissions"]["enabled"] is True
                 assert "external_side_effect" in payload["permissions"]["risk_level_options"]
+                assert payload["permissions"]["profile_overrides"]["chat"]["allowed_risk_levels"] == ["read"]
+                assert payload["permissions"]["profile_overrides"]["ops"]["approval_mode"] == "ask"
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
                 assert resp.status == 200
@@ -858,6 +860,7 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert "workspace_change_policy" in policies
                 assert policies["chat_read_policy"]["effective"]["allowed_risk_levels"] == ["read"]
                 assert "mcp" in policies["workspace_change_policy"]["effective"]["denied_risk_levels"]
+                assert policies["operations_approval_policy"]["profile_override"]["approval_mode"] == "ask"
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/permissions",
@@ -870,6 +873,16 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                     "denied_risk_levels": ["mcp"],
                     "approval_required_tools": ["credential_store"],
                     "approval_required_risk_levels": ["external_side_effect", "configuration"],
+                    "profile_overrides": {
+                        "research": {
+                            "allowed_risk_levels": ["read"],
+                            "denied_risk_levels": ["network"],
+                        },
+                        "ops": {
+                            "approval_mode": "ask",
+                            "approval_required_risk_levels": ["configuration", "mcp"],
+                        },
+                    },
                 },
             ) as resp:
                 assert resp.status == 200
@@ -879,6 +892,7 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert payload["permissions"]["approval_mode"] == "ask"
                 assert payload["permissions"]["denied_tools"] == ["dangerous_tool"]
                 assert payload["permissions"]["approval_required_risk_levels"] == ["external_side_effect", "configuration"]
+                assert payload["permissions"]["profile_overrides"]["research"]["denied_risk_levels"] == ["network"]
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
                 assert resp.status == 200
@@ -887,12 +901,14 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert policies["operations_approval_policy"]["effective"]["user_approval_mode"] == "ask"
                 assert "configuration" in policies["operations_approval_policy"]["effective"]["approval_required_risk_levels"]
                 assert "mcp" in policies["operations_approval_policy"]["effective"]["denied_risk_levels"]
+                assert policies["research_source_policy"]["effective"]["allowed_risk_levels"] == ["read"]
 
         loaded = Config.load(config_path)
         assert loaded.tools.permissions.approval_mode == "ask"
         assert loaded.tools.permissions.denied_tools == ["dangerous_tool"]
         assert loaded.tools.permissions.denied_risk_levels == ["mcp"]
         assert loaded.tools.permissions.approval_required_tools == ["credential_store"]
+        assert loaded.tools.permissions.profile_overrides["research"].denied_risk_levels == ["network"]
         assert agent.tools_config.permissions.approval_required_risk_levels == ["external_side_effect", "configuration"]
         decision = agent.tools.permission_policy.check("browser_click", {})
         assert decision.allowed is False

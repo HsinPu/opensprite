@@ -81,7 +81,14 @@
     },
     "permissions": {
       "approval_mode": "auto",
-      "approval_timeout_seconds": 300
+      "approval_timeout_seconds": 300,
+      "profile_overrides": {
+        "chat": {"allowed_risk_levels": ["read"]},
+        "research": {"allowed_risk_levels": ["read", "network"]},
+        "coding": {"allowed_risk_levels": ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory"], "denied_risk_levels": ["mcp"]},
+        "media": {"allowed_risk_levels": ["read", "network", "external_side_effect"]},
+        "ops": {"approval_mode": "ask", "approval_required_risk_levels": ["external_side_effect", "configuration", "mcp"]}
+      }
     },
     "mcp_servers_file": "mcp_servers.json"
   },

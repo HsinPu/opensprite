@@ -141,12 +141,15 @@ class HarnessPolicyService:
             reason="chat turns default to read-only local context and avoid external side effects",
         )
 
-    def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy) -> ToolRegistry:
+    def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy, profile_permission_policy: ToolPermissionPolicy | None = None) -> ToolRegistry:
         """Return a registry constrained by the selected harness policy."""
+        policies = [base_registry.permission_policy]
+        if profile_permission_policy is not None:
+            policies.append(profile_permission_policy)
+        policies.append(harness_policy.to_permission_policy())
         registry = base_registry.filtered(
             permission_policy=CompositeToolPermissionPolicy(
-                base_registry.permission_policy,
-                harness_policy.to_permission_policy(),
+                *policies,
             )
         )
         if "batch" in registry.tool_names:

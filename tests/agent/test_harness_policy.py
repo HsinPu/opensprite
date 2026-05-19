@@ -2,6 +2,7 @@ from opensprite.agent.harness_policy import HarnessPolicyService
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.tools.base import Tool
+from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
 
 
@@ -127,3 +128,15 @@ def test_chat_harness_policy_uses_declared_read_only_tool_metadata():
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
 
     assert filtered.tool_names == ["custom_read"]
+
+
+def test_profile_permission_override_is_composed_with_harness_policy():
+    registry = ToolRegistry()
+    registry.register(DummyTool("read_file", risk_levels=frozenset({"read"})))
+    registry.register(DummyTool("web_fetch", risk_levels=frozenset({"network"})))
+    policy = _policy("Search the web and cite sources for the latest release")
+    profile_override = ToolPermissionPolicy(allowed_risk_levels=["read"])
+
+    filtered = HarnessPolicyService().build_tool_registry(registry, policy, profile_override)
+
+    assert filtered.tool_names == ["read_file"]

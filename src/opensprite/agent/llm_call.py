@@ -78,7 +78,7 @@ class LlmCallService:
         classify_semantic_contract: Callable[..., Awaitable[SemanticContractDecision | None]],
         select_harness_profile: Callable[[TaskIntent], HarnessProfile],
         select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
-        build_harness_tool_registry: Callable[[ToolRegistry, HarnessPolicy], ToolRegistry],
+        build_harness_tool_registry: Callable[[ToolRegistry, HarnessProfile, HarnessPolicy], ToolRegistry],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -304,7 +304,7 @@ class LlmCallService:
         if effective_task_intent is not None:
             harness_profile = self._select_harness_profile(effective_task_intent)
             harness_policy = self._select_harness_policy(harness_profile)
-            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_policy)
+            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
             if run_id is not None:
                 await self._emit_run_event(
                     session_id,

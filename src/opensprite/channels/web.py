@@ -22,6 +22,7 @@ from uuid import uuid4
 
 import httpx
 from aiohttp import WSMsgType, web
+from pydantic import ValidationError
 
 from .identity import build_session_id, normalize_identifier
 from ..agent.harness_policy import HarnessPolicyService
@@ -39,7 +40,7 @@ from ..bus.events import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
 from ..cli import service_background, service_linux
-from ..config import Config, MessagesConfig
+from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -826,6 +827,7 @@ class WebAdapter(MessageAdapter):
     @classmethod
     def _permissions_payload(cls, config: Config) -> dict[str, Any]:
         permissions = getattr(getattr(config, "tools", None), "permissions", None)
+        profile_overrides = getattr(permissions, "profile_overrides", {}) or {}
         return {
             "enabled": bool(getattr(permissions, "enabled", True)),
             "approval_mode": getattr(permissions, "approval_mode", "auto") or "auto",
@@ -836,6 +838,10 @@ class WebAdapter(MessageAdapter):
             "denied_risk_levels": list(getattr(permissions, "denied_risk_levels", []) or []),
             "approval_required_tools": list(getattr(permissions, "approval_required_tools", []) or []),
             "approval_required_risk_levels": list(getattr(permissions, "approval_required_risk_levels", []) or []),
+            "profile_overrides": {
+                profile: override.model_dump(by_alias=True) if hasattr(override, "model_dump") else dict(override)
+                for profile, override in profile_overrides.items()
+            },
             "risk_level_options": sorted(ALL_RISK_LEVELS),
             "approval_mode_options": sorted(APPROVAL_MODES),
         }
@@ -847,28 +853,38 @@ class WebAdapter(MessageAdapter):
         user_denied_risks = set(user_permissions["denied_risk_levels"])
         user_approval_mode = user_permissions.get("approval_mode") or "auto"
         user_approval_risks = set(user_permissions["approval_required_risk_levels"])
+        profile_overrides = user_permissions.get("profile_overrides") or {}
         policy_service = HarnessPolicyService()
         profiles = cls._harness_policy_preview_profiles()
         rows = []
         for profile in profiles:
             policy = policy_service.select(profile)
+            profile_override = profile_overrides.get(profile.name) or {}
+            override_allowed_risks = set(profile_override.get("allowed_risk_levels") or sorted(ALL_RISK_LEVELS))
+            override_denied_risks = set(profile_override.get("denied_risk_levels") or [])
+            override_approval_mode = profile_override.get("approval_mode") or user_approval_mode
+            override_approval_risks = set(profile_override.get("approval_required_risk_levels") or [])
             harness_allowed_risks = set(policy.allowed_risk_levels)
             harness_denied_risks = set(policy.denied_risk_levels)
-            effective_allowed = sorted((user_allowed_risks & harness_allowed_risks) - user_denied_risks - harness_denied_risks)
-            effective_denied = sorted(user_denied_risks | harness_denied_risks | (ALL_RISK_LEVELS - set(effective_allowed)))
+            effective_allowed = sorted((user_allowed_risks & override_allowed_risks & harness_allowed_risks) - user_denied_risks - override_denied_risks - harness_denied_risks)
+            effective_denied = sorted(user_denied_risks | override_denied_risks | harness_denied_risks | (ALL_RISK_LEVELS - set(effective_allowed)))
             effective_approval = set(policy.approval_required_risk_levels)
             if user_approval_mode != "auto":
                 effective_approval |= user_approval_risks
+            if override_approval_mode != "auto":
+                effective_approval |= override_approval_risks
             effective_approval = sorted(effective_approval & set(effective_allowed))
             rows.append(
                 {
                     "profile": profile.to_metadata(),
+                    "profile_override": profile_override,
                     "policy": policy.to_metadata(),
                     "effective": {
                         "allowed_risk_levels": effective_allowed,
                         "denied_risk_levels": effective_denied,
                         "approval_required_risk_levels": effective_approval,
                         "user_approval_mode": user_approval_mode,
+                        "profile_approval_mode": override_approval_mode,
                         "user_permissions_enabled": bool(user_permissions["enabled"]),
                     },
                 }
@@ -956,6 +972,30 @@ class WebAdapter(MessageAdapter):
         if invalid:
             raise web.HTTPBadRequest(text=f"{field} contains invalid risk level(s): {', '.join(invalid)}")
         return values
+
+    @classmethod
+    def _coerce_permission_profile_overrides(cls, value: Any, *, default: dict[str, ToolPermissionProfileOverrideConfig]) -> dict[str, ToolPermissionProfileOverrideConfig]:
+        if value is None:
+            return dict(default)
+        if not isinstance(value, dict):
+            raise web.HTTPBadRequest(text="profile_overrides must be a JSON object")
+        allowed_profiles = {"chat", "research", "coding", "media", "ops"}
+        result: dict[str, ToolPermissionProfileOverrideConfig] = {}
+        for profile, raw_override in value.items():
+            profile_name = str(profile or "").strip().lower()
+            if profile_name not in allowed_profiles:
+                raise web.HTTPBadRequest(text=f"profile_overrides contains unknown profile: {profile}")
+            if not isinstance(raw_override, dict):
+                raise web.HTTPBadRequest(text=f"profile_overrides.{profile_name} must be a JSON object")
+            try:
+                override = ToolPermissionProfileOverrideConfig.model_validate(raw_override)
+            except ValidationError as exc:
+                raise web.HTTPBadRequest(text=str(exc)) from exc
+            invalid = sorted((set(override.allowed_risk_levels) | set(override.denied_risk_levels) | set(override.approval_required_risk_levels)) - ALL_RISK_LEVELS)
+            if invalid:
+                raise web.HTTPBadRequest(text=f"profile_overrides.{profile_name} contains invalid risk level(s): {', '.join(invalid)}")
+            result[profile_name] = override
+        return result
 
     @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
@@ -2479,6 +2519,10 @@ class WebAdapter(MessageAdapter):
             body.get("approval_required_risk_levels"),
             field="approval_required_risk_levels",
             default=permissions.approval_required_risk_levels,
+        )
+        permissions.profile_overrides = self._coerce_permission_profile_overrides(
+            body.get("profile_overrides"),
+            default=permissions.profile_overrides,
         )
         config.save(config_path)
         payload = {"permissions": self._permissions_payload(config), "restart_required": True}
