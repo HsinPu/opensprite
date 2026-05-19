@@ -329,6 +329,32 @@ class RunTraceRecorder:
             metadata=audit,
         )
 
+    async def record_harness_eval_result_part(
+        self,
+        session_id: str,
+        run_id: str,
+        result: dict[str, Any],
+    ) -> None:
+        """Persist a controlled harness eval result as a durable run part."""
+        summary = result.get("summary") if isinstance(result, dict) else {}
+        content = " · ".join(
+            item
+            for item in (
+                f"kind={result.get('kind')}",
+                f"ok={bool(result.get('ok'))}",
+                f"cases={summary.get('passed_cases')}/{summary.get('total_cases')}" if isinstance(summary, dict) else "",
+                f"checks={summary.get('passed_checks')}/{summary.get('total_checks')}" if isinstance(summary, dict) else "",
+            )
+            if item
+        )
+        await self.add_part(
+            session_id,
+            run_id,
+            "harness_eval_result",
+            content=content,
+            metadata=result,
+        )
+
     async def record_task_checklist_part(
         self,
         session_id: str,

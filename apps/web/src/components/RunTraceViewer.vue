@@ -681,6 +681,14 @@ function eventSummary(event) {
       `${countPayloadItems(payload.blocked_relaxations || payload.blockedRelaxations)} blocked relaxations`,
     ], " · ");
   }
+  if (String(event.eventType || "").startsWith("harness_eval.")) {
+    const summary = payload.summary || {};
+    return compactJoin([
+      payload.kind,
+      payload.ok === true ? "pass" : "fail",
+      summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} cases` : "",
+    ], " · ");
+  }
   if (event.eventType === "harness_checkpoint.recorded") {
     const completion = payload.completion || {};
     return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");

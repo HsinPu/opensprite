@@ -1859,6 +1859,13 @@ async def _run_web_run_events_api():
             assert harness_payload["ok"] is True
             assert harness_payload["kind"] == "controlled_harness_scenarios"
             assert harness_payload["summary"]["passed_cases"] == 5
+            assert harness_payload["trace"]["session_id"] == "web:evaluations"
+            assert harness_payload["trace"]["part_type"] == "harness_eval_result"
+            harness_parts = await storage.get_run_parts("web:evaluations", harness_payload["trace"]["run_id"])
+            assert [part.part_type for part in harness_parts] == ["harness_eval_result"]
+            assert harness_parts[0].metadata["kind"] == "controlled_harness_scenarios"
+            harness_events = await storage.get_run_events("web:evaluations", harness_payload["trace"]["run_id"])
+            assert [event.event_type for event in harness_events] == ["harness_eval.completed"]
 
             async with session.post(f"http://127.0.0.1:{port}/api/evals/task-completion/smoke") as resp:
                 assert resp.status == 200
