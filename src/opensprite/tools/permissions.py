@@ -177,6 +177,19 @@ class ToolPermissionPolicy:
             tool_risk_levels=tool_risk_levels,
         )
 
+    def to_metadata(self) -> dict[str, Any]:
+        """Return a JSON-safe snapshot of this policy."""
+        return {
+            "enabled": self.enabled,
+            "approval_mode": self.approval_mode,
+            "allowed_tools": list(self.allowed_tools),
+            "denied_tools": list(self.denied_tools),
+            "allowed_risk_levels": sorted(self.allowed_risk_levels),
+            "denied_risk_levels": sorted(self.denied_risk_levels),
+            "approval_required_tools": list(self.approval_required_tools),
+            "approval_required_risk_levels": sorted(self.approval_required_risk_levels),
+        }
+
     def _check(
         self,
         tool_name: str,
@@ -308,6 +321,14 @@ class CompositeToolPermissionPolicy(ToolPermissionPolicy):
                 return decision
         risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
         return PermissionDecision(True, risk_levels=tuple(sorted(risks)))
+
+    def to_metadata(self) -> dict[str, Any]:
+        """Return a JSON-safe snapshot of the ordered composite policy."""
+        return {
+            "kind": "composite",
+            "policy_count": len(self.policies),
+            "policies": [policy.to_metadata() for policy in self.policies],
+        }
 
 
 def _normalize_tool_risk_levels(value: Any) -> frozenset[str] | None:

@@ -20,6 +20,7 @@ class ToolRegistry:
         self._permission_policy = permission_policy or ToolPermissionPolicy.allow_all()
         self._permission_request_handler: PermissionRequestHandler | None = None
         self._permission_decision_hook: PermissionDecisionHook | None = None
+        self.permission_resolution_metadata: dict[str, Any] | None = None
 
     def register(self, tool: Tool) -> None:
         """Register a tool."""
@@ -61,6 +62,7 @@ class ToolRegistry:
         filtered_registry = ToolRegistry(permission_policy=permission_policy or self._permission_policy)
         filtered_registry.set_permission_request_handler(self._permission_request_handler)
         filtered_registry.set_permission_decision_hook(self._permission_decision_hook)
+        filtered_registry.permission_resolution_metadata = self.permission_resolution_metadata
         included = include_names
         excluded = exclude_names or set()
         for name, tool in self._tools.items():

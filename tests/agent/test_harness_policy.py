@@ -140,3 +140,22 @@ def test_profile_permission_override_is_composed_with_harness_policy():
     filtered = HarnessPolicyService().build_tool_registry(registry, policy, profile_override)
 
     assert filtered.tool_names == ["read_file"]
+
+
+def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
+    registry = ToolRegistry(
+        permission_policy=ToolPermissionPolicy(approval_mode="auto", allowed_risk_levels=["read", "write", "configuration", "mcp"])
+    )
+    policy = _policy("Update the MCP server configuration and restart the service")
+    profile_override = ToolPermissionPolicy(allowed_risk_levels=["read", "write", "mcp"], approval_mode="auto")
+
+    filtered = HarnessPolicyService().build_tool_registry(registry, policy, profile_override)
+
+    metadata = filtered.permission_resolution_metadata
+    assert metadata is not None
+    assert metadata["global_policy"]["approval_mode"] == "auto"
+    assert metadata["profile_override"]["approval_mode"] == "auto"
+    assert metadata["harness_policy"]["name"] == "operations_approval_policy"
+    assert metadata["effective_policy"]["kind"] == "composite"
+    assert "profile permission override" in metadata["constraints_applied"]
+    assert any(item["field"] == "approval_mode" for item in metadata["blocked_relaxations"])

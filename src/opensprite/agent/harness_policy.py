@@ -147,11 +147,87 @@ class HarnessPolicyService:
         if profile_permission_policy is not None:
             policies.append(profile_permission_policy)
         policies.append(harness_policy.to_permission_policy())
+        composite_policy = CompositeToolPermissionPolicy(*policies)
         registry = base_registry.filtered(
-            permission_policy=CompositeToolPermissionPolicy(
-                *policies,
-            )
+            permission_policy=composite_policy
+        )
+        registry.permission_resolution_metadata = self.policy_resolution_metadata(
+            base_registry.permission_policy,
+            profile_permission_policy,
+            harness_policy,
+            composite_policy,
         )
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
         return registry
+
+    def policy_resolution_metadata(
+        self,
+        global_policy: ToolPermissionPolicy,
+        profile_permission_policy: ToolPermissionPolicy | None,
+        harness_policy: HarnessPolicy,
+        effective_policy: ToolPermissionPolicy,
+    ) -> dict[str, Any]:
+        """Explain how the final executable permission policy was resolved."""
+        profile_metadata = profile_permission_policy.to_metadata() if profile_permission_policy is not None else None
+        harness_permission_policy = harness_policy.to_permission_policy()
+        return {
+            "schema_version": 1,
+            "global_policy": global_policy.to_metadata(),
+            "profile_override": profile_metadata,
+            "harness_policy": harness_policy.to_metadata(),
+            "harness_permission_policy": harness_permission_policy.to_metadata(),
+            "effective_policy": effective_policy.to_metadata(),
+            "constraints_applied": _constraints_applied(profile_permission_policy, harness_policy),
+            "blocked_relaxations": _blocked_relaxations(global_policy, profile_permission_policy, harness_policy),
+            "reason": "effective policy is the ordered intersection of global permissions, profile override, and harness hard policy",
+        }
+
+
+def _constraints_applied(profile_permission_policy: ToolPermissionPolicy | None, harness_policy: HarnessPolicy) -> list[str]:
+    constraints = [
+        "global permission policy",
+        f"harness policy: {harness_policy.name}",
+    ]
+    if profile_permission_policy is not None:
+        constraints.insert(1, "profile permission override")
+    if harness_policy.denied_risk_levels:
+        constraints.append("harness denied risk levels")
+    if harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels:
+        constraints.append("harness approval requirements")
+    return constraints
+
+
+def _blocked_relaxations(
+    global_policy: ToolPermissionPolicy,
+    profile_permission_policy: ToolPermissionPolicy | None,
+    harness_policy: HarnessPolicy,
+) -> list[dict[str, Any]]:
+    blocked: list[dict[str, Any]] = []
+    harness_allowed_risks = set(harness_policy.allowed_risk_levels)
+    harness_denied_risks = set(harness_policy.denied_risk_levels)
+    for source, policy in (("global_policy", global_policy), ("profile_override", profile_permission_policy)):
+        if policy is None:
+            continue
+        policy_allowed = set(policy.allowed_risk_levels)
+        relaxed_risks = sorted((policy_allowed - harness_allowed_risks) | (policy_allowed & harness_denied_risks))
+        if relaxed_risks:
+            blocked.append(
+                {
+                    "source": source,
+                    "field": "allowed_risk_levels",
+                    "blocked_by": "harness_policy",
+                    "risk_levels": relaxed_risks,
+                }
+            )
+        if policy.approval_mode == "auto" and (harness_policy.approval_required_tools or harness_policy.approval_required_risk_levels):
+            blocked.append(
+                {
+                    "source": source,
+                    "field": "approval_mode",
+                    "value": "auto",
+                    "blocked_by": "harness_policy",
+                    "reason": "harness approval requirements cannot be relaxed by user settings",
+                }
+            )
+    return blocked

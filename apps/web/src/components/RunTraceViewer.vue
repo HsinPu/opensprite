@@ -674,6 +674,13 @@ function eventSummary(event) {
   if (event.eventType === "harness_policy.selected") {
     return compactJoin([payload.name, `${countPayloadItems(payload.allowed_tools || payload.allowedTools)} tools`, payload.reason], " · ");
   }
+  if (event.eventType === "harness_policy.merge_resolved") {
+    return compactJoin([
+      payload.harness_policy?.name || payload.harnessPolicy?.name,
+      `${countPayloadItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
+      `${countPayloadItems(payload.blocked_relaxations || payload.blockedRelaxations)} blocked relaxations`,
+    ], " · ");
+  }
   if (event.eventType === "harness_checkpoint.recorded") {
     const completion = payload.completion || {};
     return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");

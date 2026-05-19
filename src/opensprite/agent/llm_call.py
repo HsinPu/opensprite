@@ -314,6 +314,16 @@ class LlmCallService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
+                policy_resolution = getattr(harness_tool_registry, "permission_resolution_metadata", None)
+                if isinstance(policy_resolution, dict) and policy_resolution:
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        "harness_policy.merge_resolved",
+                        policy_resolution,
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
             deterministic_contract = TaskContractService.build_deterministic(
                 task_intent=effective_task_intent,
                 current_message=prompt_message,
