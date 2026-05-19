@@ -338,7 +338,28 @@ class RunFileChangeService:
     async def preview_revert(self, session_id: str, run_id: str, change_id: int) -> dict[str, Any]:
         """Inspect whether one captured file change can be safely reverted."""
         prepared = await self.prepare_revert(session_id, run_id, change_id)
+        await self._emit_revert_event(session_id, run_id, "file_revert.previewed", prepared.preview)
         return prepared.preview
+
+    async def _emit_revert_event(
+        self,
+        session_id: str,
+        run_id: str,
+        event_type: str,
+        result: dict[str, Any],
+    ) -> None:
+        payload = {
+            "change_id": result.get("change_id"),
+            "path": result.get("path"),
+            "status": result.get("status"),
+            "ok": bool(result.get("ok")),
+            "applied": bool(result.get("applied", False)),
+            "dry_run": bool(result.get("dry_run", False)),
+            "reason": result.get("reason"),
+            "revert_action": result.get("revert_action"),
+            "post_sha256": result.get("post_sha256"),
+        }
+        await self._emit_run_event(session_id, run_id, event_type, payload)
 
     async def revert(
         self,
@@ -352,17 +373,20 @@ class RunFileChangeService:
         prepared = await self.prepare_revert(session_id, run_id, change_id)
         result = {**prepared.preview, "dry_run": bool(dry_run), "applied": False}
         if dry_run or prepared.preview.get("status") != "ready" or prepared.file_path is None:
+            await self._emit_revert_event(session_id, run_id, "file_revert.skipped", result)
             return result
 
         current_content, current_sha, current_error = self._read_current_content(prepared.file_path)
         if current_error:
             result.update({"status": "conflict", "ok": False, "reason": current_error})
+            await self._emit_revert_event(session_id, run_id, "file_revert.skipped", result)
             return result
 
         expected_current_sha = prepared.preview.get("expected_current_sha256")
         if expected_current_sha is None:
             if current_content is not None:
                 result.update({"status": "conflict", "ok": False, "reason": "current file changed before revert apply"})
+                await self._emit_revert_event(session_id, run_id, "file_revert.skipped", result)
                 return result
         elif current_sha != expected_current_sha:
             result.update(
@@ -373,6 +397,7 @@ class RunFileChangeService:
                     "current_sha256": current_sha,
                 }
             )
+            await self._emit_revert_event(session_id, run_id, "file_revert.skipped", result)
             return result
 
         try:
@@ -386,6 +411,7 @@ class RunFileChangeService:
                 post_sha = text_sha256(prepared.target_content)
         except OSError as e:
             result.update({"status": "failed", "ok": False, "reason": f"failed to apply revert: {e}"})
+            await self._emit_revert_event(session_id, run_id, "file_revert.failed", result)
             return result
 
         result.update(
@@ -397,4 +423,5 @@ class RunFileChangeService:
                 "reason": "file change reverted",
             }
         )
+        await self._emit_revert_event(session_id, run_id, "file_revert.applied", result)
         return result

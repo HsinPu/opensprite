@@ -10,8 +10,10 @@ def _sha256(content: str) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
-def _service(storage: MemoryStorage, workspace_root: Path) -> RunFileChangeService:
+def _service(storage: MemoryStorage, workspace_root: Path, events: list[tuple] | None = None) -> RunFileChangeService:
     async def emit_run_event(*args, **kwargs):
+        if events is not None:
+            events.append((args, kwargs))
         return None
 
     return RunFileChangeService(
@@ -25,7 +27,8 @@ def _service(storage: MemoryStorage, workspace_root: Path) -> RunFileChangeServi
 def test_file_change_service_can_preview_and_apply_safe_revert(tmp_path):
     async def scenario():
         storage = MemoryStorage()
-        service = _service(storage, tmp_path)
+        events = []
+        service = _service(storage, tmp_path, events)
         target = tmp_path / "notes.txt"
         target.write_text("after\n", encoding="utf-8")
         await storage.create_run("chat-1", "run-1")
@@ -45,9 +48,9 @@ def test_file_change_service_can_preview_and_apply_safe_revert(tmp_path):
         dry_run = await service.revert("chat-1", "run-1", change.change_id)
         after_dry_run = target.read_text(encoding="utf-8")
         applied = await service.revert("chat-1", "run-1", change.change_id, dry_run=False)
-        return preview, dry_run, after_dry_run, applied, target.read_text(encoding="utf-8")
+        return preview, dry_run, after_dry_run, applied, target.read_text(encoding="utf-8"), events
 
-    preview, dry_run, after_dry_run, applied, final_content = asyncio.run(scenario())
+    preview, dry_run, after_dry_run, applied, final_content, events = asyncio.run(scenario())
 
     assert preview["status"] == "ready"
     assert preview["ok"] is True
@@ -62,12 +65,21 @@ def test_file_change_service_can_preview_and_apply_safe_revert(tmp_path):
     assert applied["applied"] is True
     assert applied["post_sha256"] == _sha256("before\n")
     assert final_content == "before\n"
+    assert [args[2] for args, _kwargs in events] == [
+        "file_revert.previewed",
+        "file_revert.skipped",
+        "file_revert.applied",
+    ]
+    assert events[-1][0][3]["path"] == "notes.txt"
+    assert events[-1][0][3]["status"] == "applied"
+    assert events[-1][0][3]["applied"] is True
 
 
 def test_file_change_service_refuses_current_hash_conflict(tmp_path):
     async def scenario():
         storage = MemoryStorage()
-        service = _service(storage, tmp_path)
+        events = []
+        service = _service(storage, tmp_path, events)
         target = tmp_path / "notes.txt"
         target.write_text("user change\n", encoding="utf-8")
         await storage.create_run("chat-1", "run-1")
@@ -85,15 +97,21 @@ def test_file_change_service_refuses_current_hash_conflict(tmp_path):
 
         preview = await service.preview_revert("chat-1", "run-1", change.change_id)
         applied = await service.revert("chat-1", "run-1", change.change_id, dry_run=False)
-        return preview, applied, target.read_text(encoding="utf-8")
+        return preview, applied, target.read_text(encoding="utf-8"), events
 
-    preview, applied, final_content = asyncio.run(scenario())
+    preview, applied, final_content, events = asyncio.run(scenario())
 
     assert preview["status"] == "conflict"
     assert preview["ok"] is False
     assert "current file hash" in preview["reason"]
     assert applied["applied"] is False
     assert final_content == "user change\n"
+    assert [args[2] for args, _kwargs in events] == [
+        "file_revert.previewed",
+        "file_revert.skipped",
+    ]
+    assert events[-1][0][3]["status"] == "conflict"
+    assert events[-1][0][3]["applied"] is False
 
 
 def test_file_change_service_requires_before_snapshot(tmp_path):
