@@ -224,6 +224,17 @@ export function createSettingsState() {
       background_process_counts: {},
       metrics: [],
     },
+    harnessEvalRunning: false,
+    harnessEval: {
+      ok: false,
+      cases: [],
+      summary: {
+        passed_cases: 0,
+        total_cases: 0,
+        passed_checks: 0,
+        total_checks: 0,
+      },
+    },
     taskCompletionRunning: false,
     taskCompletionSmoke: {
       ok: false,

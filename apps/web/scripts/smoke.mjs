@@ -219,6 +219,7 @@ assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth c
 assertIncludes(settingsUi, "form.showWorkState", "work state settings switch");
 assertIncludes(settingsUi, "form.showRunHistory", "run history settings switch");
 assertIncludes(settingsUi, "form.accessToken", "gateway access token setting");
+assertIncludes(settingsModal, "run-harness-controlled-eval", "controlled harness eval action");
 assertIncludes(settingsModal, "run-task-completion-smoke", "task completion eval action");
 assertIncludes(settingsModal, "run-task-completion-live", "live task completion eval action");
 assertIncludes(settingsModal, "refresh-task-completion-history", "task completion history refresh action");
@@ -254,6 +255,7 @@ assertIncludes(chatClient, "STORAGE_KEYS.accessToken", "access token preference 
 assertIncludes(chatClient, "authorizedHeaders", "authorized API requests");
 assertIncludes(chatClient, "access_token", "authorized websocket connection");
 assertIncludes(chatClient, "/api/evals/task-completion/smoke", "task completion eval fetch");
+assertIncludes(chatClient, "/api/evals/harness/controlled", "controlled harness eval fetch");
 assertIncludes(chatClient, "/api/evals/task-completion/run", "live task completion eval fetch");
 assertIncludes(chatClient, "/api/evals/task-completion/history", "task completion history fetch");
 assertIncludes(chatClient, "deleteTaskCompletionHistoryItem", "task completion history delete fetch");
@@ -360,6 +362,8 @@ for (const key of [
   "dataLoadFailed",
   "dataTimelineLoadFailed",
   "taskCompletionSmokePassed",
+  "harnessEvalPassed",
+  "harnessEvalFailed",
   "taskCompletionEvalSmokeFailed",
   "taskCompletionLivePassed",
   "taskCompletionLiveEvalFailed",

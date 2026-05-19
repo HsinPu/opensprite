@@ -1851,6 +1851,16 @@
 
             <div class="settings-row">
               <div>
+                <strong>{{ copy.settings.eval.harnessEvalTitle }}</strong>
+                <span>{{ copy.settings.eval.harnessEvalDescription }}</span>
+              </div>
+              <button class="secondary-button" type="button" :disabled="settingsState.harnessEvalRunning" @click="$emit('run-harness-controlled-eval')">
+                {{ settingsState.harnessEvalRunning ? copy.settings.eval.running : copy.settings.eval.runHarnessEval }}
+              </button>
+            </div>
+
+            <div class="settings-row">
+              <div>
                 <strong>{{ copy.settings.eval.taskCompletionTitle }}</strong>
                 <span>{{ copy.settings.eval.taskCompletionDescription }}</span>
               </div>
@@ -1894,6 +1904,33 @@
                 <span>{{ check.detail }}</span>
               </div>
               <span class="provider-row__badge">{{ check.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
+            </div>
+          </div>
+
+          <h3>{{ copy.settings.eval.harnessEvalResultsTitle }}</h3>
+          <div class="settings-card">
+            <div v-if="!settingsState.harnessEval.cases.length" class="provider-row provider-row--empty">
+              <div>
+                <strong>{{ copy.settings.eval.noHarnessEvalTitle }}</strong>
+                <span>{{ copy.settings.eval.noHarnessEvalDescription }}</span>
+              </div>
+            </div>
+            <div v-if="settingsState.harnessEval.cases.length" class="settings-row">
+              <div>
+                <strong>{{ copy.settings.eval.checksSummary(settingsState.harnessEval.summary.passed_checks, settingsState.harnessEval.summary.total_checks) }}</strong>
+                <span>{{ copy.settings.eval.historyGroupMeta(settingsState.harnessEval.summary.total_cases, settingsState.harnessEval.summary.passed_cases, settingsState.harnessEval.summary.total_cases - settingsState.harnessEval.summary.passed_cases) }}</span>
+              </div>
+              <span class="provider-row__badge">{{ settingsState.harnessEval.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
+            </div>
+            <div v-for="evalCase in settingsState.harnessEval.cases" :key="evalCase.id" class="settings-row eval-result-row">
+              <div>
+                <span class="eval-result-row__title">
+                  <strong>{{ evalCase.id }}</strong>
+                  <span class="provider-row__badge">{{ evalCase.ok ? copy.settings.eval.pass : copy.settings.eval.fail }}</span>
+                </span>
+                <span>{{ evalCase.profile?.name || copy.settings.eval.none }} · {{ evalCase.policy?.name || copy.settings.eval.none }}</span>
+                <span v-if="failedEvalChecks(evalCase).length">{{ failedEvalChecksSummary(evalCase) }}</span>
+              </div>
             </div>
           </div>
 
@@ -4104,6 +4141,7 @@ const emit = defineEmits([
   "run-browser-install",
   "refresh-eval-status",
   "run-eval-smoke",
+  "run-harness-controlled-eval",
   "run-task-completion-smoke",
   "run-task-completion-live",
   "refresh-task-completion-history",

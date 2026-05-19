@@ -2912,6 +2912,30 @@ export function useChatClient() {
     }
   }
 
+  async function runHarnessControlledEval() {
+    settingsState.harnessEvalRunning = true;
+    settingsState.evalError = "";
+    settingsState.evalNotice = "";
+    try {
+      const payload = await requestSettingsJson("/api/evals/harness/controlled", { method: "POST" });
+      settingsState.harnessEval = {
+        ok: Boolean(payload?.ok),
+        cases: Array.isArray(payload?.cases) ? payload.cases : [],
+        summary: payload?.summary || {
+          passed_cases: 0,
+          total_cases: 0,
+          passed_checks: 0,
+          total_checks: 0,
+        },
+      };
+      settingsState.evalNotice = payload?.ok ? copy.value.settings.eval.harnessEvalPassed : copy.value.settings.eval.harnessEvalFailed;
+    } catch (error) {
+      settingsState.evalError = error?.message || copy.value.notices.harnessEvalFailed;
+    } finally {
+      settingsState.harnessEvalRunning = false;
+    }
+  }
+
   async function runTaskCompletionEvalSmoke() {
     settingsState.taskCompletionRunning = true;
     settingsState.evalError = "";
@@ -3990,6 +4014,7 @@ export function useChatClient() {
     loadDataSettings,
     loadEvalStatus,
     runEvalSmokeCheck,
+    runHarnessControlledEval,
     runTaskCompletionEvalSmoke,
     runTaskCompletionLiveEval,
     loadTaskCompletionHistory,
