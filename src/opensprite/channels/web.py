@@ -24,6 +24,8 @@ import httpx
 from aiohttp import WSMsgType, web
 
 from .identity import build_session_id, normalize_identifier
+from ..agent.harness_policy import HarnessPolicyService
+from ..agent.harness_profile import HarnessProfile
 from ..auth.credentials import (
     CredentialNotFoundError,
     CredentialStoreError,
@@ -837,6 +839,106 @@ class WebAdapter(MessageAdapter):
             "risk_level_options": sorted(ALL_RISK_LEVELS),
             "approval_mode_options": sorted(APPROVAL_MODES),
         }
+
+    @classmethod
+    def _harness_policy_preview_payload(cls, config: Config) -> dict[str, Any]:
+        user_permissions = cls._permissions_payload(config)
+        user_allowed_risks = set(user_permissions["allowed_risk_levels"])
+        user_denied_risks = set(user_permissions["denied_risk_levels"])
+        user_approval_mode = user_permissions.get("approval_mode") or "auto"
+        user_approval_risks = set(user_permissions["approval_required_risk_levels"])
+        policy_service = HarnessPolicyService()
+        profiles = cls._harness_policy_preview_profiles()
+        rows = []
+        for profile in profiles:
+            policy = policy_service.select(profile)
+            harness_allowed_risks = set(policy.allowed_risk_levels)
+            harness_denied_risks = set(policy.denied_risk_levels)
+            effective_allowed = sorted((user_allowed_risks & harness_allowed_risks) - user_denied_risks - harness_denied_risks)
+            effective_denied = sorted(user_denied_risks | harness_denied_risks | (ALL_RISK_LEVELS - set(effective_allowed)))
+            effective_approval = set(policy.approval_required_risk_levels)
+            if user_approval_mode != "auto":
+                effective_approval |= user_approval_risks
+            effective_approval = sorted(effective_approval & set(effective_allowed))
+            rows.append(
+                {
+                    "profile": profile.to_metadata(),
+                    "policy": policy.to_metadata(),
+                    "effective": {
+                        "allowed_risk_levels": effective_allowed,
+                        "denied_risk_levels": effective_denied,
+                        "approval_required_risk_levels": effective_approval,
+                        "user_approval_mode": user_approval_mode,
+                        "user_permissions_enabled": bool(user_permissions["enabled"]),
+                    },
+                }
+            )
+        return {
+            "schema_version": 1,
+            "user_permissions": user_permissions,
+            "rows": rows,
+        }
+
+    @staticmethod
+    def _harness_policy_preview_profiles() -> tuple[HarnessProfile, ...]:
+        return (
+            HarnessProfile(
+                name="chat",
+                task_type="conversation",
+                verification_policy="none",
+                continuation_policy="minimal",
+                reason="preview profile for low-risk chat turns",
+            ),
+            HarnessProfile(
+                name="research",
+                task_type="web_research",
+                required_tool_groups=("web_research",),
+                required_evidence=("web_source", "source_reference"),
+                verification_policy="source_grounded",
+                continuation_policy="bounded_with_source_fetch",
+                approval_required_risk_levels=("external_side_effect",),
+                reason="preview profile for source-grounded web research turns",
+            ),
+            HarnessProfile(
+                name="coding",
+                task_type="workspace_analysis",
+                required_tool_groups=("workspace_read",),
+                required_evidence=("workspace_evidence",),
+                verification_policy="focused_if_possible",
+                continuation_policy="bounded_with_verification",
+                approval_required_risk_levels=("external_side_effect", "configuration"),
+                reason="preview profile for workspace analysis turns",
+            ),
+            HarnessProfile(
+                name="coding",
+                task_type="workspace_change",
+                required_tool_groups=("workspace_read", "workspace_write"),
+                required_evidence=("file_change",),
+                verification_policy="focused_if_possible",
+                continuation_policy="bounded_with_verification",
+                approval_required_risk_levels=("external_side_effect", "configuration"),
+                reason="preview profile for workspace change turns",
+            ),
+            HarnessProfile(
+                name="media",
+                task_type="media_extraction",
+                required_tool_groups=("media",),
+                required_evidence=("media_artifact",),
+                verification_policy="artifact_required",
+                continuation_policy="bounded",
+                reason="preview profile for media extraction turns",
+            ),
+            HarnessProfile(
+                name="ops",
+                task_type="operations",
+                required_tool_groups=("workspace_read",),
+                required_evidence=("audit_trace",),
+                verification_policy="validate_or_report",
+                continuation_policy="approval_bounded",
+                approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
+                reason="preview profile for operations turns",
+            ),
+        )
 
     @classmethod
     def _coerce_approval_mode(cls, value: Any) -> str | None:
@@ -2335,6 +2437,10 @@ class WebAdapter(MessageAdapter):
     async def _handle_settings_permissions(self, request: web.Request) -> web.Response:
         config = Config.load(self._get_config_path())
         return web.json_response({"permissions": self._permissions_payload(config)})
+
+    async def _handle_settings_harness_policy_preview(self, request: web.Request) -> web.Response:
+        config = Config.load(self._get_config_path())
+        return web.json_response({"harness_policy_preview": self._harness_policy_preview_payload(config)})
 
     async def _handle_settings_permissions_update(self, request: web.Request) -> web.Response:
         body = await self._read_json_body(request)
