@@ -454,21 +454,23 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
+        harness_checkpoint = _harness_checkpoint_metadata(
+            harness_profile=harness_profile,
+            aggregate_result=aggregate_result,
+            completion_result=completion_result,
+            work_progress=work_progress,
+            pass_index=len(execution_results),
+            auto_continue_attempts=auto_continue_attempts,
+        )
         await self._emit_run_event(
             turn.session_id,
             run_id,
             "harness_checkpoint.recorded",
-            _harness_checkpoint_metadata(
-                harness_profile=harness_profile,
-                aggregate_result=aggregate_result,
-                completion_result=completion_result,
-                work_progress=work_progress,
-                pass_index=len(execution_results),
-                auto_continue_attempts=auto_continue_attempts,
-            ),
+            harness_checkpoint,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
+        await self.run_trace.record_harness_checkpoint_part(turn.session_id, run_id, harness_checkpoint)
         if auto_continue_attempts > 0:
             await self._emit_run_event(
                 turn.session_id,

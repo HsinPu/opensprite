@@ -277,6 +277,34 @@ class RunTraceRecorder:
                 metadata=metadata,
             )
 
+    async def record_harness_checkpoint_part(
+        self,
+        session_id: str,
+        run_id: str,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        """Persist the latest harness state as a durable run part."""
+        profile = checkpoint.get("harness_profile") if isinstance(checkpoint, dict) else {}
+        policy = checkpoint.get("harness_policy") if isinstance(checkpoint, dict) else {}
+        completion = checkpoint.get("completion") if isinstance(checkpoint, dict) else {}
+        content = " · ".join(
+            item
+            for item in (
+                f"profile={profile.get('name')}" if isinstance(profile, dict) and profile.get("name") else "",
+                f"policy={policy.get('name')}" if isinstance(policy, dict) and policy.get("name") else "",
+                f"completion={completion.get('status')}" if isinstance(completion, dict) and completion.get("status") else "",
+                f"next={checkpoint.get('next_action')}" if isinstance(checkpoint, dict) and checkpoint.get("next_action") else "",
+            )
+            if item
+        )
+        await self.add_part(
+            session_id,
+            run_id,
+            "harness_checkpoint",
+            content=content,
+            metadata=checkpoint,
+        )
+
     async def record_task_checklist_part(
         self,
         session_id: str,

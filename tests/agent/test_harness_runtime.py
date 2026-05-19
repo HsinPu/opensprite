@@ -94,11 +94,13 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
         )
         run = next(iter(agent.storage._runs.values()))
         events = await agent.storage.get_run_events("web:browser-1", run.run_id)
-        return response, provider.tool_names_by_call, events
+        parts = await agent.storage.get_run_parts("web:browser-1", run.run_id)
+        return response, provider.tool_names_by_call, events, parts
 
-    response, tool_names_by_call, events = asyncio.run(scenario())
+    response, tool_names_by_call, events, parts = asyncio.run(scenario())
     event_types = [event.event_type for event in events]
     checkpoint = next(event for event in events if event.event_type == "harness_checkpoint.recorded")
+    checkpoint_part = next(part for part in parts if part.part_type == "harness_checkpoint")
 
     assert response.text == "Harness runtime reply."
     assert tool_names_by_call[-1] == ["read_file"]
@@ -107,6 +109,9 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert checkpoint.payload["harness_policy"]["name"] == "chat_read_policy"
     assert checkpoint.payload["completion"]["status"] == "complete"
     assert checkpoint.payload["next_action"] == "finalize"
+    assert checkpoint_part.metadata["harness_profile"]["name"] == "chat"
+    assert checkpoint_part.metadata["completion"]["status"] == "complete"
+    assert "profile=chat" in checkpoint_part.content
 
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):

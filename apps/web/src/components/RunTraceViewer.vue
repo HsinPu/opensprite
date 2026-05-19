@@ -444,7 +444,9 @@ const harnessSummaryRows = computed(() => {
   const labels = props.copy.trace.harnessLabels || {};
   const profilePayload = latestEventPayload("harness_profile.selected");
   const policyPayload = latestEventPayload("harness_policy.selected");
-  const checkpointPayload = latestEventPayload("harness_checkpoint.recorded");
+  const eventCheckpointPayload = latestEventPayload("harness_checkpoint.recorded");
+  const partCheckpointPayload = latestPartMetadata("harness_checkpoint");
+  const checkpointPayload = Object.keys(eventCheckpointPayload).length ? eventCheckpointPayload : partCheckpointPayload;
   const contractPayload = latestEventPayload("task_contract.created");
   const completionPayload = latestEventPayload("completion_gate.evaluated");
   const autoContinueEvent = latestEventWithPrefix("auto_continue.");
@@ -695,6 +697,16 @@ function eventSummary(event) {
 function latestEventPayload(eventType) {
   const event = latestEventByType(eventType);
   return event?.payload && typeof event.payload === "object" ? event.payload : {};
+}
+
+function latestPartMetadata(partType) {
+  for (let index = parts.value.length - 1; index >= 0; index -= 1) {
+    const part = parts.value[index];
+    if (part?.partType === partType && part.metadata && typeof part.metadata === "object") {
+      return part.metadata;
+    }
+  }
+  return {};
 }
 
 function latestEventByType(eventType) {

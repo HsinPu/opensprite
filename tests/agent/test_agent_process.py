@@ -508,12 +508,14 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert events[5].payload["next_action"] == "finalize"
     assert events[6].payload["next_action"] == "finalize"
     assert events[-1].payload["status"] == "completed"
-    assert [part.part_type for part in parts] == ["context_compaction", "assistant_message"]
+    assert [part.part_type for part in parts] == ["context_compaction", "harness_checkpoint", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
     assert parts[0].metadata["messages_before"] == 8
-    assert parts[1].content == "assistant reply"
-    assert parts[1].metadata["executed_tool_calls"] == 0
-    assert parts[1].metadata["context_compactions"] == 1
+    assert parts[1].metadata["harness_profile"]["name"] == "chat"
+    assert parts[1].metadata["next_action"] == "finalize"
+    assert parts[2].content == "assistant reply"
+    assert parts[2].metadata["executed_tool_calls"] == 0
+    assert parts[2].metadata["context_compactions"] == 1
 
 
 def test_agent_verify_hooks_emit_verification_events(tmp_path):
@@ -1309,6 +1311,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert events[11].payload["next_action"] == "collect_review_evidence"
     assert events[12].payload["completion_status"] == "needs_review"
     assert events[13].payload["reason"] == "review_evidence_still_missing"
+    assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
     assistant_part = next(part for part in parts if part.part_type == "assistant_message")
     assert assistant_part.metadata["auto_continue_attempts"] == 1
     assert assistant_part.metadata["verification_passed"] is True

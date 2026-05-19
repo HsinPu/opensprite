@@ -46,6 +46,10 @@ _EVENT_KINDS = {
     "workflow.completed": "work",
     "workflow.failed": "work",
     "completion_gate.evaluated": "completion",
+    "harness_profile.selected": "harness",
+    "harness_policy.selected": "harness",
+    "harness_checkpoint.recorded": "harness",
+    "task_contract.created": "harness",
     "execution.stopped": "llm",
     "auto_continue.scheduled": "run",
     "auto_continue.completed": "run",
@@ -106,6 +110,8 @@ def run_event_kind(event_type: str) -> str:
         return "work"
     if normalized.startswith("permission_"):
         return "permission"
+    if normalized.startswith("harness_"):
+        return "harness"
     if normalized.startswith("run_") or normalized.startswith("auto_continue."):
         return "run"
     return "other"
@@ -519,6 +525,8 @@ def run_part_kind(part_type: str) -> str:
         return "llm"
     if normalized == "worktree_sandbox":
         return "work"
+    if normalized == "harness_checkpoint":
+        return "harness"
     return "other"
 
 
@@ -594,6 +602,21 @@ def run_part_artifact(
     if part_type == "worktree_sandbox":
         title = "Worktree sandbox"
         detail = _text(safe_metadata.get("status") or safe_metadata.get("reason"))
+    if part_type == "harness_checkpoint":
+        completion = safe_metadata.get("completion") if isinstance(safe_metadata.get("completion"), dict) else {}
+        title = "Harness checkpoint"
+        detail = _text(
+            content
+            or " · ".join(
+                item
+                for item in (
+                    safe_metadata.get("next_action"),
+                    completion.get("status"),
+                    completion.get("reason"),
+                )
+                if item
+            )
+        )
     if not detail and kind == "text":
         detail = str(content or "")[:240]
     artifact_id = f"part:{part_id}" if part_id is not None else None

@@ -119,6 +119,36 @@ def test_run_trace_recorder_persists_llm_step_part():
     assert serialize_run_part(parts[0])["artifact"]["kind"] == "llm"
 
 
+def test_run_trace_recorder_persists_harness_checkpoint_part():
+    async def scenario():
+        storage = MemoryStorage()
+        recorder = RunTraceRecorder(storage=storage, message_bus_getter=lambda: None)
+        await storage.create_run("web:browser-1", "run-1")
+        await recorder.record_harness_checkpoint_part(
+            "web:browser-1",
+            "run-1",
+            {
+                "schema_version": 1,
+                "pass_index": 1,
+                "harness_profile": {"name": "coding"},
+                "harness_policy": {"name": "coding_workspace_policy"},
+                "completion": {"status": "incomplete", "reason": "verification_missing"},
+                "next_action": "continue_work",
+            },
+        )
+        return await storage.get_run_parts("web:browser-1", "run-1")
+
+    parts = asyncio.run(scenario())
+
+    assert len(parts) == 1
+    assert parts[0].part_type == "harness_checkpoint"
+    assert parts[0].content == "profile=coding · policy=coding_workspace_policy · completion=incomplete · next=continue_work"
+    assert parts[0].metadata["completion"]["reason"] == "verification_missing"
+    serialized = serialize_run_part(parts[0])
+    assert serialized["kind"] == "harness"
+    assert serialized["artifact"]["title"] == "Harness checkpoint"
+
+
 def test_worktree_sandbox_inspector_reports_disabled(tmp_path):
     metadata = WorktreeSandboxInspector(enabled=False, workspace_root=tmp_path).inspect().to_payload()
 
