@@ -306,10 +306,25 @@ def test_agent_goal_command_persists_resumable_work_state(tmp_path):
             **Config.packaged_agent_llm_chat_kwargs(),
         )
 
-        rendered = await agent.set_goal_from_text("web:browser-1", "Finish phase two and run tests.")
-        return rendered, await storage.get_work_state("web:browser-1")
+        await storage.create_run("web:browser-1", "run-1")
+        session_token = agent._current_session_id.set("web:browser-1")
+        channel_token = agent._current_channel.set("web")
+        transport_token = agent._current_external_chat_id.set("browser-1")
+        run_token = agent._current_run_id.set("run-1")
+        try:
+            rendered = await agent.set_goal_from_text("web:browser-1", "Finish phase two and run tests.")
+        finally:
+            agent._current_run_id.reset(run_token)
+            agent._current_external_chat_id.reset(transport_token)
+            agent._current_channel.reset(channel_token)
+            agent._current_session_id.reset(session_token)
+        return (
+            rendered,
+            await storage.get_work_state("web:browser-1"),
+            await storage.get_run_events("web:browser-1", "run-1"),
+        )
 
-    rendered, work_state = asyncio.run(scenario())
+    rendered, work_state, events = asyncio.run(scenario())
 
     assert rendered is not None
     assert "- Goal: Finish phase two and run tests." in rendered
@@ -319,6 +334,9 @@ def test_agent_goal_command_persists_resumable_work_state(tmp_path):
     assert work_state.long_running is True
     assert work_state.metadata["source"] == "goal_command"
     assert work_state.resume_hint.startswith("Resume at current step:")
+    assert [event.event_type for event in events] == ["active_task.command_applied"]
+    assert events[0].payload["command"] == "set_goal"
+    assert events[0].payload["work_state_created"] is True
 
 
 def test_agent_process_persists_user_then_assistant_then_runs_maintenance(tmp_path):

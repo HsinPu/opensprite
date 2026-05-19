@@ -2238,6 +2238,31 @@ class AgentLoop:
     def _get_active_task_store(self, session_id: str):
         return self.active_task_commands.get_store(session_id)
 
+    async def _emit_active_task_command_event(
+        self,
+        session_id: str,
+        command: str,
+        *,
+        applied: bool,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        run_id = self.turn_context.current_run_id()
+        if run_id is None:
+            return
+        payload = {
+            "command": command,
+            "status": "applied" if applied else "failed",
+            **(detail or {}),
+        }
+        await self._emit_run_event(
+            session_id,
+            run_id,
+            "active_task.command_applied" if applied else "active_task.command_failed",
+            payload,
+            channel=self.turn_context.current_channel(),
+            external_chat_id=self.turn_context.current_external_chat_id(),
+        )
+
     async def show_active_task(self, session_id: str) -> str | None:
         """Return the current ACTIVE_TASK block for user display, if any."""
         return await self.active_task_commands.show(session_id)
@@ -2252,7 +2277,14 @@ class AgentLoop:
 
     async def set_active_task_from_text(self, session_id: str, task_text: str) -> str | None:
         """Create or replace the current ACTIVE_TASK from explicit user text."""
-        return await self.active_task_commands.set_from_text(session_id, task_text)
+        rendered = await self.active_task_commands.set_from_text(session_id, task_text)
+        await self._emit_active_task_command_event(
+            session_id,
+            "set_active_task",
+            applied=rendered is not None,
+            detail={"text_preview": self._format_log_preview(task_text, 160)},
+        )
+        return rendered
 
     async def set_goal_from_text(self, session_id: str, goal_text: str) -> str | None:
         """Create a resumable session goal backed by ACTIVE_TASK and work state."""
@@ -2261,6 +2293,12 @@ class AgentLoop:
             return None
         rendered = await self.active_task_commands.set_from_text(session_id, goal)
         if rendered is None:
+            await self._emit_active_task_command_event(
+                session_id,
+                "set_goal",
+                applied=False,
+                detail={"text_preview": self._format_log_preview(goal, 160)},
+            )
             return None
 
         task_intent = self._task_intent_for_explicit_goal(goal)
@@ -2273,6 +2311,15 @@ class AgentLoop:
         if state is not None:
             state.metadata.update({"source": "goal_command", "schema_version": 1})
             await self._save_work_state(state)
+        await self._emit_active_task_command_event(
+            session_id,
+            "set_goal",
+            applied=True,
+            detail={
+                "text_preview": self._format_log_preview(goal, 160),
+                "work_state_created": state is not None,
+            },
+        )
         return rendered
 
     def _task_intent_for_explicit_goal(self, goal_text: str) -> TaskIntent:
@@ -2296,44 +2343,96 @@ class AgentLoop:
 
     async def activate_active_task(self, session_id: str) -> str | None:
         """Mark the current ACTIVE_TASK as active again."""
-        return await self.active_task_commands.activate(session_id)
+        rendered = await self.active_task_commands.activate(session_id)
+        await self._emit_active_task_command_event(session_id, "activate", applied=rendered is not None)
+        return rendered
 
     async def reopen_active_task(self, session_id: str) -> str | None:
         """Reopen a terminal ACTIVE_TASK and resume it as active."""
-        return await self.active_task_commands.reopen(session_id)
+        rendered = await self.active_task_commands.reopen(session_id)
+        await self._emit_active_task_command_event(session_id, "reopen", applied=rendered is not None)
+        return rendered
 
     async def block_active_task(self, session_id: str, reason: str) -> str | None:
         """Mark the current ACTIVE_TASK as blocked with one explicit reason."""
-        return await self.active_task_commands.block(session_id, reason)
+        rendered = await self.active_task_commands.block(session_id, reason)
+        await self._emit_active_task_command_event(
+            session_id,
+            "block",
+            applied=rendered is not None,
+            detail={"reason_preview": self._format_log_preview(reason, 160)},
+        )
+        return rendered
 
     async def wait_on_active_task(self, session_id: str, question: str) -> str | None:
         """Mark the current ACTIVE_TASK as waiting for user input."""
-        return await self.active_task_commands.wait_on(session_id, question)
+        rendered = await self.active_task_commands.wait_on(session_id, question)
+        await self._emit_active_task_command_event(
+            session_id,
+            "wait_on",
+            applied=rendered is not None,
+            detail={"question_preview": self._format_log_preview(question, 160)},
+        )
+        return rendered
 
     async def set_active_task_current_step(self, session_id: str, step_text: str) -> str | None:
         """Replace the current step for the active task."""
-        return await self.active_task_commands.set_current_step(session_id, step_text)
+        rendered = await self.active_task_commands.set_current_step(session_id, step_text)
+        await self._emit_active_task_command_event(
+            session_id,
+            "set_current_step",
+            applied=rendered is not None,
+            detail={"step_preview": self._format_log_preview(step_text, 160)},
+        )
+        return rendered
 
     async def set_active_task_next_step(self, session_id: str, step_text: str) -> str | None:
         """Replace the planned next step for the active task."""
-        return await self.active_task_commands.set_next_step(session_id, step_text)
+        rendered = await self.active_task_commands.set_next_step(session_id, step_text)
+        await self._emit_active_task_command_event(
+            session_id,
+            "set_next_step",
+            applied=rendered is not None,
+            detail={"step_preview": self._format_log_preview(step_text, 160)},
+        )
+        return rendered
 
     async def advance_active_task(self, session_id: str) -> str | None:
         """Promote the next step into the current step and mark the previous step complete."""
-        return await self.active_task_commands.advance(session_id)
+        rendered = await self.active_task_commands.advance(session_id)
+        await self._emit_active_task_command_event(session_id, "advance", applied=rendered is not None)
+        return rendered
 
     async def complete_active_task_step(self, session_id: str, next_step_override: str | None = None) -> str | None:
         """Complete the current step and either advance or finish the task."""
-        return await self.active_task_commands.complete_step(session_id, next_step_override=next_step_override)
+        rendered = await self.active_task_commands.complete_step(session_id, next_step_override=next_step_override)
+        detail = None
+        if next_step_override is not None:
+            detail = {"next_step_preview": self._format_log_preview(next_step_override, 160)}
+        await self._emit_active_task_command_event(
+            session_id,
+            "complete_step",
+            applied=rendered is not None,
+            detail=detail,
+        )
+        return rendered
 
     async def mark_active_task_status(self, session_id: str, status: str) -> str | None:
         """Set the current ACTIVE_TASK status when one exists."""
-        return await self.active_task_commands.mark_status(session_id, status)
+        rendered = await self.active_task_commands.mark_status(session_id, status)
+        await self._emit_active_task_command_event(
+            session_id,
+            "mark_status",
+            applied=rendered is not None,
+            detail={"target_status": status},
+        )
+        return rendered
 
     async def reset_active_task(self, session_id: str) -> None:
         """Clear the current ACTIVE_TASK state for one session."""
         await self.active_task_commands.reset(session_id)
         await self._clear_work_state(session_id)
+        await self._emit_active_task_command_event(session_id, "reset", applied=True)
 
     async def reset_history(self, session_id: str | None = None) -> None:
         """
