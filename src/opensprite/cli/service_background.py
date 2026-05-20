@@ -11,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+import ctypes
 
 
 @dataclass
@@ -47,6 +48,8 @@ def is_process_running(pid: int | None) -> bool:
     """Return whether a process id appears to still be alive."""
     if pid is None or pid <= 0:
         return False
+    if platform.system() == "Windows":
+        return _is_windows_process_running(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -56,6 +59,33 @@ def is_process_running(pid: int | None) -> bool:
     except OSError:
         return False
     return True
+
+
+def _is_windows_process_running(pid: int) -> bool:
+    """Return whether a Windows process exists and has not exited."""
+    kernel32 = ctypes.windll.kernel32
+    process_query_limited_information = 0x1000
+    still_active = 259
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if not handle:
+        return False
+    try:
+        exit_code = ctypes.c_ulong()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            return False
+        return exit_code.value == still_active
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _windows_hidden_startupinfo() -> subprocess.STARTUPINFO | None:
+    startupinfo_type = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_type is None:
+        return None
+    startupinfo = startupinfo_type()
+    startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    startupinfo.wShowWindow = 0
+    return startupinfo
 
 
 def resolve_gateway_python(python_executable: Path | None = None) -> Path:
@@ -141,8 +171,15 @@ def start_service(
         "env": env,
     }
     if platform.system() == "Windows":
-        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+        creationflags = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0)
+            | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        )
         popen_kwargs["creationflags"] = creationflags
+        startupinfo = _windows_hidden_startupinfo()
+        if startupinfo is not None:
+            popen_kwargs["startupinfo"] = startupinfo
     else:
         popen_kwargs["start_new_session"] = True
 

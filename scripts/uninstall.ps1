@@ -56,7 +56,13 @@ function Stop-Gateway {
     $openSprite = Join-Path $InstallDir ".venv\Scripts\opensprite.exe"
     if (Test-Path $openSprite) {
         Write-Info "Stopping OpenSprite gateway"
-        & $openSprite service stop 2>$null | Out-Null
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $openSprite service stop 2>&1 | Out-Null
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
         return
     }
 

@@ -251,7 +251,13 @@ function Start-Gateway {
     $configPath = Ensure-DefaultConfig
     $openSprite = Join-Path $InstallDir ".venv\Scripts\opensprite.exe"
     Write-Info "Starting OpenSprite background gateway"
-    & $openSprite service stop 2>$null | Out-Null
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $openSprite service stop 2>&1 | Out-Null
+    } finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
     Invoke-Checked $openSprite @("service", "start", "--config", $configPath) $InstallDir
     Invoke-Checked $openSprite @("service", "status") $InstallDir
 }

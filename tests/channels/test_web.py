@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -336,6 +337,9 @@ def test_web_frontend_command_decodes_utf8_output(monkeypatch, tmp_path):
     assert result.stdout == "✓ built"
     assert captured["encoding"] == "utf-8"
     assert captured["errors"] == "replace"
+    if os.name == "nt":
+        assert captured["creationflags"] & getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        assert "startupinfo" in captured
 
 
 async def _run_web_command_catalog_api():

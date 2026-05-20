@@ -316,6 +316,15 @@ class WebAdapter(MessageAdapter):
         return (bin_dir / "vite").is_file() or (bin_dir / "vite.cmd").is_file()
 
     def _run_frontend_command(self, source_dir: Path, args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+        run_kwargs: dict[str, object] = {}
+        if os.name == "nt":
+            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            startupinfo_type = getattr(subprocess, "STARTUPINFO", None)
+            if startupinfo_type is not None:
+                startupinfo = startupinfo_type()
+                startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+                startupinfo.wShowWindow = 0
+                run_kwargs["startupinfo"] = startupinfo
         return subprocess.run(
             args,
             cwd=source_dir,
@@ -325,6 +334,7 @@ class WebAdapter(MessageAdapter):
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            **run_kwargs,
         )
 
     def _maybe_install_frontend_dependencies(self, source_dir: Path, npm: str) -> bool:

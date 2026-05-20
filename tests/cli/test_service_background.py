@@ -1,6 +1,7 @@
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from typer.testing import CliRunner
 
@@ -47,6 +48,45 @@ def test_start_service_launches_detached_gateway(tmp_path, monkeypatch):
     assert kwargs["stdin"] == subprocess.DEVNULL
     assert kwargs["stderr"] == subprocess.STDOUT
     assert "creationflags" in kwargs
+    create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if create_no_window:
+        assert kwargs["creationflags"] & create_no_window
+    if getattr(subprocess, "STARTUPINFO", None) is not None:
+        assert "startupinfo" in kwargs
+
+
+def test_is_process_running_uses_windows_process_exit_code(monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+
+    class FakeKernel32:
+        def OpenProcess(self, access, inherit, pid):
+            assert pid == 1234
+            return 99
+
+        def GetExitCodeProcess(self, handle, exit_code):
+            assert handle == 99
+            exit_code._obj.value = 259
+            return 1
+
+        def CloseHandle(self, handle):
+            assert handle == 99
+            return 1
+
+    monkeypatch.setattr(service_background.ctypes, "windll", SimpleNamespace(kernel32=FakeKernel32()), raising=False)
+
+    assert service_background.is_process_running(1234) is True
+
+
+def test_is_process_running_windows_missing_process(monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+
+    class FakeKernel32:
+        def OpenProcess(self, access, inherit, pid):
+            return 0
+
+    monkeypatch.setattr(service_background.ctypes, "windll", SimpleNamespace(kernel32=FakeKernel32()), raising=False)
+
+    assert service_background.is_process_running(1234) is False
 
 
 def test_resolve_gateway_python_prefers_installer_venv(tmp_path, monkeypatch):
