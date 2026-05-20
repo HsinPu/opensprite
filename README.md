@@ -39,6 +39,42 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/inst
 
 Web UI 需要 Node.js 20.19+ 或 22.12+。Installer 會在 apt-based Linux 上自動安裝或升級到可用的 Node.js 22。
 
+## Windows Install
+
+Windows installer 會把程式碼與資料分開，Python dependencies 會裝在專屬 venv，並建立 `opensprite.cmd` command shim。安裝完成後預設會啟動或重啟背景 gateway。
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.ps1)"
+```
+
+如果只想安裝、不啟動 gateway：
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.ps1; & ([scriptblock]::Create($script)) -NoStart'
+```
+
+也可以從 `cmd.exe` 啟動安裝：
+
+```cmd
+curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/install.cmd -o install.cmd && install.cmd && del install.cmd
+```
+
+預設路徑：
+
+```text
+%LOCALAPPDATA%\OpenSprite\opensprite                 # code checkout + .venv
+%LOCALAPPDATA%\Microsoft\WindowsApps\opensprite.cmd # command shim
+%USERPROFILE%\.opensprite                            # config, data, logs, memory
+```
+
+Windows Web UI build 需要 Node.js 20.19+ 或 22.12+ 與 npm。Installer 會檢查版本但不會自動安裝 system packages；缺少時可先執行：
+
+```powershell
+winget install Git.Git
+winget install Python.Python.3.11
+winget install OpenJS.NodeJS.LTS
+```
+
 ## Manual Install
 
 Windows / macOS / development 可以手動建立 venv：
@@ -115,6 +151,20 @@ curl -fsSL https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/unin
 ```
 
 `--full` 會刪除 `~/.opensprite`，不可復原。
+
+Windows 移除 command 與 code，但保留 `%USERPROFILE%\.opensprite`：
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command "iex (irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.ps1)"
+```
+
+Windows 完整移除 code、config、data、logs、memory：
+
+```powershell
+powershell -ExecutionPolicy ByPass -NoProfile -Command '$script = irm https://raw.githubusercontent.com/HsinPu/opensprite/main/scripts/uninstall.ps1; & ([scriptblock]::Create($script)) -Full'
+```
+
+Windows 非互動環境可加 `-Yes` 跳過確認；`-Full` 會刪除 `%USERPROFILE%\.opensprite`，不可復原。
 
 ## Configuration
 
