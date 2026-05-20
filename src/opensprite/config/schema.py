@@ -1306,7 +1306,11 @@ class Config:
                 logger.info(f"已建立設定檔：{path}")
         path = Path(path)
         if not path.exists():
-            raise FileNotFoundError(f"設定檔不存在：{path}")
+            if path.suffix != ".json":
+                raise ValueError(f"不支援的格式：{path.suffix}")
+            cls.copy_template(path)
+            from ..utils.log import logger
+            logger.info(f"已建立設定檔：{path}")
         if path.suffix != ".json":
             raise ValueError(f"不支援的格式：{path.suffix}")
         return cls.from_json(path)

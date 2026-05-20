@@ -278,6 +278,21 @@ def test_config_load_creates_default_config_and_split_files(monkeypatch, tmp_pat
     assert channels["instances"]["web"]["auth_token"] == ""
 
 
+def test_config_load_creates_explicit_missing_config_and_split_files(tmp_path):
+    config_path = tmp_path / "custom-home" / "opensprite.json"
+
+    config = Config.load(config_path)
+
+    assert config.source_path == config_path
+    assert config_path.exists()
+    assert (config_path.parent / "channels.json").exists()
+    assert (config_path.parent / "search.json").exists()
+    assert (config_path.parent / "media.json").exists()
+    assert (config_path.parent / "messages.json").exists()
+    assert (config_path.parent / "mcp_servers.json").exists()
+    assert (config_path.parent / "llm.providers.json").exists()
+
+
 def test_llm_context_window_falls_back_to_top_level_setting():
     llm = LLMsConfig(
         **{
