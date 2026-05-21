@@ -14,6 +14,10 @@ function assertIncludes(content, needle, label) {
   }
 }
 
+function assertIncludesNormalized(content, needle, label) {
+  assertIncludes(content.replace(/\r\n/g, "\n"), needle, label);
+}
+
 function assertNotIncludes(content, needle, label) {
   if (content.includes(needle)) {
     throw new Error(`${label}: unexpected ${needle}`);
@@ -130,7 +134,7 @@ assertIncludes(copy, "taskContextResolved", "task context timeline copy");
 assertIncludes(copy, "taskObjectiveResolved", "task objective timeline copy");
 assertIncludes(styles, ".run-trace__artifact-grid", "trace artifact grid styling");
 assertIncludes(styles, ".run-trace__harness-grid", "harness dashboard grid styling");
-assertIncludes(styles, ".run-trace__artifacts,\n.run-trace__code-nav", "trace artifacts share boxed section styling");
+assertIncludesNormalized(styles, ".run-trace__artifacts,\n.run-trace__code-nav", "trace artifacts share boxed section styling");
 assertIncludes(styles, "grid-template-columns: 1fr", "trace artifacts render in one column");
 assertIncludes(styles, ".run-trace__artifact-group[open] > .run-trace__artifact-group-title::after", "collapsible artifact group right indicator");
 assertIncludes(styles, "grid-template-columns: auto minmax(0, 1fr) auto auto", "artifact summary uses right control column");
