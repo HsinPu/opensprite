@@ -4,9 +4,9 @@
       <div class="work-state-card__title">
         <span class="work-state-card__eyebrow">{{ copy.workState.title }}</span>
         <strong>{{ workState.objective }}</strong>
+        <span class="work-state-card__status" :data-status="workState.status">{{ statusLabel }}</span>
       </div>
       <div class="work-state-card__actions">
-        <span class="work-state-card__status">{{ statusLabel }}</span>
         <button class="work-state-card__toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
           {{ expanded ? copy.workState.collapse : copy.workState.expand }}
         </button>

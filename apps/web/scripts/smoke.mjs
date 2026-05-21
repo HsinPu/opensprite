@@ -140,7 +140,8 @@ assertIncludes(styles, ".run-trace__event[open] > summary::after", "debug event 
 assertIncludes(runDetailsPanel, "RunHistorySelector", "run details history selector");
 assertIncludes(runDetailsPanel, "showRunHistory", "run history visibility toggle");
 assertIncludes(runDetailsPanel, "RunFileChangeDrawer", "run details file drawer");
-assertIncludes(chatPanel, "showWorkState && workState", "work state visibility toggle");
+assertIncludes(app, "state.showWorkState && currentWorkState", "work state visibility toggle");
+assertIncludes(app, "WorkStateCard", "work state renders in trace sidebar");
 assertIncludes(app, "trace-sidebar", "independent right trace sidebar shell");
 assertIncludes(app, "traceInspectorCollapsed", "right trace sidebar collapse state");
 assertIncludes(app, "toggleTraceInspectorCollapsed", "right trace sidebar collapse action");

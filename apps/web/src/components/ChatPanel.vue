@@ -5,19 +5,6 @@
         <strong>{{ copy.chat.title }}</strong>
         <span>{{ sessionMeta }}</span>
       </div>
-
-      <div class="connection-card" aria-live="polite">
-        <span class="status-dot" :class="statusDotClass"></span>
-        <strong>{{ connectionLabel }}</strong>
-        <button
-          class="ghost-button"
-          type="button"
-          :disabled="connecting"
-          @click="$emit('connect')"
-        >
-          {{ connectButtonLabel }}
-        </button>
-      </div>
     </header>
 
     <div
@@ -39,14 +26,6 @@
         />
 
         <MessageList :copy="copy" :entries="entries" :messages="messages" :display-name="displayName" />
-
-        <WorkStateCard
-          v-if="showWorkState && workState"
-          :copy="copy"
-          :work-state="workState"
-          @resume-follow-up="$emit('resume-follow-up', $event)"
-          @run-verification="$emit('run-verification', $event)"
-        />
 
         <PermissionPanel
           :copy="copy"
@@ -80,7 +59,6 @@ import ChatComposer from "./ChatComposer.vue";
 import EmptyState from "./EmptyState.vue";
 import MessageList from "./MessageList.vue";
 import PermissionPanel from "./PermissionPanel.vue";
-import WorkStateCard from "./WorkStateCard.vue";
 
 const props = defineProps({
   copy: {
@@ -99,20 +77,12 @@ const props = defineProps({
     type: Array,
     required: true,
   },
-  workState: {
-    type: Object,
-    default: null,
-  },
   permissionState: {
     type: Object,
     required: true,
   },
   permissionRequests: {
     type: Array,
-    required: true,
-  },
-  showWorkState: {
-    type: Boolean,
     required: true,
   },
   notice: {
@@ -139,27 +109,11 @@ const props = defineProps({
     type: String,
     required: true,
   },
-  connectionLabel: {
-    type: String,
-    required: true,
-  },
-  connectButtonLabel: {
-    type: String,
-    required: true,
-  },
-  statusDotClass: {
-    type: Object,
-    required: true,
-  },
   sendDisabled: {
     type: Boolean,
     required: true,
   },
   composerReadOnly: {
-    type: Boolean,
-    required: true,
-  },
-  connecting: {
     type: Boolean,
     required: true,
   },
@@ -174,7 +128,6 @@ const props = defineProps({
 });
 
 const emit = defineEmits([
-  "connect",
   "apply-prompt",
   "update-message-text",
   "composer-input",
@@ -182,8 +135,6 @@ const emit = defineEmits([
   "submit-message",
   "apply-command-hint",
   "resolve-permission",
-  "resume-follow-up",
-  "run-verification",
 ]);
 
 function forwardPermissionResolution(request, decision) {

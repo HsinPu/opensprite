@@ -4,6 +4,7 @@
       <div class="run-summary-card__title">
         <span class="run-summary-card__eyebrow">{{ copy.runSummary.title }}</span>
         <strong>{{ objective }}</strong>
+        <span class="run-summary-card__status" :data-status="status">{{ statusLabel }}</span>
       </div>
       <div class="run-summary-card__actions">
         <button class="run-summary-card__copy" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
@@ -26,7 +27,6 @@
         >
           {{ copy.runSummary.downloadReport }}
         </button>
-        <span class="run-summary-card__status">{{ statusLabel }}</span>
       </div>
     </div>
 
