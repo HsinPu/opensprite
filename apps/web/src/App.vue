@@ -14,8 +14,15 @@
       :aria-expanded="String(sidebarOpen)"
       @click="toggleSidebar"
     >
-      {{ copy.app.menu }}
+      {{ sidebarOpen ? "關閉" : copy.app.menu }}
     </button>
+    <button
+      v-if="sidebarOpen"
+      class="mobile-nav-backdrop"
+      type="button"
+      aria-label="Close menu"
+      @click="toggleSidebar"
+    ></button>
 
     <SidebarNav
       :copy="copy"
@@ -42,25 +49,18 @@
       :prompts="prompts"
       :entries="currentEntries"
       :messages="currentMessages"
-      :work-state="currentWorkState"
       :permission-state="permissionState"
       :permission-requests="currentPermissionRequests"
-      :show-work-state="state.showWorkState"
       :notice="state.notice"
       :session-meta="sessionMeta"
       :runtime-hint="composerHint"
       :command-hints="commandHints"
       :display-name="state.displayName"
       :message-text="messageText"
-      :connection-label="connectionLabel"
-      :connect-button-label="connectButtonLabel"
-      :status-dot-class="statusDotClass"
       :composer-read-only="currentSessionReadOnly"
       :send-disabled="sendDisabled"
-      :connecting="state.connectionState === 'connecting'"
       :set-message-input-ref="setMessageInputRef"
       :set-message-stage-ref="setMessageStageRef"
-      @connect="connectSocket"
       @apply-prompt="applyPrompt"
       @update-message-text="setMessageText"
       @composer-input="resizeComposer"
@@ -68,8 +68,6 @@
       @submit-message="submitMessage"
       @apply-command-hint="applyCommandHint"
       @resolve-permission="resolvePermissionRequest"
-      @resume-follow-up="resumeFollowUp"
-      @run-verification="runVerification"
     />
 
     <aside
@@ -90,15 +88,24 @@
           class="trace-sidebar__toggle"
           type="button"
           :aria-expanded="String(!traceInspectorCollapsed)"
-          :title="traceInspectorCollapsed ? 'Expand trace' : 'Collapse trace'"
+          :aria-label="traceInspectorCollapsed ? 'Open trace panel' : 'Close trace panel'"
+          :title="traceInspectorCollapsed ? 'Open trace panel' : 'Close trace panel'"
           @click="toggleTraceInspectorCollapsed"
         >
-          <span aria-hidden="true">{{ traceInspectorCollapsed ? '<' : '>' }}</span>
-          <strong>Trace</strong>
+          <strong>{{ traceInspectorCollapsed ? 'Trace' : '關閉' }}</strong>
+          <span v-if="traceInspectorCollapsed" aria-hidden="true">Open</span>
         </button>
       </div>
 
       <div v-show="!traceInspectorCollapsed" class="trace-sidebar__body">
+        <WorkStateCard
+          v-if="state.showWorkState && currentWorkState"
+          :copy="copy"
+          :work-state="currentWorkState"
+          @resume-follow-up="resumeFollowUp"
+          @run-verification="runVerification"
+        />
+
         <RunDetailsPanel
           :copy="copy"
           :runs="currentRuns"
@@ -259,6 +266,7 @@ import RunDetailsPanel from "./components/RunDetailsPanel.vue";
 import SettingsModal from "./components/SettingsModal.vue";
 import SidebarNav from "./components/SidebarNav.vue";
 import ToastStack from "./components/ToastStack.vue";
+import WorkStateCard from "./components/WorkStateCard.vue";
 import { useChatClient } from "./composables/useChatClient";
 
 const {
@@ -295,9 +303,6 @@ const {
   sessionMeta,
   composerHint,
   commandHints,
-  connectionLabel,
-  connectButtonLabel,
-  statusDotClass,
   currentSessionReadOnly,
   sendDisabled,
   setMessageInputRef,
@@ -400,9 +405,9 @@ const {
 } = useChatClient();
 
 const TRACE_WIDTH_STORAGE_KEY = "opensprite:web:traceInspectorWidth";
-const TRACE_WIDTH_MIN = 560;
-const TRACE_CHAT_MIN = 360;
-const TRACE_LEFT_GUTTER = 72;
+const TRACE_WIDTH_MIN = 440;
+const TRACE_CHAT_MIN = 520;
+const TRACE_LEFT_GUTTER = 268;
 
 const traceInspectorWidth = ref(readStoredTraceWidth());
 const traceSidebarStyle = computed(() => ({
@@ -438,7 +443,7 @@ function openConfirmDialog({ eyebrow, title, message, detail, cancelLabel, confi
 function readStoredTraceWidth() {
   try {
     const value = Number.parseInt(window.localStorage.getItem(TRACE_WIDTH_STORAGE_KEY) || "", 10);
-    return Number.isFinite(value) ? value : 0;
+    return Number.isFinite(value) ? clampTraceWidth(value) : 0;
   } catch {
     return 0;
   }

@@ -4,9 +4,9 @@
       <div class="run-trace__title">
         <span class="run-trace__eyebrow">{{ copy.trace.title }}</span>
         <strong>{{ run.runId }}</strong>
+        <span class="run-trace__status" :data-status="run.status">{{ run.status }}</span>
       </div>
       <div class="run-trace__actions">
-        <span class="run-trace__status" :data-status="run.status">{{ run.status }}</span>
         <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
           {{ expanded ? copy.trace.collapse : copy.trace.expand }}
         </button>

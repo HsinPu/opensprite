@@ -1095,7 +1095,7 @@ export function useChatClient() {
   const toasts = ref([]);
   const sidebarOpen = ref(false);
   const sidebarCollapsed = ref(readStoredBoolean(STORAGE_KEYS.sidebarCollapsed, false));
-  const traceInspectorCollapsed = ref(readStoredBoolean(STORAGE_KEYS.traceInspectorCollapsed, false));
+  const traceInspectorCollapsed = ref(readStoredBoolean(STORAGE_KEYS.traceInspectorCollapsed, true));
   const sessionChannelFilter = ref("all");
   const settingsOpen = ref(false);
   const settingsSection = ref("general");
@@ -1269,25 +1269,6 @@ export function useChatClient() {
       .filter((command) => command.command.toLowerCase().startsWith(query))
       .slice(0, 6);
   });
-
-  const connectionLabel = computed(() => {
-    const labels = copy.value.connection;
-    return labels[state.connectionState] || labels.disconnected;
-  });
-
-  const connectButtonLabel = computed(() => {
-    const labels = {
-      disconnected: copy.value.connection.retry,
-      connecting: copy.value.connection.connecting,
-      connected: copy.value.connection.reconnect,
-    };
-    return labels[state.connectionState] || labels.disconnected;
-  });
-
-  const statusDotClass = computed(() => ({
-    "status-dot--connected": state.connectionState === "connected",
-    "status-dot--connecting": state.connectionState === "connecting",
-  }));
 
   const currentSessionReadOnly = computed(() => {
     const session = currentSession.value;
@@ -3979,9 +3960,6 @@ export function useChatClient() {
     runtimeHint,
     composerHint,
     commandHints,
-    connectionLabel,
-    connectButtonLabel,
-    statusDotClass,
     currentSessionReadOnly,
     sendDisabled,
     setMessageInputRef,

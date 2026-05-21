@@ -11,7 +11,7 @@
           @click="collapsed && $emit('toggle-sidebar-collapsed')"
         >
           <span class="brand-mark__initial" aria-hidden="true">OS</span>
-          <span class="brand-mark__expand" aria-hidden="true">&gt;</span>
+          <span class="brand-mark__expand" aria-hidden="true"></span>
         </button>
         <div class="brand-row__copy">
           <strong>OpenSprite</strong>
@@ -25,7 +25,7 @@
           :aria-pressed="String(collapsed)"
           @click="$emit('toggle-sidebar-collapsed')"
         >
-          <span aria-hidden="true">{{ collapsed ? '>' : '<' }}</span>
+          <span class="sidebar-collapse-button__icon" aria-hidden="true"></span>
         </button>
       </div>
 

@@ -4,9 +4,9 @@
       <div class="run-timeline__title">
         <span class="run-timeline__eyebrow">{{ copy.timeline.runPrefix }} {{ summary.shortId }}</span>
         <strong>{{ summary.title }}</strong>
+        <span class="run-timeline__status" :data-tone="summary.tone">{{ summary.statusLabel }}</span>
       </div>
       <div class="run-timeline__actions">
-        <span class="run-timeline__status">{{ summary.statusLabel }}</span>
         <button class="run-block-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
           {{ expanded ? copy.timeline.collapse : copy.timeline.expand }}
         </button>
