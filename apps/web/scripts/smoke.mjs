@@ -216,6 +216,7 @@ assertIncludes(styles, ".trace-sidebar__resize", "right trace sidebar resize sty
 assertIncludes(styles, "scrollbar-gutter: stable", "right trace sidebar keeps an internal scrollbar");
 assertIncludes(styles, ".run-trace__part-body pre", "message parts expanded content styling");
 assertIncludes(styles, "overflow-wrap: anywhere", "message parts long text stays in bounds");
+assertIncludes(styles, ".message + .message", "chat transcript has separators between messages");
 assertIncludesNormalized(
   styles,
   ".message {\n    grid-template-columns: 28px minmax(0, 1fr);\n    gap: 10px;\n    padding: 16px 0;\n  }\n\n  .message--user {\n    grid-template-columns: minmax(0, 1fr) 28px;\n  }",
@@ -230,6 +231,10 @@ assertIncludesNormalized(
 );
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
 assertIncludes(styles, ".session-tile__select", "sidebar session select styling");
+assertIncludes(styles, "grid-template-rows: minmax(0, 1fr) auto", "sidebar keeps footer pinned while top content scrolls");
+assertIncludes(styles, "grid-template-rows: auto auto minmax(0, 1fr)", "sidebar top list can shrink before footer moves");
+assertIncludes(styles, "overscroll-behavior: contain", "sidebar session list scroll stays inside the list");
+assertIncludes(styles, "scrollbar-gutter: stable", "sidebar session list reserves scrollbar space");
 assertIncludes(styles, ".app-shell--sidebar-collapsed .sidebar-collapse-button", "collapsed sidebar hides top restore button");
 assertIncludes(styles, ".app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__expand", "collapsed sidebar brand hover expand styling");
 assertIncludes(styles, ".secondary-button--danger", "settings destructive action styling");
