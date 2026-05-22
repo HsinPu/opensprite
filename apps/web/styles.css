@@ -2087,30 +2087,26 @@ button:disabled {
 .message__bubble {
   width: auto;
   max-width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 16px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
   color: var(--text);
-  background: var(--surface);
+  background: transparent;
   font-size: 0.98rem;
   line-height: 1.72;
   overflow-wrap: anywhere;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 }
 
 .message--assistant .message__bubble {
   justify-self: stretch;
-  border-top-left-radius: var(--radius-sm);
-  background: var(--panel-subtle);
 }
 
 .message--user .message__bubble {
   justify-self: end;
   width: auto;
   min-width: min(260px, 100%);
-  border-color: color-mix(in srgb, var(--accent-blue) 16%, var(--border-soft));
-  border-top-right-radius: var(--radius-sm);
-  background: var(--accent-soft);
+  text-align: right;
 }
 
 .message__rendered {
@@ -7181,17 +7177,42 @@ textarea:focus-visible {
 
   .settings-panel {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     width: calc(100vw - 24px);
     height: calc(100dvh - 24px);
   }
 
   .settings-nav {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
+    display: flex;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
     padding: 12px;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+    scrollbar-width: thin;
+  }
+
+  .settings-nav__group {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .settings-nav__group p {
+    margin: 0 4px 0 0;
+    white-space: nowrap;
+  }
+
+  .settings-nav__item {
+    flex: 0 0 auto;
+    min-height: 36px;
+    white-space: nowrap;
   }
 
   .settings-nav__footer {

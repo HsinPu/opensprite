@@ -223,6 +223,11 @@ assertIncludesNormalized(
 );
 assertIncludes(styles, ".settings-content__header", "settings shared header styling");
 assertIncludes(styles, "position: sticky", "settings header remains fixed while scrolling");
+assertIncludesNormalized(
+  styles,
+  ".settings-nav {\n    display: flex;\n    min-height: 0;\n    flex-direction: row;\n    align-items: center;\n    gap: 8px;\n    justify-content: flex-start;\n    overflow-x: auto;\n    overflow-y: hidden;",
+  "mobile settings navigation stays compact as horizontal tabs",
+);
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
 assertIncludes(styles, ".session-tile__select", "sidebar session select styling");
 assertIncludes(styles, ".app-shell--sidebar-collapsed .sidebar-collapse-button", "collapsed sidebar hides top restore button");
