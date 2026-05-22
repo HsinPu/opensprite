@@ -42,7 +42,6 @@ class HarnessPolicy:
     denied_risk_levels: tuple[str, ...] = ()
     approval_required_tools: tuple[str, ...] = ()
     approval_required_risk_levels: tuple[str, ...] = ()
-    max_tool_iterations: int | None = None
     reason: str = ""
 
     def to_permission_policy(self) -> ToolPermissionPolicy:
@@ -70,8 +69,6 @@ class HarnessPolicy:
             "approval_required_risk_levels": list(self.approval_required_risk_levels),
             "reason": self.reason,
         }
-        if self.max_tool_iterations is not None:
-            payload["max_tool_iterations"] = self.max_tool_iterations
         return payload
 
 

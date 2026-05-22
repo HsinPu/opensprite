@@ -565,8 +565,6 @@ class LlmCallService:
             "should_cancel": lambda: self._should_cancel_run(session_id, run_id),
             "work_state_summary": work_state_summary,
         }
-        if harness_policy is not None and harness_policy.max_tool_iterations is not None:
-            execute_kwargs["max_tool_iterations"] = harness_policy.max_tool_iterations
         if on_tool_after_execute is not None:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
         try:
