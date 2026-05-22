@@ -88,7 +88,7 @@ class HarnessPolicyService:
                 allowed_tools=_WEB_RESEARCH_TOOLS,
                 allowed_risk_levels=_RESEARCH_RISKS,
                 denied_risk_levels=("write", "execute", "external_side_effect", "configuration", "delegation", "memory", "mcp"),
-                max_tool_iterations=8,
+                max_tool_iterations=32,
                 reason="research turns may inspect local context and web sources but cannot mutate workspace or external state",
             )
         if profile_name == "coding":

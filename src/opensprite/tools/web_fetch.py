@@ -699,7 +699,26 @@ class WebFetcher:
         # 權限詢問回調 (參考 OpenCode ctx.ask)
         if self.permission_callback:
             self.permission_callback(url, mode, self.timeout)
-        content_type, content, status, final_url = fetch_url(url, self.timeout, self.retry_on_403, self.max_response_size)
+        try:
+            content_type, content, status, final_url = fetch_url(url, self.timeout, self.retry_on_403, self.max_response_size)
+        except Exception as exc:
+            if self.retry_on_403 and "HTTP Error: 403" in str(exc):
+                jina_result = extract_with_jina(url, timeout=min(self.timeout, 20))
+                if jina_result and jina_result.get('text'):
+                    text, truncated = truncate_text(jina_result['text'], self.max_chars)
+                    return {
+                        'url': url,
+                        'finalUrl': url,
+                        'status': 403,
+                        'contentType': 'text/markdown',
+                        'extractor': 'jina',
+                        'title': jina_result.get('title') or url,
+                        'text': text,
+                        'truncated': truncated,
+                        'attachments': None,
+                        'is_image': False,
+                    }
+            raise
         
         result = {
             'url': url, 'finalUrl': final_url, 'status': status,

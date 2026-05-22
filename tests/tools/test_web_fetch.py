@@ -156,6 +156,25 @@ def test_web_fetcher_passes_configured_response_size_to_fetch_layer(monkeypatch)
     assert captured["max_response_size"] == 2
 
 
+def test_web_fetcher_uses_jina_fallback_for_403(monkeypatch):
+    def fake_fetch_url(*args, **kwargs):
+        raise Exception("HTTP Error: 403 Forbidden")
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.fetch_url", fake_fetch_url)
+    monkeypatch.setattr(
+        "opensprite.tools.web_fetch.extract_with_jina",
+        lambda url, timeout=20: {"title": "Readable fallback", "text": "Fallback content from reader."},
+    )
+    fetcher = WebFetcher(max_chars=500)
+
+    result = fetcher.fetch("https://example.com/blocked")
+
+    assert result["status"] == 403
+    assert result["extractor"] == "jina"
+    assert result["title"] == "Readable fallback"
+    assert result["text"] == "Fallback content from reader."
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -52,6 +52,7 @@ def test_research_harness_policy_allows_web_without_workspace_mutation():
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "research_source_policy"
+    assert policy.max_tool_iterations == 32
     assert permission_policy.is_tool_exposed("web_search") is True
     assert permission_policy.is_tool_exposed("web_fetch") is True
     assert permission_policy.is_tool_exposed("edit_file") is False
