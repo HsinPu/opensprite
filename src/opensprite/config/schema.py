@@ -438,9 +438,8 @@ class ExecToolConfig(BaseModel):
 class WebSearchToolConfig(BaseModel):
     """Web search tool configuration."""
 
-    provider: Literal["duckduckgo", "tavily", "searxng", "jina"] = DEFAULT_WEB_SEARCH_PROVIDER
+    provider: Literal["duckduckgo", "searxng", "jina"] = DEFAULT_WEB_SEARCH_PROVIDER
     freshness: Literal["auto", "none", "day", "week", "month", "year"] = DEFAULT_WEB_SEARCH_FRESHNESS
-    tavily_api_key: str = ""
     jina_api_key: str = ""
     searxng_url: str = DEFAULT_SEARXNG_URL
     searxng_engines: list[str] = Field(default_factory=list)

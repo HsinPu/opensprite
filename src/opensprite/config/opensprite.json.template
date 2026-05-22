@@ -39,7 +39,6 @@
     "web_search": {
       "provider": "duckduckgo",
         "freshness": "auto",
-      "tavily_api_key": "",
       "jina_api_key": "",
       "searxng_url": "https://searx.be",
       "searxng_engines": [],

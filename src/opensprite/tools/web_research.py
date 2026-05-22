@@ -577,8 +577,6 @@ def _search_provider_order(config: WebSearchToolConfig, *, configured_provider: 
     configured = (configured_provider or config.provider or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
     candidates = [configured]
     probe_tool = WebSearchTool(config=config)
-    if probe_tool.tavily_api_key:
-        candidates.append("tavily")
     if str(config.searxng_url or "").strip():
         candidates.append("searxng")
     candidates.append("duckduckgo")

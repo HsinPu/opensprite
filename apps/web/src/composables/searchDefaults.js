@@ -1,5 +1,5 @@
 export const DEFAULT_SEARCH_PROVIDER = "duckduckgo";
-export const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "tavily", "searxng", "jina"];
+export const DEFAULT_SEARCH_PROVIDERS = ["duckduckgo", "searxng", "jina"];
 export const DEFAULT_SEARCH_FRESHNESS = "auto";
 export const DEFAULT_FRESHNESS_OPTIONS = ["auto", "none", "day", "week", "month", "year"];
 export const DEFAULT_SEARXNG_URL = "https://searx.be";
@@ -24,7 +24,6 @@ export function createDefaultSearchState() {
       categories: [],
     },
     proxy: "",
-    tavily_api_key_configured: false,
     jina_api_key_configured: false,
   };
 }
@@ -40,7 +39,6 @@ export function createDefaultSearchForm() {
     searxngEngines: [],
     searxngCategories: [],
     proxy: "",
-    tavilyApiKey: "",
     jinaApiKey: "",
   };
 }

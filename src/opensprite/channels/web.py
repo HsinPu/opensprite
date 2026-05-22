@@ -667,7 +667,6 @@ class WebAdapter(MessageAdapter):
             "searxng_engines": cls._coerce_text_list(getattr(search, "searxng_engines", []), field="searxng_engines", default=[]),
             "searxng_categories": cls._coerce_text_list(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
             "proxy": str(getattr(search, "proxy", "") or ""),
-            "tavily_api_key_configured": bool(getattr(search, "tavily_api_key", "") or os.environ.get("TAVILY_API_KEY", "")),
             "jina_api_key_configured": bool(getattr(search, "jina_api_key", "") or os.environ.get("JINA_API_KEY", "")),
         }
 
@@ -2617,7 +2616,7 @@ class WebAdapter(MessageAdapter):
             search.searxng_categories = self._coerce_text_list(body.get("searxng_categories"), field="searxng_categories", default=search.searxng_categories)
         if "proxy" in body:
             search.proxy = self._coerce_optional_text(body.get("proxy"), default="") or None
-        for field in ("tavily_api_key", "jina_api_key"):
+        for field in ("jina_api_key",):
             self._apply_optional_secret_field(search, body, field)
         config.save(config_path)
         payload = {"search": self._web_search_payload(config), "restart_required": True}

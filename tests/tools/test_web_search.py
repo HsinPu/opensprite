@@ -243,7 +243,7 @@ def test_web_search_freshness_aliases_and_provider_params():
     assert _effective_freshness("none", "auto", query="sqlite docs") == "none"
     assert _effective_freshness("none", "year", query="sqlite docs") == "none"
     assert _freshness_params("duckduckgo", "week") == {"df": "w"}
-    assert _freshness_params("tavily", "year") == {"time_range": "year"}
+    assert _freshness_params("searxng", "year") == {"time_range": "year"}
     assert _freshness_params("searxng", "none") == {}
 
 

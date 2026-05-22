@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 DEFAULT_WEB_SEARCH_PROVIDER = "duckduckgo"
-WEB_SEARCH_PROVIDERS = ("duckduckgo", "tavily", "searxng", "jina")
+WEB_SEARCH_PROVIDERS = ("duckduckgo", "searxng", "jina")
 DEFAULT_WEB_SEARCH_FRESHNESS = "auto"
 WEB_SEARCH_FRESHNESS_OPTIONS = ("auto", "none", "day", "week", "month", "year")
 DEFAULT_SEARXNG_URL = "https://searx.be"

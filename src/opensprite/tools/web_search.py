@@ -165,7 +165,7 @@ def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
         return {}
     if provider == "duckduckgo":
         return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
-    if provider in {"tavily", "searxng"}:
+    if provider == "searxng":
         return {"time_range": normalized}
     if provider == "jina":
         return {"df": DUCKDUCKGO_FRESHNESS[normalized]}
@@ -255,7 +255,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, Tavily, SearXNG, Jina."
+    description = "Search the web for new external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. If this chat may already contain earlier research, prefer search_knowledge first. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()
@@ -289,10 +289,6 @@ class WebSearchTool(Tool):
         return self.config.provider.strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
 
     @property
-    def tavily_api_key(self) -> str:
-        return self.config.tavily_api_key or os.environ.get("TAVILY_API_KEY", "")
-
-    @property
     def jina_api_key(self) -> str:
         return self.config.jina_api_key or os.environ.get("JINA_API_KEY", "")
 
@@ -324,8 +320,6 @@ class WebSearchTool(Tool):
 
         if provider == "duckduckgo":
             return await self._search_duckduckgo(query, n, freshness)
-        elif provider == "tavily":
-            return await self._search_tavily(query, n, freshness)
         elif provider == "searxng":
             return await self._search_searxng(query, n, freshness)
         elif provider == "jina":
@@ -392,26 +386,6 @@ class WebSearchTool(Tool):
             logger.warning("DDGS returned no results for query: %s", query)
             return _format_error(query, "duckduckgo", f"DDGS returned no results for '{query}'.", backend="ddgs")
         return _format_results(query, items, n, provider="duckduckgo", backend="ddgs")
-
-    async def _search_tavily(self, query: str, n: int, freshness: str) -> str:
-        api_key = self.tavily_api_key
-        if not api_key:
-            logger.warning("Tavily API key not set, falling back to DuckDuckGo")
-            return await self._search_duckduckgo(query, n, freshness)
-        try:
-            async with httpx.AsyncClient(proxy=self.proxy) as client:
-                r = await client.post(
-                    "https://api.tavily.com/search",
-                    headers={"Authorization": f"Bearer {api_key}"},
-                    json={"query": query, "max_results": n, **_freshness_params("tavily", freshness)},
-                    timeout=15.0
-                )
-                r.raise_for_status()
-            items = [{"title": x.get("title", ""), "url": x.get("url", ""), "content": x.get("content", "")} 
-                     for x in r.json().get("results", [])]
-            return _format_results(query, items, n, provider="tavily")
-        except Exception as e:
-            return _format_error(query, "tavily", str(e))
 
     async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
         base_url = self.config.searxng_url

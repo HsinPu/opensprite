@@ -57,7 +57,6 @@ function normalizeSearchSettings(search = {}) {
     searxng_categories: normalizeTextList(search.searxng_categories),
     searxng_options: normalizeSearxngOptions(search.searxng_options || {}),
     proxy: search.proxy || "",
-    tavily_api_key_configured: search.tavily_api_key_configured === true,
     jina_api_key_configured: search.jina_api_key_configured === true,
   };
 }
@@ -72,15 +71,12 @@ function syncSearchForm(settingsState) {
   settingsState.searchForm.searxngEngines = normalizeTextList(settingsState.search.searxng_engines);
   settingsState.searchForm.searxngCategories = normalizeTextList(settingsState.search.searxng_categories);
   settingsState.searchForm.proxy = settingsState.search.proxy;
-  settingsState.searchForm.tavilyApiKey = "";
   settingsState.searchForm.jinaApiKey = "";
 }
 
 function secretPayload(form) {
   const payload = {};
-  const tavilyApiKey = String(form.tavilyApiKey || "").trim();
   const jinaApiKey = String(form.jinaApiKey || "").trim();
-  if (tavilyApiKey) payload.tavily_api_key = tavilyApiKey;
   if (jinaApiKey) payload.jina_api_key = jinaApiKey;
   return payload;
 }
