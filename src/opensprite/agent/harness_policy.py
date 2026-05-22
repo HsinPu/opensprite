@@ -88,7 +88,6 @@ class HarnessPolicyService:
                 allowed_tools=_WEB_RESEARCH_TOOLS,
                 allowed_risk_levels=_RESEARCH_RISKS,
                 denied_risk_levels=("write", "execute", "external_side_effect", "configuration", "delegation", "memory", "mcp"),
-                max_tool_iterations=32,
                 reason="research turns may inspect local context and web sources but cannot mutate workspace or external state",
             )
         if profile_name == "coding":
@@ -99,7 +98,6 @@ class HarnessPolicyService:
                     allowed_tools=("*",),
                     allowed_risk_levels=_WORKSPACE_ANALYSIS_RISKS,
                     denied_risk_levels=("write", "execute", "external_side_effect", "configuration", "memory", "mcp"),
-                    max_tool_iterations=8,
                     reason="workspace analysis turns can inspect and delegate review but should not mutate or execute",
                 )
             return HarnessPolicy(
@@ -109,7 +107,6 @@ class HarnessPolicyService:
                 allowed_risk_levels=tuple(sorted(ALL_RISK_LEVELS - {"mcp"})),
                 denied_risk_levels=("mcp",),
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
-                max_tool_iterations=12,
                 reason="workspace change turns may edit and verify but require approval for configuration or external side effects",
             )
         if profile_name == "media":
@@ -118,7 +115,6 @@ class HarnessPolicyService:
                 harness_profile_name=profile_name,
                 allowed_tools=_MEDIA_TOOLS,
                 allowed_risk_levels=_MEDIA_RISKS,
-                max_tool_iterations=6,
                 reason="media turns use media extraction tools and may send produced artifacts without broad workspace mutation",
             )
         if profile_name == "ops":
@@ -128,7 +124,6 @@ class HarnessPolicyService:
                 allowed_tools=("*",),
                 allowed_risk_levels=tuple(sorted(ALL_RISK_LEVELS)),
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
-                max_tool_iterations=8,
                 reason="operations turns must ask approval before configuration, MCP, or external side effects",
             )
         return HarnessPolicy(
@@ -137,7 +132,6 @@ class HarnessPolicyService:
             allowed_tools=("*",),
             allowed_risk_levels=_CHAT_RISKS,
             denied_risk_levels=("write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"),
-            max_tool_iterations=3,
             reason="chat turns default to read-only local context and avoid external side effects",
         )
 

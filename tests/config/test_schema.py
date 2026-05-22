@@ -26,6 +26,7 @@ from opensprite.config.defaults import (
     DEFAULT_HTTP_PROXY,
     DEFAULT_HTTPS_PROXY,
     DEFAULT_LLM_PROVIDERS_FILE,
+    DEFAULT_MAX_TOOL_ITERATIONS,
     DEFAULT_MCP_SERVERS_FILE,
     DEFAULT_MEDIA_FILE,
     DEFAULT_MESSAGES_FILE,
@@ -363,6 +364,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.browser.browser_use_api_key == ""
     assert config.browser.firecrawl_api_key == ""
     assert config.cron.default_timezone == "UTC"
+    assert config.max_tool_iterations == DEFAULT_MAX_TOOL_ITERATIONS
     assert config.permissions.enabled is True
     assert config.permissions.approval_mode == "auto"
     assert config.permissions.approval_timeout_seconds == 300.0

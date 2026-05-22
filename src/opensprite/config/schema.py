@@ -24,6 +24,7 @@ from .defaults import (
     DEFAULT_HTTPS_PROXY,
     DEFAULT_CHANNELS_FILE,
     DEFAULT_LLM_PROVIDERS_FILE,
+    DEFAULT_MAX_TOOL_ITERATIONS,
     DEFAULT_MCP_SERVERS_FILE,
     DEFAULT_MEDIA_FILE,
     DEFAULT_MESSAGES_FILE,
@@ -566,7 +567,7 @@ class ToolsConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    max_tool_iterations: int = 100
+    max_tool_iterations: int = DEFAULT_MAX_TOOL_ITERATIONS
     tool_result_max_chars: int = Field(default=1200, ge=200)
     exec_result_max_chars: int = Field(default=1200, ge=200)
     exec_tool: ExecToolConfig = Field(default_factory=ExecToolConfig, alias="exec")

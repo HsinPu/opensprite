@@ -32,7 +32,7 @@
     "no_proxy": "127.0.0.1,localhost"
   },
   "tools": {
-    "max_tool_iterations": 100,
+    "max_tool_iterations": 200,
     "exec": {
       "timeout": 60
     },

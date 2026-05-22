@@ -41,3 +41,4 @@ DEFAULT_SEARCH_FILE = "search.json"
 DEFAULT_MEDIA_FILE = "media.json"
 DEFAULT_MESSAGES_FILE = "messages.json"
 DEFAULT_MCP_SERVERS_FILE = "mcp_servers.json"
+DEFAULT_MAX_TOOL_ITERATIONS = 200
