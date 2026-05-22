@@ -22,6 +22,28 @@ function coerceStringList(value) {
   return value.map((item) => String(item || "").trim()).filter(Boolean);
 }
 
+function compactJoin(values, separator = " · ") {
+  return values.map((value) => String(value || "").trim()).filter(Boolean).join(separator);
+}
+
+function countItems(value) {
+  return Array.isArray(value) ? value.length : 0;
+}
+
+function coerceText(value) {
+  return String(value || "").trim();
+}
+
+function formatShortList(value, maxItems = 3) {
+  const items = coerceStringList(value);
+  if (!items.length) {
+    return "";
+  }
+  const visible = items.slice(0, maxItems).join(", ");
+  const remaining = items.length - maxItems;
+  return remaining > 0 ? `${visible} +${remaining}` : visible;
+}
+
 function coerceBoolean(value) {
   return value === true || value === "true" || value === 1;
 }
@@ -227,6 +249,300 @@ export function normalizeRunArtifact(artifact, fallback = {}) {
     },
     metadata: artifact.metadata && typeof artifact.metadata === "object" ? artifact.metadata : {},
   };
+}
+
+function normalizeDecisionStatus(status) {
+  const normalized = coerceText(status).toLowerCase();
+  if (["completed", "complete", "passed", "pass", "success", "ok", "ready"].includes(normalized)) {
+    return "success";
+  }
+  if (["failed", "fail", "error"].includes(normalized)) {
+    return "failed";
+  }
+  if (["blocked", "denied", "cancelled", "canceled"].includes(normalized)) {
+    return "blocked";
+  }
+  if (["running", "scheduled", "incomplete", "waiting", "waiting_user", "cancelling"].includes(normalized)) {
+    return "warning";
+  }
+  return "info";
+}
+
+function decisionDetail(labelKey, value, tone = "neutral") {
+  const normalized = value === null || value === undefined ? "" : String(value).trim();
+  if (!normalized) {
+    return null;
+  }
+  return { labelKey, value: normalized, tone };
+}
+
+function compactDetails(items) {
+  return items.filter(Boolean);
+}
+
+function profileName(payload) {
+  return compactJoin([
+    payload?.name,
+    payload?.task_type || payload?.taskType,
+  ], " / ");
+}
+
+function decisionId(event, index) {
+  return `decision:${event.id || event.eventId || event.event_id || event.eventType || event.event_type || "event"}:${index}`;
+}
+
+function decisionEventId(event) {
+  const eventId = event?.id || event?.eventId || event?.event_id;
+  return eventId ? [String(eventId)] : [];
+}
+
+function profileDecision(eventType, payload, event, index) {
+  const selection = payload.selection || {};
+  const titleKey = eventType === "harness_profile.effective_selected"
+    ? "effectiveProfile"
+    : eventType === "harness_profile.initial_selected"
+      ? "initialProfile"
+      : "profileSelected";
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "profile",
+    status: "info",
+    titleKey,
+    title: "Profile selected",
+    summary: compactJoin([profileName(payload), payload.reason]),
+    reason: coerceText(payload.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("profile", payload.name),
+      decisionDetail("taskType", payload.task_type || payload.taskType),
+      decisionDetail("selection", compactJoin([selection.selected_by || selection.selectedBy, formatShortList(selection.matched_signals || selection.matchedSignals, 4)])),
+      decisionDetail("verification", payload.verification_policy || payload.verificationPolicy),
+      decisionDetail("continuation", payload.continuation_policy || payload.continuationPolicy),
+    ]),
+  };
+}
+
+function profileChangedDecision(payload, event, index) {
+  const initial = payload.initial || {};
+  const effective = payload.effective || {};
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "profile",
+    status: "warning",
+    titleKey: "profileChanged",
+    title: "Profile changed",
+    summary: compactJoin([`${profileName(initial) || "unknown"} -> ${profileName(effective) || "unknown"}`, payload.reason], " / "),
+    reason: coerceText(payload.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("initialProfile", profileName(initial)),
+      decisionDetail("effectiveProfile", profileName(effective)),
+      decisionDetail("reason", payload.reason),
+    ]),
+  };
+}
+
+function policySelectedDecision(payload, event, index) {
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "policy",
+    status: "info",
+    titleKey: "policySelected",
+    title: "Policy selected",
+    summary: compactJoin([payload.name, payload.reason]),
+    reason: coerceText(payload.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("policy", payload.name),
+      decisionDetail("allowedTools", formatShortList(payload.allowed_tools || payload.allowedTools, 5)),
+      decisionDetail("allowedRisks", formatShortList(payload.allowed_risk_levels || payload.allowedRiskLevels, 5)),
+      decisionDetail("deniedRisks", formatShortList(payload.denied_risk_levels || payload.deniedRiskLevels, 5), "warning"),
+      decisionDetail("approvalRisks", formatShortList(payload.approval_required_risk_levels || payload.approvalRequiredRiskLevels, 5)),
+    ]),
+  };
+}
+
+function policyMergedDecision(payload, event, index) {
+  const policy = payload.harness_policy || payload.harnessPolicy || {};
+  const blocked = countItems(payload.blocked_relaxations || payload.blockedRelaxations);
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "policy",
+    status: blocked > 0 ? "warning" : "success",
+    titleKey: "policyMerged",
+    title: "Policy merged",
+    summary: compactJoin([
+      policy.name,
+      `${countItems(payload.constraints_applied || payload.constraintsApplied)} constraints`,
+      blocked ? `${blocked} blocked relaxations` : "",
+    ]),
+    reason: "",
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("policy", policy.name),
+      decisionDetail("constraints", formatShortList(payload.constraints_applied || payload.constraintsApplied, 5)),
+      decisionDetail("blockedRelaxations", formatShortList(payload.blocked_relaxations || payload.blockedRelaxations, 5), blocked > 0 ? "warning" : "neutral"),
+    ]),
+  };
+}
+
+function taskContractDecision(payload, event, index) {
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "contract",
+    status: "success",
+    titleKey: event.eventType === "task_contract.semantic_classified" ? "semanticContract" : "taskContract",
+    title: "Task contract",
+    summary: compactJoin([
+      payload.task_type || payload.taskType,
+      `${countItems(payload.requirements)} requirements`,
+      `${countItems(payload.acceptance_criteria || payload.acceptanceCriteria)} criteria`,
+    ]),
+    reason: "",
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("taskType", payload.task_type || payload.taskType),
+      decisionDetail("requirements", countItems(payload.requirements)),
+      decisionDetail("criteria", countItems(payload.acceptance_criteria || payload.acceptanceCriteria)),
+      decisionDetail("sources", formatShortList(payload.contract_sources || payload.contractSources, 5)),
+    ]),
+  };
+}
+
+function completionGateDecision(payload, event, index) {
+  const missingEvidence = payload.missing_evidence || payload.missingEvidence;
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "completion",
+    status: normalizeDecisionStatus(payload.status || (payload.ok === false ? "failed" : "completed")),
+    titleKey: "completionGate",
+    title: "Completion gate",
+    summary: compactJoin([payload.status, payload.reason, countItems(missingEvidence) ? `${countItems(missingEvidence)} missing` : ""]),
+    reason: coerceText(payload.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("status", payload.status),
+      decisionDetail("reason", payload.reason),
+      decisionDetail("missingEvidence", formatShortList(missingEvidence, 4), countItems(missingEvidence) ? "warning" : "neutral"),
+      decisionDetail("attempts", payload.auto_continue_attempts ?? payload.autoContinueAttempts),
+    ]),
+  };
+}
+
+function autoContinueDecision(eventType, payload, event, index) {
+  const action = eventType.replace("auto_continue.", "");
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "completion",
+    status: action === "scheduled" ? "warning" : action === "skipped" ? "blocked" : "success",
+    titleKey: "autoContinue",
+    title: "Auto-continue",
+    summary: compactJoin([action, payload.reason]),
+    reason: coerceText(payload.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("status", action),
+      decisionDetail("reason", payload.reason),
+      decisionDetail("attempts", payload.attempt ?? payload.attempts ?? payload.auto_continue_attempts ?? payload.autoContinueAttempts),
+    ]),
+  };
+}
+
+function checkpointDecision(payload, event, index) {
+  const completion = payload.completion || {};
+  const progress = payload.work_progress || payload.workProgress || {};
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "checkpoint",
+    status: "success",
+    titleKey: "checkpoint",
+    title: "Checkpoint recorded",
+    summary: compactJoin([payload.next_action || payload.nextAction || progress.next_action || progress.nextAction, completion.status]),
+    reason: coerceText(completion.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("nextAction", payload.next_action || payload.nextAction || progress.next_action || progress.nextAction),
+      decisionDetail("status", completion.status),
+      decisionDetail("reason", completion.reason),
+      decisionDetail("artifacts", payload.task_artifact_count ?? payload.taskArtifactCount),
+      decisionDetail("attempts", payload.auto_continue_attempts ?? payload.autoContinueAttempts),
+    ]),
+  };
+}
+
+function evalDecision(eventType, payload, event, index) {
+  const summary = payload.summary || {};
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "checkpoint",
+    status: payload.ok === true ? "success" : "failed",
+    titleKey: eventType === "harness_eval.completed" ? "evalCompleted" : "evalFailed",
+    title: "Harness eval",
+    summary: compactJoin([
+      payload.kind,
+      payload.ok === true ? "pass" : "fail",
+      summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases} cases` : "",
+      summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks} checks` : "",
+    ]),
+    reason: coerceText(payload.reason || payload.error),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("kind", payload.kind),
+      decisionDetail("status", payload.ok === true ? "pass" : "fail", payload.ok === true ? "success" : "error"),
+      decisionDetail("cases", summary.total_cases !== undefined ? `${summary.passed_cases}/${summary.total_cases}` : ""),
+      decisionDetail("checks", summary.total_checks !== undefined ? `${summary.passed_checks}/${summary.total_checks}` : ""),
+      decisionDetail("reason", payload.reason || payload.error, payload.ok === true ? "neutral" : "error"),
+    ]),
+  };
+}
+
+export function deriveDecisionTimelineItems(events = []) {
+  if (!Array.isArray(events)) {
+    return [];
+  }
+  const items = [];
+  for (const event of events) {
+    const eventType = coerceText(event?.eventType || event?.event_type);
+    const payload = coerceEventPayload(event?.payload);
+    const eventWithTimestamp = {
+      ...event,
+      eventType,
+      createdAt: normalizeEventTimestamp(event?.createdAt ?? event?.created_at),
+    };
+    let item = null;
+    if (eventType === "harness_profile.selected" || eventType === "harness_profile.initial_selected" || eventType === "harness_profile.effective_selected") {
+      item = profileDecision(eventType, payload, eventWithTimestamp, items.length);
+    } else if (eventType === "harness_profile.changed") {
+      item = profileChangedDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType === "harness_policy.selected") {
+      item = policySelectedDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType === "harness_policy.merge_resolved") {
+      item = policyMergedDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType === "task_contract.created" || eventType === "task_contract.semantic_classified") {
+      item = taskContractDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType === "completion_gate.evaluated") {
+      item = completionGateDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType.startsWith("auto_continue.")) {
+      item = autoContinueDecision(eventType, payload, eventWithTimestamp, items.length);
+    } else if (eventType === "harness_checkpoint.recorded") {
+      item = checkpointDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType.startsWith("harness_eval.")) {
+      item = evalDecision(eventType, payload, eventWithTimestamp, items.length);
+    }
+    if (item) {
+      items.push(item);
+    }
+  }
+  return items;
 }
 
 function normalizeBackgroundProcessArtifact(eventType, payload, fallback = {}) {

@@ -62,6 +62,7 @@ const [
   networkDefaults,
   scheduleDefaults,
   searchDefaults,
+  runTraceNormalizers,
   settingsNormalizers,
   permissionsDefaults,
   networkSettingsActions,
@@ -94,6 +95,7 @@ const [
   read("src/composables/networkDefaults.js"),
   read("src/composables/scheduleDefaults.js"),
   read("src/composables/searchDefaults.js"),
+  read("src/composables/runTraceNormalizers.js"),
   read("src/composables/settingsNormalizers.js"),
   read("src/composables/permissionsDefaults.js"),
   read("src/composables/useNetworkSettingsActions.js"),
@@ -125,6 +127,10 @@ assertIncludes(runTraceViewer, "formatToolDecisionCounts", "harness tool decisio
 assertIncludes(runTraceViewer, "formatApprovalCounts", "harness approval lifecycle summary rendering");
 assertIncludes(runTraceViewer, "formatPolicyResolution", "harness policy resolution summary rendering");
 assertIncludes(runTraceViewer, "formatHarnessEvalResult", "harness eval result summary rendering");
+assertIncludes(runTraceNormalizers, "deriveDecisionTimelineItems", "trace decision timeline normalizer export");
+assertIncludes(runTraceNormalizers, "harness_profile.effective_selected", "trace timeline captures effective profile decisions");
+assertIncludes(runTraceNormalizers, "completion_gate.evaluated", "trace timeline captures completion gate decisions");
+assertIncludes(runTraceNormalizers, "harness_checkpoint.recorded", "trace timeline captures checkpoint decisions");
 assertIncludes(runTraceViewer, "const artifactsExpanded = ref(false)", "run artifacts default collapsed");
 assertIncludes(runTraceViewer, "<summary class=\"run-trace__artifact-group-title\">", "run artifact groups are collapsible");
 assertNotIncludes(runTraceViewer, "class=\"run-trace__artifact-group\" open", "run artifact groups default collapsed");
