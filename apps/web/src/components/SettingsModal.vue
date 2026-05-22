@@ -1243,7 +1243,9 @@
                 <span>{{ copy.settings.permissions.harnessPreview.effectiveAllowed(row.effectiveAllowed) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.denied(row.denied) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.approval(row.approval) }}</span>
-                <span v-if="row.maxIterations">{{ copy.settings.permissions.harnessPreview.maxIterations(row.maxIterations) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.evidence(row.requiredEvidence) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.verification(row.verification) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.continuation(row.continuation) }}</span>
               </div>
             </div>
           </div>
@@ -4002,7 +4004,9 @@ const harnessPolicyPreviewRows = computed(() => {
       effectiveAllowed: formatRiskList(effective.allowed_risk_levels),
       denied: formatRiskList(effective.denied_risk_levels),
       approval: formatRiskList(effective.approval_required_risk_levels),
-      maxIterations: policy.max_tool_iterations || null,
+      requiredEvidence: formatPreviewList(profile.required_evidence || profile.requiredEvidence),
+      verification: profile.verification_policy || profile.verificationPolicy || props.copy.settings.permissions.harnessPreview.none,
+      continuation: profile.continuation_policy || profile.continuationPolicy || props.copy.settings.permissions.harnessPreview.none,
     };
   });
 });
@@ -4013,6 +4017,14 @@ function formatRiskList(value) {
     return props.copy.settings.permissions.harnessPreview.none;
   }
   return risks.map(permissionRiskLabel).join(", ");
+}
+
+function formatPreviewList(value) {
+  const items = Array.isArray(value) ? value : [];
+  if (!items.length) {
+    return props.copy.settings.permissions.harnessPreview.none;
+  }
+  return items.map((item) => String(item || "").trim()).filter(Boolean).join(", ") || props.copy.settings.permissions.harnessPreview.none;
 }
 
 const logLevelOptions = computed(() => {
