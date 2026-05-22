@@ -5,6 +5,7 @@
         <template v-for="segment in block.segments" :key="segment.id">
           <code v-if="segment.type === 'code'">{{ segment.text }}</code>
           <a v-else-if="segment.type === 'link'" :href="segment.href" target="_blank" rel="noreferrer">{{ segment.text }}</a>
+          <strong v-else-if="segment.type === 'strong'">{{ segment.text }}</strong>
           <span v-else>{{ segment.text }}</span>
         </template>
       </h2>
@@ -13,6 +14,7 @@
         <template v-for="segment in block.segments" :key="segment.id">
           <code v-if="segment.type === 'code'">{{ segment.text }}</code>
           <a v-else-if="segment.type === 'link'" :href="segment.href" target="_blank" rel="noreferrer">{{ segment.text }}</a>
+          <strong v-else-if="segment.type === 'strong'">{{ segment.text }}</strong>
           <span v-else>{{ segment.text }}</span>
         </template>
       </p>
@@ -21,6 +23,7 @@
         <template v-for="segment in block.segments" :key="segment.id">
           <code v-if="segment.type === 'code'">{{ segment.text }}</code>
           <a v-else-if="segment.type === 'link'" :href="segment.href" target="_blank" rel="noreferrer">{{ segment.text }}</a>
+          <strong v-else-if="segment.type === 'strong'">{{ segment.text }}</strong>
           <span v-else>{{ segment.text }}</span>
         </template>
       </blockquote>
@@ -30,6 +33,7 @@
           <template v-for="segment in item.segments" :key="segment.id">
             <code v-if="segment.type === 'code'">{{ segment.text }}</code>
             <a v-else-if="segment.type === 'link'" :href="segment.href" target="_blank" rel="noreferrer">{{ segment.text }}</a>
+            <strong v-else-if="segment.type === 'strong'">{{ segment.text }}</strong>
             <span v-else>{{ segment.text }}</span>
           </template>
         </li>
@@ -40,6 +44,7 @@
           <template v-for="segment in item.segments" :key="segment.id">
             <code v-if="segment.type === 'code'">{{ segment.text }}</code>
             <a v-else-if="segment.type === 'link'" :href="segment.href" target="_blank" rel="noreferrer">{{ segment.text }}</a>
+            <strong v-else-if="segment.type === 'strong'">{{ segment.text }}</strong>
             <span v-else>{{ segment.text }}</span>
           </template>
         </li>

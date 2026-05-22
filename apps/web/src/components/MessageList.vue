@@ -102,6 +102,18 @@ function normalizeEntry(entry, index) {
   };
 }
 
+function isChatEntry(entry) {
+  const runId = String(entry?.runId || entry?.run_id || "").trim();
+  if (runId) {
+    return false;
+  }
+  const entryId = String(entry?.id || entry?.entry_id || entry?.entryId || "").trim();
+  if (entryId.startsWith("run:")) {
+    return false;
+  }
+  return entry?.role === "user" || entry?.role === "assistant";
+}
+
 function normalizeMessage(message) {
   const text = sanitizeVisibleText(message.text);
   return {
@@ -114,7 +126,7 @@ function normalizeMessage(message) {
 
 const messages = computed(() => {
   if (props.entries.length) {
-    return props.entries.map(normalizeEntry).filter(Boolean);
+    return props.entries.filter(isChatEntry).map(normalizeEntry).filter(Boolean);
   }
 
   return props.messages.map(normalizeMessage).filter((message) => message.text.trim());
@@ -352,7 +364,7 @@ function splitTableRow(line) {
 
 function inlineSegments(text, idPrefix) {
   const segments = [];
-  const pattern = /(`[^`]+`)|(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))/g;
+  const pattern = /(`[^`]+`)|(\[([^\]]+)\]\((https?:\/\/[^)\s]+)\))|(\*\*([^*\n][\s\S]*?[^*\n])\*\*)/g;
   let cursor = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -361,8 +373,10 @@ function inlineSegments(text, idPrefix) {
     }
     if (match[1]) {
       segments.push({ id: `${idPrefix}:c-${segments.length}`, type: "code", text: match[1].slice(1, -1) });
-    } else {
+    } else if (match[2]) {
       segments.push({ id: `${idPrefix}:l-${segments.length}`, type: "link", text: match[3], href: match[4] });
+    } else {
+      segments.push({ id: `${idPrefix}:s-${segments.length}`, type: "strong", text: match[6] });
     }
     cursor = pattern.lastIndex;
   }

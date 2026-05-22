@@ -114,9 +114,13 @@ const settingsUi = `${settingsModal}\n${generalSettingsPage}\n${shortcutsSetting
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
 assertIncludes(messageList, "message__artifact-status", "session entry artifact status");
 assertIncludes(messageList, "sanitizeVisibleText", "message visible text sanitizer");
+assertIncludes(messageList, "isChatEntry", "run trace entries stay out of the chat transcript");
+assertIncludes(messageList, "entryId.startsWith(\"run:\")", "run entry filtering keeps trace artifacts out of chat");
 assertIncludes(messageList, "normalizeTextPart", "message text-only entry filtering");
 assertIncludes(messageList, "system-reminder", "message internal reminder stripping");
 assertIncludes(messageList, "buildMessageBlocks", "message markdown block normalization");
+assertIncludes(messageList, "type: \"strong\"", "message markdown bold segment normalization");
+assertIncludes(messageTextRenderer, "segment.type === 'strong'", "message markdown bold rendering");
 assertIncludes(messageTextRenderer, "message__json-card", "message JSON payload collapse rendering");
 assertIncludes(messageTextRenderer, "message__code-block", "message code block rendering");
 assertIncludes(messageTextRenderer, "message__table", "message table rendering");
