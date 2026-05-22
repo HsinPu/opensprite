@@ -9,7 +9,7 @@ def _profile(text: str):
 
 
 def test_harness_profile_selects_research_for_url_task():
-    profile = _profile("幫我查一下這個網站 https://example.com 並整理來源")
+    profile = _profile("請上網查 https://example.com 並整理來源")
 
     assert profile.name == "research"
     assert profile.task_type == "web_research"
@@ -41,7 +41,7 @@ def test_harness_profile_selects_ops_before_coding_for_configuration_task():
 
 
 def test_harness_profile_selects_chat_for_plain_question():
-    profile = _profile("為什麼 Harness 會讓 AI 更穩？")
+    profile = _profile("Harness 在 AI agent 裡是什麼意思？")
 
     assert profile.name == "chat"
     assert profile.continuation_policy == "minimal"
@@ -49,7 +49,7 @@ def test_harness_profile_selects_chat_for_plain_question():
 
 
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
-    intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
+    intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)
 
     contract = TaskContractService.build_deterministic(
@@ -96,12 +96,12 @@ def test_task_contract_adds_ops_harness_operation_report_criterion():
 
 
 def test_task_contract_adds_media_artifact_criterion_for_selected_media():
-    intent = TaskIntentService().classify("請 OCR 這張圖片")
+    intent = TaskIntentService().classify("請幫我 OCR 這張圖片")
     profile = HarnessProfileService().select(intent)
 
     contract = TaskContractService.build_deterministic(
         task_intent=intent,
-        current_message="User attached 1 image. 請 OCR 這張圖片",
+        current_message="User attached 1 image. 請幫我 OCR 這張圖片",
         current_image_files=["workspace/images/input.png"],
         harness_profile=profile,
     )
@@ -109,3 +109,28 @@ def test_task_contract_adds_media_artifact_criterion_for_selected_media():
     assert contract.task_type == "media_extraction"
     assert contract.selected_resources
     assert any(item.kind == "media_artifact" for item in contract.acceptance_criteria)
+
+
+def test_harness_profile_selects_research_for_chinese_source_request():
+    profile = _profile("幫我上網查資料並附上引用來源")
+
+    assert profile.name == "research"
+    assert profile.task_type == "web_research"
+    assert "marker:上網" in profile.to_metadata()["selection"]["matched_signals"]
+
+
+def test_harness_profile_selects_coding_for_chinese_file_request():
+    profile = _profile("幫我檢查 src/opensprite/agent/harness_profile.py 這個檔案")
+
+    assert profile.name == "coding"
+    assert profile.task_type == "workspace_analysis"
+    assert "marker:檔案" in profile.to_metadata()["selection"]["matched_signals"]
+    assert "pattern:code_path" in profile.to_metadata()["selection"]["matched_signals"]
+
+
+def test_harness_profile_selects_ops_for_chinese_service_request():
+    profile = _profile("幫我更新設定並重啟服務")
+
+    assert profile.name == "ops"
+    assert profile.task_type == "operations"
+    assert "marker:設定" in profile.to_metadata()["selection"]["matched_signals"]
