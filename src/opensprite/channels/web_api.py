@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from aiohttp import web
 
+from . import web_api_evals, web_api_runs
 from ..bus.session_commands import session_command_catalog
 from ..config import Config
 from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
@@ -121,311 +122,67 @@ class WebApiHandlers:
         )
 
     async def handle_run_events(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-
-        run_id = adapter._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        run = await storage.get_run(session_id, run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        events = await storage.get_run_events(session_id, run_id)
-        serialized_events = serialize_run_events(events)
-        return web.json_response(
-            {
-                "run_id": run_id,
-                "session_id": session_id,
-                "events": serialized_events,
-                "event_counts": serialize_run_event_counts(events, serialized_events),
-            }
-        )
+        return await web_api_runs.handle_run_events(self.adapter, request)
 
     async def handle_runs(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if session_id is None:
-            raise web.HTTPBadRequest(text="session_id is required")
-
-        runs = await storage.get_runs(session_id, limit=adapter._coerce_limit(request.query.get("limit")))
-        return web.json_response(
-            {
-                "session_id": session_id,
-                "runs": [adapter._serialize_run(run) for run in runs],
-            }
-        )
+        return await web_api_runs.handle_runs(self.adapter, request)
 
     async def handle_background_processes(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        states = _coerce_states(request.query.get("states") or request.query.get("state"))
-        limit = adapter._coerce_limit(request.query.get("limit"), default=20, maximum=100)
-        processes = await storage.list_background_processes(
-            owner_session_id=session_id,
-            states=states,
-            limit=limit,
-        )
-        counts: dict[str, int] = {}
-        for process in processes:
-            counts[process.state] = counts.get(process.state, 0) + 1
-        return web.json_response(
-            {
-                "session_id": session_id,
-                "states": list(states or []),
-                "counts": counts,
-                "processes": [_serialize_background_process(process) for process in processes],
-            }
+        return await web_api_evals.handle_background_processes(
+            self.adapter,
+            request,
+            coerce_states=_coerce_states,
+            serialize_background_process=_serialize_background_process,
         )
 
     async def handle_long_task_eval_status(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._get_storage()
-        storage_available = storage is not None
-        processes = []
-        counts: dict[str, int] = {}
-        if storage_available:
-            processes = await storage.list_background_processes(limit=100)
-            for process in processes:
-                counts[process.state] = counts.get(process.state, 0) + 1
-
-        return web.json_response(
-            {
-                "ok": True,
-                "ready": storage_available,
-                "storage_available": storage_available,
-                "background_process_counts": counts,
-                "recent_background_processes": len(processes),
-                "recommended_metrics": _long_task_eval_metrics(),
-                "recommended_scenarios": _long_task_eval_scenarios(),
-            }
+        return await web_api_evals.handle_long_task_eval_status(
+            self.adapter,
+            request,
+            long_task_eval_metrics=_long_task_eval_metrics,
+            long_task_eval_scenarios=_long_task_eval_scenarios,
         )
 
     async def handle_long_task_eval_smoke(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._get_storage()
-        checks: list[dict[str, Any]] = []
-
-        storage_available = storage is not None
-        checks.append(
-            {
-                "id": "storage_available",
-                "label": "Run storage is available",
-                "ok": storage_available,
-                "detail": "Required for persisted run traces and background process lifecycle records.",
-            }
-        )
-
-        background_process_api = False
-        process_counts: dict[str, int] = {}
-        if storage_available:
-            processes = await storage.list_background_processes(limit=100)
-            background_process_api = True
-            for process in processes:
-                process_counts[process.state] = process_counts.get(process.state, 0) + 1
-        checks.append(
-            {
-                "id": "background_process_api",
-                "label": "Background process records are queryable",
-                "ok": background_process_api,
-                "detail": f"Observed {sum(process_counts.values())} recent process record(s).",
-            }
-        )
-
-        checks.append(
-            {
-                "id": "run_event_schema",
-                "label": "Background process run events are registered",
-                "ok": True,
-                "detail": "Expected events: background_process.started, background_process.completed, background_process.lost.",
-            }
-        )
-
-        ok = all(check["ok"] for check in checks)
-        return web.json_response(
-            {
-                "ok": ok,
-                "checks": checks,
-                "background_process_counts": process_counts,
-                "metrics": _long_task_eval_metrics(),
-            }
+        return await web_api_evals.handle_long_task_eval_smoke(
+            self.adapter,
+            request,
+            long_task_eval_metrics=_long_task_eval_metrics,
         )
 
     async def handle_long_task_eval_controlled(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        agent = adapter._get_agent()
-        storage = adapter._get_storage()
-        manager = getattr(agent, "background_process_manager", None) if agent is not None else None
-        if storage is None:
-            raise web.HTTPServiceUnavailable(text="Run trace storage is not available")
-        if manager is None:
-            raise web.HTTPServiceUnavailable(text="Background process manager is not available")
-
-        session_id = adapter._coerce_optional_text(
-            request.query.get("session_id"),
-            default="web:long-task-eval",
-        )
-        run_id = f"run_long_task_eval_{uuid4().hex}"
-        created_at = time.time()
-        await storage.create_run(
-            session_id,
-            run_id,
-            status="running",
-            metadata={"kind": "long_task_eval_controlled"},
-            created_at=created_at,
-        )
-
-        command = _long_task_controlled_command()
-        output_chunks: list[CapturedOutputChunk] = []
-        process, read_tasks = await start_shell_process(command, cwd=None, output_chunks=output_chunks)
-        background_session = manager.register_session(
-            command=command,
-            cwd=None,
-            process=process,
-            read_tasks=read_tasks,
-            output_chunks=output_chunks,
-            timeout_seconds=5.0,
-            drain_timeout=5.0,
-            exit_notifier=None,
-            notify_on_exit=False,
-            owner_session_id=session_id,
-            owner_run_id=run_id,
-            owner_channel=adapter._channel_from_session(session_id),
-            owner_external_chat_id=adapter._external_chat_id_from_session(session_id),
-        )
-        await asyncio.sleep(0)
-
-        if background_session.watch_task is not None:
-            done, _ = await asyncio.wait({background_session.watch_task}, timeout=5.0)
-            if not done:
-                await manager.kill_session(background_session.session_id)
-
-        stored_process = await storage.get_background_process(background_session.session_id)
-        events = await storage.get_run_events(session_id, run_id)
-        event_types = [event.event_type for event in events]
-        await storage.update_run_status(
-            session_id,
-            run_id,
-            "completed" if stored_process is not None and stored_process.exit_code == 0 else "failed",
-            metadata={"kind": "long_task_eval_controlled", "event_types": event_types},
-            finished_at=time.time(),
-        )
-
-        checks = [
-            {
-                "id": "process_record_created",
-                "label": "Background process record was created",
-                "ok": stored_process is not None,
-                "detail": background_session.session_id,
-            },
-            {
-                "id": "process_completed",
-                "label": "Controlled process completed successfully",
-                "ok": (
-                    stored_process is not None
-                    and stored_process.state == "exited"
-                    and stored_process.exit_code == 0
-                ),
-                "detail": (
-                    f"state={getattr(stored_process, 'state', None)} "
-                    f"exit_code={getattr(stored_process, 'exit_code', None)}"
-                ),
-            },
-            {
-                "id": "started_event_recorded",
-                "label": "Started event was recorded",
-                "ok": "background_process.started" in event_types,
-                "detail": ", ".join(event_types) or "none",
-            },
-            {
-                "id": "completed_event_recorded",
-                "label": "Completed event was recorded",
-                "ok": "background_process.completed" in event_types,
-                "detail": ", ".join(event_types) or "none",
-            },
-            {
-                "id": "output_tail_captured",
-                "label": "Output tail was captured",
-                "ok": (
-                    stored_process is not None
-                    and "opensprite-long-task-controlled:done" in stored_process.output_tail
-                ),
-                "detail": (
-                    getattr(stored_process, "output_tail", "")[-160:]
-                    if stored_process is not None
-                    else "missing process"
-                ),
-            },
-        ]
-
-        return web.json_response(
-            {
-                "ok": all(check["ok"] for check in checks),
-                "session_id": session_id,
-                "run_id": run_id,
-                "process_session_id": background_session.session_id,
-                "checks": checks,
-                "event_types": event_types,
-                "process": _serialize_background_process(stored_process) if stored_process is not None else None,
-            }
+        return await web_api_evals.handle_long_task_eval_controlled(
+            self.adapter,
+            request,
+            long_task_controlled_command=_long_task_controlled_command,
+            serialize_background_process=_serialize_background_process,
         )
 
     async def handle_task_completion_eval_smoke(self, request: web.Request) -> web.Response:
-        return web.json_response(run_task_completion_smoke())
+        return await web_api_evals.handle_task_completion_eval_smoke(request)
 
     async def handle_task_completion_eval_run(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        agent = adapter._get_agent()
-        storage = adapter._get_storage()
-        if agent is None:
-            raise web.HTTPServiceUnavailable(text="Agent is not available")
-        if storage is None:
-            raise web.HTTPServiceUnavailable(text="Run trace storage is not available")
-        timeout_seconds = adapter._coerce_limit(request.query.get("timeout"), default=45, maximum=120)
-        payload = await run_live_task_completion_eval(
-            agent=agent,
-            storage=storage,
-            channel=adapter.channel_instance_id,
-            timeout_seconds=float(timeout_seconds),
-            model_info=_active_llm_model_info(adapter),
+        return await web_api_evals.handle_task_completion_eval_run(
+            self.adapter,
+            request,
+            active_llm_model_info=_active_llm_model_info,
         )
-        return web.json_response(payload)
 
     async def handle_harness_controlled_eval(self, request: web.Request) -> web.Response:
-        payload = run_controlled_harness_scenarios()
-        trace = await _persist_harness_controlled_eval_trace(self.adapter, payload)
-        if trace is not None:
-            payload = dict(payload)
-            payload["trace"] = trace
-        return web.json_response(payload)
+        return await web_api_evals.handle_harness_controlled_eval(
+            self.adapter,
+            request,
+            persist_harness_controlled_eval_trace=_persist_harness_controlled_eval_trace,
+        )
 
     async def handle_task_completion_eval_history(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        limit = adapter._coerce_limit(request.query.get("limit"), default=20, maximum=100)
-        history = await storage.list_eval_runs(kind="task_completion", limit=limit)
-        return web.json_response({"ok": True, "history": [item.to_payload() for item in history]})
+        return await web_api_evals.handle_task_completion_eval_history(self.adapter, request)
 
     async def handle_task_completion_eval_history_delete(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        eval_id = adapter._coerce_optional_text(request.match_info.get("eval_id"))
-        if eval_id is None:
-            raise web.HTTPBadRequest(text="eval_id is required")
-        deleted = await storage.delete_eval_run(eval_id, kind="task_completion")
-        if not deleted:
-            raise web.HTTPNotFound(text="Eval run not found")
-        return web.json_response({"ok": True, "eval_id": eval_id, "deleted": 1})
+        return await web_api_evals.handle_task_completion_eval_history_delete(self.adapter, request)
 
     async def handle_task_completion_eval_history_clear(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        deleted = await storage.clear_eval_runs(kind="task_completion")
-        return web.json_response({"ok": True, "deleted": deleted})
+        return await web_api_evals.handle_task_completion_eval_history_clear(self.adapter, request)
 
     async def handle_sessions(self, request: web.Request) -> web.Response:
         adapter = self.adapter
@@ -535,99 +292,16 @@ class WebApiHandlers:
         )
 
     async def handle_run_trace(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        run_id = adapter._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        trace = await storage.get_run_trace(session_id, run_id)
-        if trace is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        serialized_events = serialize_run_events(trace.events)
-        return web.json_response(
-            {
-                "run": adapter._serialize_run(trace.run),
-                "events": serialized_events,
-                "event_counts": serialize_run_event_counts(trace.events, serialized_events),
-                "parts": [serialize_run_part(part) for part in trace.parts],
-                "file_changes": [serialize_file_change(change) for change in trace.file_changes],
-                "diff_summary": serialize_diff_summary(trace),
-                "artifacts": serialize_run_artifacts(trace),
-                "entries": serialize_run_trace_entries(trace),
-            }
-        )
+        return await web_api_runs.handle_run_trace(self.adapter, request)
 
     async def handle_run_summary(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        run_id = adapter._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        trace = await storage.get_run_trace(session_id, run_id)
-        if trace is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        return web.json_response(serialize_run_summary(trace))
+        return await web_api_runs.handle_run_summary(self.adapter, request)
 
     async def handle_run_cancel(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        storage = adapter._require_storage()
-        agent = adapter._get_agent()
-        if agent is None or not hasattr(agent, "request_run_cancel"):
-            raise web.HTTPServiceUnavailable(text="Run cancellation is not available")
-
-        run_id = adapter._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-
-        run = await storage.get_run(session_id, run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="Run not found")
-
-        accepted = await agent.request_run_cancel(
-            session_id,
-            run_id,
-            channel=adapter.channel_instance_id,
-            external_chat_id=adapter._external_chat_id_from_session(session_id),
-        )
-        if not accepted:
-            raise web.HTTPConflict(text="Run is not active")
-
-        cancel_session = getattr(adapter.mq, "cancel_session", None)
-        if callable(cancel_session):
-            await cancel_session(session_id)
-
-        return web.json_response({"ok": True, "session_id": session_id, "run_id": run_id, "status": "cancelling"})
+        return await web_api_runs.handle_run_cancel(self.adapter, request)
 
     async def handle_run_file_change_revert(self, request: web.Request) -> web.Response:
-        adapter = self.adapter
-        agent = adapter._get_agent()
-        revert = getattr(agent, "revert_run_file_change", None) if agent is not None else None
-        if not callable(revert):
-            raise web.HTTPServiceUnavailable(text="Run file-change revert is not available")
-
-        run_id = adapter._coerce_optional_text(request.match_info.get("run_id"))
-        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-        if run_id is None or session_id is None:
-            raise web.HTTPBadRequest(text="Both run_id and session_id are required")
-        try:
-            change_id = int(str(request.match_info.get("change_id") or ""))
-        except ValueError as exc:
-            raise web.HTTPBadRequest(text="change_id must be an integer") from exc
-
-        body = await adapter._read_json_body(request)
-        dry_run = bool(body.get("dry_run", True))
-        result = await revert(session_id, run_id, change_id, dry_run=dry_run)
-        status = str(result.get("status") or "")
-        if status == "not_found":
-            raise web.HTTPNotFound(text=str(result.get("reason") or "File change not found"))
-        return web.json_response({"ok": bool(result.get("ok")), "revert": adapter._json_safe(result)})
+        return await web_api_runs.handle_run_file_change_revert(self.adapter, request)
 
     async def handle_permissions(self, request: web.Request) -> web.Response:
         adapter = self.adapter
