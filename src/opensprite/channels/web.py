@@ -108,6 +108,7 @@ from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
 from . import web_settings_handlers_core
+from . import web_settings_handlers_app
 from . import web_settings_handlers_tools
 from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
@@ -1361,92 +1362,19 @@ class WebAdapter(MessageAdapter):
         return await web_settings_handlers_core.handle_settings_models(self, request)
 
     async def _handle_settings_llm(self, request: web.Request) -> web.Response:
-        config = Config.load(self._get_config_path())
-        return web.json_response({"llm": self._llm_payload(config)})
+        return await web_settings_handlers_app.handle_settings_llm(self, request)
 
     async def _handle_settings_llm_update(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        config_path = self._get_config_path()
-        config = Config.load(config_path)
-        decoding_mode = self._coerce_optional_text(body.get("decoding_mode"))
-        if decoding_mode:
-            if decoding_mode == "custom":
-                decoding = body.get("decoding")
-                if decoding is not None and not isinstance(decoding, dict):
-                    raise web.HTTPBadRequest(text="decoding must be a JSON object")
-                self._apply_custom_llm_decoding(config, decoding or {})
-            else:
-                self._apply_llm_decoding_preset(config, decoding_mode)
-        elif "pass_decoding_params" in body:
-            config.llm.pass_decoding_params = self._coerce_bool(
-                body.get("pass_decoding_params"),
-                field="pass_decoding_params",
-                default=config.llm.pass_decoding_params,
-            )
-        if "semantic_contract_classifier_enabled" in body:
-            config.agent.semantic_contract_classifier_enabled = self._coerce_bool(
-                body.get("semantic_contract_classifier_enabled"),
-                field="semantic_contract_classifier_enabled",
-                default=config.agent.semantic_contract_classifier_enabled,
-            )
-        if "semantic_contract_classifier_confidence_threshold" in body:
-            config.agent.semantic_contract_classifier_confidence_threshold = self._coerce_float_range(
-                body.get("semantic_contract_classifier_confidence_threshold"),
-                field="semantic_contract_classifier_confidence_threshold",
-                default=config.agent.semantic_contract_classifier_confidence_threshold,
-                minimum=0.0,
-                maximum=1.0,
-            )
-        config.save(config_path)
-        payload = {
-            "llm": self._llm_payload(config),
-            "restart_required": True,
-        }
-        payload = self._reload_agent_llm_from_config(payload, force=True)
-        agent = self._get_agent()
-        if agent is not None:
-            agent.config = config.agent
-            llm_calls = getattr(agent, "llm_calls", None)
-            if llm_calls is not None:
-                llm_calls.config = config.agent
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_llm_update(self, request)
 
     async def _handle_settings_media(self, request: web.Request) -> web.Response:
-        try:
-            payload = self._get_media_settings().list_media()
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_media(self, request)
 
     async def _handle_settings_media_update(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        category = self._coerce_optional_text(body.get("category"))
-        if category is None:
-            raise web.HTTPBadRequest(text="category is required")
-        try:
-            payload = self._get_media_settings().update_media(
-                category,
-                enabled=self._coerce_bool(body.get("enabled"), field="enabled", default=False),
-                provider_id=self._coerce_optional_text(body.get("provider_id")),
-                model=self._coerce_optional_text(body.get("model")),
-            )
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_media_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_media_update(self, request)
 
     async def _handle_settings_model_select(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        provider_id = self._coerce_optional_text(body.get("provider_id"))
-        model = self._coerce_optional_text(body.get("model"))
-        if provider_id is None or model is None:
-            raise web.HTTPBadRequest(text="provider_id and model are required")
-        try:
-            payload = self._get_provider_settings().select_model(provider_id, model)
-        except ProviderSettingsError as exc:
-            self._raise_provider_settings_error(exc)
-        payload = self._reload_agent_llm_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_model_select(self, request)
 
     @staticmethod
     def _git_output(args: list[str], *, cwd: Path) -> str:
@@ -1484,8 +1412,7 @@ class WebAdapter(MessageAdapter):
             }
 
     async def _handle_settings_update_status(self, request: web.Request) -> web.Response:
-        payload = await asyncio.to_thread(self._build_update_status_payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_update_status(self, request)
 
     async def _restart_gateway_after_response(self, config_path: Path | None = None) -> None:
         await asyncio.sleep(1.0)
@@ -1510,128 +1437,28 @@ class WebAdapter(MessageAdapter):
         os._exit(0)
 
     async def _handle_settings_update_apply(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        restart = self._coerce_bool(body.get("restart"), field="restart", default=True)
-        try:
-            result = await asyncio.to_thread(update_cli.update_checkout, branch="main", install_dev=False)
-        except update_cli.UpdateError as exc:
-            raise web.HTTPConflict(text=str(exc)) from exc
-        except Exception as exc:
-            raise web.HTTPServiceUnavailable(text=str(exc)) from exc
-
-        payload = {
-            "ok": True,
-            "updated": result.updated,
-            "before_rev": result.before_rev,
-            "before_rev_short": result.before_rev[:7],
-            "after_rev": result.after_rev,
-            "after_rev_short": result.after_rev[:7],
-            "branch": result.branch,
-            "project_root": str(result.project_root),
-            "python": str(result.python_executable),
-            "restart_scheduled": restart,
-        }
-        if restart:
-            config_path = Path(self.config["config_path"]).expanduser() if self.config.get("config_path") else None
-            asyncio.create_task(self._restart_gateway_after_response(config_path=config_path))
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_update_apply(self, request)
 
     async def _handle_settings_schedule(self, request: web.Request) -> web.Response:
-        try:
-            payload = self._get_schedule_settings().get_schedule()
-        except ScheduleSettingsError as exc:
-            self._raise_schedule_settings_error(exc)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_schedule(self, request)
 
     async def _handle_settings_schedule_update(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        try:
-            payload = self._get_schedule_settings().update_schedule(
-                default_timezone=self._coerce_optional_text(body.get("default_timezone")),
-            )
-        except ScheduleSettingsError as exc:
-            self._raise_schedule_settings_error(exc)
-        payload = self._reload_schedule_from_config(payload)
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_schedule_update(self, request)
 
     async def _handle_settings_network(self, request: web.Request) -> web.Response:
-        config = Config.load(self._get_config_path())
-        return web.json_response({"network": self._network_payload(config)})
+        return await web_settings_handlers_app.handle_settings_network(self, request)
 
     async def _handle_settings_network_update(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        config_path = self._get_config_path()
-        config = Config.load(config_path)
-        config.network.http_proxy = self._coerce_optional_text(body.get("http_proxy"), default="") or ""
-        config.network.https_proxy = self._coerce_optional_text(body.get("https_proxy"), default="") or ""
-        config.network.no_proxy = self._coerce_optional_text(body.get("no_proxy"), default="") or ""
-        config.save(config_path)
-        self._apply_network_environment(config)
-        return web.json_response({"network": self._network_payload(config), "restart_required": False})
+        return await web_settings_handlers_app.handle_settings_network_update(self, request)
 
     async def _handle_settings_permissions(self, request: web.Request) -> web.Response:
-        config = Config.load(self._get_config_path())
-        return web.json_response({"permissions": self._permissions_payload(config)})
+        return await web_settings_handlers_app.handle_settings_permissions(self, request)
 
     async def _handle_settings_harness_policy_preview(self, request: web.Request) -> web.Response:
-        config = Config.load(self._get_config_path())
-        return web.json_response({"harness_policy_preview": self._harness_policy_preview_payload(config)})
+        return await web_settings_handlers_app.handle_settings_harness_policy_preview(self, request)
 
     async def _handle_settings_permissions_update(self, request: web.Request) -> web.Response:
-        body = await self._read_json_body(request)
-        config_path = self._get_config_path()
-        config = Config.load(config_path)
-        permissions = config.tools.permissions
-        before_permissions = self._permissions_payload(config)
-        permissions.enabled = self._coerce_bool(body.get("enabled"), field="enabled", default=permissions.enabled)
-        permissions.approval_mode = self._coerce_approval_mode(body.get("approval_mode", permissions.approval_mode))
-        permissions.approval_timeout_seconds = self._coerce_float_range(
-            body.get("approval_timeout_seconds"),
-            field="approval_timeout_seconds",
-            default=permissions.approval_timeout_seconds,
-            minimum=1.0,
-            maximum=86400.0,
-        )
-        permissions.allowed_tools = self._coerce_text_list(body.get("allowed_tools"), field="allowed_tools", default=permissions.allowed_tools)
-        if not permissions.allowed_tools:
-            permissions.allowed_tools = ["*"]
-        permissions.denied_tools = self._coerce_text_list(body.get("denied_tools"), field="denied_tools", default=permissions.denied_tools)
-        permissions.allowed_risk_levels = self._coerce_risk_level_list(
-            body.get("allowed_risk_levels"),
-            field="allowed_risk_levels",
-            default=permissions.allowed_risk_levels,
-        )
-        permissions.denied_risk_levels = self._coerce_risk_level_list(
-            body.get("denied_risk_levels"),
-            field="denied_risk_levels",
-            default=permissions.denied_risk_levels,
-        )
-        permissions.approval_required_tools = self._coerce_text_list(
-            body.get("approval_required_tools"),
-            field="approval_required_tools",
-            default=permissions.approval_required_tools,
-        )
-        permissions.approval_required_risk_levels = self._coerce_risk_level_list(
-            body.get("approval_required_risk_levels"),
-            field="approval_required_risk_levels",
-            default=permissions.approval_required_risk_levels,
-        )
-        permissions.profile_overrides = self._coerce_permission_profile_overrides(
-            body.get("profile_overrides"),
-            default=permissions.profile_overrides,
-        )
-        config.save(config_path)
-        payload = {"permissions": self._permissions_payload(config), "restart_required": True}
-        payload = self._reload_permissions_from_config(payload)
-        payload["operation_audit"] = OperationAuditRecord(
-            operation_type="settings.permissions.update",
-            target="tools.permissions",
-            before=before_permissions,
-            after=payload["permissions"],
-            validation={"runtime_reloaded": bool(payload.get("runtime_reloaded")), "restart_required": bool(payload.get("restart_required"))},
-            rollback_available=True,
-        ).to_metadata()
-        return web.json_response(payload)
+        return await web_settings_handlers_app.handle_settings_permissions_update(self, request)
 
     async def _handle_settings_search(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_tools.handle_settings_search(self, request)
