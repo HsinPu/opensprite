@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import datetime
 
 from opensprite.agent.task_artifact import build_task_artifact
 from opensprite.config.schema import WebFetchToolConfig, WebSearchToolConfig
@@ -248,6 +249,115 @@ def test_web_research_runs_manual_queries_and_dedupes_fetches():
     assert all(attempt["ok"] is True for attempt in payload["query_attempts"])
     assert [attempt["result_count"] for attempt in payload["query_attempts"]] == [2, 2]
     assert all(attempt["backend"] == "ddgs" for attempt in payload["query_attempts"])
+
+
+def test_web_research_searches_manual_queries_concurrently():
+    class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
+        def __init__(self, items_by_query):
+            super().__init__(items_by_query)
+            self.started = []
+            self.ready = None
+
+        async def _execute(self, query, count=None, freshness=None):
+            if self.ready is None:
+                self.ready = asyncio.Event()
+            self.calls.append({"query": query, "count": count, "freshness": freshness})
+            self.started.append(query)
+            if len(self.started) >= 2:
+                self.ready.set()
+            await self.ready.wait()
+            items = self.items_by_query.get(query, [])
+            return _format_results(query, items, count or len(items), provider=self.provider, backend=self.backend)
+
+    search = _ConcurrentSearchToolByQuery(
+        {
+            "sqlite fts": [{"title": "One", "url": "https://example.com/one", "content": "One snippet"}],
+            "sqlite benchmark": [
+                {"title": "Two", "url": "https://example.com/two", "content": "Two snippet"}
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/one": _fetch_payload("https://example.com/one", title="One"),
+            "https://example.com/two": _fetch_payload("https://example.com/two", title="Two"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            asyncio.wait_for(
+                tool._execute("sqlite fts", queries=["sqlite benchmark"], count=2, fetch_count=2),
+                timeout=1,
+            )
+        )
+    )
+
+    assert search.started == ["sqlite fts", "sqlite benchmark"]
+    assert payload["fetched_count"] == 2
+
+
+def test_web_research_fetches_candidate_batch_concurrently():
+    class _ConcurrentFetchTool(_FakeFetchTool):
+        def __init__(self, payloads):
+            super().__init__(payloads)
+            self.ready = None
+
+        async def _execute(self, url, max_chars=None):
+            if self.ready is None:
+                self.ready = asyncio.Event()
+            self.calls.append({"url": url, "max_chars": max_chars})
+            if len(self.calls) >= 2:
+                self.ready.set()
+            await self.ready.wait()
+            return json.dumps(self.payloads[url], ensure_ascii=False)
+
+    search = _FakeSearchTool(
+        [
+            {"title": "One", "url": "https://example.com/one", "content": "One snippet"},
+            {"title": "Two", "url": "https://example.com/two", "content": "Two snippet"},
+        ]
+    )
+    fetch = _ConcurrentFetchTool(
+        {
+            "https://example.com/one": _fetch_payload("https://example.com/one", title="One"),
+            "https://example.com/two": _fetch_payload("https://example.com/two", title="Two"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(asyncio.wait_for(tool._execute("sqlite fts", count=2, fetch_count=2), timeout=1))
+    )
+
+    assert [call["url"] for call in fetch.calls] == ["https://example.com/one", "https://example.com/two"]
+    assert payload["fetched_count"] == 2
+
+
+def test_web_research_prioritizes_current_year_candidates_for_recent_searches():
+    current_year = datetime.now().year
+    search = _FakeSearchTool(
+        [
+            {"title": f"Older guide 2025", "url": "https://example.com/old", "content": "Old snippet"},
+            {
+                "title": f"Release notes {current_year}",
+                "url": "https://example.com/current",
+                "content": "Latest release notes",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/current": _fetch_payload("https://example.com/current", title="Current"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("release notes", count=2, fetch_count=1, freshness="month")))
+
+    assert [call["url"] for call in fetch.calls] == ["https://example.com/current"]
+    assert payload["fetched_sources"][0]["search_freshness"] == "month"
 
 
 def test_web_research_diversifies_fetch_candidates_across_queries_and_domains():

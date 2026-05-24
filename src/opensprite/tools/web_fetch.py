@@ -182,6 +182,25 @@ from ..utils.log import logger
 
 WEB_FETCH_MIN_CONTENT_CHARS = 800
 
+
+def _looks_blocked_or_challenge(*, title: str, content: str, status: int | None) -> bool:
+    if status in {401, 403, 407, 408, 409, 429, 451, 503}:
+        return True
+    normalized = f"{title}\n{content}".lower()
+    markers = (
+        "captcha",
+        "cloudflare",
+        "access denied",
+        "forbidden",
+        "enable javascript",
+        "verify you are human",
+        "prove you are human",
+        "unusual traffic",
+        "rate limit",
+        "too many requests",
+    )
+    return any(marker in normalized for marker in markers)
+
 # 嘗試引入 trafilatura
 try:
     from trafilatura import extract as trafilatura_extract
@@ -876,6 +895,15 @@ class WebFetchTool(Tool):
         result = await asyncio.to_thread(fetcher.fetch, url)
         content = str(result.get("text") or "")
         content_chars = len(content.strip())
+        raw_status = result.get("status")
+        try:
+            status = int(raw_status) if raw_status is not None else None
+        except (TypeError, ValueError):
+            status = None
+        title = str(result.get("title") or "")
+        blocked_or_challenge = _looks_blocked_or_challenge(title=title, content=content, status=status)
+        is_too_short = content_chars < WEB_FETCH_MIN_CONTENT_CHARS
+        has_main_content = bool(content.strip()) and not is_too_short and not blocked_or_challenge
         return json.dumps(
             {
                 "type": "web_fetch",
@@ -892,7 +920,9 @@ class WebFetchTool(Tool):
                 "truncated": result.get("truncated"),
                 "content_chars": content_chars,
                 "has_title": bool(str(result.get("title") or "").strip()),
-                "is_too_short": content_chars < WEB_FETCH_MIN_CONTENT_CHARS,
+                "has_main_content": has_main_content,
+                "is_too_short": is_too_short,
+                "blocked_or_challenge": blocked_or_challenge,
                 "min_content_chars": WEB_FETCH_MIN_CONTENT_CHARS,
                 "items": [],
             },

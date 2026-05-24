@@ -60,10 +60,35 @@ def test_web_fetch_returns_unified_web_payload(monkeypatch):
         "truncated": False,
         "content_chars": 38,
         "has_title": True,
+        "has_main_content": False,
         "is_too_short": True,
+        "blocked_or_challenge": False,
         "min_content_chars": 800,
         "items": [],
     }
+
+
+def test_web_fetch_marks_blocked_challenge_payload(monkeypatch):
+    class _BlockedFetcher(_FakeFetcher):
+        def fetch(self, url: str):
+            result = super().fetch(url)
+            result.update(
+                {
+                    "status": 403,
+                    "title": "Access Denied",
+                    "text": "Captcha: verify you are human before continuing.",
+                }
+            )
+            return result
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.WebFetcher", lambda *args, **kwargs: _BlockedFetcher())
+    tool = WebFetchTool()
+
+    payload = json.loads(asyncio.run(tool._execute("https://example.com/blocked")))
+
+    assert payload["blocked_or_challenge"] is True
+    assert payload["has_main_content"] is False
+    assert payload["is_too_short"] is True
 
 
 def test_web_fetch_parameter_default_uses_configured_max_chars():

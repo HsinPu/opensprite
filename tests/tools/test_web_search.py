@@ -309,6 +309,7 @@ def test_searxng_search_fetches_multiple_pages(monkeypatch):
 
     payload = json.loads(asyncio.run(tool._search_searxng("sqlite", 3, "week")))
 
+    assert payload["freshness"] == "week"
     assert [item["title"] for item in payload["items"]] == ["One", "Two", "Three"]
     assert [request[1]["pageno"] for request in fake_client.requests] == [1, 2, 3]
     assert all(request[1]["time_range"] == "week" for request in fake_client.requests)
@@ -343,6 +344,7 @@ def test_duckduckgo_search_prefers_ddgs_package(monkeypatch):
 
     assert payload["provider"] == "duckduckgo"
     assert payload["backend"] == "ddgs"
+    assert payload["freshness"] == "month"
     assert [item["url"] for item in payload["items"]] == [
         "https://qwen.ai/blog/",
         "https://huggingface.co/Qwen",
@@ -359,6 +361,7 @@ def test_duckduckgo_search_reports_missing_ddgs(monkeypatch):
     assert payload["ok"] is False
     assert payload["provider"] == "duckduckgo"
     assert payload["backend"] == "ddgs"
+    assert payload["freshness"] == "none"
     assert payload["items"] == []
     assert "ddgs package is not installed" in payload["error"]
 
@@ -372,6 +375,7 @@ def test_duckduckgo_search_reports_ddgs_no_results(monkeypatch):
     assert payload["ok"] is False
     assert payload["provider"] == "duckduckgo"
     assert payload["backend"] == "ddgs"
+    assert payload["freshness"] == "none"
     assert payload["items"] == []
     assert payload["error"] == "Error: DDGS returned no results for 'sqlite'."
     assert fake.calls == [("sqlite", {"max_results": 1})]
@@ -386,4 +390,5 @@ def test_duckduckgo_search_reports_ddgs_runtime_error(monkeypatch):
     assert payload["ok"] is False
     assert payload["provider"] == "duckduckgo"
     assert payload["backend"] == "ddgs"
+    assert payload["freshness"] == "week"
     assert "rate limited 202" in payload["error"]

@@ -371,6 +371,7 @@ class WebSearchTool(Tool):
                 "duckduckgo",
                 "ddgs package is not installed. Install OpenSprite dependencies and retry.",
                 backend="ddgs",
+                freshness=freshness,
             )
 
         safe_limit = max(1, int(n))
@@ -408,18 +409,42 @@ class WebSearchTool(Tool):
                     items = await asyncio.to_thread(_run_ddgs_search)
                 except Exception as retry_exc:
                     logger.warning("DDGS search failed: %s", retry_exc)
-                    return _format_error(query, "duckduckgo", f"DDGS search failed: {retry_exc}", backend="ddgs")
+                    return _format_error(
+                        query,
+                        "duckduckgo",
+                        f"DDGS search failed: {retry_exc}",
+                        backend="ddgs",
+                        freshness=freshness,
+                    )
             else:
                 logger.warning("DDGS search failed: %s", exc)
-                return _format_error(query, "duckduckgo", f"DDGS search failed: {exc}", backend="ddgs")
+                return _format_error(
+                    query,
+                    "duckduckgo",
+                    f"DDGS search failed: {exc}",
+                    backend="ddgs",
+                    freshness=freshness,
+                )
         except Exception as exc:
             logger.warning("DDGS search failed: %s", exc)
-            return _format_error(query, "duckduckgo", f"DDGS search failed: {exc}", backend="ddgs")
+            return _format_error(
+                query,
+                "duckduckgo",
+                f"DDGS search failed: {exc}",
+                backend="ddgs",
+                freshness=freshness,
+            )
 
         if not items:
             logger.warning("DDGS returned no results for query: %s", query)
-            return _format_error(query, "duckduckgo", f"DDGS returned no results for '{query}'.", backend="ddgs")
-        return _format_results(query, items, n, provider="duckduckgo", backend="ddgs")
+            return _format_error(
+                query,
+                "duckduckgo",
+                f"DDGS returned no results for '{query}'.",
+                backend="ddgs",
+                freshness=freshness,
+            )
+        return _format_results(query, items, n, provider="duckduckgo", backend="ddgs", freshness=freshness)
 
     async def _search_searxng(self, query: str, n: int, freshness: str) -> str:
         base_url = self.config.searxng_url
@@ -459,9 +484,9 @@ class WebSearchTool(Tool):
                             break
                     if len(items) >= n:
                         break
-            return _format_results(query, items, n, provider="searxng")
+            return _format_results(query, items, n, provider="searxng", freshness=freshness)
         except Exception as e:
-            return _format_error(query, "searxng", str(e))
+            return _format_error(query, "searxng", str(e), freshness=freshness)
 
     async def _search_jina(self, query: str, n: int, freshness: str) -> str:
         try:
@@ -488,6 +513,7 @@ class WebSearchTool(Tool):
                 }],
                 n,
                 provider="jina",
+                freshness=freshness,
             )
         except Exception as e:
-            return _format_error(query, "jina", str(e))
+            return _format_error(query, "jina", str(e), freshness=freshness)

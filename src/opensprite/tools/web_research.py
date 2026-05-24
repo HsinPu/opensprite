@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import re
+from datetime import datetime
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
@@ -13,6 +16,22 @@ from .base import Tool
 from .validation import NON_EMPTY_STRING_PATTERN
 from .web_fetch import WEB_FETCH_MIN_CONTENT_CHARS, WebFetchTool
 from .web_search import FRESHNESS_VALUES, WebSearchTool, _effective_freshness, _infer_freshness_from_query
+
+_WEB_RESEARCH_FETCH_CONCURRENCY = 4
+_WEB_RESEARCH_SEARCH_CONCURRENCY = 3
+_RECENT_FRESHNESS_VALUES = {"day", "week", "month"}
+_RECENT_TEXT_MARKERS = (
+    "latest",
+    "newest",
+    "recent",
+    "current",
+    "updated",
+    "update",
+    "release",
+    "released",
+    "announcement",
+    "announced",
+)
 
 
 class WebResearchTool(Tool):
@@ -182,47 +201,19 @@ class WebResearchTool(Tool):
         fetch_candidates = _prioritize_research_candidates(
             search_items,
             existing_sources=fetched_sources,
+            freshness=effective_freshness,
         )
-        for item in fetch_candidates:
-            if len(fetched_sources) >= target_fetches:
-                break
-            url = item.get("url", "")
-            if not url:
-                failed_sources.append({**item, "reason": "missing url"})
-                continue
-            canonical_url = _candidate_url_key(item)
-            if canonical_url in reused_urls:
-                continue
-
-            item_search_provider = str(item.get("search_provider") or search_provider)
-            item_search_backend = str(item.get("search_backend") or search_backend)
-            try:
-                fetch_result = await self.fetch_tool._execute(url=url, max_chars=effective_max_chars)
-            except Exception as exc:
-                failed_sources.append({**item, "reason": f"web_fetch failed: {exc}"[:500]})
-                continue
-            fetch_payload = _parse_json_object(fetch_result)
-            if fetch_payload is None:
-                failed_sources.append({**item, "reason": str(fetch_result or "web_fetch returned no structured result")[:500]})
-                continue
-
-            fetched = _merge_fetch_source(
-                item,
-                fetch_payload,
-                query=str(item.get("source_query") or query),
-                search_provider=item_search_provider,
-                search_backend=item_search_backend,
-            )
-            if fetched.get("blocked_or_challenge"):
-                failed_sources.append({**fetched, "reason": "fetched content looked blocked or challenged"})
-                continue
-            if fetched.get("is_too_short") or not fetched.get("has_main_content"):
-                failed_sources.append({**fetched, "reason": "fetched content was too short"})
-                continue
-            fetched_sources.append(fetched)
-            fetched_by_candidate_url[canonical_url] = fetched
-            reused_urls.add(canonical_url)
-            reused_urls.add(str(fetched.get("canonical_url") or fetched.get("url") or ""))
+        fetched_by_candidate_url = await self._fetch_research_candidates(
+            candidates=fetch_candidates,
+            fetched_sources=fetched_sources,
+            failed_sources=failed_sources,
+            reused_urls=reused_urls,
+            target_fetches=target_fetches,
+            max_chars=effective_max_chars,
+            query=query,
+            search_provider=search_provider,
+            search_backend=search_backend,
+        )
 
         for item in search_items:
             item_search_provider = str(item.get("search_provider") or search_provider)
@@ -256,6 +247,114 @@ class WebResearchTool(Tool):
             reuse_attempts=reuse_attempts,
             queries=research_queries,
         )
+
+    async def _fetch_research_candidates(
+        self,
+        *,
+        candidates: list[dict[str, Any]],
+        fetched_sources: list[dict[str, Any]],
+        failed_sources: list[dict[str, Any]],
+        reused_urls: set[str],
+        target_fetches: int,
+        max_chars: int,
+        query: str,
+        search_provider: str,
+        search_backend: str,
+    ) -> dict[str, dict[str, Any]]:
+        fetched_by_candidate_url: dict[str, dict[str, Any]] = {}
+        cursor = 0
+        while len(fetched_sources) < target_fetches and cursor < len(candidates):
+            remaining_needed = max(target_fetches - len(fetched_sources), 1)
+            batch_size = min(
+                len(candidates) - cursor,
+                max(remaining_needed, min(_WEB_RESEARCH_FETCH_CONCURRENCY, max(target_fetches, 1))),
+            )
+            batch = candidates[cursor : cursor + batch_size]
+            cursor += batch_size
+
+            tasks: list[Any] = []
+            for item in batch:
+                url = _clean_text(item.get("url"))
+                if not url:
+                    failed_sources.append({**item, "reason": "missing url"})
+                    continue
+                if not _is_fetchable_url(url):
+                    failed_sources.append({**item, "reason": "unsupported url"})
+                    continue
+                canonical_url = _candidate_url_key(item)
+                if canonical_url in reused_urls:
+                    continue
+                tasks.append(
+                    self._fetch_single_candidate(
+                        item,
+                        max_chars=max_chars,
+                        query=query,
+                        search_provider=search_provider,
+                        search_backend=search_backend,
+                    )
+                )
+
+            if not tasks:
+                continue
+
+            for canonical_url, fetched, failed in await asyncio.gather(*tasks):
+                if failed is not None:
+                    failed_sources.append(failed)
+                    continue
+                if fetched is None:
+                    continue
+                final_url_key = str(fetched.get("canonical_url") or fetched.get("url") or "")
+                if final_url_key and final_url_key in reused_urls and final_url_key != canonical_url:
+                    failed_sources.append({**fetched, "reason": "duplicate final url"})
+                    continue
+                if fetched.get("blocked_or_challenge"):
+                    failed_sources.append({**fetched, "reason": "fetched content looked blocked or challenged"})
+                    continue
+                if fetched.get("is_too_short") or not fetched.get("has_main_content"):
+                    failed_sources.append({**fetched, "reason": "fetched content was too short"})
+                    continue
+
+                fetched_sources.append(fetched)
+                fetched_by_candidate_url[canonical_url] = fetched
+                reused_urls.add(canonical_url)
+                if final_url_key:
+                    reused_urls.add(final_url_key)
+                if len(fetched_sources) >= target_fetches:
+                    break
+
+        return fetched_by_candidate_url
+
+    async def _fetch_single_candidate(
+        self,
+        item: dict[str, Any],
+        *,
+        max_chars: int,
+        query: str,
+        search_provider: str,
+        search_backend: str,
+    ) -> tuple[str, dict[str, Any] | None, dict[str, Any] | None]:
+        canonical_url = _candidate_url_key(item)
+        url = _clean_text(item.get("url"))
+        item_search_provider = str(item.get("search_provider") or search_provider)
+        item_search_backend = str(item.get("search_backend") or search_backend)
+        try:
+            fetch_result = await self.fetch_tool._execute(url=url, max_chars=max_chars)
+        except Exception as exc:
+            return canonical_url, None, {**item, "reason": f"web_fetch failed: {exc}"[:500]}
+        fetch_payload = _parse_json_object(fetch_result)
+        if fetch_payload is None:
+            return canonical_url, None, {
+                **item,
+                "reason": str(fetch_result or "web_fetch returned no structured result")[:500],
+            }
+
+        return canonical_url, _merge_fetch_source(
+            item,
+            fetch_payload,
+            query=str(item.get("source_query") or query),
+            search_provider=item_search_provider,
+            search_backend=item_search_backend,
+        ), None
 
     async def _reuse_knowledge_sources_for_queries(
         self,
@@ -339,12 +438,21 @@ class WebResearchTool(Tool):
         selected_backend = ""
         fallback_provider = ""
         fallback_backend = ""
-        for current_query in queries:
-            payload, items, provider, backend, attempts = await self._search_with_fallback(
-                query=current_query,
-                count=count,
-                freshness=freshness,
-            )
+        semaphore = asyncio.Semaphore(_WEB_RESEARCH_SEARCH_CONCURRENCY)
+
+        async def run_query(current_query: str):
+            async with semaphore:
+                return await self._search_with_fallback(
+                    query=current_query,
+                    count=count,
+                    freshness=freshness,
+                )
+
+        results = await asyncio.gather(
+            *(run_query(current_query) for current_query in queries)
+        )
+        for current_query, result in zip(queries, results):
+            payload, items, provider, backend, attempts = result
             all_attempts.extend(attempts)
             query_attempts.append(_query_attempt_payload(current_query, provider, backend, payload, items, attempts))
             if not fallback_provider and provider:
@@ -391,7 +499,7 @@ class WebResearchTool(Tool):
             last_provider = provider_name
             last_backend = backend_name
             items = _dedupe_search_items(_coerce_search_items(payload or {}), limit=count) if payload else []
-            fetchable_count = sum(1 for item in items if item.get("url"))
+            fetchable_count = sum(1 for item in items if _is_fetchable_url(item.get("url")))
             attempts.append(
                 _search_attempt_payload(
                     configured_provider=provider,
@@ -406,7 +514,16 @@ class WebResearchTool(Tool):
             if payload is not None and fetchable_count > 0:
                 return (
                     payload,
-                    [{**item, "search_provider": provider_name, "search_backend": backend_name, "source_query": query} for item in items],
+                    [
+                        {
+                            **item,
+                            "search_provider": provider_name,
+                            "search_backend": backend_name,
+                            "search_freshness": str((payload or {}).get("freshness") or freshness),
+                            "source_query": query,
+                        }
+                        for item in items
+                    ],
                     provider_name,
                     backend_name,
                     attempts,
@@ -717,16 +834,22 @@ def _prioritize_research_candidates(
     items: list[dict[str, Any]],
     *,
     existing_sources: list[dict[str, Any]],
+    freshness: str,
 ) -> list[dict[str, Any]]:
     if len(items) <= 1:
         return items
+    ordered_items = sorted(
+        enumerate(items),
+        key=lambda pair: (_candidate_priority(pair[1], freshness), pair[0]),
+    )
+    ordered = [item for _, item in ordered_items]
     item_queries = {_candidate_query(item) for item in items}
     item_queries.discard("")
     if len(item_queries) <= 1:
-        return items
+        return ordered
 
     selected: list[dict[str, Any]] = []
-    remaining = list(items)
+    remaining = list(ordered)
     covered_domains = {_candidate_domain(source) for source in existing_sources}
     covered_domains.discard("")
     covered_queries = {_candidate_query(source) for source in existing_sources}
@@ -754,6 +877,36 @@ def _prioritize_research_candidates(
     take_candidates(require_new_query=False, require_new_domain=True)
     selected.extend(remaining)
     return selected
+
+
+def _candidate_priority(item: dict[str, Any], freshness: str) -> tuple[int, int, int]:
+    fetchable_penalty = 0 if _is_fetchable_url(item.get("url")) else 1
+    recent_bonus = _candidate_recent_score(item) if freshness in _RECENT_FRESHNESS_VALUES else 0
+    rank = _coerce_int(item.get("rank"), default=9999)
+    return (fetchable_penalty, -recent_bonus, rank)
+
+
+def _candidate_recent_score(item: dict[str, Any]) -> int:
+    text = " ".join(
+        _clean_text(item.get(key)).lower()
+        for key in ("title", "content", "snippet", "url")
+    )
+    if not text:
+        return 0
+    current_year = str(datetime.now().year)
+    score = 0
+    if current_year in text:
+        score += 4
+    if re.search(r"\b20\d{2}[-/.](0?[1-9]|1[0-2])([-/.](0?[1-9]|[12]\d|3[01]))?\b", text):
+        score += 2
+    if any(marker in text for marker in _RECENT_TEXT_MARKERS):
+        score += 1
+    return score
+
+
+def _is_fetchable_url(url: Any) -> bool:
+    parsed = urlsplit(_clean_text(url))
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
 
 
 def _candidate_url_key(item: dict[str, Any]) -> str:
@@ -833,6 +986,7 @@ def _merge_fetch_source(
         "source_query": query,
         "search_provider": search_provider,
         "search_backend": search_backend,
+        "search_freshness": _clean_text(item.get("search_freshness")),
         "search_rank": item.get("rank"),
     }
 
