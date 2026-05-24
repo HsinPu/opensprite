@@ -107,6 +107,7 @@ from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
+from . import web_settings_coercion, web_settings_reload
 from .web_routes import register_web_routes
 
 
@@ -782,218 +783,93 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _coerce_approval_mode(cls, value: Any) -> str | None:
-        if value is None or value == "":
-            return None
-        mode = str(value or "").strip().lower()
-        if mode not in APPROVAL_MODES:
-            raise web.HTTPBadRequest(text=f"approval_mode must be one of: {', '.join(sorted(APPROVAL_MODES))}")
-        return mode
+        return web_settings_coercion.coerce_approval_mode(value, approval_modes=APPROVAL_MODES)
 
     @classmethod
     def _coerce_risk_level_list(cls, value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
-        values = cls._coerce_text_list(value, field=field, default=default)
-        invalid = [item for item in values if item not in ALL_RISK_LEVELS]
-        if invalid:
-            raise web.HTTPBadRequest(text=f"{field} contains invalid risk level(s): {', '.join(invalid)}")
-        return values
+        return web_settings_coercion.coerce_risk_level_list(
+            value,
+            field=field,
+            default=default,
+            all_risk_levels=ALL_RISK_LEVELS,
+        )
 
     @classmethod
     def _coerce_permission_profile_overrides(cls, value: Any, *, default: dict[str, ToolPermissionProfileOverrideConfig]) -> dict[str, ToolPermissionProfileOverrideConfig]:
-        if value is None:
-            return dict(default)
-        if not isinstance(value, dict):
-            raise web.HTTPBadRequest(text="profile_overrides must be a JSON object")
-        allowed_profiles = {"chat", "research", "coding", "media", "ops"}
-        result: dict[str, ToolPermissionProfileOverrideConfig] = {}
-        for profile, raw_override in value.items():
-            profile_name = str(profile or "").strip().lower()
-            if profile_name not in allowed_profiles:
-                raise web.HTTPBadRequest(text=f"profile_overrides contains unknown profile: {profile}")
-            if not isinstance(raw_override, dict):
-                raise web.HTTPBadRequest(text=f"profile_overrides.{profile_name} must be a JSON object")
-            try:
-                override = ToolPermissionProfileOverrideConfig.model_validate(raw_override)
-            except ValidationError as exc:
-                raise web.HTTPBadRequest(text=str(exc)) from exc
-            invalid = sorted((set(override.allowed_risk_levels) | set(override.denied_risk_levels) | set(override.approval_required_risk_levels)) - ALL_RISK_LEVELS)
-            if invalid:
-                raise web.HTTPBadRequest(text=f"profile_overrides.{profile_name} contains invalid risk level(s): {', '.join(invalid)}")
-            result[profile_name] = override
-        return result
+        return web_settings_coercion.coerce_permission_profile_overrides(
+            value,
+            default=default,
+            all_risk_levels=ALL_RISK_LEVELS,
+        )
 
     @classmethod
     def _coerce_log_level(cls, value: Any) -> str:
-        level = str(value or DEFAULT_LOG_LEVEL).strip().upper()
-        if level not in cls.LOG_LEVELS:
-            raise web.HTTPBadRequest(text=f"level must be one of: {', '.join(cls.LOG_LEVELS)}")
-        return level
+        return web_settings_coercion.coerce_log_level(value, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
     @staticmethod
     def _coerce_positive_int(value: Any, *, field: str, default: int, minimum: int = 0, maximum: int = 3650) -> int:
-        if value is None or value == "":
-            return default
-        try:
-            number = int(value)
-        except (TypeError, ValueError) as exc:
-            raise web.HTTPBadRequest(text=f"{field} must be an integer") from exc
-        if number < minimum:
-            raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
-        if number > maximum:
-            raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
-        return number
+        return web_settings_coercion.coerce_positive_int(value, field=field, default=default, minimum=minimum, maximum=maximum)
 
     @staticmethod
     def _coerce_float_range(value: Any, *, field: str, default: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
-        if value is None or value == "":
-            return default
-        try:
-            number = float(value)
-        except (TypeError, ValueError) as exc:
-            raise web.HTTPBadRequest(text=f"{field} must be a number") from exc
-        if number < minimum:
-            raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
-        if number > maximum:
-            raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
-        return number
+        return web_settings_coercion.coerce_float_range(value, field=field, default=default, minimum=minimum, maximum=maximum)
 
     @staticmethod
     def _coerce_bool(value: Any, *, field: str, default: bool) -> bool:
-        if value is None:
-            return default
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, int) and value in (0, 1):
-            return bool(value)
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            if normalized in {"1", "true", "yes", "on"}:
-                return True
-            if normalized in {"0", "false", "no", "off"}:
-                return False
-        raise web.HTTPBadRequest(text=f"{field} must be a boolean")
+        return web_settings_coercion.coerce_bool(value, field=field, default=default)
 
     @classmethod
     def _coerce_browser_backend(cls, value: Any) -> str:
-        backend = str(value or DEFAULT_BROWSER_BACKEND).strip() or DEFAULT_BROWSER_BACKEND
-        if backend not in cls.BROWSER_BACKENDS:
-            raise web.HTTPBadRequest(text=f"backend must be one of: {', '.join(cls.BROWSER_BACKENDS)}")
-        return backend
+        return web_settings_coercion.coerce_browser_backend(
+            value,
+            default_backend=DEFAULT_BROWSER_BACKEND,
+            backends=cls.BROWSER_BACKENDS,
+        )
 
     @classmethod
     def _coerce_web_search_provider(cls, value: Any) -> str:
-        provider = str(value or DEFAULT_WEB_SEARCH_PROVIDER).strip().lower() or DEFAULT_WEB_SEARCH_PROVIDER
-        if provider not in cls.WEB_SEARCH_PROVIDERS:
-            raise web.HTTPBadRequest(text=f"provider must be one of: {', '.join(cls.WEB_SEARCH_PROVIDERS)}")
-        return provider
+        return web_settings_coercion.coerce_web_search_provider(
+            value,
+            default_provider=DEFAULT_WEB_SEARCH_PROVIDER,
+            providers=cls.WEB_SEARCH_PROVIDERS,
+        )
 
     @classmethod
     def _coerce_web_search_freshness(cls, value: Any) -> str:
-        freshness = str(value or DEFAULT_WEB_SEARCH_FRESHNESS).strip().lower() or DEFAULT_WEB_SEARCH_FRESHNESS
-        if freshness not in cls.WEB_SEARCH_FRESHNESS:
-            raise web.HTTPBadRequest(text=f"freshness must be one of: {', '.join(cls.WEB_SEARCH_FRESHNESS)}")
-        return freshness
+        return web_settings_coercion.coerce_web_search_freshness(
+            value,
+            default_freshness=DEFAULT_WEB_SEARCH_FRESHNESS,
+            freshness_values=cls.WEB_SEARCH_FRESHNESS,
+        )
 
     @staticmethod
     def _coerce_text_list(value: Any, *, field: str, default: list[str] | None = None) -> list[str]:
-        if value is None or value == "":
-            return list(default or [])
-        if isinstance(value, str):
-            candidates = value.replace("\n", ",").split(",")
-        elif isinstance(value, (list, tuple, set)):
-            candidates = value
-        else:
-            raise web.HTTPBadRequest(text=f"{field} must be a list or comma-separated text")
-        items: list[str] = []
-        for item in candidates:
-            text = str(item or "").strip()
-            if text and text not in items:
-                items.append(text)
-        return items
+        return web_settings_coercion.coerce_text_list(value, field=field, default=default)
 
     @classmethod
     def _normalize_searxng_engine_options(cls, engines: Any) -> list[dict[str, Any]]:
-        if not isinstance(engines, list):
-            return []
-        options: list[dict[str, Any]] = []
-        seen: set[str] = set()
-        for engine in engines:
-            if isinstance(engine, str):
-                engine_id = engine.strip()
-                label = engine_id
-                shortcut = ""
-                categories: list[str] = []
-                enabled = None
-            elif isinstance(engine, dict):
-                engine_id = str(engine.get("name") or engine.get("id") or "").strip()
-                label = str(engine.get("display_name") or engine.get("displayName") or engine_id).strip()
-                shortcut = str(engine.get("shortcut") or "").strip()
-                categories = cls._coerce_text_list(engine.get("categories", []), field="categories", default=[])
-                enabled = engine.get("enabled") if isinstance(engine.get("enabled"), bool) else None
-            else:
-                continue
-            if not engine_id or engine_id in seen:
-                continue
-            seen.add(engine_id)
-            options.append({
-                "id": engine_id,
-                "label": label or engine_id,
-                "shortcut": shortcut,
-                "categories": categories,
-                "enabled": enabled,
-            })
-        return options
+        return web_settings_coercion.normalize_searxng_engine_options(engines)
 
     @classmethod
     def _normalize_searxng_category_options(cls, categories: Any) -> list[dict[str, str]]:
-        if isinstance(categories, dict):
-            candidates = list(categories.keys())
-        else:
-            candidates = categories
-        options: list[dict[str, str]] = []
-        seen: set[str] = set()
-        for category in cls._coerce_text_list(candidates, field="categories", default=[]):
-            if category in seen:
-                continue
-            seen.add(category)
-            options.append({"id": category, "label": category})
-        return options
+        return web_settings_coercion.normalize_searxng_category_options(categories)
 
     @classmethod
     def _searxng_options_payload(cls, config_payload: dict[str, Any], *, url: str) -> dict[str, Any]:
-        engines = cls._normalize_searxng_engine_options(config_payload.get("engines"))
-        categories = cls._normalize_searxng_category_options(config_payload.get("categories"))
-        if not categories:
-            category_names: list[str] = []
-            for engine in engines:
-                category_names.extend(engine.get("categories") or [])
-            categories = cls._normalize_searxng_category_options(category_names)
-        return {
-            "url": url,
-            "engines": engines,
-            "categories": categories,
-            "fallback": False,
-            "warning": "",
-        }
+        return web_settings_coercion.searxng_options_payload(config_payload, url=url)
 
     @classmethod
     def _fallback_searxng_options_payload(cls, *, url: str, warning: str) -> dict[str, Any]:
-        return {
-            "url": url,
-            "engines": [
-                {"id": engine, "label": engine, "shortcut": "", "categories": [], "enabled": None}
-                for engine in cls.SEARXNG_FALLBACK_ENGINES
-            ],
-            "categories": [{"id": category, "label": category} for category in cls.SEARXNG_FALLBACK_CATEGORIES],
-            "fallback": True,
-            "warning": warning,
-        }
+        return web_settings_coercion.fallback_searxng_options_payload(
+            url=url,
+            warning=warning,
+            fallback_engines=cls.SEARXNG_FALLBACK_ENGINES,
+            fallback_categories=cls.SEARXNG_FALLBACK_CATEGORIES,
+        )
 
     @staticmethod
     def _searxng_config_url(searxng_url: str) -> str:
-        base = str(searxng_url or "").strip().rstrip("/")
-        if base.lower().endswith("/search"):
-            base = base[:-len("/search")]
-        return join_url_path(base, "/config")
+        return web_settings_coercion.searxng_config_url(searxng_url)
 
     def _apply_optional_secret_field(self, target: Any, body: dict[str, Any], field: str) -> None:
         clear_field = f"clear_{field}"
@@ -1008,215 +884,35 @@ class WebAdapter(MessageAdapter):
 
     def _reload_agent_llm_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted LLM settings to the running agent when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        reload_llm = getattr(agent, "reload_llm_from_config", None) if agent is not None else None
-        if not callable(reload_llm):
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            runtime = reload_llm(Config.load(self._get_config_path()))
-        except Exception as exc:
-            logger.warning("LLM runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["runtime"] = self._json_safe(runtime)
-        return updated
+        return web_settings_reload.reload_agent_llm_from_config(self, payload, force=force, logger=logger)
 
     async def _reload_channels_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted channel settings to running adapters when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        manager = getattr(self.mq, "channel_manager", None)
-        apply_channels = getattr(manager, "apply", None)
-        if not callable(apply_channels):
-            return payload
-
-        updated = dict(payload)
-        try:
-            runtime = await apply_channels(Config.load(self._get_config_path()).channels, include_fixed=False)
-        except Exception as exc:
-            logger.warning("Channel runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        runtime_ok = bool(runtime.get("ok"))
-        updated["restart_required"] = not runtime_ok
-        updated["runtime_reloaded"] = runtime_ok
-        updated["runtime"] = self._json_safe(runtime)
-        return updated
+        return await web_settings_reload.reload_channels_from_config(self, payload, force=force, logger=logger)
 
     def _reload_schedule_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted scheduling settings to the running agent when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        if agent is None:
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            config = Config.load(self._get_config_path())
-        except Exception as exc:
-            logger.warning("Schedule runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        agent.tools_config = config.tools
-        cron_tool = getattr(getattr(agent, "tools", None), "get", lambda _name: None)("cron")
-        set_default_timezone = getattr(cron_tool, "set_default_timezone", None)
-        tool_updated = False
-        if callable(set_default_timezone):
-            set_default_timezone(config.tools.cron.default_timezone)
-            tool_updated = True
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["runtime"] = {
-            "default_timezone": config.tools.cron.default_timezone,
-            "tool_updated": tool_updated,
-        }
-        return updated
+        return web_settings_reload.reload_schedule_from_config(self, payload, force=force, logger=logger)
 
     def _reload_permissions_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted tool permission settings to the running agent when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        tools = getattr(agent, "tools", None) if agent is not None else None
-        set_permission_policy = getattr(tools, "set_permission_policy", None)
-        if agent is None or not callable(set_permission_policy):
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            config = Config.load(self._get_config_path())
-            agent.tools_config = config.tools
-            set_permission_policy(ToolPermissionPolicy.from_config(config.tools.permissions))
-        except Exception as exc:
-            logger.warning("Tool permission runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        return updated
+        return web_settings_reload.reload_permissions_from_config(self, payload, force=force, logger=logger)
 
     def _reload_media_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted media settings to the running agent when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        reload_media = getattr(agent, "reload_media_from_config", None) if agent is not None else None
-        if not callable(reload_media):
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            runtime = reload_media(Config.load(self._get_config_path()))
-        except Exception as exc:
-            logger.warning("Media runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["runtime"] = self._json_safe(runtime)
-        return updated
+        return web_settings_reload.reload_media_from_config(self, payload, force=force, logger=logger)
 
     def _reload_web_search_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted web search settings to running web tools when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        reload_web_search = getattr(agent, "reload_web_search_from_config", None) if agent is not None else None
-        if not callable(reload_web_search):
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            runtime = reload_web_search(Config.load(self._get_config_path()))
-        except Exception as exc:
-            logger.warning("Web search runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["runtime"] = self._json_safe(runtime)
-        return updated
+        return web_settings_reload.reload_web_search_from_config(self, payload, force=force, logger=logger)
 
     def _reload_browser_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted browser settings to running browser tools when possible."""
-        if not force and not payload.get("restart_required"):
-            return payload
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        reload_browser = getattr(agent, "reload_browser_from_config", None) if agent is not None else None
-        if not callable(reload_browser):
-            updated["runtime_reloaded"] = False
-            return updated
-
-        try:
-            runtime = reload_browser(Config.load(self._get_config_path()))
-        except Exception as exc:
-            logger.warning("Browser runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return updated
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["runtime"] = self._json_safe(runtime)
-        return updated
+        return web_settings_reload.reload_browser_from_config(self, payload, force=force, logger=logger)
 
     async def _reload_mcp_from_config(self, payload: dict[str, Any], *, force: bool = False) -> dict[str, Any]:
         """Hot-apply persisted MCP settings to the running agent when possible."""
-        if not force and not payload.get("restart_required"):
-            return self._with_mcp_runtime(payload)
-
-        updated = dict(payload)
-        agent = self._get_agent()
-        reload_mcp = getattr(agent, "reload_mcp_from_config", None) if agent is not None else None
-        if not callable(reload_mcp):
-            updated["runtime_reloaded"] = False
-            return self._with_mcp_runtime(updated)
-
-        try:
-            reload_message = await reload_mcp()
-        except Exception as exc:
-            logger.warning("MCP runtime reload failed after settings change: {}", exc)
-            updated["runtime_reloaded"] = False
-            updated["reload_error"] = str(exc)
-            return self._with_mcp_runtime(updated)
-
-        updated["restart_required"] = False
-        updated["runtime_reloaded"] = True
-        updated["reload_message"] = reload_message
-        return self._with_mcp_runtime(updated)
+        return await web_settings_reload.reload_mcp_from_config(self, payload, force=force, logger=logger)
 
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
