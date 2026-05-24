@@ -1267,6 +1267,17 @@ button:disabled {
     padding: 6px 0 8px;
   }
 
+  .app-shell--sidebar-collapsed .sidebar__top {
+    align-content: start;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .app-shell--sidebar-collapsed .sidebar__section {
+    grid-template-rows: minmax(0, 1fr);
+    gap: 0;
+    overflow: hidden;
+  }
+
   .app-shell--sidebar-collapsed .brand-row__copy,
   .app-shell--sidebar-collapsed .new-chat-button__label,
   .app-shell--sidebar-collapsed .sidebar__section-head,
@@ -1361,18 +1372,32 @@ button:disabled {
   }
 
   .app-shell--sidebar-collapsed .session-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     gap: 6px;
-    padding-right: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 2px 0;
+    scrollbar-width: none;
+  }
+
+  .app-shell--sidebar-collapsed .session-list::-webkit-scrollbar {
+    display: none;
   }
 
   .app-shell--sidebar-collapsed .session-tile-wrap {
     grid-template-columns: 1fr;
+    width: 40px;
+    border-radius: 999px;
   }
 
   .app-shell--sidebar-collapsed .session-tile {
     place-items: center;
-    min-height: 42px;
+    width: 40px;
+    min-height: 40px;
     padding: 0;
+    border-radius: 999px;
   }
 
   .app-shell--sidebar-collapsed .session-tile__initial {
@@ -5594,9 +5619,30 @@ button:disabled {
   flex-direction: column;
   justify-content: space-between;
   gap: 22px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 22px 12px 18px;
   border-right: 1px solid var(--border-soft);
   background: var(--panel-muted);
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-nav::-webkit-scrollbar {
+  width: 10px;
+}
+
+.settings-nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-nav::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--border);
+  background-clip: padding-box;
 }
 
 .settings-nav__group {
