@@ -106,6 +106,7 @@ from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, ToolPermissionP
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
+from . import web_frontend_runtime
 from .web_routes import register_web_routes
 
 
@@ -259,169 +260,53 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     def _is_frontend_source_dir(path: Path) -> bool:
-        return (path / "package.json").is_file()
+        return web_frontend_runtime.is_frontend_source_dir(path)
 
     def _resolve_frontend_source_dir(self) -> Path | None:
-        configured = str(self.config.get("frontend_source_dir", "") or "").strip()
-        configured_static = str(self.config.get("static_dir", "") or "").strip()
-        candidates: list[Path] = []
-        if configured:
-            candidates.append(Path(configured).expanduser())
-        if configured_static:
-            candidates.append(Path(configured_static).expanduser())
-
-        if not configured_static:
-            module_path = Path(__file__).resolve()
-            candidates.extend(
-                [
-                    module_path.parents[3] / "apps" / "web",
-                    Path.cwd() / "apps" / "web",
-                ]
-            )
-
-        for candidate in candidates:
-            resolved = candidate.expanduser().resolve(strict=False)
-            if self._is_frontend_source_dir(resolved):
-                return resolved
-        return None
+        return web_frontend_runtime.resolve_frontend_source_dir(self.config, module_path=Path(__file__).resolve())
 
     @staticmethod
     def _trim_process_output(value: str | None, limit: int = 2000) -> str:
-        if not value:
-            return ""
-        stripped = value.strip()
-        if len(stripped) <= limit:
-            return stripped
-        return f"...{stripped[-limit:]}"
+        return web_frontend_runtime.trim_process_output(value, limit=limit)
 
     def _resolve_npm_executable(self) -> str | None:
-        preferred = "npm.cmd" if os.name == "nt" else "npm"
-        return shutil.which(preferred) or shutil.which("npm")
+        return web_frontend_runtime.resolve_npm_executable()
 
     def _is_frontend_auto_build_enabled(self) -> bool:
         value = self.config.get("frontend_auto_build", self.DEFAULT_CONFIG["frontend_auto_build"])
-        if isinstance(value, str):
-            return value.strip().lower() not in {"0", "false", "no", "off"}
-        return bool(value)
+        return web_frontend_runtime.is_feature_enabled(value)
 
     def _is_frontend_auto_install_enabled(self) -> bool:
         value = self.config.get("frontend_auto_install", self.DEFAULT_CONFIG["frontend_auto_install"])
-        if isinstance(value, str):
-            return value.strip().lower() not in {"0", "false", "no", "off"}
-        return bool(value)
+        return web_frontend_runtime.is_feature_enabled(value)
 
     def _frontend_dependencies_ready(self, source_dir: Path) -> bool:
-        bin_dir = source_dir / "node_modules" / ".bin"
-        return (bin_dir / "vite").is_file() or (bin_dir / "vite.cmd").is_file()
+        return web_frontend_runtime.frontend_dependencies_ready(source_dir)
 
     def _run_frontend_command(self, source_dir: Path, args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
-        run_kwargs: dict[str, object] = {}
-        if os.name == "nt":
-            run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            startupinfo_type = getattr(subprocess, "STARTUPINFO", None)
-            if startupinfo_type is not None:
-                startupinfo = startupinfo_type()
-                startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
-                startupinfo.wShowWindow = 0
-                run_kwargs["startupinfo"] = startupinfo
-        return subprocess.run(
-            args,
-            cwd=source_dir,
-            capture_output=True,
-            check=False,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            **run_kwargs,
-        )
+        return web_frontend_runtime.run_frontend_command(source_dir, args, timeout)
 
     def _maybe_install_frontend_dependencies(self, source_dir: Path, npm: str) -> bool:
-        if self._frontend_dependencies_ready(source_dir):
-            return True
-        if not self._is_frontend_auto_install_enabled():
-            logger.warning("Skipping web frontend dependency install because frontend_auto_install is disabled")
-            return False
-
-        install_command = [npm, "ci"] if (source_dir / "package-lock.json").is_file() else [npm, "install"]
-        logger.info("Installing web frontend dependencies before build: {}", source_dir)
-        try:
-            result = self._run_frontend_command(source_dir, install_command, self._get_frontend_install_timeout())
-        except subprocess.TimeoutExpired:
-            logger.warning("Web frontend dependency install timed out after {} seconds", self._get_frontend_install_timeout())
-            return False
-        except OSError as exc:
-            logger.warning("Web frontend dependency install could not start: {}", exc)
-            return False
-
-        if result.returncode != 0:
-            logger.warning(
-                "Web frontend dependency install failed with exit code {} | stdout={} | stderr={}",
-                result.returncode,
-                self._trim_process_output(result.stdout),
-                self._trim_process_output(result.stderr),
-            )
-            return False
-
-        return True
-
-    def _maybe_build_frontend(self) -> None:
-        if not self._is_frontend_auto_build_enabled():
-            return
-
-        source_dir = self._resolve_frontend_source_dir()
-        if source_dir is None:
-            return
-
-        npm = self._resolve_npm_executable()
-        if npm is None:
-            logger.warning("Skipping web frontend build because npm was not found")
-            return
-
-        if not self._maybe_install_frontend_dependencies(source_dir, npm):
-            return
-
-        logger.info("Building web frontend before gateway startup: {}", source_dir)
-        try:
-            result = self._run_frontend_command(source_dir, [npm, "run", "build"], self._get_frontend_build_timeout())
-        except subprocess.TimeoutExpired:
-            logger.warning("Web frontend build timed out after {} seconds", self._get_frontend_build_timeout())
-            return
-        except OSError as exc:
-            logger.warning("Web frontend build could not start: {}", exc)
-            return
-
-        if result.returncode != 0:
-            logger.warning(
-                "Web frontend build failed with exit code {} | stdout={} | stderr={}",
-                result.returncode,
-                self._trim_process_output(result.stdout),
-                self._trim_process_output(result.stderr),
-            )
-            return
-
-        logger.info("Web frontend build completed")
-
-    def _resolve_frontend_dir(self) -> Path | None:
-        configured = str(self.config.get("static_dir", "") or "").strip()
-        candidates: list[Path] = []
-        if configured:
-            resolved = Path(configured).expanduser().resolve(strict=False)
-            candidates.append(resolved / "dist" if self._is_frontend_source_dir(resolved) else resolved)
-
-        module_path = Path(__file__).resolve()
-        candidates.extend(
-            [
-                module_path.parents[3] / "apps" / "web" / "dist",
-                Path.cwd() / "apps" / "web" / "dist",
-            ]
+        return web_frontend_runtime.maybe_install_frontend_dependencies(
+            source_dir,
+            npm,
+            auto_install_enabled=self._is_frontend_auto_install_enabled(),
+            install_timeout=self._get_frontend_install_timeout(),
+            logger=logger,
         )
 
-        for candidate in candidates:
-            resolved = candidate.expanduser().resolve(strict=False)
-            if (resolved / "index.html").is_file():
-                return resolved
-        return None
+    def _maybe_build_frontend(self) -> None:
+        web_frontend_runtime.maybe_build_frontend(
+            self.config,
+            default_config=self.DEFAULT_CONFIG,
+            module_path=Path(__file__).resolve(),
+            build_timeout=self._get_frontend_build_timeout(),
+            install_timeout=self._get_frontend_install_timeout(),
+            logger=logger,
+        )
+
+    def _resolve_frontend_dir(self) -> Path | None:
+        return web_frontend_runtime.resolve_frontend_dir(self.config, module_path=Path(__file__).resolve())
 
     def _resolve_frontend_asset(self, asset_path: str) -> Path:
         if self._frontend_dir is None:
@@ -535,35 +420,11 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     def _browser_runtime_status() -> dict[str, Any]:
-        command = WebAdapter._browser_command_prefix()
-        if command and len(command) == 1:
-            return {
-                "available": True,
-                "command": command[0],
-                "install_hint": "",
-            }
-        if command:
-            return {
-                "available": True,
-                "command": " ".join(command),
-                "install_hint": "agent-browser is not on PATH; OpenSprite will fall back to npx agent-browser.",
-            }
-        return {
-            "available": False,
-            "command": "",
-            "install_hint": "Install agent-browser on PATH, or install Node.js/npm so npx agent-browser can run.",
-        }
+        return web_frontend_runtime.browser_runtime_status(WebAdapter._browser_command_prefix())
 
     @staticmethod
     def _browser_command_prefix() -> list[str]:
-        agent_browser = shutil.which("agent-browser")
-        if agent_browser:
-            return [agent_browser]
-
-        npx = shutil.which("npx") or shutil.which("npx.cmd")
-        if npx:
-            return [npx, "agent-browser"]
-        return []
+        return web_frontend_runtime.browser_command_prefix()
 
     @classmethod
     async def _run_browser_doctor_command(
@@ -573,68 +434,23 @@ class WebAdapter(MessageAdapter):
         timeout: int = 20,
         launch_args: str = "",
     ) -> dict[str, Any]:
-        command_prefix = cls._browser_command_prefix()
-        if not command_prefix:
-            return {"ok": False, "exit_code": None, "stdout": "", "stderr": "agent-browser and npx were not found."}
-        effective_launch_args = str(launch_args or "").strip()
-        global_args = ["--args", effective_launch_args] if effective_launch_args and args != ["--version"] else []
-        argv = [*command_prefix, *global_args, *args]
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *argv,
-                stdin=asyncio.subprocess.DEVNULL,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(1, timeout))
-        except asyncio.TimeoutError:
-            return cls._with_browser_diagnostic({"ok": False, "exit_code": None, "stdout": "", "stderr": f"command timed out after {timeout}s"})
-        except OSError as exc:
-            return cls._with_browser_diagnostic({"ok": False, "exit_code": None, "stdout": "", "stderr": str(exc)})
-        stdout_text = stdout.decode("utf-8", errors="replace").strip()
-        stderr_text = stderr.decode("utf-8", errors="replace").strip()
-        return cls._with_browser_diagnostic(
-            {
-                "ok": proc.returncode == 0,
-                "exit_code": proc.returncode,
-                "stdout": stdout_text[-4000:],
-                "stderr": stderr_text[-4000:],
-            }
+        return await web_frontend_runtime.run_browser_doctor_command(
+            args,
+            timeout=timeout,
+            launch_args=launch_args,
+            command_prefix=cls._browser_command_prefix(),
         )
 
     @classmethod
     async def _run_browser_install_command(cls, *, timeout: int = 300) -> dict[str, Any]:
-        return await cls._run_browser_doctor_command(["install"], timeout=timeout)
+        return await web_frontend_runtime.run_browser_install_command(
+            timeout=timeout,
+            command_prefix=cls._browser_command_prefix(),
+        )
 
     @staticmethod
     def _with_browser_diagnostic(result: dict[str, Any] | None) -> dict[str, Any]:
-        payload = dict(result or {})
-        text = "\n".join(str(payload.get(key) or "") for key in ("error", "stderr", "stdout")).lower()
-        if payload.get("ok") is True or payload.get("success") is True:
-            payload["diagnostic_code"] = "ok"
-            payload["suggestion"] = ""
-        elif "agent-browser and npx were not found" in text or "agent-browser cli was not found" in text:
-            payload["diagnostic_code"] = "cli_missing"
-            payload["suggestion"] = "Install agent-browser on PATH, or install Node.js/npm so OpenSprite can run npx agent-browser."
-        elif "timed out" in text or "timeout" in text:
-            payload["diagnostic_code"] = "timeout"
-            payload["suggestion"] = "Increase command timeout or retry after closing stale browser sessions."
-        elif "no usable sandbox" in text or "--no-sandbox" in text:
-            payload["diagnostic_code"] = "sandbox_unavailable"
-            payload["suggestion"] = "Use Browser launch args: --no-sandbox, or fix Linux Chromium sandbox support."
-        elif "install --with-deps" in text or "missing dependencies" in text or "system dependencies" in text:
-            payload["diagnostic_code"] = "system_deps_missing"
-            payload["suggestion"] = "Run agent-browser install --with-deps on Linux, then retry the browser test."
-        elif "executable" in text and ("not found" in text or "doesn't exist" in text or "missing" in text):
-            payload["diagnostic_code"] = "browser_missing"
-            payload["suggestion"] = "Run agent-browser install to download the managed Chromium browser."
-        elif "cdp" in text and ("refused" in text or "unreachable" in text or "failed" in text or "could not" in text):
-            payload["diagnostic_code"] = "cdp_unreachable"
-            payload["suggestion"] = "Check the Chrome CDP URL or start Chrome with remote debugging enabled."
-        else:
-            payload["diagnostic_code"] = "unknown"
-            payload["suggestion"] = "Review stdout/stderr and run agent-browser doctor locally for more detail."
-        return payload
+        return web_frontend_runtime.with_browser_diagnostic(result)
 
     @classmethod
     def _browser_payload(cls, config: Config) -> dict[str, Any]:
