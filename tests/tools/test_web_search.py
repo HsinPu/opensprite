@@ -167,6 +167,7 @@ def test_web_search_count_limit_comes_from_config():
     freshness_schema = tool.parameters["properties"]["freshness"]
 
     assert count_schema["maximum"] == 25
+    assert count_schema["default"] == 25
     assert count_schema["description"] == "Results (1-25)"
     assert freshness_schema["default"] == "auto"
     assert freshness_schema["enum"] == ["auto", "none", "day", "week", "month", "year"]
@@ -217,6 +218,21 @@ def test_web_search_execute_infers_freshness_for_latest_query(monkeypatch):
     assert requested_freshness == ["month"]
 
 
+def test_web_search_execute_infers_freshness_for_chinese_current_query(monkeypatch):
+    tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
+    requested_freshness = []
+
+    async def fake_search(query, n, freshness):
+        requested_freshness.append(freshness)
+        return _format_results(query, [], n, provider="duckduckgo")
+
+    monkeypatch.setattr(tool, "_search_duckduckgo", fake_search)
+
+    asyncio.run(tool._execute("現在寫 code 最好的語言模型"))
+
+    assert requested_freshness == ["month"]
+
+
 def test_web_search_execute_respects_any_time_for_latest_query(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="none"))
     requested_freshness = []
@@ -236,6 +252,7 @@ def test_web_search_freshness_aliases_and_provider_params():
     assert _normalize_freshness("latest", "year") == "month"
     assert _normalize_freshness("all", "year") == "none"
     assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness(None, "auto", query="現在寫 code 最好的語言模型") == "month"
     assert _effective_freshness(None, "auto", query="sqlite docs") == "year"
     assert _effective_freshness("year", "auto", query="latest Qwen models") == "month"
     assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"

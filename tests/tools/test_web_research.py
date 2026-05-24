@@ -128,6 +128,30 @@ def test_web_research_searches_and_fetches_traceable_sources():
     assert payload["sources"][1]["tool_name"] == "web_fetch"
 
 
+def test_web_research_defaults_count_to_configured_max_results():
+    search = _FakeSearchTool(
+        [
+            {"title": "One", "url": "https://example.com/one", "content": "First snippet"},
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/one": _fetch_payload("https://example.com/one", title="Fetched One"),
+        }
+    )
+    tool = WebResearchTool(
+        search_config=WebSearchToolConfig(max_results=25),
+        search_tool=search,
+        fetch_tool=fetch,
+    )
+
+    payload = json.loads(asyncio.run(tool._execute("coding model comparison", fetch_count=1)))
+
+    assert tool.parameters["properties"]["count"]["default"] == 25
+    assert search.calls == [{"query": "coding model comparison", "count": 25, "freshness": "year"}]
+    assert payload["coverage"]["search_result_count"] == 1
+
+
 def test_web_research_infers_freshness_for_latest_query_when_config_is_auto():
     search = _FakeSearchTool(
         [
@@ -437,7 +461,7 @@ def test_web_research_skips_knowledge_reuse_for_recent_queries():
     payload = json.loads(asyncio.run(tool._execute("Qwen 最新模型 2026", fetch_count=1)))
 
     assert knowledge.calls == []
-    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 8, "freshness": "month"}]
+    assert search.calls == [{"query": "Qwen 最新模型 2026", "count": 25, "freshness": "month"}]
     assert payload["reuse_attempt"] == {
         "source": "search_knowledge",
         "ok": False,
@@ -477,7 +501,7 @@ def test_web_research_ignores_low_quality_knowledge_and_fetches_new_source():
 
     payload = json.loads(asyncio.run(tool._execute("sqlite fts", fetch_count=1)))
 
-    assert search.calls == [{"query": "sqlite fts", "count": 8, "freshness": "year"}]
+    assert search.calls == [{"query": "sqlite fts", "count": 25, "freshness": "year"}]
     assert [call["url"] for call in fetch.calls] == ["https://example.com/fresh"]
     assert payload["reused_count"] == 0
     assert payload["reuse_attempt"] == {

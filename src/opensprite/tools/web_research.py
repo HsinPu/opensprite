@@ -65,8 +65,8 @@ class WebResearchTool(Tool):
                 },
                 "count": {
                     "type": "integer",
-                    "description": "Search candidates to inspect before dedupe",
-                    "default": min(8, self.search_config.max_results),
+                    "description": "Search candidates to inspect before dedupe; defaults to the configured max_results",
+                    "default": self.search_config.max_results,
                     "minimum": 1,
                     "maximum": self.search_config.max_results,
                 },
@@ -103,7 +103,7 @@ class WebResearchTool(Tool):
         queries: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
-        search_count = min(max(int(count or min(8, self.search_config.max_results)), 1), self.search_config.max_results)
+        search_count = min(max(int(count or self.search_config.max_results), 1), self.search_config.max_results)
         target_fetches = min(max(int(fetch_count or 2), 1), 5)
         research_queries = _research_queries(query, queries)
         inferred_freshness = _infer_freshness_from_query(" ".join(research_queries))

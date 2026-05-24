@@ -75,6 +75,35 @@ _MONTH_RECENCY_MARKERS = (
 )
 
 
+_DAY_RECENCY_MARKERS = (*_DAY_RECENCY_MARKERS, "今日", "今天")
+_WEEK_RECENCY_MARKERS = (
+    *_WEEK_RECENCY_MARKERS,
+    "本週",
+    "本周",
+    "這週",
+    "這周",
+    "最近一週",
+    "最近一周",
+)
+_MONTH_RECENCY_MARKERS = (
+    *_MONTH_RECENCY_MARKERS,
+    "now",
+    "as of",
+    "目前",
+    "現在",
+    "當前",
+    "最新",
+    "最近",
+    "近況",
+    "今年",
+    "新版",
+    "發布",
+    "發表",
+    "推出",
+    "更新",
+)
+
+
 def _strip_tags(text: str) -> str:
     """Remove HTML tags and decode entities."""
     text = re.sub(r'<script[\s\S]*?</script>', '', text, flags=re.I)
@@ -271,6 +300,7 @@ class WebSearchTool(Tool):
                 "count": {
                     "type": "integer",
                     "description": f"Results (1-{self.max_results})",
+                    "default": self.max_results,
                     "minimum": 1,
                     "maximum": self.max_results,
                 },

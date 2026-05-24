@@ -111,6 +111,8 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
   - Use when the user asks for current external information and you need both search results and inspected source pages.
   - Prefer this over manually chaining `web_search` and `web_fetch` for normal web research tasks.
   - It searches, deduplicates candidate URLs, fetches substantive pages, and returns traceable source metadata.
+  - Do not lower `count` from the configured search maximum unless the user explicitly asks for fewer results; if the user asks for "up to N" sources/results, pass that number as `count`.
+  - For current/latest/now/recent requests, keep recency words and the current year in the search query when helpful, and leave `freshness` as `auto` unless the user requests all-time results.
   - Use the optional `queries` argument for broad, ambiguous, comparative, current, or contested topics where one search phrase may miss important angles.
   - Keep `query` as the main user-facing question and add 1-4 focused `queries` variants for complementary angles, such as official docs, release notes, pricing, reviews, limitations, or regional policy terms.
   - Do not add extra `queries` for simple lookups, user-provided URLs, or cases where `search_knowledge` already has enough current fetched content.
