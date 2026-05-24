@@ -108,6 +108,7 @@ from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_frontend_runtime
 from . import web_settings_coercion, web_settings_reload
+from . import web_settings_support
 from .web_routes import register_web_routes
 
 
@@ -378,19 +379,19 @@ class WebAdapter(MessageAdapter):
         return self._get_config_path().parent
 
     def _get_provider_settings(self) -> ProviderSettingsService:
-        return ProviderSettingsService(self._get_config_path())
+        return web_settings_support.get_provider_settings(self)
 
     def _get_channel_settings(self) -> ChannelSettingsService:
-        return ChannelSettingsService(self._get_config_path())
+        return web_settings_support.get_channel_settings(self)
 
     def _get_schedule_settings(self) -> ScheduleSettingsService:
-        return ScheduleSettingsService(self._get_config_path())
+        return web_settings_support.get_schedule_settings(self)
 
     def _get_mcp_settings(self) -> MCPSettingsService:
-        return MCPSettingsService(self._get_config_path())
+        return web_settings_support.get_mcp_settings(self)
 
     def _get_media_settings(self) -> MediaSettingsService:
-        return MediaSettingsService(self._get_config_path())
+        return web_settings_support.get_media_settings(self)
 
     @staticmethod
     def _apply_network_environment(config: Config) -> None:
@@ -916,53 +917,27 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     async def _read_json_body(request: web.Request) -> dict[str, Any]:
-        try:
-            payload = await request.json()
-        except json.JSONDecodeError as exc:
-            raise web.HTTPBadRequest(text="Request body must be valid JSON") from exc
-        if not isinstance(payload, dict):
-            raise web.HTTPBadRequest(text="Request body must be a JSON object")
-        return payload
+        return await web_settings_support.read_json_body(request)
 
     @staticmethod
     def _raise_provider_settings_error(exc: ProviderSettingsError) -> None:
-        if isinstance(exc, ProviderSettingsValidationError):
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        if isinstance(exc, ProviderSettingsNotFound):
-            raise web.HTTPNotFound(text=str(exc)) from exc
-        if isinstance(exc, ProviderSettingsConflict):
-            raise web.HTTPConflict(text=str(exc)) from exc
-        raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+        web_settings_support.raise_provider_settings_error(exc)
 
     @staticmethod
     def _raise_channel_settings_error(exc: ChannelSettingsError) -> None:
-        if isinstance(exc, ChannelSettingsValidationError):
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        if isinstance(exc, ChannelSettingsNotFound):
-            raise web.HTTPNotFound(text=str(exc)) from exc
-        raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+        web_settings_support.raise_channel_settings_error(exc)
 
     @staticmethod
     def _raise_credential_store_error(exc: CredentialStoreError) -> None:
-        if isinstance(exc, CredentialNotFoundError):
-            raise web.HTTPNotFound(text=str(exc)) from exc
-        raise web.HTTPBadRequest(text=str(exc)) from exc
+        web_settings_support.raise_credential_store_error(exc)
 
     @staticmethod
     def _raise_schedule_settings_error(exc: ScheduleSettingsError) -> None:
-        if isinstance(exc, ScheduleSettingsValidationError):
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        if isinstance(exc, ScheduleSettingsNotFound):
-            raise web.HTTPNotFound(text=str(exc)) from exc
-        raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+        web_settings_support.raise_schedule_settings_error(exc)
 
     @staticmethod
     def _raise_mcp_settings_error(exc: MCPSettingsError) -> None:
-        if isinstance(exc, MCPSettingsValidationError):
-            raise web.HTTPBadRequest(text=str(exc)) from exc
-        if isinstance(exc, MCPSettingsNotFound):
-            raise web.HTTPNotFound(text=str(exc)) from exc
-        raise web.HTTPServiceUnavailable(text=str(exc)) from exc
+        web_settings_support.raise_mcp_settings_error(exc)
 
     def _mcp_runtime_payload(self) -> dict[str, Any]:
         agent = self._get_agent()
