@@ -109,6 +109,7 @@ from .web_api import WebApiHandlers
 from . import web_frontend_runtime
 from . import web_settings_coercion, web_settings_reload
 from . import web_settings_support
+from . import web_settings_payloads
 from .web_routes import register_web_routes
 
 
@@ -413,12 +414,12 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     def _network_payload(config: Config) -> dict[str, Any]:
-        network = getattr(config, "network", None)
-        return {
-            "http_proxy": str(getattr(network, "http_proxy", DEFAULT_HTTP_PROXY) or DEFAULT_HTTP_PROXY),
-            "https_proxy": str(getattr(network, "https_proxy", DEFAULT_HTTPS_PROXY) or DEFAULT_HTTPS_PROXY),
-            "no_proxy": str(getattr(network, "no_proxy", DEFAULT_NO_PROXY) or DEFAULT_NO_PROXY),
-        }
+        return web_settings_payloads.network_payload(
+            config,
+            default_http_proxy=DEFAULT_HTTP_PROXY,
+            default_https_proxy=DEFAULT_HTTPS_PROXY,
+            default_no_proxy=DEFAULT_NO_PROXY,
+        )
 
     @staticmethod
     def _browser_runtime_status() -> dict[str, Any]:
@@ -456,221 +457,88 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _browser_payload(cls, config: Config) -> dict[str, Any]:
-        browser = getattr(getattr(config, "tools", None), "browser", None)
-        return {
-            "enabled": bool(getattr(browser, "enabled", False)),
-            "backend": str(getattr(browser, "backend", DEFAULT_BROWSER_BACKEND) or DEFAULT_BROWSER_BACKEND),
-            "backends": list(cls.BROWSER_BACKENDS),
-            "command_timeout": int(getattr(browser, "command_timeout", DEFAULT_BROWSER_COMMAND_TIMEOUT) or DEFAULT_BROWSER_COMMAND_TIMEOUT),
-            "session_timeout": int(getattr(browser, "session_timeout", DEFAULT_BROWSER_SESSION_TIMEOUT) or DEFAULT_BROWSER_SESSION_TIMEOUT),
-            "cdp_url": str(getattr(browser, "cdp_url", "") or ""),
-            "launch_args": str(getattr(browser, "launch_args", DEFAULT_BROWSER_LAUNCH_ARGS) or ""),
-            "allow_private_urls": bool(getattr(browser, "allow_private_urls", False)),
-            "cloud": browser_cloud_status(browser),
-            "runtime": cls._browser_runtime_status(),
-        }
+        return web_settings_payloads.browser_payload(
+            config,
+            default_backend=DEFAULT_BROWSER_BACKEND,
+            default_command_timeout=DEFAULT_BROWSER_COMMAND_TIMEOUT,
+            default_session_timeout=DEFAULT_BROWSER_SESSION_TIMEOUT,
+            default_launch_args=DEFAULT_BROWSER_LAUNCH_ARGS,
+            backends=cls.BROWSER_BACKENDS,
+            browser_cloud_status_fn=browser_cloud_status,
+            browser_runtime_status_fn=cls._browser_runtime_status,
+        )
 
     @classmethod
     def _web_search_payload(cls, config: Config) -> dict[str, Any]:
-        search = getattr(getattr(config, "tools", None), "web_search", None)
-        return {
-            "provider": str(getattr(search, "provider", DEFAULT_WEB_SEARCH_PROVIDER) or DEFAULT_WEB_SEARCH_PROVIDER),
-            "providers": list(cls.WEB_SEARCH_PROVIDERS),
-            "freshness": str(getattr(search, "freshness", DEFAULT_WEB_SEARCH_FRESHNESS) or DEFAULT_WEB_SEARCH_FRESHNESS),
-            "freshness_options": list(cls.WEB_SEARCH_FRESHNESS),
-            "max_results": int(getattr(search, "max_results", DEFAULT_WEB_SEARCH_MAX_RESULTS) or DEFAULT_WEB_SEARCH_MAX_RESULTS),
-            "duckduckgo_max_pages": int(getattr(search, "duckduckgo_max_pages", DEFAULT_DUCKDUCKGO_MAX_PAGES) or DEFAULT_DUCKDUCKGO_MAX_PAGES),
-            "searxng_max_pages": int(getattr(search, "searxng_max_pages", DEFAULT_SEARXNG_MAX_PAGES) or DEFAULT_SEARXNG_MAX_PAGES),
-            "searxng_url": str(getattr(search, "searxng_url", DEFAULT_SEARXNG_URL) or DEFAULT_SEARXNG_URL),
-            "searxng_engines": cls._coerce_text_list(getattr(search, "searxng_engines", []), field="searxng_engines", default=[]),
-            "searxng_categories": cls._coerce_text_list(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
-            "proxy": str(getattr(search, "proxy", "") or ""),
-            "jina_api_key_configured": bool(getattr(search, "jina_api_key", "") or os.environ.get("JINA_API_KEY", "")),
-        }
+        return web_settings_payloads.web_search_payload(
+            config,
+            default_provider=DEFAULT_WEB_SEARCH_PROVIDER,
+            providers=cls.WEB_SEARCH_PROVIDERS,
+            default_freshness=DEFAULT_WEB_SEARCH_FRESHNESS,
+            freshness_values=cls.WEB_SEARCH_FRESHNESS,
+            default_max_results=DEFAULT_WEB_SEARCH_MAX_RESULTS,
+            default_duckduckgo_max_pages=DEFAULT_DUCKDUCKGO_MAX_PAGES,
+            default_searxng_max_pages=DEFAULT_SEARXNG_MAX_PAGES,
+            default_searxng_url=DEFAULT_SEARXNG_URL,
+            coerce_text_list_fn=cls._coerce_text_list,
+        )
 
     @staticmethod
     def _llm_decoding_payload(config: Config) -> dict[str, Any]:
-        llm = config.llm
-        return {
-            "temperature": llm.temperature,
-            "max_tokens": llm.max_tokens,
-            "top_p": llm.top_p,
-            "frequency_penalty": llm.frequency_penalty,
-            "presence_penalty": llm.presence_penalty,
-        }
+        return web_settings_payloads.llm_decoding_payload(config)
 
     @classmethod
     def _llm_decoding_mode(cls, config: Config) -> str:
-        if not config.llm.pass_decoding_params:
-            return "provider_default"
-        decoding = cls._llm_decoding_payload(config)
-        for mode, preset in cls.LLM_DECODING_PRESETS.items():
-            if all(decoding.get(key) == value for key, value in preset.items()):
-                return mode
-        return "custom"
+        return web_settings_payloads.llm_decoding_mode(config, presets=cls.LLM_DECODING_PRESETS)
 
     @classmethod
     def _apply_llm_decoding_preset(cls, config: Config, mode: str) -> None:
-        if mode == "provider_default":
-            config.llm.pass_decoding_params = False
-            return
-        preset = cls.LLM_DECODING_PRESETS.get(mode)
-        if preset is None:
-            raise web.HTTPBadRequest(text=f"decoding_mode must be one of: {', '.join(cls.LLM_DECODING_MODE_ORDER)}")
-        config.llm.pass_decoding_params = True
-        for key, value in preset.items():
-            setattr(config.llm, key, value)
+        web_settings_payloads.apply_llm_decoding_preset(
+            config,
+            mode,
+            presets=cls.LLM_DECODING_PRESETS,
+            mode_order=cls.LLM_DECODING_MODE_ORDER,
+        )
 
     @staticmethod
     def _coerce_llm_float(value: Any, *, field: str, minimum: float | None = None, maximum: float | None = None) -> float:
-        try:
-            number = float(value)
-        except (TypeError, ValueError) as exc:
-            raise web.HTTPBadRequest(text=f"{field} must be a number") from exc
-        if minimum is not None and number < minimum:
-            raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
-        if maximum is not None and number > maximum:
-            raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
-        return number
+        return web_settings_payloads.coerce_llm_float(value, field=field, minimum=minimum, maximum=maximum)
 
     @classmethod
     def _apply_custom_llm_decoding(cls, config: Config, decoding: dict[str, Any]) -> None:
-        config.llm.pass_decoding_params = True
-        if "temperature" in decoding:
-            config.llm.temperature = cls._coerce_llm_float(decoding["temperature"], field="temperature")
-        if "max_tokens" in decoding:
-            config.llm.max_tokens = cls._coerce_positive_int(decoding["max_tokens"], field="max_tokens", default=config.llm.max_tokens, minimum=1, maximum=1_000_000)
-        if "top_p" in decoding:
-            config.llm.top_p = cls._coerce_llm_float(decoding["top_p"], field="top_p", minimum=0.0, maximum=1.0)
-        if "frequency_penalty" in decoding:
-            config.llm.frequency_penalty = cls._coerce_llm_float(decoding["frequency_penalty"], field="frequency_penalty", minimum=-2.0, maximum=2.0)
-        if "presence_penalty" in decoding:
-            config.llm.presence_penalty = cls._coerce_llm_float(decoding["presence_penalty"], field="presence_penalty", minimum=-2.0, maximum=2.0)
+        web_settings_payloads.apply_custom_llm_decoding(
+            config,
+            decoding,
+            coerce_positive_int_fn=cls._coerce_positive_int,
+        )
 
     @staticmethod
     def _anthropic_reasoning_budget(effort: str | None) -> int:
-        budgets = {"minimal": 4000, "low": 4000, "medium": 8000, "high": 16000, "xhigh": 32000}
-        return budgets.get(str(effort or "medium").lower(), budgets["medium"])
+        return web_settings_payloads.anthropic_reasoning_budget(effort)
 
     @classmethod
     def _effective_llm_request_payload(cls, config: Config) -> dict[str, Any]:
-        llm = config.llm
-        provider_id = str(llm.default or "").strip()
-        active = llm.get_active()
-        provider_name = str(getattr(active, "provider", None) or provider_id or "").strip()
-        defaults = provider_profile_defaults(
-            provider_name,
-            auth_type=getattr(active, "auth_type", "api_key"),
-            api_mode=getattr(active, "api_mode", None),
-        )
-        provider_name = defaults.provider_id or provider_name
-        api_mode = str(defaults.api_mode or "chat_completions").strip()
-        decoding = cls._llm_decoding_payload(config)
-        sent_decoding = dict(decoding) if llm.pass_decoding_params else {key: None for key in decoding}
-        reasoning_source = "none"
-        reasoning_payload: dict[str, Any] = {}
-        provider_options: dict[str, Any] = {}
-        request_options = provider_request_options(provider_name)
-
-        if request_options:
-            reasoning: dict[str, Any] = {}
-            if "reasoning" in request_options and active.reasoning_enabled:
-                if active.reasoning_effort:
-                    reasoning["effort"] = active.reasoning_effort
-                if active.reasoning_max_tokens is not None:
-                    reasoning["max_tokens"] = active.reasoning_max_tokens
-            if "reasoning" in request_options and active.reasoning_exclude:
-                reasoning["exclude"] = True
-            if "reasoning" in request_options:
-                reasoning_source = provider_name or "provider_request_options"
-            reasoning_payload = reasoning
-            if "provider_sort" in request_options and active.provider_sort:
-                provider_options["sort"] = active.provider_sort
-            if "require_parameters" in request_options and active.require_parameters:
-                provider_options["require_parameters"] = True
-        elif api_mode == "anthropic_messages":
-            reasoning_source = "anthropic_messages"
-            if active.reasoning_enabled:
-                budget = cls._anthropic_reasoning_budget(active.reasoning_effort)
-                base_max_tokens = sent_decoding.get("max_tokens") or 131072
-                reasoning_payload = {
-                    "thinking": {"type": "enabled", "budget_tokens": budget},
-                    "temperature": 1,
-                    "max_tokens": max(int(base_max_tokens), budget + 4096),
-                }
-        elif provider_name == "minimax":
-            reasoning_source = "minimax_chat_completions"
-            reasoning_payload = {"extra_body": {"reasoning_split": True}}
-
-        return {
-            "configured": bool(config.is_llm_configured),
-            "provider_id": provider_id,
-            "provider": provider_name,
-            "api_mode": api_mode,
-            "model": str(getattr(active, "model", "") or llm.model or ""),
-            "context_window_tokens": active.context_window_tokens,
-            "decoding": {
-                "status": "sent" if llm.pass_decoding_params else "omitted",
-                "params": sent_decoding,
-            },
-            "reasoning": {
-                "source": reasoning_source,
-                "sent": bool(reasoning_payload),
-                "enabled": bool(getattr(active, "reasoning_enabled", False)),
-                "effort": getattr(active, "reasoning_effort", None),
-                "max_tokens": getattr(active, "reasoning_max_tokens", None),
-                "exclude": bool(getattr(active, "reasoning_exclude", False)),
-                "payload": reasoning_payload,
-            },
-            "provider_options": provider_options,
-        }
+        return web_settings_payloads.effective_llm_request_payload(config)
 
     @classmethod
     def _llm_payload(cls, config: Config) -> dict[str, Any]:
-        return {
-            "decoding_mode": cls._llm_decoding_mode(config),
-            "decoding_modes": list(cls.LLM_DECODING_MODE_ORDER),
-            "pass_decoding_params": bool(config.llm.pass_decoding_params),
-            "decoding": cls._llm_decoding_payload(config),
-            "effective_request": cls._effective_llm_request_payload(config),
-            "semantic_contract_classifier_enabled": bool(config.agent.semantic_contract_classifier_enabled),
-            "semantic_contract_classifier_confidence_threshold": float(config.agent.semantic_contract_classifier_confidence_threshold),
-        }
+        return web_settings_payloads.llm_payload(
+            config,
+            mode_order=cls.LLM_DECODING_MODE_ORDER,
+            presets=cls.LLM_DECODING_PRESETS,
+        )
 
     @classmethod
     def _log_payload(cls, config: Config) -> dict[str, Any]:
-        log = getattr(config, "log", None)
-        return {
-            "enabled": bool(getattr(log, "enabled", DEFAULT_LOG_ENABLED)),
-            "level": str(getattr(log, "level", DEFAULT_LOG_LEVEL) or DEFAULT_LOG_LEVEL).upper(),
-            "retention_days": int(getattr(log, "retention_days", DEFAULT_LOG_RETENTION_DAYS) or DEFAULT_LOG_RETENTION_DAYS),
-            "log_system_prompt": bool(getattr(log, "log_system_prompt", DEFAULT_LOG_SYSTEM_PROMPT)),
-            "log_system_prompt_lines": int(getattr(log, "log_system_prompt_lines", DEFAULT_LOG_SYSTEM_PROMPT_LINES) or DEFAULT_LOG_SYSTEM_PROMPT_LINES),
-            "log_reasoning_details": bool(getattr(log, "log_reasoning_details", DEFAULT_LOG_REASONING_DETAILS)),
-            "levels": list(cls.LOG_LEVELS),
-        }
+        return web_settings_payloads.log_payload(config, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
     @classmethod
     def _permissions_payload(cls, config: Config) -> dict[str, Any]:
-        permissions = getattr(getattr(config, "tools", None), "permissions", None)
-        profile_overrides = getattr(permissions, "profile_overrides", {}) or {}
-        return {
-            "enabled": bool(getattr(permissions, "enabled", True)),
-            "approval_mode": getattr(permissions, "approval_mode", "auto") or "auto",
-            "approval_timeout_seconds": float(getattr(permissions, "approval_timeout_seconds", 300.0) or 300.0),
-            "allowed_tools": list(getattr(permissions, "allowed_tools", ["*"]) or ["*"]),
-            "denied_tools": list(getattr(permissions, "denied_tools", []) or []),
-            "allowed_risk_levels": list(getattr(permissions, "allowed_risk_levels", sorted(ALL_RISK_LEVELS)) or []),
-            "denied_risk_levels": list(getattr(permissions, "denied_risk_levels", []) or []),
-            "approval_required_tools": list(getattr(permissions, "approval_required_tools", []) or []),
-            "approval_required_risk_levels": list(getattr(permissions, "approval_required_risk_levels", []) or []),
-            "profile_overrides": {
-                profile: override.model_dump(by_alias=True) if hasattr(override, "model_dump") else dict(override)
-                for profile, override in profile_overrides.items()
-            },
-            "risk_level_options": sorted(ALL_RISK_LEVELS),
-            "approval_mode_options": sorted(APPROVAL_MODES),
-        }
+        return web_settings_payloads.permissions_payload(
+            config,
+            all_risk_levels=ALL_RISK_LEVELS,
+            approval_modes=APPROVAL_MODES,
+        )
 
     @classmethod
     def _harness_policy_preview_payload(cls, config: Config) -> dict[str, Any]:
