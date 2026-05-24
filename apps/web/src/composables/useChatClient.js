@@ -13,6 +13,16 @@ import { useScheduleSettingsActions } from "./useScheduleSettingsActions";
 import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
+import {
+  buildBackgroundProcessesPath as buildBackgroundProcessesPathBase,
+  buildRunFileChangeRevertPath as buildRunFileChangeRevertPathBase,
+  buildRunSummaryPath as buildRunSummaryPathBase,
+  buildRunTracePath as buildRunTracePathBase,
+  buildRunsPath as buildRunsPathBase,
+  buildSessionDeletePath as buildSessionDeletePathBase,
+  buildSessionsClearPath as buildSessionsClearPathBase,
+  buildWorktreeCleanupPath as buildWorktreeCleanupPathBase,
+} from "./chatClientPaths";
 import { normalizeRunSummary } from "./runSummaryNormalizers";
 import {
   coerceEventPayload,
@@ -514,19 +524,19 @@ function createRunViewState({ runId, sessionId, status = "running", createdAt, u
 }
 
 function buildRunSummaryPath(runId, sessionId) {
-  return `/api/runs/${encodeURIComponent(runId)}/summary?session_id=${encodeURIComponent(sessionId)}`;
+  return buildRunSummaryPathBase(runId, sessionId);
 }
 
 function buildRunTracePath(runId, sessionId) {
-  return `/api/runs/${encodeURIComponent(runId)}?session_id=${encodeURIComponent(sessionId)}`;
+  return buildRunTracePathBase(runId, sessionId);
 }
 
 function buildRunFileChangeRevertPath(runId, sessionId, changeId) {
-  return `/api/runs/${encodeURIComponent(runId)}/file-changes/${encodeURIComponent(changeId)}/revert?session_id=${encodeURIComponent(sessionId)}`;
+  return buildRunFileChangeRevertPathBase(runId, sessionId, changeId);
 }
 
 function buildWorktreeCleanupPath() {
-  return "/api/worktrees/cleanup";
+  return buildWorktreeCleanupPathBase();
 }
 
 function buildCuratorStatusPath(sessionId) {
@@ -546,23 +556,19 @@ function buildCuratorActionPath(action, sessionId, scope = "") {
 }
 
 function buildRunsPath(sessionId) {
-  return `/api/runs?session_id=${encodeURIComponent(sessionId)}&limit=${RUN_HISTORY_LIMIT}`;
+  return buildRunsPathBase(sessionId, RUN_HISTORY_LIMIT);
 }
 
 function buildSessionDeletePath(sessionId) {
-  return `/api/sessions?session_id=${encodeURIComponent(sessionId)}`;
+  return buildSessionDeletePathBase(sessionId);
 }
 
 function buildSessionsClearPath(channel = "web") {
-  return `/api/sessions?channel=${encodeURIComponent(channel)}`;
+  return buildSessionsClearPathBase(channel);
 }
 
 function buildBackgroundProcessesPath(sessionId = "", limit = BACKGROUND_PROCESS_LIMIT) {
-  const params = new URLSearchParams({ limit: String(limit) });
-  if (sessionId) {
-    params.set("session_id", sessionId);
-  }
-  return `/api/background-processes?${params.toString()}`;
+  return buildBackgroundProcessesPathBase(sessionId, limit);
 }
 
 function normalizeBackgroundProcess(payload) {
