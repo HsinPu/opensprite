@@ -28,28 +28,8 @@ def load_sqlite_search_store(config: str | None, *, resolve_config_path: Callabl
     if search_store is None:
         raise ValueError("search.enabled=false; enable search first")
     if not isinstance(search_store, SQLiteSearchStore):
-        raise ValueError("configured history search backend does not support rebuild")
+        raise ValueError("configured history search backend does not support status inspection")
     return loaded, search_store
-
-
-def search_rebuild_command(*, config: str | None, session_id: str | None, load_sqlite_search_store: Callable[[str | None], Any], handle_search_error: Callable[[Exception | str], None]) -> None:
-    try:
-        loaded, search_store = load_sqlite_search_store(config)
-        result = asyncio.run(search_store.rebuild_index(session_id=session_id))
-        status = asyncio.run(search_store.wait_for_embedding_idle())
-    except (FileNotFoundError, ValueError, RuntimeError) as exc:
-        handle_search_error(exc)
-
-    scope = session_id or "all sessions"
-    typer.echo(f"Rebuilt chat history search index for {scope}.")
-    typer.echo(f"Storage DB: {Path(loaded.storage.path).expanduser()}")
-    typer.echo(f"Sessions: {result['session_count']}")
-    typer.echo(f"Messages: {result['message_count']}")
-    typer.echo(f"Chunks: {result['chunk_count']}")
-    typer.echo(
-        "Embeddings: "
-        f"queued={status['queued']} pending={status['pending']} processing={status['processing']} completed={status['completed']} failed={status['failed']} missing={status['missing']} stale={status['stale']}"
-    )
 
 
 def search_status_command(*, config: str | None, session_id: str | None, load_sqlite_search_store: Callable[[str | None], Any], handle_search_error: Callable[[Exception | str], None], format_presence: Callable[[bool], str]) -> None:

@@ -241,7 +241,6 @@ Chat 範例：
 
 ```bash
 opensprite search status
-opensprite search rebuild
 ```
 
 Cron jobs 需要 gateway 正在執行。CLI 只保留檢視與刪除；新增、暫停、啟用與立即執行請使用聊天中的 `/cron` 指令：

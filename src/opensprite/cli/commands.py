@@ -283,29 +283,6 @@ def auth_credentials_list(
     )
 
 
-@search_app.command("rebuild")
-def search_rebuild(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-    session_id: str | None = typer.Option(
-        None,
-        "--session-id",
-        help="Optional session id to rebuild instead of rebuilding every chat history index.",
-    ),
-) -> None:
-    """Rebuild the chat history search index from stored messages."""
-    commands_search.search_rebuild_command(
-        config=config,
-        session_id=session_id,
-        load_sqlite_search_store=_load_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-    )
-
-
 @search_app.command("status")
 def search_status(
     config: str | None = typer.Option(
