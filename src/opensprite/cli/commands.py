@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
 import json
 from pathlib import Path
 import platform
-import statistics
-import time
 
 import typer
 
@@ -17,8 +14,6 @@ from ..context.paths import get_session_workspace, get_tool_workspace
 from ..cron import CronSchedule, CronService
 from ..cron.presentation import format_cron_timestamp, format_cron_timing, render_cron_jobs
 from ..runtime import gateway as run_gateway
-from ..search.base import SearchHit
-from ..storage.base import StoredMessage
 from . import (
     commands_auth,
     commands_cron,
@@ -43,7 +38,7 @@ service_app = typer.Typer(help="Manage the OpenSprite background gateway service
 app.add_typer(service_app, name="service")
 cron_app = typer.Typer(help="Manage per-session scheduled jobs.")
 app.add_typer(cron_app, name="cron")
-search_app = typer.Typer(help="Manage the SQLite search index.")
+search_app = typer.Typer(help="Inspect and rebuild the chat history search index.")
 app.add_typer(search_app, name="search")
 config_app = typer.Typer(help="Inspect and validate configuration files.")
 app.add_typer(config_app, name="config")
@@ -359,10 +354,10 @@ def search_rebuild(
     session_id: str | None = typer.Option(
         None,
         "--session-id",
-        help="Optional session id to rebuild instead of rebuilding the full index.",
+        help="Optional session id to rebuild instead of rebuilding every chat history index.",
     ),
 ) -> None:
-    """Rebuild the SQLite search index from stored messages."""
+    """Rebuild the chat history search index from stored messages."""
     commands_search.search_rebuild_command(
         config=config,
         session_id=session_id,
@@ -382,156 +377,11 @@ def search_status(
     session_id: str | None = typer.Option(
         None,
         "--session-id",
-        help="Optional session id to inspect instead of the full search index.",
+        help="Optional session id to inspect instead of the full chat history search index.",
     ),
 ) -> None:
-    """Show SQLite search index and embedding status."""
+    """Show chat history search index and embedding status."""
     commands_search.search_status_command(
-        config=config,
-        session_id=session_id,
-        load_sqlite_search_store=_load_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-        format_presence=_format_presence,
-    )
-
-
-@search_app.command("refresh-embeddings")
-def search_refresh_embeddings(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-    session_id: str | None = typer.Option(
-        None,
-        "--session-id",
-        help="Optional session id to refresh instead of refreshing all embeddings.",
-    ),
-    force: bool = typer.Option(
-        False,
-        "--force",
-        help="Recompute all embeddings in scope, not just missing or stale ones.",
-    ),
-) -> None:
-    """Queue embedding refresh work and wait for it to complete."""
-    commands_search.search_refresh_embeddings_command(
-        config=config,
-        session_id=session_id,
-        force=force,
-        load_sqlite_search_store=_load_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-        format_presence=_format_presence,
-    )
-
-
-@search_app.command("run-queue")
-def search_run_queue(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-    watch: bool = typer.Option(
-        False,
-        "--watch",
-        help="Keep polling the embedding queue instead of draining it once.",
-    ),
-    poll_interval: float = typer.Option(
-        5.0,
-        "--poll-interval",
-        help="Polling interval in seconds when --watch is enabled.",
-    ),
-    idle_exit_seconds: float | None = typer.Option(
-        None,
-        "--idle-exit-seconds",
-        help="Exit watch mode after this many idle seconds.",
-    ),
-    force_refresh: bool = typer.Option(
-        False,
-        "--force-refresh",
-        help="Refresh all embeddings before draining the queue.",
-    ),
-) -> None:
-    """Run the embedding queue worker once or in watch mode."""
-    commands_search.search_run_queue_command(
-        config=config,
-        watch=watch,
-        poll_interval=poll_interval,
-        idle_exit_seconds=idle_exit_seconds,
-        force_refresh=force_refresh,
-        load_sqlite_search_store=_load_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-    )
-
-
-@search_app.command("benchmark")
-def search_benchmark(
-    query: str = typer.Option(..., "--query", help="Search query to benchmark."),
-    session_id: str = typer.Option(..., "--session-id", help="Session id to benchmark against."),
-    kind: str = typer.Option("history", "--kind", help="Benchmark history search."),
-    strategy: str = typer.Option("both", "--strategy", help="Benchmark `fts`, `vector`, or `both`."),
-    vector_backend: str | None = typer.Option(None, "--vector-backend", help="Override vector backend for this benchmark: `exact`, `sqlite_vec`, `auto`, or `both` (compare exact vs sqlite_vec)."),
-    limit: int = typer.Option(5, "--limit", help="Maximum hits to show per strategy."),
-    repeat: int = typer.Option(3, "--repeat", help="How many runs to execute per strategy."),
-    json_output: bool = typer.Option(False, "--json", help="Emit benchmark output as JSON."),
-    demo_embeddings: bool = typer.Option(False, "--demo-embeddings", help="Use a deterministic local embedding provider so vector benchmarks can run without a remote API key."),
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-) -> None:
-    """Benchmark FTS and vector candidate strategies for one session query."""
-    commands_search.search_benchmark_command(
-        query=query,
-        session_id=session_id,
-        kind=kind,
-        strategy=strategy,
-        vector_backend=vector_backend,
-        limit=limit,
-        repeat=repeat,
-        json_output=json_output,
-        demo_embeddings=demo_embeddings,
-        config=config,
-        build_sqlite_search_store=_build_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-        resolve_config_path=_resolve_config_path,
-        benchmark_one_strategy_fn=_benchmark_one_strategy,
-    )
-
-
-@search_app.command("seed-demo")
-def search_seed_demo(
-    config: str | None = typer.Option(None, "--config", "-c", help="Path to an OpenSprite JSON config file."),
-    session_id: str = typer.Option("demo:search-benchmark", "--session-id", help="Session id that will receive the synthetic benchmark dataset."),
-    reset: bool = typer.Option(True, "--reset/--append", help="Replace any existing demo chat data before seeding."),
-) -> None:
-    """Seed synthetic session history so benchmark commands can run without real user data."""
-    commands_search.search_seed_demo_command(
-        session_id=session_id,
-        reset=reset,
-        config=config,
-        load_sqlite_search_store=_load_sqlite_search_store,
-        handle_search_error=_handle_search_error,
-    )
-    typer.echo("Try:")
-    typer.echo(f"  opensprite search benchmark --session-id {session_id} --query \"orchard irrigation\" --strategy both --repeat 5")
-
-
-@search_app.command("retry-embeddings")
-def search_retry_embeddings(
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-    session_id: str | None = typer.Option(
-        None,
-        "--session-id",
-        help="Optional session id to retry instead of retrying all failed embeddings.",
-    ),
-) -> None:
-    """Retry failed embedding jobs and wait for the queue to go idle."""
-    commands_search.search_retry_embeddings_command(
         config=config,
         session_id=session_id,
         load_sqlite_search_store=_load_sqlite_search_store,
@@ -558,36 +408,6 @@ def _handle_search_error(exc: Exception | str) -> None:
     raise typer.Exit(code=1)
 
 
-def _format_search_timestamp(value: float | None) -> str:
-    """Render an optional unix timestamp for search status output."""
-    return commands_search.format_search_timestamp(value)
-
-
-def _render_benchmark_hits(hits, *, limit: int) -> list[str]:
-    """Render a compact benchmark preview for the top hits."""
-    return commands_search.render_benchmark_hits(hits, limit=limit)
-
-
-def _serialize_benchmark_hits(hits, *, limit: int) -> list[dict[str, object]]:
-    """Convert benchmark hits into a compact JSON-friendly structure."""
-    return commands_search.serialize_benchmark_hits(hits, limit=limit)
-
-
-def _summarize_benchmark_runs(elapsed_runs: list[float]) -> dict[str, float]:
-    """Summarize repeated benchmark timings."""
-    return commands_search.summarize_benchmark_runs(elapsed_runs)
-
-
-def _benchmark_hit_identity(hit: SearchHit) -> str:
-    """Build a stable identity for comparing benchmark result overlap."""
-    return commands_search.benchmark_hit_identity(hit)
-
-
-def _compare_benchmark_results(results: list[dict[str, object]]) -> dict[str, object]:
-    """Compare benchmark outputs pairwise by overlap and top-hit agreement."""
-    return commands_search.compare_benchmark_results(results)
-
-
 def _resolve_workspace_root() -> Path:
     """Resolve the default workspace root used by cron CLI commands."""
     return get_tool_workspace()
@@ -596,45 +416,6 @@ def _resolve_workspace_root() -> Path:
 def _load_sqlite_search_store(config: str | None = None):
     """Load the configured SQLite search store or fail with a clear message."""
     return commands_search.load_sqlite_search_store(config, resolve_config_path=_resolve_config_path)
-
-
-def _build_sqlite_search_store(
-    loaded,
-    *,
-    candidate_strategy: str | None = None,
-    vector_backend: str | None = None,
-    embedding_provider_override=None,
-):
-    """Build a SQLite search store from an already loaded config."""
-    return commands_search.build_sqlite_search_store(
-        loaded,
-        candidate_strategy=candidate_strategy,
-        vector_backend=vector_backend,
-        embedding_provider_override=embedding_provider_override,
-    )
-
-
-def _benchmark_one_strategy(
-    search_store,
-    *,
-    kind: str,
-    session_id: str,
-    query: str,
-    limit: int,
-):
-    """Run one benchmark query and return elapsed time with hits."""
-    return commands_search.benchmark_one_strategy(
-        search_store,
-        kind=kind,
-        session_id=session_id,
-        query=query,
-        limit=limit,
-    )
-
-
-async def _seed_demo_search_data(loaded, search_store, *, session_id: str, reset: bool) -> dict[str, int]:
-    """Seed one synthetic session with searchable history."""
-    return await commands_search.seed_demo_search_data(loaded, search_store, session_id=session_id, reset=reset)
 
 
 def _get_cron_service(session: str) -> CronService:

@@ -239,15 +239,13 @@ Chat 範例：
 - Tool result、run trace、persisted tool args 和後續 LLM context 只會顯示 redacted preview，不會回顯完整 secret。
 - Runtime 會從 vault 解析 `credential_id`、provider default，或 `llm.chat` capability default。
 
-## Search And Cron
+## History Search And Cron
 
 搜尋維護：
 
 ```bash
 opensprite search status
 opensprite search rebuild
-opensprite search retry-embeddings
-opensprite search run-queue
 ```
 
 Cron jobs 需要 gateway 正在執行：
