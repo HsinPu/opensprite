@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 import time
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
+from aiohttp import ClientError, ClientSession, WSMsgType
 import typer
 
 from ..channels.cli import CliAdapter, CliChatResult
@@ -21,12 +23,142 @@ from ..runtime import (
 from ..utils.log import setup_log
 
 
+TERMINAL_RUN_EVENTS = {"run_finished", "run_failed", "run_cancelled"}
+
+
+def build_ws_url(
+    gateway_url: str,
+    *,
+    ws_url: str | None = None,
+    external_chat_id: str | None = None,
+    access_token: str | None = None,
+) -> str:
+    """Build a WebSocket URL for a running Web gateway."""
+    base = (ws_url or gateway_url or "http://127.0.0.1:8765").strip()
+    parsed = urlparse(base)
+    if parsed.scheme in {"http", "https"}:
+        scheme = "wss" if parsed.scheme == "https" else "ws"
+        path = parsed.path.rstrip("/") or ""
+        if not path or path == "/":
+            path = "/ws"
+        parsed = parsed._replace(scheme=scheme, path=path)
+    elif parsed.scheme not in {"ws", "wss"}:
+        raise ValueError(f"Unsupported gateway URL scheme: {parsed.scheme or '<missing>'}")
+
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    if external_chat_id:
+        query["external_chat_id"] = external_chat_id
+    if access_token:
+        query["access_token"] = access_token
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
 def _event_payload(event: Any) -> dict[str, Any]:
     return {
         "run_id": event.run_id,
         "event_type": event.event_type,
         "status": event.payload.get("status") if isinstance(event.payload, dict) else None,
         "created_at": event.created_at,
+    }
+
+
+async def run_web_chat(
+    message: str,
+    *,
+    gateway_url: str = "http://127.0.0.1:8765",
+    ws_url: str | None = None,
+    external_chat_id: str = "cli-smoke",
+    session_id: str | None = None,
+    sender_name: str = "OpenSprite CLI",
+    access_token: str | None = None,
+    timeout_seconds: float = 120.0,
+) -> dict[str, Any]:
+    """Send one message through an already-running Web gateway."""
+    if not message.strip():
+        raise ValueError("message is required")
+    socket_url = build_ws_url(gateway_url, ws_url=ws_url, external_chat_id=external_chat_id, access_token=access_token)
+    started = time.monotonic()
+    deadline = started + timeout_seconds
+    run_id: str | None = None
+    run_status = ""
+    run_events: list[dict[str, Any]] = []
+    reply_text = ""
+    resolved_session_id = session_id or ""
+    resolved_external_chat_id = external_chat_id
+
+    try:
+        async with ClientSession() as session:
+            async with session.ws_connect(socket_url, timeout=timeout_seconds) as ws:
+                first = await ws.receive_json(timeout=min(timeout_seconds, 10.0))
+                if not isinstance(first, dict) or first.get("type") != "session":
+                    raise RuntimeError(f"Expected session frame, got: {first}")
+                resolved_session_id = session_id or str(first.get("session_id") or "")
+                resolved_external_chat_id = external_chat_id or str(first.get("external_chat_id") or "")
+
+                outgoing: dict[str, Any] = {
+                    "external_chat_id": resolved_external_chat_id,
+                    "sender_name": sender_name,
+                    "text": message,
+                    "metadata": {"source": "cli_via_web"},
+                }
+                if resolved_session_id:
+                    outgoing["session_id"] = resolved_session_id
+                await ws.send_json(outgoing)
+
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError(f"Timed out waiting for chat reply after {timeout_seconds:g}s")
+                    msg = await ws.receive(timeout=remaining)
+                    if msg.type == WSMsgType.TEXT:
+                        frame = json.loads(msg.data)
+                    elif msg.type in {WSMsgType.CLOSED, WSMsgType.CLOSE, WSMsgType.ERROR}:
+                        raise RuntimeError("WebSocket closed before a reply was received")
+                    else:
+                        continue
+                    if not isinstance(frame, dict):
+                        continue
+                    frame_session_id = str(frame.get("session_id") or "")
+                    if frame.get("type") == "error":
+                        raise RuntimeError(str(frame.get("error") or "gateway returned an error"))
+                    if frame_session_id and resolved_session_id and frame_session_id != resolved_session_id:
+                        continue
+                    if frame.get("type") == "run_event":
+                        run_events.append(frame)
+                        run_id = run_id or str(frame.get("run_id") or "") or None
+                        if frame.get("event_type") in TERMINAL_RUN_EVENTS:
+                            run_status = str(frame.get("status") or "")
+                            if not run_status and isinstance(frame.get("payload"), dict):
+                                run_status = str(frame["payload"].get("status") or "")
+                    elif frame.get("type") == "message":
+                        reply_text = str(frame.get("text") or "")
+                        break
+    except (ClientError, asyncio.TimeoutError, TimeoutError, OSError) as exc:
+        raise RuntimeError(f"Web gateway chat failed: {exc}") from exc
+
+    tool_call_count = sum(1 for event in run_events if event.get("event_type") == "tool_started")
+    return {
+        "ok": True,
+        "mode": "web",
+        "gateway_url": gateway_url,
+        "ws_url": socket_url,
+        "session_id": resolved_session_id,
+        "external_chat_id": resolved_external_chat_id,
+        "run_id": run_id,
+        "run_status": run_status,
+        "reply": reply_text,
+        "run_event_count": len(run_events),
+        "tool_call_count": tool_call_count,
+        "elapsed_seconds": round(time.monotonic() - started, 3),
+        "recent_events": [
+            {
+                "run_id": event.get("run_id"),
+                "event_type": event.get("event_type"),
+                "status": event.get("status"),
+                "created_at": event.get("created_at"),
+            }
+            for event in run_events[-8:]
+        ],
     }
 
 
@@ -93,6 +225,7 @@ def result_payload(result: CliChatResult, trace_summary: dict[str, Any]) -> dict
     """Convert a chat result into stable JSON for scripts."""
     return {
         "ok": not bool(result.error),
+        "mode": "cli",
         "session_id": result.response.session_id,
         "external_chat_id": result.response.external_chat_id,
         "run_id": result.run_id,
@@ -126,6 +259,19 @@ def _render_text(result: CliChatResult, trace_summary: dict[str, Any]) -> None:
     typer.echo(result.response.text)
 
 
+def _render_web_payload(payload: dict[str, Any]) -> None:
+    typer.echo("OpenSprite Web Chat Smoke")
+    typer.echo(f"Gateway: {payload.get('gateway_url')}")
+    typer.echo(f"Session: {payload.get('session_id')}")
+    if payload.get("run_id"):
+        status = f" [{payload.get('run_status')}]" if payload.get("run_status") else ""
+        typer.echo(f"Run: {payload.get('run_id')}{status}")
+    typer.echo(f"Events: run={payload.get('run_event_count', 0)} tools={payload.get('tool_call_count', 0)}")
+    typer.echo(f"Elapsed: {payload.get('elapsed_seconds')}s")
+    typer.echo("")
+    typer.echo(str(payload.get("reply") or ""))
+
+
 def chat_command(
     *,
     message: str,
@@ -135,9 +281,32 @@ def chat_command(
     sender_name: str,
     timeout_seconds: float,
     json_output: bool,
+    via_web: bool,
+    gateway_url: str,
+    ws_url: str | None,
+    access_token: str | None,
 ) -> None:
     """Run the Typer-facing one-shot chat command."""
     try:
+        if via_web:
+            payload = asyncio.run(
+                run_web_chat(
+                    message,
+                    gateway_url=gateway_url,
+                    ws_url=ws_url,
+                    external_chat_id=external_chat_id,
+                    session_id=session_id,
+                    sender_name=sender_name,
+                    access_token=access_token,
+                    timeout_seconds=timeout_seconds,
+                )
+            )
+            if json_output:
+                typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+            else:
+                _render_web_payload(payload)
+            return
+
         result, trace_summary = asyncio.run(
             run_cli_chat(
                 message,

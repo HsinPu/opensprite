@@ -235,6 +235,26 @@ def chat(
         "--json",
         help="Output machine-readable JSON.",
     ),
+    via_web: bool = typer.Option(
+        False,
+        "--via-web",
+        help="Send through an already-running Web gateway instead of the local one-shot CLI channel.",
+    ),
+    gateway_url: str = typer.Option(
+        "http://127.0.0.1:8765",
+        "--gateway-url",
+        help="Gateway base URL used with --via-web.",
+    ),
+    ws_url: str | None = typer.Option(
+        None,
+        "--ws-url",
+        help="Explicit WebSocket URL used with --via-web.",
+    ),
+    access_token: str | None = typer.Option(
+        None,
+        "--access-token",
+        help="Web auth token used with --via-web when auth_token is configured.",
+    ),
 ) -> None:
     """Send one message through a local one-shot CLI channel."""
     commands_chat.chat_command(
@@ -245,6 +265,10 @@ def chat(
         sender_name=sender_name,
         timeout_seconds=timeout_seconds,
         json_output=json_output,
+        via_web=via_web,
+        gateway_url=gateway_url,
+        ws_url=ws_url,
+        access_token=access_token,
     )
 
 
