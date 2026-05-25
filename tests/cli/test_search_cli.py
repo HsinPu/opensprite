@@ -29,7 +29,7 @@ def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, embedd
                 },
                 "channels": {
                     "telegram": {"enabled": False},
-                    "console": {"enabled": True},
+                    "web": {"enabled": True},
                 },
                 "search": {
                     "enabled": search_enabled,

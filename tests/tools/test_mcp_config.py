@@ -11,7 +11,7 @@ def _write_config(tmp_path, tools: dict | None = None) -> tuple:
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "tools": tools or {"mcp_servers_file": "mcp_servers.json"},
             }
         ),

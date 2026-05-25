@@ -16,7 +16,7 @@ from ..utils.log import logger
 
 
 CHANNEL_FACTORIES = CHANNEL_ADAPTER_FACTORIES
-FIXED_RUNTIME_INSTANCES = frozenset({"web", "console"})
+FIXED_RUNTIME_INSTANCES = frozenset({"web"})
 
 
 def __getattr__(name: str) -> Any:

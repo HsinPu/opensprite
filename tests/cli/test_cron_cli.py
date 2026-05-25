@@ -18,7 +18,7 @@ def _write_cron_messages_config(root):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "messages_file": "messages.json",
             }
         ),

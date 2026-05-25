@@ -32,7 +32,7 @@ def test_start_channels_only_runs_enabled_registered_channels(monkeypatch):
                 "instances": {
                     "telegram_work": {"type": "telegram", "enabled": True},
                     "discord_team": {"type": "discord", "enabled": False},
-                    "console": {"type": "console", "enabled": True},
+                    "unknown_local": {"type": "unknown", "enabled": True},
                 },
             },
         )

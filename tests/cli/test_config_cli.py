@@ -52,7 +52,7 @@ def _write_split_config(root):
         encoding="utf-8",
     )
     (root / "channels.json").write_text(
-        json.dumps({"telegram": {"enabled": False, "token": ""}, "web": {"enabled": True}, "console": {"enabled": True}}, indent=2),
+        json.dumps({"telegram": {"enabled": False, "token": ""}, "web": {"enabled": True}}, indent=2),
         encoding="utf-8",
     )
     (root / "search.json").write_text(

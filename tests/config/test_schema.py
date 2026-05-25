@@ -240,7 +240,7 @@ def test_config_load_reads_llm_providers_from_external_file(tmp_path):
                     "https_proxy": "http://proxy.local:8443",
                     "no_proxy": "127.0.0.1,localhost,.internal",
                 },
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -615,7 +615,7 @@ def test_config_load_reads_media_from_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "media_file": "media.json",
             }
         ),
@@ -652,7 +652,7 @@ def test_config_load_reads_messages_from_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "messages_file": "messages.json",
             }
         ),
@@ -711,7 +711,7 @@ def test_config_load_reads_search_from_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "search_file": "search.json",
             }
         ),
@@ -736,7 +736,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -778,7 +778,7 @@ def test_config_load_reads_channels_from_external_file(tmp_path):
         json.dumps(
             {
                 "telegram": {"enabled": True, "token": "abc"},
-                "console": {"enabled": False},
+                "web": {"enabled": True},
             }
         ),
         encoding="utf-8",
@@ -809,7 +809,7 @@ def test_config_save_writes_channels_to_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -837,7 +837,7 @@ def test_config_save_writes_search_to_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -868,7 +868,7 @@ def test_config_save_writes_media_to_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -910,7 +910,7 @@ def test_config_save_writes_messages_to_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -941,7 +941,7 @@ def test_config_save_writes_llm_providers_to_external_file(tmp_path):
                     "max_tokens": 2048,
                 },
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
             }
         ),
         encoding="utf-8",
@@ -989,7 +989,7 @@ def test_config_load_merges_external_mcp_servers_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "tools": {
                     "mcp_servers_file": "mcp_servers.json",
                     "mcp_servers": {
@@ -1018,7 +1018,7 @@ def test_config_save_writes_mcp_servers_to_external_file(tmp_path):
             {
                 "llm": {"api_key": "key", "model": "gpt", "temperature": 0.7, "max_tokens": 2048},
                 "storage": {"type": "memory", "path": "memory.db"},
-                "channels": {"telegram": {"enabled": False}, "console": {"enabled": True}},
+                "channels": {"telegram": {"enabled": False}, "web": {"enabled": True}},
                 "tools": {
                     "mcp_servers_file": "mcp_servers.json",
                     "mcp_servers": {

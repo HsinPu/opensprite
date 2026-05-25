@@ -31,7 +31,7 @@ class ChannelSettingsNotFound(ChannelSettingsError):
     """Raised when a channel cannot be found."""
 
 
-FIXED_CHANNEL_INSTANCES = frozenset({"web", "console"})
+FIXED_CHANNEL_INSTANCES = frozenset({"web"})
 
 
 def _coerce_text(value: Any, *, field: str, allow_empty: bool = True) -> str:

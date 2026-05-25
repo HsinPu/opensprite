@@ -3120,12 +3120,6 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             ) as resp:
                 assert resp.status == 400
 
-            async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/channels/console",
-                json={"enabled": False, "settings": {}},
-            ) as resp:
-                assert resp.status == 400
-
             telegram = channels_payload["available"][0]
             assert telegram["type"] == "telegram"
             assert telegram["requires_token"] is True
