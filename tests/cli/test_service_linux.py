@@ -10,7 +10,26 @@ from opensprite.cli import service_linux
 runner = CliRunner()
 
 
-def test_build_service_unit_uses_python_and_config_paths(tmp_path):
+def test_build_service_unit_uses_opensprite_executable_and_config_paths(tmp_path):
+    config_path = tmp_path / "opensprite.json"
+    opensprite_path = Path("/opt/opensprite/.venv/bin/opensprite").expanduser().resolve()
+    unit = service_linux.build_service_unit(
+        config_path,
+        opensprite_executable=opensprite_path,
+    )
+
+    assert "Description=OpenSprite Gateway" in unit
+    assert "ExecStart=" in unit
+    assert f"{opensprite_path}" in unit
+    assert " gateway --config " in unit
+    assert " -m opensprite " not in unit
+    assert str(config_path.resolve()) in unit
+    assert "WorkingDirectory=" in unit
+    assert str(config_path.parent.resolve()) in unit
+    assert "WantedBy=default.target" in unit
+
+
+def test_build_service_unit_can_use_explicit_python_for_module_mode(tmp_path):
     config_path = tmp_path / "opensprite.json"
     python_path = Path("/opt/venv/bin/python").expanduser().resolve()
     unit = service_linux.build_service_unit(
@@ -18,21 +37,15 @@ def test_build_service_unit_uses_python_and_config_paths(tmp_path):
         python_executable=python_path,
     )
 
-    assert "Description=OpenSprite Gateway" in unit
-    assert "ExecStart=" in unit
     assert f"{python_path}" in unit
     assert " -m opensprite gateway --config " in unit
-    assert str(config_path.resolve()) in unit
-    assert "WorkingDirectory=" in unit
-    assert str(config_path.parent.resolve()) in unit
-    assert "WantedBy=default.target" in unit
 
 
 def test_install_service_writes_unit_and_runs_systemctl_commands(tmp_path, monkeypatch):
     monkeypatch.setattr(service_linux.platform, "system", lambda: "Linux")
     config_path = tmp_path / "opensprite.json"
     config_path.write_text("{}", encoding="utf-8")
-    python_path = Path("/usr/bin/python3").expanduser().resolve()
+    opensprite_path = Path("/opt/opensprite/.venv/bin/opensprite").expanduser().resolve()
     calls = []
 
     def fake_runner(args, check=True):
@@ -42,15 +55,16 @@ def test_install_service_writes_unit_and_runs_systemctl_commands(tmp_path, monke
     service_file = service_linux.install_service(
         config_path,
         home=tmp_path,
-        python_executable=python_path,
+        opensprite_executable=opensprite_path,
         systemctl_runner=fake_runner,
     )
 
     assert service_file.exists()
     content = service_file.read_text(encoding="utf-8")
     assert "ExecStart=" in content
-    assert f"{python_path}" in content
-    assert " -m opensprite gateway --config " in content
+    assert f"{opensprite_path}" in content
+    assert " gateway --config " in content
+    assert " -m opensprite " not in content
     assert calls == [
         (("daemon-reload",), True),
         (("enable", service_linux.SERVICE_NAME), True),

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import platform
 import shlex
+import shutil
 import subprocess
 import sys
 
@@ -44,17 +45,34 @@ def get_default_config_path(home: Path | None = None) -> Path:
     return resolved_home / ".opensprite" / "opensprite.json"
 
 
+def resolve_opensprite_executable() -> Path:
+    """Return the CLI executable that can import the installed OpenSprite package."""
+    argv0 = Path(sys.argv[0]).expanduser()
+    if argv0.name.startswith("opensprite") and argv0.exists():
+        return argv0.resolve()
+
+    discovered = shutil.which("opensprite")
+    if discovered:
+        return Path(discovered).expanduser().resolve()
+
+    raise RuntimeError("Could not resolve the opensprite executable for the Linux service.")
+
+
 def build_service_unit(
     config_path: Path,
     *,
+    opensprite_executable: Path | None = None,
     python_executable: Path | None = None,
 ) -> str:
     """Build the systemd user service unit content."""
-    python_path = Path(python_executable or sys.executable).expanduser().resolve()
     config_path = Path(config_path).expanduser().resolve()
-    exec_start = shlex.join(
-        [str(python_path), "-m", "opensprite", "gateway", "--config", str(config_path)]
-    )
+    if python_executable is not None:
+        python_path = Path(python_executable).expanduser().resolve()
+        exec_args = [str(python_path), "-m", "opensprite", "gateway", "--config", str(config_path)]
+    else:
+        executable_path = Path(opensprite_executable).expanduser().resolve() if opensprite_executable else resolve_opensprite_executable()
+        exec_args = [str(executable_path), "gateway", "--config", str(config_path)]
+    exec_start = shlex.join(exec_args)
     working_directory = shlex.quote(str(config_path.parent))
     return (
         "[Unit]\n"
@@ -96,6 +114,7 @@ def install_service(
     *,
     start: bool = True,
     home: Path | None = None,
+    opensprite_executable: Path | None = None,
     python_executable: Path | None = None,
     systemctl_runner=_run_systemctl_user,
 ) -> Path:
@@ -108,7 +127,11 @@ def install_service(
     service_file = get_service_file_path(home)
     service_file.parent.mkdir(parents=True, exist_ok=True)
     service_file.write_text(
-        build_service_unit(config_path, python_executable=python_executable),
+        build_service_unit(
+            config_path,
+            opensprite_executable=opensprite_executable,
+            python_executable=python_executable,
+        ),
         encoding="utf-8",
     )
     systemctl_runner(["daemon-reload"])
@@ -191,6 +214,7 @@ __all__ = [
     "get_service_status",
     "get_user_service_dir",
     "install_service",
+    "resolve_opensprite_executable",
     "restart_service",
     "start_service",
     "stop_service",
