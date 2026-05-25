@@ -1,9 +1,10 @@
-import re
 import json
 
 from typer.testing import CliRunner
 
 from opensprite.cli.commands import app
+from opensprite.context.paths import get_session_workspace
+from opensprite.cron import CronSchedule, CronService
 
 
 runner = CliRunner()
@@ -27,9 +28,8 @@ def _write_cron_messages_config(root):
         json.dumps(
             {
                 "cron": {
-                    "created_job": "已建立排程 {name} [{job_id}]",
-                    "no_jobs": "目前沒有排程。",
-                    "removed_job": "已移除排程 {job_id}",
+                    "no_jobs": "No configured cron jobs.",
+                    "removed_job": "Removed configured job {job_id}.",
                 }
             }
         ),
@@ -38,29 +38,23 @@ def _write_cron_messages_config(root):
     return config_path
 
 
-def test_cron_cli_add_list_and_remove(monkeypatch, tmp_path):
-    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: tmp_path / "workspace")
-
-    add_result = runner.invoke(
-        app,
-        [
-            "cron",
-            "add",
-            "--session",
-            "telegram:user-a",
-            "--message",
-            "Check weather and report back",
-            "--name",
-            "weather-check",
-            "--every-seconds",
-            "300",
-        ],
+def _seed_cron_job(workspace_root, session="telegram:user-a", *, name="weather-check"):
+    jobs_path = get_session_workspace(session, workspace_root=workspace_root) / "cron" / "jobs.json"
+    service = CronService(jobs_path, session_id=session)
+    return service.add_job(
+        name=name,
+        schedule=CronSchedule(kind="every", every_ms=300_000),
+        message="Check weather and report back",
+        deliver=True,
+        channel="telegram",
+        external_chat_id="user-a",
     )
 
-    assert add_result.exit_code == 0
-    assert "Created job 'weather-check'" in add_result.stdout
-    job_id = re.search(r"id: ([a-f0-9]{8})", add_result.stdout)
-    assert job_id is not None
+
+def test_cron_cli_lists_and_removes_existing_jobs(monkeypatch, tmp_path):
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: workspace_root)
+    job = _seed_cron_job(workspace_root)
 
     list_result = runner.invoke(app, ["cron", "list", "--session", "telegram:user-a"])
     assert list_result.exit_code == 0
@@ -70,134 +64,41 @@ def test_cron_cli_add_list_and_remove(monkeypatch, tmp_path):
 
     remove_result = runner.invoke(
         app,
-        ["cron", "remove", "--session", "telegram:user-a", "--job-id", job_id.group(1)],
+        ["cron", "remove", "--session", "telegram:user-a", "--job-id", job.id],
     )
     assert remove_result.exit_code == 0
-    assert f"Removed job {job_id.group(1)}" in remove_result.stdout
+    assert f"Removed job {job.id}" in remove_result.stdout
 
     empty_list = runner.invoke(app, ["cron", "list", "--session", "telegram:user-a"])
     assert empty_list.exit_code == 0
     assert empty_list.stdout.strip() == "No scheduled jobs."
 
 
-def test_cron_cli_requires_exactly_one_schedule(monkeypatch, tmp_path):
-    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: tmp_path / "workspace")
+def test_cron_cli_help_only_exposes_inspection_and_cleanup_commands():
+    result = runner.invoke(app, ["cron", "--help"])
 
-    result = runner.invoke(
-        app,
-        [
-            "cron",
-            "add",
-            "--session",
-            "telegram:user-a",
-            "--message",
-            "Bad schedule",
-            "--every-seconds",
-            "60",
-            "--cron-expr",
-            "0 9 * * *",
-        ],
-    )
-
-    assert result.exit_code == 1
-    assert "provide exactly one of --every-seconds, --cron-expr, or --at" in result.stderr
+    assert result.exit_code == 0
+    assert "list" in result.stdout
+    assert "remove" in result.stdout
+    assert "add" not in result.stdout
+    assert "pause" not in result.stdout
+    assert "enable" not in result.stdout
+    assert "run" not in result.stdout
 
 
-def test_cron_cli_can_pause_and_enable_job(monkeypatch, tmp_path):
-    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: tmp_path / "workspace")
-
-    add_result = runner.invoke(
-        app,
-        [
-            "cron",
-            "add",
-            "--session",
-            "telegram:user-a",
-            "--message",
-            "Check weather and report back",
-            "--every-seconds",
-            "300",
-        ],
-    )
-    job_id = re.search(r"id: ([a-f0-9]{8})", add_result.stdout)
-    assert job_id is not None
-
-    pause_result = runner.invoke(
-        app,
-        ["cron", "pause", "--session", "telegram:user-a", "--job-id", job_id.group(1)],
-    )
-    assert pause_result.exit_code == 0
-    assert f"Paused job {job_id.group(1)}" in pause_result.stdout
-
-    enable_result = runner.invoke(
-        app,
-        ["cron", "enable", "--session", "telegram:user-a", "--job-id", job_id.group(1)],
-    )
-    assert enable_result.exit_code == 0
-    assert f"Enabled job {job_id.group(1)}" in enable_result.stdout
-
-
-def test_cron_cli_can_run_job_immediately(monkeypatch, tmp_path):
-    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: tmp_path / "workspace")
-
-    add_result = runner.invoke(
-        app,
-        [
-            "cron",
-            "add",
-            "--session",
-            "telegram:user-a",
-            "--message",
-            "Check weather and report back",
-            "--every-seconds",
-            "300",
-        ],
-    )
-    job_id = re.search(r"id: ([a-f0-9]{8})", add_result.stdout)
-    assert job_id is not None
-
-    run_result = runner.invoke(
-        app,
-        ["cron", "run", "--session", "telegram:user-a", "--job-id", job_id.group(1)],
-    )
-    assert run_result.exit_code == 0
-    assert f"Ran job {job_id.group(1)}" in run_result.stdout
-
-
-def test_cron_cli_uses_configured_messages(monkeypatch, tmp_path):
-    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: tmp_path / "workspace")
+def test_cron_cli_uses_configured_messages_for_list_and_remove(monkeypatch, tmp_path):
+    workspace_root = tmp_path / "workspace"
+    monkeypatch.setattr("opensprite.cli.commands._resolve_workspace_root", lambda: workspace_root)
     config_path = _write_cron_messages_config(tmp_path)
-
-    add_result = runner.invoke(
-        app,
-        [
-            "cron",
-            "add",
-            "--session",
-            "telegram:user-a",
-            "--message",
-            "Check weather and report back",
-            "--name",
-            "weather-check",
-            "--every-seconds",
-            "300",
-            "--config",
-            str(config_path),
-        ],
-    )
-
-    assert add_result.exit_code == 0
-    job_id = re.search(r"\[([a-f0-9]{8})\]", add_result.stdout)
-    assert job_id is not None
-    assert "已建立排程 weather-check" in add_result.stdout
+    job = _seed_cron_job(workspace_root)
 
     empty_list = runner.invoke(app, ["cron", "list", "--session", "telegram:user-b", "--config", str(config_path)])
     assert empty_list.exit_code == 0
-    assert empty_list.stdout.strip() == "目前沒有排程。"
+    assert empty_list.stdout.strip() == "No configured cron jobs."
 
     remove_result = runner.invoke(
         app,
-        ["cron", "remove", "--session", "telegram:user-a", "--job-id", job_id.group(1), "--config", str(config_path)],
+        ["cron", "remove", "--session", "telegram:user-a", "--job-id", job.id, "--config", str(config_path)],
     )
     assert remove_result.exit_code == 0
-    assert f"已移除排程 {job_id.group(1)}" in remove_result.stdout
+    assert f"Removed configured job {job.id}." in remove_result.stdout

@@ -248,11 +248,11 @@ opensprite search status
 opensprite search rebuild
 ```
 
-Cron jobs 需要 gateway 正在執行：
+Cron jobs 需要 gateway 正在執行。CLI 只保留檢視與刪除；新增、暫停、啟用與立即執行請使用聊天中的 `/cron` 指令：
 
 ```bash
 opensprite cron list --session telegram:<chat_id>
-opensprite cron add every 300 "message" --session telegram:<chat_id>
+opensprite cron remove --session telegram:<chat_id> --job-id <job_id>
 ```
 
 ## Project Layout

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from pathlib import Path
 import platform
@@ -10,9 +9,8 @@ import platform
 import typer
 
 from .. import __version__
-from ..context.paths import get_session_workspace, get_tool_workspace
-from ..cron import CronSchedule, CronService
-from ..cron.presentation import format_cron_timestamp, format_cron_timing, render_cron_jobs
+from ..context.paths import get_tool_workspace
+from ..cron import CronService
 from ..runtime import gateway as run_gateway
 from . import (
     commands_auth,
@@ -423,34 +421,6 @@ def _get_cron_service(session: str) -> CronService:
     return commands_cron.get_cron_service(session, resolve_workspace_root=_resolve_workspace_root)
 
 
-def _build_cli_schedule(
-    *,
-    every_seconds: int | None,
-    cron_expr: str | None,
-    tz: str | None,
-    at: str | None,
-    default_timezone: str = "UTC",
-) -> tuple[CronSchedule, bool]:
-    """Build a CronSchedule from CLI arguments."""
-    return commands_cron.build_cli_schedule(
-        every_seconds=every_seconds,
-        cron_expr=cron_expr,
-        tz=tz,
-        at=at,
-        default_timezone=default_timezone,
-    )
-
-
-def _format_cron_timestamp(ms: int, tz_name: str) -> str:
-    """Format a scheduled timestamp for CLI output."""
-    return format_cron_timestamp(ms, tz_name)
-
-
-def _format_cron_timing(schedule: CronSchedule, default_timezone: str = "UTC") -> str:
-    """Format a cron schedule in the same style as the runtime tool."""
-    return format_cron_timing(schedule, default_timezone)
-
-
 def _load_cli_cron_messages(config: str | None = None):
     return commands_cron.load_cli_cron_messages(config, resolve_config_path=_resolve_config_path)
 
@@ -579,73 +549,6 @@ def cron_list(
     )
 
 
-@cron_app.command("add")
-def cron_add(
-    session: str = typer.Option(
-        ...,
-        "--session",
-        help="Session id, for example telegram:user-a.",
-    ),
-    message: str = typer.Option(
-        ...,
-        "--message",
-        help="Instruction to execute when the job triggers.",
-    ),
-    name: str | None = typer.Option(
-        None,
-        "--name",
-        help="Optional short label for the job.",
-    ),
-    every_seconds: int | None = typer.Option(
-        None,
-        "--every-seconds",
-        help="Fixed recurring interval in seconds.",
-    ),
-    cron_expr: str | None = typer.Option(
-        None,
-        "--cron-expr",
-        help="Cron expression like '0 9 * * *'.",
-    ),
-    tz: str | None = typer.Option(
-        None,
-        "--tz",
-        help="Optional IANA timezone for cron expressions.",
-    ),
-    at: str | None = typer.Option(
-        None,
-        "--at",
-        help="ISO datetime for one-time execution, e.g. 2026-04-10T09:00:00.",
-    ),
-    deliver: bool = typer.Option(
-        True,
-        "--deliver/--no-deliver",
-        help="Whether the job should send its result back to the original chat.",
-    ),
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-) -> None:
-    """Add a scheduled job to one session."""
-    commands_cron.cron_add_command(
-        session=session,
-        message=message,
-        name=name,
-        every_seconds=every_seconds,
-        cron_expr=cron_expr,
-        tz=tz,
-        at=at,
-        deliver=deliver,
-        config=config,
-        get_cron_service=_get_cron_service,
-        build_cli_schedule=_build_cli_schedule,
-        load_cli_cron_messages=_load_cli_cron_messages,
-        handle_cron_error=_handle_cron_error,
-    )
-
-
 @cron_app.command("remove")
 def cron_remove(
     session: str = typer.Option(
@@ -667,96 +570,6 @@ def cron_remove(
 ) -> None:
     """Remove one scheduled job from a session."""
     commands_cron.cron_remove_command(
-        session=session,
-        job_id=job_id,
-        config=config,
-        get_cron_service=_get_cron_service,
-        load_cli_cron_messages=_load_cli_cron_messages,
-        handle_cron_error=_handle_cron_error,
-    )
-
-
-@cron_app.command("pause")
-def cron_pause(
-    session: str = typer.Option(
-        ...,
-        "--session",
-        help="Session id, for example telegram:user-a.",
-    ),
-    job_id: str = typer.Option(
-        ...,
-        "--job-id",
-        help="The job id to pause.",
-    ),
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-) -> None:
-    """Pause one scheduled job in a session without deleting it."""
-    commands_cron.cron_pause_command(
-        session=session,
-        job_id=job_id,
-        config=config,
-        get_cron_service=_get_cron_service,
-        load_cli_cron_messages=_load_cli_cron_messages,
-        handle_cron_error=_handle_cron_error,
-    )
-
-
-@cron_app.command("enable")
-def cron_enable(
-    session: str = typer.Option(
-        ...,
-        "--session",
-        help="Session id, for example telegram:user-a.",
-    ),
-    job_id: str = typer.Option(
-        ...,
-        "--job-id",
-        help="The job id to re-enable.",
-    ),
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-) -> None:
-    """Re-enable a paused scheduled job in a session."""
-    commands_cron.cron_enable_command(
-        session=session,
-        job_id=job_id,
-        config=config,
-        get_cron_service=_get_cron_service,
-        load_cli_cron_messages=_load_cli_cron_messages,
-        handle_cron_error=_handle_cron_error,
-    )
-
-
-@cron_app.command("run")
-def cron_run(
-    session: str = typer.Option(
-        ...,
-        "--session",
-        help="Session id, for example telegram:user-a.",
-    ),
-    job_id: str = typer.Option(
-        ...,
-        "--job-id",
-        help="The job id to execute immediately.",
-    ),
-    config: str | None = typer.Option(
-        None,
-        "--config",
-        "-c",
-        help="Path to an OpenSprite JSON config file.",
-    ),
-) -> None:
-    """Run one scheduled job immediately in a session."""
-    commands_cron.cron_run_command(
         session=session,
         job_id=job_id,
         config=config,
