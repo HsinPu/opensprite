@@ -23,7 +23,7 @@ def _format_time(created_at: float) -> str:
     return datetime.fromtimestamp(created_at).strftime("%Y-%m-%d %H:%M")
 
 
-class _BaseSearchTool(Tool):
+class SearchHistoryTool(Tool):
     def __init__(self, store: SearchStore, get_session_id: Callable[[], str | None], default_limit: int):
         self.store = store
         self.get_session_id = get_session_id
@@ -35,8 +35,6 @@ class _BaseSearchTool(Tool):
     def _missing_chat_response(self) -> str:
         return "Error: current session_id is unavailable. Search tools require a session-scoped conversation."
 
-
-class SearchHistoryTool(_BaseSearchTool):
     @property
     def name(self) -> str:
         return "search_history"

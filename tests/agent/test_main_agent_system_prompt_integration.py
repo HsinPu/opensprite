@@ -795,5 +795,4 @@ def test_main_agent_call_llm_injects_proactive_retrieval_context_for_follow_up(t
     )
     assert "## Retrieved History" in proactive_context
     assert "src/cleanup.py" in proactive_context
-    assert "## Retrieved Knowledge" in proactive_context
-    assert "Cleanup docs" in proactive_context
+    assert "## Retrieved Knowledge" not in proactive_context
