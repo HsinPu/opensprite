@@ -28,8 +28,10 @@ def _write_config(path, db_path, *, search_enabled=True, history_top_k=5, embedd
                     "path": str(db_path),
                 },
                 "channels": {
-                    "telegram": {"enabled": False},
-                    "web": {"enabled": True},
+                    "instances": {
+                        "telegram": {"type": "telegram", "enabled": False},
+                        "web": {"type": "web", "enabled": True},
+                    }
                 },
                 "search": {
                     "enabled": search_enabled,

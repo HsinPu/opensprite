@@ -158,7 +158,7 @@ def test_reload_mcp_from_config_replaces_registered_mcp_tools(tmp_path, monkeypa
     config_path.write_text(
         '{"llm":{"api_key":"key","model":"gpt","temperature":0.7,"max_tokens":2048},'
         '"storage":{"type":"memory","path":"memory.db"},'
-        '"channels":{"telegram":{"enabled":false},"web":{"enabled":true}},'
+        '"channels":{"instances":{"telegram":{"type":"telegram","enabled":false},"web":{"type":"web","enabled":true}}},'
         '"tools":{"mcp_servers_file":"mcp_servers.json"}}',
         encoding="utf-8",
     )
