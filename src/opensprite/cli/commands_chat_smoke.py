@@ -5,14 +5,15 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+import json
 from pathlib import Path
+import sqlite3
 import time
 from typing import Any
 
 import typer
 
-from ..storage.base import StoredRunTrace
-from ..storage.sqlite import SQLiteStorage
+from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredRunTrace
 from .commands_chat import _json_for_stdout, run_web_chat
 
 
@@ -52,6 +53,9 @@ DEFAULT_SMOKE_CASES: tuple[SmokeCase, ...] = (
 SendWebChat = Callable[..., Awaitable[dict[str, Any]]]
 
 
+DEFAULT_SESSIONS_DB_PATH = Path.home() / ".opensprite" / "data" / "sessions.db"
+
+
 def _payload_value(payload: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         if key in payload:
@@ -82,6 +86,149 @@ def _profile_from_payload(payload: dict[str, Any]) -> str:
 def _contract_type_from_payload(payload: dict[str, Any]) -> str:
     value = payload.get("task_type")
     return str(value) if isinstance(value, str) else ""
+
+
+def _load_json_object(value: Any) -> dict[str, Any]:
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    try:
+        loaded = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _resolve_db_path(db_path: str | Path | None) -> Path:
+    if db_path is None or str(db_path).strip() == "":
+        return DEFAULT_SESSIONS_DB_PATH
+    return Path(db_path).expanduser()
+
+
+def _connect_readonly(db_path: str | Path | None, *, immutable: bool = False) -> sqlite3.Connection:
+    """Open sessions.db for trace inspection without triggering migrations."""
+    resolved = _resolve_db_path(db_path)
+    if not resolved.exists():
+        raise FileNotFoundError(f"Trace database not found: {resolved}")
+    suffix = "?mode=ro&immutable=1" if immutable else "?mode=ro"
+    conn = sqlite3.connect(f"file:{resolved}{suffix}", uri=True)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _query_readonly(conn: sqlite3.Connection, query: str, params: tuple[Any, ...]) -> list[sqlite3.Row]:
+    return conn.execute(query, params).fetchall()
+
+
+def _load_trace_readonly(
+    session_id: str,
+    run_id: str,
+    *,
+    db_path: str | Path | None = None,
+    immutable: bool = False,
+) -> StoredRunTrace | None:
+    conn = _connect_readonly(db_path, immutable=immutable)
+    try:
+        run_rows = _query_readonly(conn, "SELECT * FROM runs WHERE session_id = ? AND run_id = ?", (session_id, run_id))
+        if not run_rows:
+            return None
+        run_row = run_rows[0]
+        run = StoredRun(
+            run_id=str(run_row["run_id"]),
+            session_id=str(run_row["session_id"]),
+            status=str(run_row["status"]),
+            created_at=float(run_row["created_at"] or 0),
+            updated_at=float(run_row["updated_at"] or 0),
+            finished_at=float(run_row["finished_at"]) if run_row["finished_at"] is not None else None,
+            metadata=_load_json_object(run_row["metadata_json"]),
+        )
+        event_rows = _query_readonly(
+            conn,
+            """
+            SELECT id, run_id, session_id, event_type, payload_json, created_at
+            FROM run_events
+            WHERE session_id = ? AND run_id = ?
+            ORDER BY id ASC
+            """,
+            (session_id, run_id),
+        )
+        part_rows = _query_readonly(
+            conn,
+            """
+            SELECT id, run_id, session_id, part_type, content, tool_name, metadata_json, created_at
+            FROM run_parts
+            WHERE session_id = ? AND run_id = ?
+            ORDER BY id ASC
+            """,
+            (session_id, run_id),
+        )
+        change_rows = _query_readonly(
+            conn,
+            """
+            SELECT id, run_id, session_id, tool_name, path, action, before_sha256, after_sha256,
+                   before_content, after_content, diff, metadata_json, created_at
+            FROM run_file_changes
+            WHERE session_id = ? AND run_id = ?
+            ORDER BY id ASC
+            """,
+            (session_id, run_id),
+        )
+        return StoredRunTrace(
+            run=run,
+            events=[
+                StoredRunEvent(
+                    run_id=str(row["run_id"]),
+                    session_id=str(row["session_id"]),
+                    event_type=str(row["event_type"]),
+                    payload=_load_json_object(row["payload_json"]),
+                    created_at=float(row["created_at"] or 0),
+                    event_id=int(row["id"]),
+                )
+                for row in event_rows
+            ],
+            parts=[
+                StoredRunPart(
+                    run_id=str(row["run_id"]),
+                    session_id=str(row["session_id"]),
+                    part_type=str(row["part_type"]),
+                    content=str(row["content"] or ""),
+                    tool_name=row["tool_name"],
+                    metadata=_load_json_object(row["metadata_json"]),
+                    created_at=float(row["created_at"] or 0),
+                    part_id=int(row["id"]),
+                )
+                for row in part_rows
+            ],
+            file_changes=[
+                StoredRunFileChange(
+                    run_id=str(row["run_id"]),
+                    session_id=str(row["session_id"]),
+                    tool_name=str(row["tool_name"]),
+                    path=str(row["path"]),
+                    action=str(row["action"]),
+                    before_sha256=row["before_sha256"],
+                    after_sha256=row["after_sha256"],
+                    before_content=row["before_content"],
+                    after_content=row["after_content"],
+                    diff=str(row["diff"] or ""),
+                    metadata=_load_json_object(row["metadata_json"]),
+                    created_at=float(row["created_at"] or 0),
+                    change_id=int(row["id"]),
+                )
+                for row in change_rows
+            ],
+        )
+    finally:
+        conn.close()
+
+
+def load_trace_readonly(session_id: str, run_id: str, *, db_path: str | Path | None = None) -> StoredRunTrace | None:
+    """Load one persisted run trace without initializing or upgrading storage."""
+    try:
+        return _load_trace_readonly(session_id, run_id, db_path=db_path)
+    except sqlite3.OperationalError as exc:
+        if "unable to open database file" not in str(exc).lower():
+            raise
+        return _load_trace_readonly(session_id, run_id, db_path=db_path, immutable=True)
 
 
 def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -175,7 +322,6 @@ async def run_smoke_cases(
     send_web_chat: SendWebChat = run_web_chat,
 ) -> dict[str, Any]:
     """Run all smoke cases through the Web gateway and inspect their stored traces."""
-    storage = SQLiteStorage(db_path)
     started = time.monotonic()
     results: list[dict[str, Any]] = []
 
@@ -191,7 +337,7 @@ async def run_smoke_cases(
         )
         session_id = str(payload.get("session_id") or f"web:{external_chat_id}")
         run_id = str(payload.get("run_id") or "")
-        trace = await storage.get_run_trace(session_id, run_id) if run_id else None
+        trace = load_trace_readonly(session_id, run_id, db_path=db_path) if run_id else None
         trace_summary = summarize_trace(trace, fallback=payload)
         failures = check_trace(case, trace_summary)
         results.append(

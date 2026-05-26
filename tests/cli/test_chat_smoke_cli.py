@@ -1,9 +1,10 @@
 import json
+import sqlite3
 
 from typer.testing import CliRunner
 
 from opensprite.cli import commands
-from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, select_cases, summarize_trace
+from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, load_trace_readonly, select_cases, summarize_trace
 from opensprite.storage.base import StoredRun, StoredRunEvent, StoredRunTrace
 
 
@@ -60,6 +61,90 @@ def test_summarize_trace_extracts_profile_tools_and_completion():
     assert summary["failed_tools"] == ["web_fetch"]
     assert summary["completion_status"] == "complete"
     assert summary["completion_reason"] == "done"
+
+
+def test_load_trace_readonly_reads_sqlite_without_storage_initialization(tmp_path):
+    db_path = tmp_path / "sessions.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE runs (
+                run_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                finished_at REAL
+            );
+            CREATE TABLE run_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            CREATE TABLE run_parts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                part_type TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                tool_name TEXT,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            CREATE TABLE run_file_changes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                action TEXT NOT NULL,
+                before_sha256 TEXT,
+                after_sha256 TEXT,
+                before_content TEXT,
+                after_content TEXT,
+                diff TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("run-1", "web:smoke", "completed", '{"channel":"web"}', 1.0, 2.0, 3.0),
+        )
+        conn.execute(
+            "INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("run-1", "web:smoke", "tool_started", '{"tool_name":"web_search"}', 1.5),
+        )
+        conn.execute(
+            "INSERT INTO run_parts (run_id, session_id, part_type, content, metadata_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            ("run-1", "web:smoke", "assistant_message", "pong", '{"ok":true}', 2.5),
+        )
+        conn.execute(
+            """
+            INSERT INTO run_file_changes (
+                run_id, session_id, tool_name, path, action, metadata_json, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            ("run-1", "web:smoke", "edit_file", "a.txt", "modify", '{"ok":true}', 2.7),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    trace = load_trace_readonly("web:smoke", "run-1", db_path=db_path)
+
+    assert trace is not None
+    assert trace.run.status == "completed"
+    assert trace.run.metadata == {"channel": "web"}
+    assert trace.events[0].payload == {"tool_name": "web_search"}
+    assert trace.parts[0].content == "pong"
+    assert trace.file_changes[0].path == "a.txt"
 
 
 def test_check_trace_flags_removed_tool_and_web_tool_mismatch():
