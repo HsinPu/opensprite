@@ -157,6 +157,14 @@ _PURE_ANSWER_RE = re.compile(
     r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
     re.IGNORECASE,
 )
+_PURE_ANSWER_LITERAL_PHRASES = (
+    "\u7ffb\u8b6f",
+    "\u7ffb\u6210",
+    "\u7ffb\u8b6f\u6210",
+    "\u7ffb\u6210\u82f1\u6587",
+    "\u7ffb\u6210\u4e2d\u6587",
+    "\u8a08\u7b97",
+)
 
 
 @dataclass(frozen=True)
@@ -288,7 +296,7 @@ def _looks_like_question(text: str) -> bool:
 def _classify_kind(text: str, *, media_count: int) -> str:
     lowered = text.lower()
     has_request_marker = _has_marker(text, _REQUEST_MARKERS)
-    if media_count == 0 and _PURE_ANSWER_RE.search(text):
+    if media_count == 0 and _is_pure_answer_request(text):
         return "question"
     matched_kind = "conversation"
     for kind, markers in _KIND_MARKERS:
@@ -321,6 +329,12 @@ def _needs_clarification(text: str, kind: str) -> bool:
     if len(words) <= 2 and any(marker in lowered for _, markers in _KIND_MARKERS for marker in markers):
         return True
     return False
+
+
+def _is_pure_answer_request(text: str) -> bool:
+    text = text or ""
+    lowered = text.lower()
+    return bool(_PURE_ANSWER_RE.search(text) or any(phrase in lowered for phrase in _PURE_ANSWER_LITERAL_PHRASES))
 
 
 def _is_long_running(text: str, kind: str) -> bool:
@@ -397,6 +411,8 @@ def _expects_code_change(kind: str, text: str) -> bool:
 
 def _expects_verification(kind: str, text: str) -> bool:
     lowered = text.lower()
+    if _is_pure_answer_request(text):
+        return False
     if any(marker in lowered for marker in ("pytest", "verify", "verification", "測試", "驗證", "建置", "編譯")):
         return True
     if any(marker in lowered for marker in ("run tests", "run the tests", "run build", "run the build", "run compile")):

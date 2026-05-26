@@ -49,6 +49,18 @@ def test_task_intent_keeps_translation_as_direct_question():
     assert intent.kind == "question"
     assert intent.should_seed_active_task is False
     assert intent.expects_code_change is False
+    assert intent.expects_verification is False
+
+
+def test_task_intent_keeps_chinese_translation_with_test_word_as_direct_question():
+    intent = TaskIntentService().classify(
+        "\u8acb\u628a\u9019\u53e5\u7ffb\u6210\u82f1\u6587\uff1a\u4eca\u5929\u6211\u60f3\u6e2c\u8a66 CLI \u5c0d\u8a71\u6d41\u7a0b\u3002"
+    )
+
+    assert intent.kind == "question"
+    assert intent.should_seed_active_task is False
+    assert intent.expects_code_change is False
+    assert intent.expects_verification is False
 
 
 def test_task_intent_keeps_calculation_as_direct_question():

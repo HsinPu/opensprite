@@ -74,6 +74,21 @@ def test_translation_and_runtime_context_stay_chat_profile():
     assert HarnessProfileService().select(context_intent).name == "chat"
 
 
+def test_translation_with_test_word_does_not_require_workspace_verification():
+    text = "\u8acb\u628a\u9019\u53e5\u7ffb\u6210\u82f1\u6587\uff1a\u4eca\u5929\u6211\u60f3\u6e2c\u8a66 CLI \u5c0d\u8a71\u6d41\u7a0b\u3002"
+    intent = TaskIntentService().classify(text)
+    profile = HarnessProfileService().select(intent)
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.task_type == "pure_answer"
+    assert contract.requirements == ()
+
+
 def test_generic_python_debug_question_does_not_require_workspace_or_web():
     intent = TaskIntentService().classify("請說明如果我要 debug Python ModuleNotFoundError，前三個檢查步驟是什麼，不要上網。")
     profile = HarnessProfileService().select(intent)

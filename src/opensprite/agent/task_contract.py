@@ -56,6 +56,14 @@ _PURE_ANSWER_RE = re.compile(
     r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
     re.IGNORECASE,
 )
+_PURE_ANSWER_LITERAL_PHRASES = (
+    "\u7ffb\u8b6f",
+    "\u7ffb\u6210",
+    "\u7ffb\u8b6f\u6210",
+    "\u7ffb\u6210\u82f1\u6587",
+    "\u7ffb\u6210\u4e2d\u6587",
+    "\u8a08\u7b97",
+)
 _ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
 _ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "history_retrieval", "task", "analysis", "pure_answer"})
 _SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
@@ -464,7 +472,7 @@ class TaskContractService:
     @staticmethod
     def _looks_like_web_task(text: str) -> bool:
         text = text or ""
-        if has_no_web_constraint(text) or _LOCAL_RUNTIME_RE.search(text):
+        if has_no_web_constraint(text) or _LOCAL_RUNTIME_RE.search(text) or _is_pure_answer_request(text):
             return False
         return bool(
             _URL_RE.search(text)
@@ -475,7 +483,7 @@ class TaskContractService:
 
     @staticmethod
     def _looks_like_workspace_task(text: str) -> bool:
-        if has_no_workspace_constraint(text or ""):
+        if has_no_workspace_constraint(text or "") or _is_pure_answer_request(text):
             return False
         return bool(_WORKSPACE_TASK_HINT_RE.search(text or ""))
 
@@ -765,6 +773,12 @@ def _task_type_from_intent(task_intent: TaskIntent) -> str:
     if task_intent.kind in {"conversation", "question", "command"}:
         return "pure_answer"
     return task_intent.kind or "task"
+
+
+def _is_pure_answer_request(text: str) -> bool:
+    text = text or ""
+    lowered = text.lower()
+    return bool(_PURE_ANSWER_RE.search(text) or any(phrase in lowered for phrase in _PURE_ANSWER_LITERAL_PHRASES))
 
 
 def _requested_item_count(objective: str) -> int:
