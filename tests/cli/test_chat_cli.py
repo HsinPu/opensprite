@@ -8,7 +8,7 @@ from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.cli import CliAdapter
 from opensprite.cli import commands
-from opensprite.cli.commands_chat import build_ws_url, result_payload, run_web_chat
+from opensprite.cli.commands_chat import build_ws_url, _json_for_stdout, result_payload, run_web_chat
 
 
 def test_build_ws_url_defaults_to_gateway_ws_path():
@@ -118,6 +118,20 @@ def test_result_payload_includes_trace_summary():
     assert payload["session_id"] == "cli:smoke"
     assert payload["run_id"] == "run-cli"
     assert payload["trace"]["event_count"] == 4
+
+
+def test_json_for_stdout_escapes_non_ascii_for_legacy_windows_encoding():
+    rendered = _json_for_stdout({"reply": "✅ 繁體中文"}, encoding="cp950")
+
+    assert "\\u2705" in rendered
+    assert "\\u7e41" in rendered
+    rendered.encode("cp950")
+
+
+def test_json_for_stdout_preserves_unicode_for_utf8():
+    rendered = _json_for_stdout({"reply": "✅ 繁體中文"}, encoding="utf-8")
+
+    assert "✅ 繁體中文" in rendered
 
 
 def test_run_web_chat_sends_message_to_gateway_websocket():

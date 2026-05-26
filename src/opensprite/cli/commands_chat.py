@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+import sys
 import time
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -60,6 +61,17 @@ def _event_payload(event: Any) -> dict[str, Any]:
         "status": event.payload.get("status") if isinstance(event.payload, dict) else None,
         "created_at": event.created_at,
     }
+
+
+def _json_for_stdout(payload: dict[str, Any], *, encoding: str | None = None) -> str:
+    """Render JSON safely for the active terminal encoding."""
+    output_encoding = (encoding or getattr(sys.stdout, "encoding", None) or "").lower()
+    ensure_ascii = output_encoding not in {"utf-8", "utf8"}
+    return json.dumps(payload, ensure_ascii=ensure_ascii, indent=2)
+
+
+def _echo_json(payload: dict[str, Any]) -> None:
+    typer.echo(_json_for_stdout(payload))
 
 
 async def run_web_chat(
@@ -302,7 +314,7 @@ def chat_command(
                 )
             )
             if json_output:
-                typer.echo(json.dumps(payload, ensure_ascii=False, indent=2))
+                _echo_json(payload)
             else:
                 _render_web_payload(payload)
             return
@@ -322,6 +334,6 @@ def chat_command(
         raise typer.Exit(code=1) from exc
 
     if json_output:
-        typer.echo(json.dumps(result_payload(result, trace_summary), ensure_ascii=False, indent=2))
+        _echo_json(result_payload(result, trace_summary))
         return
     _render_text(result, trace_summary)
