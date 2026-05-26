@@ -215,6 +215,31 @@ def emit_status(
     typer.echo("Channels: " + (", ".join(enabled_channels) if enabled_channels else "none enabled"))
 
 
+def _provider_has_configured_key(provider: object, *, provider_name: str, app_home: Path) -> bool:
+    if bool(getattr(provider, "api_key", "")):
+        return True
+    if str(getattr(provider, "auth_type", "api_key") or "api_key") != "api_key":
+        return False
+
+    try:
+        from ..auth.credentials import CredentialNotFoundError, resolve_credential
+    except Exception:
+        return bool(getattr(provider, "credential_id", ""))
+
+    configured_provider = str(getattr(provider, "provider", "") or provider_name or "").strip()
+    credential_id = str(getattr(provider, "credential_id", "") or "").strip()
+    try:
+        resolve_credential(
+            provider=configured_provider,
+            credential_id=credential_id or None,
+            capability="llm.chat",
+            app_home=app_home,
+        )
+        return True
+    except CredentialNotFoundError:
+        return False
+
+
 def status_command(
     *,
     config_path: Path,
@@ -261,7 +286,11 @@ def status_command(
     if selected_provider is not None:
         active_provider = loaded.llm.providers[selected_provider]
         provider_enabled = bool(getattr(active_provider, "enabled", False))
-        provider_has_key = bool(active_provider.api_key)
+        provider_has_key = _provider_has_configured_key(
+            active_provider,
+            provider_name=selected_provider,
+            app_home=config_path.parent,
+        )
         model_name = active_provider.model or "<unset>"
     else:
         provider_enabled = False
