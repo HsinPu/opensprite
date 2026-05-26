@@ -40,12 +40,13 @@ _RESEARCH_MARKERS = (
     "連結",
 )
 _NO_WEB_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:web|internet|online|search|sources?)\b"
+    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|sources?)\b"
     r"|(?:不要|不用|不需要|別)(?:上網|搜尋|搜索|查資料|查網路|使用\s*web)",
     re.IGNORECASE,
 )
 _NO_WEB_EN_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:web|internet|online|search|browse|sources?)\b"
+    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
+    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
     r"|\b(?:do not|don't|dont)\s+(?:search|browse|look\s+up|google)\b"
     r"|\b(?:offline|no\s+internet|no\s+web|no\s+search)\b",
     re.IGNORECASE,

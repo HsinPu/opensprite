@@ -110,6 +110,28 @@ def test_explicit_no_web_and_no_file_constraints_hide_tools():
     assert permission_policy.is_tool_exposed("search_history") is True
 
 
+def test_compound_english_no_web_and_no_file_constraints_hide_tools():
+    text = "Do not read files or use the web. Explain Python ModuleNotFoundError in plain English."
+    intent = TaskIntentService().classify(text)
+    profile = HarnessProfileService().select(intent)
+    policy = HarnessPolicyService().select(profile)
+    permission_policy = policy.to_permission_policy()
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.requirements == ()
+    assert "constraint:no_web" in profile.to_metadata()["selection"]["matched_signals"]
+    assert "constraint:no_workspace" in profile.to_metadata()["selection"]["matched_signals"]
+    assert permission_policy.is_tool_exposed("web_research") is False
+    assert permission_policy.is_tool_exposed("web_search") is False
+    assert permission_policy.is_tool_exposed("read_file") is False
+    assert permission_policy.is_tool_exposed("list_dir") is False
+
+
 def test_research_harness_policy_allows_web_without_workspace_mutation():
     policy = _policy("幫我查一下最新消息並附來源")
     permission_policy = policy.to_permission_policy()
