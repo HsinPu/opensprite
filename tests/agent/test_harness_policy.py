@@ -1,5 +1,6 @@
 from opensprite.agent.harness_policy import HarnessPolicyService
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.task_contract import TaskContractService, semantic_contract_skip_reason
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -45,6 +46,45 @@ def test_chat_harness_policy_is_read_only():
     assert permission_policy.is_tool_exposed("read_file") is True
     assert permission_policy.is_tool_exposed("web_search") is False
     assert permission_policy.is_tool_exposed("edit_file") is False
+
+
+def test_no_web_constraint_keeps_summary_in_chat_profile():
+    intent = TaskIntentService().classify("用三點列出 OpenSprite 可以幫使用者做什麼，不要上網。")
+    profile = HarnessProfileService().select(intent)
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.requirements == ()
+    assert semantic_contract_skip_reason(
+        current_message=intent.objective,
+        task_intent=intent,
+        deterministic_contract=contract,
+    ) == "user explicitly disabled web/search evidence"
+
+
+def test_translation_and_runtime_context_stay_chat_profile():
+    translate_intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
+    context_intent = TaskIntentService().classify("請回答你目前看到的 channel、session id、current time。")
+
+    assert HarnessProfileService().select(translate_intent).name == "chat"
+    assert HarnessProfileService().select(context_intent).name == "chat"
+
+
+def test_generic_python_debug_question_does_not_require_workspace_or_web():
+    intent = TaskIntentService().classify("請說明如果我要 debug Python ModuleNotFoundError，前三個檢查步驟是什麼，不要上網。")
+    profile = HarnessProfileService().select(intent)
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.requirements == ()
 
 
 def test_research_harness_policy_allows_web_without_workspace_mutation():

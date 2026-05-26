@@ -43,6 +43,19 @@ _WEB_TASK_HINT_RE = re.compile(
     re.IGNORECASE,
 )
 _WEB_SEARCH_TERM_RE = re.compile(r"\b(?:search)\b|(?:搜尋)", re.IGNORECASE)
+_NO_WEB_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:web|internet|online|search|sources?)\b"
+    r"|(?:不要|不用|不需要|別)(?:上網|搜尋|搜索|查資料|查網路|使用\s*web)",
+    re.IGNORECASE,
+)
+_LOCAL_RUNTIME_RE = re.compile(
+    r"\b(?:channel|session id|current time|trace metrics?|cli chat)\b|(?:目前時間|現在時間|對話|工作階段|執行階段)",
+    re.IGNORECASE,
+)
+_PURE_ANSWER_RE = re.compile(
+    r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
+    re.IGNORECASE,
+)
 _ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
 _ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "history_retrieval", "task", "analysis", "pure_answer"})
 _SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
@@ -449,6 +462,8 @@ class TaskContractService:
     @staticmethod
     def _looks_like_web_task(text: str) -> bool:
         text = text or ""
+        if _NO_WEB_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
+            return False
         return bool(
             _URL_RE.search(text)
             or _WEB_KEYWORD_RE.search(text)
@@ -685,6 +700,12 @@ def semantic_contract_skip_reason(
     message = _compact(current_message)
     if not message or len(message) > 500:
         return "message is empty or too long for semantic classification"
+    if _NO_WEB_RE.search(message):
+        return "user explicitly disabled web/search evidence"
+    if _PURE_ANSWER_RE.search(message):
+        return "pure answer request does not need semantic evidence"
+    if _LOCAL_RUNTIME_RE.search(message):
+        return "local runtime context request does not need semantic evidence"
     if _URL_RE.search(message):
         return "message already has a deterministic URL requirement"
     if task_intent.kind == "conversation" and not _looks_like_semantic_lookup_candidate(message):

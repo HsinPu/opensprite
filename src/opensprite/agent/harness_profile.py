@@ -39,6 +39,19 @@ _RESEARCH_MARKERS = (
     "網站",
     "連結",
 )
+_NO_WEB_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:web|internet|online|search|sources?)\b"
+    r"|(?:不要|不用|不需要|別)(?:上網|搜尋|搜索|查資料|查網路|使用\s*web)",
+    re.IGNORECASE,
+)
+_LOCAL_RUNTIME_RE = re.compile(
+    r"\b(?:channel|session id|current time|trace metrics?|cli chat)\b|(?:目前時間|現在時間|對話|工作階段|執行階段)",
+    re.IGNORECASE,
+)
+_PURE_ANSWER_RE = re.compile(
+    r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
+    re.IGNORECASE,
+)
 _CODING_MARKERS = (
     "repo",
     "repository",
@@ -49,7 +62,6 @@ _CODING_MARKERS = (
     "function",
     "class",
     "method",
-    "test",
     "tests",
     "pytest",
     "build",
@@ -193,6 +205,15 @@ class HarnessProfileService:
                 reason="objective references media analysis or an attachment-only media turn",
                 selection_signals=_selection_signals("media", lowered, _MEDIA_MARKERS, extra=(task_intent.kind,)),
             )
+        if _looks_like_direct_chat(task_intent, lowered, text):
+            return HarnessProfile(
+                name="chat",
+                task_type=task_intent.kind,
+                verification_policy="none",
+                continuation_policy="minimal",
+                reason="request is a direct answer or explicitly avoids external lookup",
+                selection_signals=("fallback:chat", "signal:direct_answer"),
+            )
         if _looks_like_coding(task_intent, lowered, text):
             return HarnessProfile(
                 name="coding",
@@ -242,14 +263,18 @@ def _is_ascii_word_marker(marker: str) -> bool:
 
 
 def _looks_like_research(lowered: str) -> bool:
+    if _NO_WEB_RE.search(lowered) or _LOCAL_RUNTIME_RE.search(lowered):
+        return False
     return bool(_URL_RE.search(lowered)) or _has_marker(lowered, _RESEARCH_MARKERS)
 
 
 def _looks_like_coding(task_intent: TaskIntent, lowered: str, text: str) -> bool:
     if task_intent.expects_code_change:
         return True
-    if task_intent.kind in {"debug", "refactor", "implementation"}:
+    if task_intent.kind in {"refactor", "implementation"}:
         return True
+    if task_intent.kind == "debug":
+        return bool(_CODE_PATH_RE.search(text)) or _has_marker(lowered, _CODING_MARKERS)
     return bool(_CODE_PATH_RE.search(text)) or _has_marker(lowered, _CODING_MARKERS)
 
 
@@ -259,6 +284,16 @@ def _looks_like_media(task_intent: TaskIntent, lowered: str) -> bool:
 
 def _looks_like_ops(lowered: str) -> bool:
     return _has_marker(lowered, _OPS_MARKERS)
+
+
+def _looks_like_direct_chat(task_intent: TaskIntent, lowered: str, text: str) -> bool:
+    if _PURE_ANSWER_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
+        return True
+    if _NO_WEB_RE.search(text) and not _CODE_PATH_RE.search(text) and not _has_marker(lowered, _CODING_MARKERS):
+        return True
+    if _URL_RE.search(lowered) or _has_marker(lowered, _RESEARCH_MARKERS):
+        return False
+    return task_intent.kind in {"question", "conversation"} and not _CODE_PATH_RE.search(text) and not _has_marker(lowered, _CODING_MARKERS)
 
 
 def _selection_signals(profile: str, lowered: str, markers: tuple[str, ...], *, extra: tuple[str, ...] = ()) -> tuple[str, ...]:

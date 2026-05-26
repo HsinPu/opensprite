@@ -43,6 +43,21 @@ def test_task_intent_debug_diagnosis_does_not_require_code_change():
     assert intent.expects_verification is False
 
 
+def test_task_intent_keeps_translation_as_direct_question():
+    intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
+
+    assert intent.kind == "question"
+    assert intent.should_seed_active_task is False
+    assert intent.expects_code_change is False
+
+
+def test_task_intent_keeps_calculation_as_direct_question():
+    intent = TaskIntentService().classify("請計算 17 * 23 + 19，最後只輸出答案。")
+
+    assert intent.kind == "question"
+    assert intent.should_seed_active_task is False
+
+
 def test_task_intent_classifier_marks_chinese_extract_and_merge_request_as_task():
     intent = TaskIntentService().classify(
         "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理"

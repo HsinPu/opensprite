@@ -153,6 +153,10 @@ _KIND_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("writing", ("write", "draft", "summarize", "summary", "rewrite", "撰寫", "草擬", "摘要", "總結", "重寫", "整理", "整合")),
     ("planning", ("plan", "organize", "design", "規劃", "設計")),
 )
+_PURE_ANSWER_RE = re.compile(
+    r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -284,6 +288,8 @@ def _looks_like_question(text: str) -> bool:
 def _classify_kind(text: str, *, media_count: int) -> str:
     lowered = text.lower()
     has_request_marker = _has_marker(text, _REQUEST_MARKERS)
+    if media_count == 0 and _PURE_ANSWER_RE.search(text):
+        return "question"
     matched_kind = "conversation"
     for kind, markers in _KIND_MARKERS:
         if any(marker in lowered for marker in markers):
