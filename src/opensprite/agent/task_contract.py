@@ -9,7 +9,7 @@ from typing import Any
 
 from ..llms import ChatMessage
 from .resource_index import ResourceIndex, ResourceRef
-from .harness_profile import HarnessProfile
+from .harness_profile import HarnessProfile, has_no_web_constraint, has_no_workspace_constraint
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
 from .tool_groups import TOOL_GROUPS
@@ -274,6 +274,8 @@ class TaskContractService:
         audio_resources = resource_index.by_kind("audio")
         video_resources = resource_index.by_kind("video")
         inherited_tool_group = task_context_decision.inherited_tool_group
+        no_web_constraint = has_no_web_constraint(text)
+        no_workspace_constraint = has_no_workspace_constraint(text)
 
         if image_resources and (
             cls._looks_like_image_task(text, task_intent, current_image_files)
@@ -328,7 +330,7 @@ class TaskContractService:
             task_type = "media_extraction"
 
         web_required = cls._looks_like_web_task(text)
-        if not web_required and not requirements:
+        if not web_required and not requirements and not no_web_constraint:
             web_required = inherited_tool_group == "web_research"
 
         if web_required:
@@ -361,7 +363,7 @@ class TaskContractService:
             task_type = "web_research"
 
         workspace_required = not requirements and cls._looks_like_workspace_task(text)
-        if not workspace_required and not requirements:
+        if not workspace_required and not requirements and not no_workspace_constraint:
             workspace_required = inherited_tool_group == "workspace_read"
 
         if workspace_required:
@@ -462,7 +464,7 @@ class TaskContractService:
     @staticmethod
     def _looks_like_web_task(text: str) -> bool:
         text = text or ""
-        if _NO_WEB_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
+        if has_no_web_constraint(text) or _LOCAL_RUNTIME_RE.search(text):
             return False
         return bool(
             _URL_RE.search(text)
@@ -473,6 +475,8 @@ class TaskContractService:
 
     @staticmethod
     def _looks_like_workspace_task(text: str) -> bool:
+        if has_no_workspace_constraint(text or ""):
+            return False
         return bool(_WORKSPACE_TASK_HINT_RE.search(text or ""))
 
     @staticmethod
@@ -700,8 +704,10 @@ def semantic_contract_skip_reason(
     message = _compact(current_message)
     if not message or len(message) > 500:
         return "message is empty or too long for semantic classification"
-    if _NO_WEB_RE.search(message):
+    if has_no_web_constraint(message):
         return "user explicitly disabled web/search evidence"
+    if has_no_workspace_constraint(message):
+        return "user explicitly disabled workspace/file evidence"
     if _PURE_ANSWER_RE.search(message):
         return "pure answer request does not need semantic evidence"
     if _LOCAL_RUNTIME_RE.search(message):

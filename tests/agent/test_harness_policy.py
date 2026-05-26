@@ -87,6 +87,29 @@ def test_generic_python_debug_question_does_not_require_workspace_or_web():
     assert contract.requirements == ()
 
 
+def test_explicit_no_web_and_no_file_constraints_hide_tools():
+    text = "\u4e0d\u8981\u8b80\u6a94\u4e5f\u4e0d\u8981\u4e0a\u7db2\uff0c\u53ea\u56de\u7b54\u9019\u662f\u4ec0\u9ebc\u985e\u578b\u7684\u554f\u984c"
+    intent = TaskIntentService().classify(text)
+    profile = HarnessProfileService().select(intent)
+    policy = HarnessPolicyService().select(profile)
+    permission_policy = policy.to_permission_policy()
+    contract = TaskContractService.build_deterministic(
+        task_intent=intent,
+        current_message=intent.objective,
+        harness_profile=profile,
+    )
+
+    assert profile.name == "chat"
+    assert contract.requirements == ()
+    assert "constraint:no_web" in profile.to_metadata()["selection"]["matched_signals"]
+    assert "constraint:no_workspace" in profile.to_metadata()["selection"]["matched_signals"]
+    assert permission_policy.is_tool_exposed("web_research") is False
+    assert permission_policy.is_tool_exposed("web_search") is False
+    assert permission_policy.is_tool_exposed("read_file") is False
+    assert permission_policy.is_tool_exposed("list_dir") is False
+    assert permission_policy.is_tool_exposed("search_history") is True
+
+
 def test_research_harness_policy_allows_web_without_workspace_mutation():
     policy = _policy("幫我查一下最新消息並附來源")
     permission_policy = policy.to_permission_policy()

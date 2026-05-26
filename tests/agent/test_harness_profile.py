@@ -48,6 +48,17 @@ def test_harness_profile_selects_chat_for_plain_question():
     assert profile.to_metadata()["selection"]["matched_signals"] == ["fallback:chat"]
 
 
+def test_harness_profile_respects_explicit_no_web_and_no_file_constraints():
+    profile = _profile("\u4e0d\u8981\u8b80\u6a94\u4e5f\u4e0d\u8981\u4e0a\u7db2\uff0c\u5e6b\u6211\u89e3\u91cb Python ModuleNotFoundError")
+    metadata = profile.to_metadata()
+
+    assert profile.name == "chat"
+    assert "web_research" in profile.denied_tools
+    assert "read_file" in profile.denied_tools
+    assert "constraint:no_web" in metadata["selection"]["matched_signals"]
+    assert "constraint:no_workspace" in metadata["selection"]["matched_signals"]
+
+
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
     intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)
