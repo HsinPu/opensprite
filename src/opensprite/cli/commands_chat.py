@@ -95,6 +95,7 @@ async def run_web_chat(
     run_status = ""
     run_events: list[dict[str, Any]] = []
     reply_text = ""
+    terminal_run_seen = False
     resolved_session_id = session_id or ""
     resolved_external_chat_id = external_chat_id
 
@@ -139,12 +140,14 @@ async def run_web_chat(
                         run_events.append(frame)
                         run_id = run_id or str(frame.get("run_id") or "") or None
                         if frame.get("event_type") in TERMINAL_RUN_EVENTS:
+                            terminal_run_seen = True
                             run_status = str(frame.get("status") or "")
                             if not run_status and isinstance(frame.get("payload"), dict):
                                 run_status = str(frame["payload"].get("status") or "")
                     elif frame.get("type") == "message":
                         reply_text = str(frame.get("text") or "")
-                        break
+                        if terminal_run_seen or not run_id:
+                            break
     except (ClientError, asyncio.TimeoutError, TimeoutError, OSError) as exc:
         raise RuntimeError(f"Web gateway chat failed: {exc}") from exc
 
