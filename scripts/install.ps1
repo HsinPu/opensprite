@@ -250,7 +250,7 @@ function Start-Gateway {
 
     $configPath = Ensure-DefaultConfig
     $openSprite = Join-Path $InstallDir ".venv\Scripts\opensprite.exe"
-    Write-Info "Starting OpenSprite background gateway"
+    Write-Info "Installing OpenSprite startup task and starting background gateway"
     $previousErrorAction = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
@@ -258,7 +258,7 @@ function Start-Gateway {
     } finally {
         $ErrorActionPreference = $previousErrorAction
     }
-    Invoke-Checked $openSprite @("service", "start", "--config", $configPath) $InstallDir
+    Invoke-Checked $openSprite @("service", "install", "--config", $configPath, "--start") $InstallDir
     Invoke-Checked $openSprite @("service", "status") $InstallDir
 }
 
@@ -280,6 +280,8 @@ function Print-Success {
     Write-Host "  opensprite service start"
     Write-Host "  opensprite service status"
     Write-Host "  opensprite service stop"
+    Write-Host ""
+    Write-Host "Windows installs a Task Scheduler logon task so OpenSprite starts after reboot."
     Write-Host ""
     Write-Host "Logs:"
     Write-Host "  Get-Content -Wait `"$AppHome\logs\gateway.log`""

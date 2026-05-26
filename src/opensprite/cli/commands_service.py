@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import platform
 from pathlib import Path
 from typing import Any, Callable
 
@@ -14,11 +15,27 @@ def service_install_command(
     start: bool,
     resolve_config_path: Callable[[str | None], Path],
     service_linux_module: Any,
+    service_background_module: Any,
     handle_service_error: Callable[[Exception], None],
 ) -> None:
-    """Install OpenSprite as a Linux systemd user service."""
+    """Install OpenSprite background startup integration for the current platform."""
     try:
         config_path = resolve_config_path(config)
+        if platform.system() == "Windows":
+            task_name = service_background_module.install_startup_task(config_path=config_path)
+            typer.echo(f"Installed startup task: {task_name}")
+            typer.echo(f"Config: {config_path}")
+            if start:
+                try:
+                    service_background_module.stop_service()
+                except FileNotFoundError:
+                    pass
+                status = service_background_module.start_service(config_path=config_path)
+                typer.echo(f"Started OpenSprite background gateway (PID {status.pid}).")
+                typer.echo(f"Log: {status.log_file}")
+            else:
+                typer.echo("Started: no")
+            return
         service_file = service_linux_module.install_service(config_path, start=start)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         handle_service_error(exc)
@@ -29,10 +46,22 @@ def service_install_command(
     typer.echo("Tip: run `loginctl enable-linger $USER` if you want the user service to stay up after logout.")
 
 
-def service_uninstall_command(*, service_linux_module: Any, handle_service_error: Callable[[Exception], None]) -> None:
-    """Uninstall the OpenSprite Linux systemd user service."""
+def service_uninstall_command(
+    *,
+    service_linux_module: Any,
+    service_background_module: Any,
+    handle_service_error: Callable[[Exception], None],
+) -> None:
+    """Uninstall OpenSprite background startup integration."""
     try:
-        removed = service_linux_module.uninstall_service()
+        if platform.system() == "Windows":
+            try:
+                service_background_module.stop_service()
+            except FileNotFoundError:
+                pass
+            removed = service_background_module.uninstall_startup_task()
+        else:
+            removed = service_linux_module.uninstall_service()
     except RuntimeError as exc:
         handle_service_error(exc)
 
@@ -124,7 +153,7 @@ def service_status_command(
             typer.echo(f"Enabled: {format_presence(status.enabled)}")
             typer.echo(f"Active: {format_presence(status.active)}")
             return
-        status = service_background_module.get_service_status()
+        status = service_background_module.get_service_status(include_startup=True)
     except RuntimeError as exc:
         handle_service_error(exc)
 
@@ -134,3 +163,6 @@ def service_status_command(
     typer.echo(f"PID: {status.pid or '<none>'}")
     typer.echo(f"PID File: {status.pid_file}")
     typer.echo(f"Log: {status.log_file}")
+    typer.echo(f"Startup: {format_presence(status.startup_enabled)}")
+    if status.startup_task_name:
+        typer.echo(f"Startup Task: {status.startup_task_name}")

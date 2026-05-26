@@ -76,6 +76,23 @@ function Stop-Gateway {
     }
 }
 
+function Remove-StartupTask {
+    $openSprite = Join-Path $InstallDir ".venv\Scripts\opensprite.exe"
+    if (Test-Path $openSprite) {
+        Write-Info "Removing OpenSprite startup task"
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            & $openSprite service uninstall 2>&1 | Out-Null
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        return
+    }
+
+    schtasks /Delete /TN "OpenSprite Gateway" /F 2>$null | Out-Null
+}
+
 function Remove-Shim {
     $shimPath = Join-Path $env:LOCALAPPDATA "Microsoft\WindowsApps\opensprite.cmd"
     if (-not (Test-Path $shimPath)) { return }
@@ -118,6 +135,7 @@ if ((Test-UnsafePath $InstallDir) -or (Test-UnsafePath $AppHome)) {
 
 Confirm-Uninstall
 Stop-Gateway
+Remove-StartupTask
 Remove-Shim
 Remove-Code
 Remove-Home

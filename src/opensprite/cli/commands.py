@@ -493,21 +493,23 @@ def service_install(
         help="Start the service immediately after installation.",
     ),
 ) -> None:
-    """Install OpenSprite as a Linux systemd user service."""
+    """Install OpenSprite background startup integration."""
     commands_service.service_install_command(
         config=config,
         start=start,
         resolve_config_path=_resolve_config_path,
         service_linux_module=service_linux,
+        service_background_module=service_background,
         handle_service_error=_handle_service_error,
     )
 
 
 @service_app.command("uninstall")
 def service_uninstall() -> None:
-    """Uninstall the OpenSprite Linux systemd user service."""
+    """Uninstall OpenSprite background startup integration."""
     commands_service.service_uninstall_command(
         service_linux_module=service_linux,
+        service_background_module=service_background,
         handle_service_error=_handle_service_error,
     )
 

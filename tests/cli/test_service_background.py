@@ -165,15 +165,71 @@ def test_stop_service_uses_taskkill_on_windows(tmp_path, monkeypatch):
     assert not pid_file.exists()
 
 
+def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return subprocess.CompletedProcess(args, 0, stdout="SUCCESS", stderr="")
+
+    task_name = service_background.install_startup_task(
+        config_path=tmp_path / "opensprite.json",
+        python_executable=tmp_path / "python.exe",
+        run=fake_run,
+    )
+
+    assert task_name == "OpenSprite Gateway"
+    args, kwargs = calls[0]
+    assert args[:6] == ["schtasks", "/Create", "/TN", "OpenSprite Gateway", "/SC", "ONLOGON"]
+    assert "/TR" in args
+    task_run = args[args.index("/TR") + 1]
+    assert "python.exe" in task_run
+    assert "-m" in task_run
+    assert "opensprite" in task_run
+    assert "service" in task_run
+    assert "start" in task_run
+    assert str((tmp_path / "opensprite.json").resolve()) in task_run
+    assert "/F" in args
+    assert kwargs["capture_output"] is True
+
+
+def test_get_service_status_can_include_windows_startup_task(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(service_background, "is_process_running", lambda pid: False)
+    monkeypatch.setattr(service_background, "is_startup_task_installed", lambda: False)
+
+    status = service_background.get_service_status(home=tmp_path, include_startup=True)
+    assert status.startup_enabled is False
+
+    monkeypatch.setattr(service_background, "is_startup_task_installed", lambda: True)
+    status = service_background.get_service_status(home=tmp_path, include_startup=True)
+    assert status.startup_enabled is True
+    assert status.startup_task_name == "OpenSprite Gateway"
+
+
+def test_service_install_command_registers_windows_startup_task(monkeypatch, tmp_path):
+    monkeypatch.setattr("opensprite.cli.commands_service.platform.system", lambda: "Windows")
+    monkeypatch.setattr("opensprite.cli.commands.service_background.install_startup_task", lambda config_path: "OpenSprite Gateway")
+
+    result = runner.invoke(app, ["service", "install", "--config", str(tmp_path / "opensprite.json"), "--no-start"])
+
+    assert result.exit_code == 0
+    assert "Installed startup task: OpenSprite Gateway" in result.stdout
+    assert "Started: no" in result.stdout
+
+
 def test_service_status_command_renders_detached_status(monkeypatch, tmp_path):
     monkeypatch.setattr("opensprite.cli.commands.platform.system", lambda: "Windows")
     monkeypatch.setattr(
         "opensprite.cli.commands.service_background.get_service_status",
-        lambda: service_background.BackgroundServiceStatus(
+        lambda **kwargs: service_background.BackgroundServiceStatus(
             running=True,
             pid=4321,
             pid_file=tmp_path / "gateway.pid",
             log_file=tmp_path / "logs" / "gateway.log",
+            startup_enabled=True,
+            startup_task_name="OpenSprite Gateway",
         ),
     )
 
@@ -183,6 +239,8 @@ def test_service_status_command_renders_detached_status(monkeypatch, tmp_path):
     assert "Mode: detached process" in result.stdout
     assert "Active: yes" in result.stdout
     assert "PID: 4321" in result.stdout
+    assert "Startup: yes" in result.stdout
+    assert "Startup Task: OpenSprite Gateway" in result.stdout
 
 
 def test_linux_service_status_uses_detached_when_unit_is_not_installed(monkeypatch, tmp_path):
@@ -193,7 +251,7 @@ def test_linux_service_status_uses_detached_when_unit_is_not_installed(monkeypat
     )
     monkeypatch.setattr(
         "opensprite.cli.commands.service_background.get_service_status",
-        lambda: service_background.BackgroundServiceStatus(
+        lambda **kwargs: service_background.BackgroundServiceStatus(
             running=False,
             pid=None,
             pid_file=tmp_path / "gateway.pid",

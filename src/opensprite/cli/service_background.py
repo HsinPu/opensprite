@@ -20,6 +20,11 @@ class BackgroundServiceStatus:
     pid: int | None
     pid_file: Path
     log_file: Path
+    startup_enabled: bool = False
+    startup_task_name: str | None = None
+
+
+WINDOWS_STARTUP_TASK_NAME = "OpenSprite Gateway"
 
 
 def get_app_home(home: Path | None = None) -> Path:
@@ -133,6 +138,84 @@ def _read_log_tail(log_file: Path, limit: int = 2000) -> str:
     return data[-limit:].decode("utf-8", errors="replace").strip()
 
 
+def _quote_task_command_part(value: str) -> str:
+    return '"' + value.replace('"', r'\"') + '"'
+
+
+def _build_windows_startup_command(config_path: Path | None, *, python_executable: Path | None = None) -> str:
+    python_path = resolve_gateway_python(python_executable)
+    parts = [str(python_path), "-m", "opensprite", "service", "start"]
+    if config_path is not None:
+        parts.extend(["--config", str(Path(config_path).expanduser().resolve())])
+    return " ".join(_quote_task_command_part(part) for part in parts)
+
+
+def install_startup_task(
+    *,
+    config_path: Path | None = None,
+    python_executable: Path | None = None,
+    run=subprocess.run,
+) -> str:
+    """Register a Windows logon startup task that starts the detached gateway."""
+    if platform.system() != "Windows":
+        raise RuntimeError("Startup task installation is only supported on Windows.")
+    task_command = _build_windows_startup_command(config_path, python_executable=python_executable)
+    result = run(
+        [
+            "schtasks",
+            "/Create",
+            "/TN",
+            WINDOWS_STARTUP_TASK_NAME,
+            "/SC",
+            "ONLOGON",
+            "/TR",
+            task_command,
+            "/RL",
+            "LIMITED",
+            "/F",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "Failed to register Windows startup task."
+        raise RuntimeError(message)
+    return WINDOWS_STARTUP_TASK_NAME
+
+
+def uninstall_startup_task(*, run=subprocess.run) -> bool:
+    """Remove the Windows logon startup task if it exists."""
+    if platform.system() != "Windows":
+        raise RuntimeError("Startup task uninstall is only supported on Windows.")
+    result = run(
+        ["schtasks", "/Delete", "/TN", WINDOWS_STARTUP_TASK_NAME, "/F"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return True
+    output = f"{result.stdout}\n{result.stderr}".lower()
+    if "cannot find" in output or "does not exist" in output:
+        return False
+    message = result.stderr.strip() or result.stdout.strip() or "Failed to remove Windows startup task."
+    raise RuntimeError(message)
+
+
+def is_startup_task_installed(*, run=subprocess.run) -> bool:
+    """Return whether the Windows logon startup task is registered."""
+    if platform.system() != "Windows":
+        return False
+    result = run(
+        ["schtasks", "/Query", "/TN", WINDOWS_STARTUP_TASK_NAME],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def start_service(
     *,
     config_path: Path | None = None,
@@ -236,7 +319,7 @@ def stop_service(
         pass
 
 
-def get_service_status(*, home: Path | None = None) -> BackgroundServiceStatus:
+def get_service_status(*, home: Path | None = None, include_startup: bool = False) -> BackgroundServiceStatus:
     """Return detached gateway runtime status."""
     pid_file = get_pid_file(home)
     log_file = get_log_file(home)
@@ -245,7 +328,15 @@ def get_service_status(*, home: Path | None = None) -> BackgroundServiceStatus:
     if pid is not None and not running:
         _cleanup_stale_pid(pid_file)
         pid = None
-    return BackgroundServiceStatus(running=running, pid=pid, pid_file=pid_file, log_file=log_file)
+    startup_enabled = include_startup and is_startup_task_installed()
+    return BackgroundServiceStatus(
+        running=running,
+        pid=pid,
+        pid_file=pid_file,
+        log_file=log_file,
+        startup_enabled=startup_enabled,
+        startup_task_name=WINDOWS_STARTUP_TASK_NAME if startup_enabled else None,
+    )
 
 
 __all__ = [
@@ -253,7 +344,10 @@ __all__ = [
     "get_log_file",
     "get_pid_file",
     "get_service_status",
+    "install_startup_task",
     "is_process_running",
+    "is_startup_task_installed",
     "start_service",
     "stop_service",
+    "uninstall_startup_task",
 ]
