@@ -52,11 +52,19 @@ class LlmStepEvent:
     iteration: int
     attempt: int
     status: str
+    provider: str | None
     model: str | None
     duration_ms: int
     estimated_input_tokens: int
     message_tokens: int
     tool_schema_tokens: int
+    tools_enabled: bool = False
+    tool_count: int = 0
+    temperature: float | None = None
+    max_tokens: int | None = None
+    top_p: float | None = None
+    frequency_penalty: float | None = None
+    presence_penalty: float | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
     reasoning_tokens: int | None = None
@@ -1302,11 +1310,19 @@ Output exactly these sections when applicable:
                             iteration=iteration + 1,
                             attempt=request_attempt,
                             status="completed",
+                            provider=type(active_provider).__name__,
                             model=getattr(response, "model", None),
                             duration_ms=duration_ms,
                             estimated_input_tokens=estimated_tokens,
                             message_tokens=message_tokens,
                             tool_schema_tokens=tool_schema_tokens,
+                            tools_enabled=bool(tools),
+                            tool_count=len(tools or []),
+                            temperature=dec_temp,
+                            max_tokens=dec_max,
+                            top_p=dec_top_p,
+                            frequency_penalty=dec_freq,
+                            presence_penalty=dec_pres,
                             output_tokens=output_tokens,
                             total_tokens=total_tokens,
                             reasoning_tokens=reasoning_tokens,
@@ -1325,11 +1341,19 @@ Output exactly these sections when applicable:
                             iteration=iteration + 1,
                             attempt=request_attempt,
                             status="error",
+                            provider=type(active_provider).__name__,
                             model=self._get_token_model(active_provider),
                             duration_ms=duration_ms,
                             estimated_input_tokens=estimated_tokens,
                             message_tokens=message_tokens,
                             tool_schema_tokens=tool_schema_tokens,
+                            tools_enabled=bool(tools),
+                            tool_count=len(tools or []),
+                            temperature=dec_temp,
+                            max_tokens=dec_max,
+                            top_p=dec_top_p,
+                            frequency_penalty=dec_freq,
+                            presence_penalty=dec_pres,
                             error=error_preview,
                             retryable=retry_delay.retryable,
                             retry_after_ms=retry_delay.retry_after_ms,

@@ -267,7 +267,8 @@ class RunTraceRecorder:
             metadata = vars(step_event)
             content = (
                 f"iteration={step_event.iteration} attempt={step_event.attempt} "
-                f"status={step_event.status} model={step_event.model or 'unknown'}"
+                f"status={step_event.status} provider={step_event.provider or 'unknown'} "
+                f"model={step_event.model or 'unknown'}"
             )
             await self.add_part(
                 session_id,

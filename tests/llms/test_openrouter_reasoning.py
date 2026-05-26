@@ -5,6 +5,19 @@ from opensprite.llms import ChatMessage
 from opensprite.llms.openrouter import OpenRouterLLM
 
 
+def test_openrouter_client_uses_openrouter_headers_and_longer_timeout():
+    provider = OpenRouterLLM(api_key="secret-key", default_model="qwen/qwen3.6-27b")
+
+    headers = provider._client_kwargs["default_headers"]
+    timeout = provider._client_kwargs["timeout"]
+
+    assert headers["HTTP-Referer"] == "https://github.com/HsinPu/opensprite"
+    assert headers["X-OpenRouter-Title"] == "OpenSprite"
+    assert headers["X-Title"] == "OpenSprite"
+    assert timeout.connect == 20.0
+    assert timeout.read == 120.0
+
+
 def test_openrouter_chat_preserves_reasoning_details_in_non_streaming_calls():
     calls = []
 
@@ -47,7 +60,8 @@ def test_openrouter_chat_preserves_reasoning_details_in_non_streaming_calls():
     assert response.content == "final answer"
     assert response.reasoning_details == [{"type": "reasoning.text", "text": "thinking"}]
     assert "provider" not in calls[0]
-    assert calls[0]["reasoning"] == {"effort": "medium"}
+    assert "reasoning" not in calls[0]
+    assert calls[0]["extra_body"]["reasoning"] == {"effort": "medium"}
     assert calls[0]["messages"][0]["reasoning_details"] == [
         {"type": "reasoning.text", "text": "previous thinking"}
     ]
@@ -86,8 +100,8 @@ def test_openrouter_chat_sends_optional_request_settings_when_configured():
     response = asyncio.run(provider.chat([ChatMessage(role="user", content="think")]))
 
     assert response.content == "final answer"
-    assert calls[0]["reasoning"] == {"effort": "high", "exclude": True}
-    assert calls[0]["provider"] == {"sort": "throughput", "require_parameters": True}
+    assert calls[0]["extra_body"]["reasoning"] == {"effort": "high", "exclude": True}
+    assert calls[0]["extra_body"]["provider"] == {"sort": "throughput", "require_parameters": True}
 
 
 def test_openrouter_chat_retries_without_reasoning_when_reasoning_fails():
@@ -96,7 +110,7 @@ def test_openrouter_chat_retries_without_reasoning_when_reasoning_fails():
     class FakeCompletions:
         async def create(self, **kwargs):
             calls.append(kwargs)
-            if "reasoning" in kwargs:
+            if kwargs.get("extra_body", {}).get("reasoning"):
                 raise RuntimeError("unsupported reasoning parameter")
             return SimpleNamespace(
                 id="response-id",
@@ -117,8 +131,8 @@ def test_openrouter_chat_retries_without_reasoning_when_reasoning_fails():
     response = asyncio.run(provider.chat([ChatMessage(role="user", content="hello")]))
 
     assert response.content == "fallback answer"
-    assert calls[0]["reasoning"] == {"effort": "medium"}
-    assert "reasoning" not in calls[1]
+    assert calls[0]["extra_body"]["reasoning"] == {"effort": "medium"}
+    assert "extra_body" not in calls[1]
     assert provider.reasoning_enabled is False
 
 

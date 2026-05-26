@@ -12,6 +12,10 @@ from .tool_args import parse_tool_arguments
 from ..utils.log import logger
 
 
+_OPENROUTER_TIMEOUT_SECONDS = 120.0
+_OPENROUTER_CONNECT_TIMEOUT_SECONDS = 20.0
+
+
 def _safe_len(value: Any) -> str:
     try:
         return str(len(value))
@@ -85,14 +89,24 @@ class OpenRouterLLM(LLMProvider):
         self.reasoning_exclude = reasoning_exclude
         self.provider_sort = provider_sort
         self.require_parameters = require_parameters
+        from httpx import Timeout
+
         self._client_kwargs = {
             "api_key": api_key,
             "base_url": base_url or "https://openrouter.ai/api/v1",
             # OpenRouter 需要這些 headers
             "default_headers": {
                 "HTTP-Referer": "https://github.com/HsinPu/opensprite",
+                "X-OpenRouter-Title": "OpenSprite",
                 "X-Title": "OpenSprite"
             },
+            "timeout": Timeout(
+                _OPENROUTER_TIMEOUT_SECONDS,
+                connect=_OPENROUTER_CONNECT_TIMEOUT_SECONDS,
+                read=_OPENROUTER_TIMEOUT_SECONDS,
+                write=30.0,
+                pool=_OPENROUTER_CONNECT_TIMEOUT_SECONDS,
+            ),
         }
         self.client = self._build_client()
 
@@ -105,7 +119,8 @@ class OpenRouterLLM(LLMProvider):
         try:
             return await self.client.chat.completions.create(**params)
         except Exception as exc:
-            if "reasoning" not in params:
+            extra_body = params.get("extra_body") if isinstance(params.get("extra_body"), dict) else {}
+            if "reasoning" not in extra_body:
                 raise
             logger.warning(
                 "OpenRouter reasoning request failed; retrying without reasoning: model={}, error={}",
@@ -117,7 +132,12 @@ class OpenRouterLLM(LLMProvider):
             self.reasoning_max_tokens = None
             self.reasoning_exclude = False
             retry_params = dict(params)
-            retry_params.pop("reasoning", None)
+            retry_extra_body = dict(extra_body)
+            retry_extra_body.pop("reasoning", None)
+            if retry_extra_body:
+                retry_params["extra_body"] = retry_extra_body
+            else:
+                retry_params.pop("extra_body", None)
             return await self.client.chat.completions.create(**retry_params)
     
     async def chat(
@@ -175,6 +195,7 @@ class OpenRouterLLM(LLMProvider):
         if presence_penalty is not None:
             params["presence_penalty"] = presence_penalty
 
+        extra_body: dict[str, Any] = {}
         reasoning: dict[str, Any] = {}
         if self.reasoning_enabled:
             if self.reasoning_effort:
@@ -184,7 +205,7 @@ class OpenRouterLLM(LLMProvider):
         if self.reasoning_exclude:
             reasoning["exclude"] = True
         if reasoning:
-            params["reasoning"] = reasoning
+            extra_body["reasoning"] = reasoning
 
         provider: dict[str, Any] = {}
         if self.provider_sort:
@@ -192,7 +213,9 @@ class OpenRouterLLM(LLMProvider):
         if self.require_parameters:
             provider["require_parameters"] = True
         if provider:
-            params["provider"] = provider
+            extra_body["provider"] = provider
+        if extra_body:
+            params["extra_body"] = extra_body
 
         # 加入 tools 如果有
         if tools:

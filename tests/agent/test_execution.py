@@ -679,7 +679,7 @@ def test_execution_engine_records_llm_step_usage_metadata():
             finish_reason="stop",
         )
     ])
-    engine = _make_engine(provider, ToolRegistry(), [])
+    engine = _make_engine(provider, ToolRegistry(), [], pass_decoding_params=True)
 
     result = asyncio.run(
         engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)
@@ -691,7 +691,13 @@ def test_execution_engine_records_llm_step_usage_metadata():
     assert step.iteration == 1
     assert step.attempt == 1
     assert step.status == "completed"
+    assert step.provider == "FakeProvider"
     assert step.model == "fake-model"
+    assert step.tools_enabled is False
+    assert step.tool_count == 0
+    assert step.temperature == 0.25
+    assert step.max_tokens == 32768
+    assert step.top_p == 0.95
     assert step.output_tokens == 7
     assert step.total_tokens == 18
     assert step.finish_reason == "stop"
@@ -780,6 +786,8 @@ def test_execution_engine_retries_transient_provider_errors_with_metadata():
     assert result.llm_step_events[0].retryable is True
     assert result.llm_step_events[0].retry_after_ms == 0
     assert result.llm_step_events[0].next_retry_at is not None
+    assert result.llm_step_events[0].provider == "RetryableThenSuccessProvider"
+    assert result.llm_step_events[1].provider == "RetryableThenSuccessProvider"
     assert statuses == [ExecutionEngine.PROVIDER_RETRY_STATUS_MESSAGE]
 
 

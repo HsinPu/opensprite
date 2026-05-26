@@ -122,6 +122,7 @@ def test_run_trace_recorder_persists_llm_step_part():
                     iteration=1,
                     attempt=1,
                     status="completed",
+                    provider="FakeProvider",
                     model="fake-model",
                     duration_ms=12,
                     estimated_input_tokens=42,
@@ -139,6 +140,8 @@ def test_run_trace_recorder_persists_llm_step_part():
 
     assert len(parts) == 1
     assert parts[0].part_type == "llm_step"
+    assert "provider=FakeProvider" in parts[0].content
+    assert parts[0].metadata["provider"] == "FakeProvider"
     assert parts[0].metadata["model"] == "fake-model"
     assert parts[0].metadata["estimated_input_tokens"] == 42
     assert serialize_run_part(parts[0])["artifact"]["kind"] == "llm"
