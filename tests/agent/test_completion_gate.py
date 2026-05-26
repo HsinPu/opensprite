@@ -1582,6 +1582,37 @@ def test_completion_gate_allows_optional_fetch_errors_after_successful_fetch_sou
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_removed_search_knowledge_error_after_successful_sources():
+    intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Qwen's current model line includes Qwen3, with details from qwenlm.github.io and a fetched "
+        "model card. These traceable sources satisfy the request even though an old search_knowledge "
+        "tool call failed."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=3,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_fetch", ok=True),
+                ToolEvidence(name="search_knowledge", ok=False, metadata={"error": "Tool 'search_knowledge' not found"}),
+            ),
+            task_artifacts=(_web_fetch_artifact(), _web_fetch_artifact()),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_still_blocks_failed_fetch_tool_errors():
     intent = TaskIntentService().classify("Please summarize https://www.reddit.com/dev/api/")
     contract = TaskContractService.build(
