@@ -165,6 +165,12 @@ _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u6210\u4e2d\u6587",
     "\u8a08\u7b97",
 )
+_NO_CODE_CHANGE_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\s+(?:edit|modify|change|write|patch|implement)\b"
+    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:edit|modify|change|write|patch|implement)\s+(?:files?|code)?\b"
+    r"|\b(?:plan only|analysis only|read[- ]only|no code changes?)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -398,6 +404,8 @@ def _verification_hint(kind: str, text: str) -> str | None:
 
 def _expects_code_change(kind: str, text: str) -> bool:
     lowered = text.lower()
+    if _NO_CODE_CHANGE_RE.search(text):
+        return False
     if kind in {"implementation", "refactor"}:
         return True
     if kind != "debug":

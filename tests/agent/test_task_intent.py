@@ -43,6 +43,15 @@ def test_task_intent_debug_diagnosis_does_not_require_code_change():
     assert intent.expects_verification is False
 
 
+def test_task_intent_respects_no_edit_planning_constraint():
+    intent = TaskIntentService().classify(
+        "Plan a refactor for src/opensprite/tools/web_research.py, but do not edit files."
+    )
+
+    assert intent.kind == "refactor"
+    assert intent.expects_code_change is False
+
+
 def test_task_intent_keeps_translation_as_direct_question():
     intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
 
