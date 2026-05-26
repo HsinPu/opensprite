@@ -1582,6 +1582,67 @@ def test_completion_gate_allows_optional_fetch_errors_after_successful_fetch_sou
     assert completion.status == "complete"
 
 
+def test_completion_gate_allows_optional_fetch_errors_after_web_research_fetches_sources():
+    intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Qwen's current model line includes Qwen3, with details from qwenlm.github.io and a fetched "
+        "Hugging Face model card. These sources satisfy the request even though one extra URL returned 404."
+    )
+    web_research_artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        content_preview="source",
+        metadata={
+            "coverage": {"fetched_count": 2, "target_met": True},
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://qwenlm.github.io/blog/qwen3/",
+                    "title": "Qwen3",
+                    "snippet": "Qwen3 release notes and model details.",
+                    "content_chars": 1200,
+                    "has_main_content": True,
+                    "is_too_short": False,
+                    "blocked_or_challenge": False,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://huggingface.co/Qwen/Qwen3-30B-A3B-Instruct-2507",
+                    "title": "Qwen3 model card",
+                    "snippet": "Model card for a recent Qwen3 instruct checkpoint.",
+                    "content_chars": 1200,
+                    "has_main_content": True,
+                    "is_too_short": False,
+                    "blocked_or_challenge": False,
+                },
+            ],
+            "source_count": 2,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            had_tool_error=True,
+            tool_evidence=(
+                ToolEvidence(name="web_research", ok=True),
+                ToolEvidence(name="web_fetch", ok=False, metadata={"error": "HTTP 404"}),
+            ),
+            task_artifacts=(web_research_artifact,),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_allows_removed_search_knowledge_error_after_successful_sources():
     intent = TaskIntentService().classify("Find current Qwen model releases and summarize them with sources.")
     contract = TaskContractService.build(

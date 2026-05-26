@@ -607,10 +607,30 @@ def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResul
     for artifact in execution_result.task_artifacts:
         if artifact.kind != "web_source" or not artifact.ok:
             continue
-        if artifact.source_tool not in {"web_fetch", "browser_navigate", "browser_snapshot"}:
-            continue
         sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if isinstance(sources, list) and sources:
+        if artifact.source_tool in {"web_fetch", "browser_navigate", "browser_snapshot"} and isinstance(sources, list) and sources:
+            return True
+        if artifact.source_tool == "web_research" and _web_research_artifact_has_successful_fetch(artifact):
+            return True
+    return False
+
+
+def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
+    metadata = artifact.metadata if isinstance(artifact.metadata, dict) else {}
+    coverage = metadata.get("coverage") if isinstance(metadata.get("coverage"), dict) else {}
+    if int(coverage.get("fetched_count") or 0) > 0:
+        return True
+    sources = metadata.get("sources")
+    if not isinstance(sources, list):
+        return False
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        if source.get("tool_name") != "web_fetch":
+            continue
+        if source.get("blocked_or_challenge") or source.get("is_too_short"):
+            continue
+        if int(source.get("content_chars") or 0) > 0 or source.get("has_main_content"):
             return True
     return False
 
