@@ -817,15 +817,8 @@ class AgentTurnRunner:
                     external_chat_id=turn.external_chat_id,
                 )
             self._finalize_learning_reuse(turn.session_id, run_id, True)
-            self._schedule_curator(
-                turn.session_id,
-                run_id,
-                turn.channel,
-                turn.external_chat_id,
-                aggregate_result,
-            )
 
-        return await self.response_finalizer.finalize(
+        assistant_message = await self.response_finalizer.finalize(
             session_id=turn.session_id,
             run_id=run_id,
             response=response,
@@ -842,6 +835,14 @@ class AgentTurnRunner:
             videos=outbound_media["videos"] or None,
             after_save=after_response_saved,
         )
+        self._schedule_curator(
+            turn.session_id,
+            run_id,
+            turn.channel,
+            turn.external_chat_id,
+            aggregate_result,
+        )
+        return assistant_message
 
     @staticmethod
     def _extract_follow_up_resume_request(metadata: dict[str, Any] | None) -> dict[str, str] | None:

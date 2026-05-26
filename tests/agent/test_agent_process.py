@@ -522,6 +522,58 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert parts[2].metadata["context_compactions"] == 1
 
 
+def test_agent_process_schedules_curator_after_run_finished(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+
+        async def fake_call_llm(*args, **kwargs):
+            return ExecutionResult(content="assistant reply", executed_tool_calls=0)
+
+        async def fake_maintenance(session_id):
+            return None
+
+        agent.call_llm = fake_call_llm
+        agent._maybe_consolidate_memory = fake_maintenance
+        agent._maybe_update_recent_summary = fake_maintenance
+        agent._maybe_update_user_profile = fake_maintenance
+        agent._maybe_update_active_task = fake_maintenance
+
+        await agent.process(
+            UserMessage(
+                text="hello",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+                sender_id="user-1",
+            )
+        )
+        await agent.wait_for_background_maintenance()
+
+        run = next(iter(storage._runs.values()))
+        return await storage.get_run_events("web:browser-1", run.run_id)
+
+    events = asyncio.run(scenario())
+    event_types = [event.event_type for event in events]
+
+    assert "run_finished" in event_types
+    assert "curator.started" in event_types
+    assert event_types.index("run_finished") < event_types.index("curator.started")
+
+
 def test_agent_verify_hooks_emit_verification_events(tmp_path):
     async def scenario():
         storage = MemoryStorage()
