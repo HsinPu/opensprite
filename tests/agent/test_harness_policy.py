@@ -1,4 +1,5 @@
 from opensprite.agent.harness_policy import HarnessPolicyService
+from opensprite.agent.harness_profile import HarnessProfile
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.task_contract import TaskContractService, semantic_contract_skip_reason
 from opensprite.agent.task_intent import TaskIntentService
@@ -279,3 +280,96 @@ def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
     assert metadata["effective_policy"]["kind"] == "composite"
     assert "profile permission override" in metadata["constraints_applied"]
     assert any(item["field"] == "approval_mode" for item in metadata["blocked_relaxations"])
+
+
+def _registry_for_permission_baseline() -> ToolRegistry:
+    registry = ToolRegistry()
+    for name in (
+        "read_file",
+        "list_dir",
+        "web_search",
+        "web_fetch",
+        "web_research",
+        "apply_patch",
+        "exec",
+        "task_update",
+        "configure_mcp",
+        "delegate",
+        "analyze_image",
+        "send_media",
+    ):
+        registry.register(DummyTool(name))
+    return registry
+
+
+def _filtered_tool_names(profile: HarnessProfile) -> set[str]:
+    policy = HarnessPolicyService().select(profile)
+    return set(HarnessPolicyService().build_tool_registry(_registry_for_permission_baseline(), policy).tool_names)
+
+
+def test_permission_baseline_chat_profile_exposes_only_read_context_tools():
+    tool_names = _filtered_tool_names(HarnessProfile(name="chat", task_type="question"))
+
+    assert {"read_file", "list_dir"}.issubset(tool_names)
+    assert "web_search" not in tool_names
+    assert "web_fetch" not in tool_names
+    assert "web_research" not in tool_names
+    assert "apply_patch" not in tool_names
+    assert "exec" not in tool_names
+    assert "task_update" not in tool_names
+    assert "configure_mcp" not in tool_names
+
+
+def test_permission_baseline_research_profile_exposes_web_but_not_mutation_tools():
+    tool_names = _filtered_tool_names(HarnessProfile(name="research", task_type="web_research"))
+
+    assert {"read_file", "web_search", "web_fetch", "web_research"}.issubset(tool_names)
+    assert "apply_patch" not in tool_names
+    assert "exec" not in tool_names
+    assert "task_update" not in tool_names
+    assert "configure_mcp" not in tool_names
+
+
+def test_permission_baseline_workspace_analysis_profile_hides_task_update():
+    tool_names = _filtered_tool_names(HarnessProfile(name="coding", task_type="workspace_analysis"))
+
+    assert {"read_file", "list_dir", "web_search", "web_fetch", "delegate"}.issubset(tool_names)
+    assert "apply_patch" not in tool_names
+    assert "exec" not in tool_names
+    assert "task_update" not in tool_names
+    assert "configure_mcp" not in tool_names
+
+
+def test_permission_baseline_workspace_change_profile_allows_writes_and_asks_for_configuration():
+    policy = HarnessPolicyService().select(
+        HarnessProfile(
+            name="coding",
+            task_type="workspace_change",
+            approval_required_risk_levels=("external_side_effect", "configuration"),
+        )
+    )
+    filtered = HarnessPolicyService().build_tool_registry(_registry_for_permission_baseline(), policy)
+    tool_names = set(filtered.tool_names)
+
+    assert {"read_file", "apply_patch", "exec", "task_update", "delegate"}.issubset(tool_names)
+    assert "configure_mcp" in tool_names
+    decision = filtered.permission_policy.check("configure_mcp", {})
+    assert decision.allowed is False
+    assert decision.requires_approval is True
+
+
+def test_permission_baseline_ops_profile_exposes_approval_gated_tools():
+    policy = HarnessPolicyService().select(
+        HarnessProfile(
+            name="ops",
+            task_type="operations",
+            approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
+        )
+    )
+    filtered = HarnessPolicyService().build_tool_registry(_registry_for_permission_baseline(), policy)
+
+    assert "configure_mcp" in filtered.tool_names
+    assert "exec" in filtered.tool_names
+    decision = filtered.permission_policy.check("configure_mcp", {})
+    assert decision.allowed is False
+    assert decision.requires_approval is True
