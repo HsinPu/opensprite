@@ -6,22 +6,7 @@ import fnmatch
 from dataclasses import dataclass
 from typing import Any
 
-
-ALL_RISK_LEVELS = frozenset(
-    {
-        "read",
-        "write",
-        "execute",
-        "network",
-        "external_side_effect",
-        "configuration",
-        "delegation",
-        "memory",
-        "mcp",
-    }
-)
-
-APPROVAL_MODES = frozenset({"auto", "ask", "block"})
+from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPROVAL_MODES
 
 DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
     "read_file": frozenset({"read"}),
