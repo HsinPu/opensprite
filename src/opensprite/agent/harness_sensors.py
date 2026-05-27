@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .harness_inventory import SENSOR_IDS_BY_TASK_TYPE
+from .harness_inventory import expected_sensor_ids_for_task_type
 from .harness_scorecard import HarnessSensorResult
 
 if TYPE_CHECKING:
@@ -19,7 +19,7 @@ def evaluate_harness_sensors(
     completion_result: CompletionGateResult,
 ) -> tuple[HarnessSensorResult, ...]:
     """Evaluate the expected sensors for a harness task type."""
-    sensor_ids = SENSOR_IDS_BY_TASK_TYPE.get(task_type, ())
+    sensor_ids = expected_sensor_ids_for_task_type(task_type)
     return tuple(
         _evaluate_sensor(sensor_id, execution_result=execution_result, completion_result=completion_result)
         for sensor_id in sensor_ids

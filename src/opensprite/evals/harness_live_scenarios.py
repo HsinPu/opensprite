@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agent.harness_inventory import SENSOR_IDS_BY_TASK_TYPE
+from ..agent.harness_inventory import expected_sensor_ids_for_task_type
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.task_contract import TaskContractService
@@ -81,13 +81,14 @@ def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]
         harness_profile=profile,
     )
     visible = set(filtered.tool_names)
+    expected_sensor_ids = expected_sensor_ids_for_task_type(profile.task_type)
     checks = [
         _check("profile", profile.name == case["expected_profile"], f"Selected {profile.name}."),
         _check("contract", bool(contract.to_metadata()), f"Contract task type {contract.task_type}."),
         _check(
             "expected_sensors",
-            bool(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type)),
-            f"Expected sensors: {', '.join(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())) or '-'}.",
+            bool(expected_sensor_ids),
+            f"Expected sensors: {', '.join(expected_sensor_ids) or '-'}.",
         ),
     ]
     checks.extend(_check(f"visible:{tool}", tool in visible, f"{tool} visible={tool in visible}.") for tool in case.get("visible_tools", ()))
@@ -103,7 +104,7 @@ def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]
         "policy": policy.to_metadata(),
         "visible_tools": sorted(visible),
         "contract": contract.to_metadata(),
-        "expected_sensor_ids": list(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())),
+        "expected_sensor_ids": list(expected_sensor_ids),
     }
 
 

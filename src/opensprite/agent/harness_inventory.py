@@ -56,6 +56,11 @@ def build_harness_inventory() -> tuple[HarnessInventoryItem, ...]:
     return tuple(items)
 
 
+def expected_sensor_ids_for_task_type(task_type: str) -> tuple[str, ...]:
+    """Return the expected sensor ids for one harness task type."""
+    return SENSOR_IDS_BY_TASK_TYPE.get(task_type, ())
+
+
 def harness_inventory_payload() -> dict[str, Any]:
     """Return a stable payload for debug exports, evals, and future UI wiring."""
     items = build_harness_inventory()

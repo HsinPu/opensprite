@@ -1,4 +1,4 @@
-from opensprite.agent.harness_inventory import build_harness_inventory, harness_inventory_payload
+from opensprite.agent.harness_inventory import build_harness_inventory, expected_sensor_ids_for_task_type, harness_inventory_payload
 
 
 def test_harness_inventory_uses_representative_profiles_and_policies():
@@ -27,6 +27,7 @@ def test_harness_inventory_declares_expected_sensor_ids():
     assert "research.source_coverage" in items["research:web_research"].expected_sensor_ids
     assert "coding.verification" in items["coding:workspace_change"].expected_sensor_ids
     assert "ops.approval_boundary" in items["ops:operations"].expected_sensor_ids
+    assert expected_sensor_ids_for_task_type("question") == items["chat:conversation"].expected_sensor_ids
 
 
 def test_harness_inventory_payload_is_json_safe():

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from ..agent.harness_inventory import SENSOR_IDS_BY_TASK_TYPE
+from ..agent.harness_inventory import expected_sensor_ids_for_task_type
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.task_contract import TaskContractService
@@ -133,6 +133,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
         harness_profile=profile,
     )
 
+    expected_sensor_ids = expected_sensor_ids_for_task_type(profile.task_type)
     checks = [
         _expect_equal("profile", "Harness profile matches", profile.name, case.get("expected_profile")),
         _expect_equal(
@@ -200,7 +201,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
         _expect_non_empty(
             "expected_sensors",
             "Harness inventory declares expected sensors",
-            SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ()),
+            expected_sensor_ids,
         ),
     ]
 
@@ -215,7 +216,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
         "profile": profile.to_metadata(),
         "policy": policy.to_metadata(),
         "contract": contract.to_metadata(),
-        "expected_sensor_ids": list(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())),
+        "expected_sensor_ids": list(expected_sensor_ids),
     }
 
 
