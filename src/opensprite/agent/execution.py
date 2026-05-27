@@ -60,11 +60,6 @@ class LlmStepEvent:
     tool_schema_tokens: int
     tools_enabled: bool = False
     tool_count: int = 0
-    temperature: float | None = None
-    max_tokens: int | None = None
-    top_p: float | None = None
-    frequency_penalty: float | None = None
-    presence_penalty: float | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
     reasoning_tokens: int | None = None
@@ -1267,32 +1262,15 @@ Output exactly these sections when applicable:
                 )
                 started_at = time.perf_counter()
                 try:
-                    if self.pass_decoding_params:
-                        dec_temp = self.chat_temperature
-                        dec_max = self.chat_max_tokens
-                        dec_top_p = self.chat_top_p
-                        dec_freq = self.chat_frequency_penalty
-                        dec_pres = self.chat_presence_penalty
-                    else:
-                        dec_temp = dec_max = dec_top_p = dec_freq = dec_pres = None
                     logger.info(
                         f"[{log_id}] llm.request.attempt | iter={iteration + 1} attempt={request_attempt} "
                         f"provider={type(active_provider).__name__} model={self._get_token_model(active_provider) or '-'} "
                         f"messages={len(chat_messages)} tools={len(tools or [])} "
-                        f"estimated_tokens={estimated_tokens} message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens} "
-                        f"temperature={dec_temp if dec_temp is not None else '-'} "
-                        f"max_tokens={dec_max if dec_max is not None else '-'} top_p={dec_top_p if dec_top_p is not None else '-'} "
-                        f"frequency_penalty={dec_freq if dec_freq is not None else '-'} "
-                        f"presence_penalty={dec_pres if dec_pres is not None else '-'}"
+                        f"estimated_tokens={estimated_tokens} message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens}"
                     )
                     response = await active_provider.chat(
                         messages=chat_messages,
                         tools=tools,
-                        temperature=dec_temp,
-                        max_tokens=dec_max,
-                        top_p=dec_top_p,
-                        frequency_penalty=dec_freq,
-                        presence_penalty=dec_pres,
                         status_callback=on_llm_status,
                         response_delta_callback=_provider_response_delta if on_response_delta is not None else None,
                         tool_input_delta_callback=_provider_tool_input_delta if on_tool_input_delta is not None else None,
@@ -1318,11 +1296,6 @@ Output exactly these sections when applicable:
                             tool_schema_tokens=tool_schema_tokens,
                             tools_enabled=bool(tools),
                             tool_count=len(tools or []),
-                            temperature=dec_temp,
-                            max_tokens=dec_max,
-                            top_p=dec_top_p,
-                            frequency_penalty=dec_freq,
-                            presence_penalty=dec_pres,
                             output_tokens=output_tokens,
                             total_tokens=total_tokens,
                             reasoning_tokens=reasoning_tokens,
@@ -1349,11 +1322,6 @@ Output exactly these sections when applicable:
                             tool_schema_tokens=tool_schema_tokens,
                             tools_enabled=bool(tools),
                             tool_count=len(tools or []),
-                            temperature=dec_temp,
-                            max_tokens=dec_max,
-                            top_p=dec_top_p,
-                            frequency_penalty=dec_freq,
-                            presence_penalty=dec_pres,
                             error=error_preview,
                             retryable=retry_delay.retryable,
                             retry_after_ms=retry_delay.retry_after_ms,

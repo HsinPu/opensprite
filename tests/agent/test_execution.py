@@ -695,9 +695,6 @@ def test_execution_engine_records_llm_step_usage_metadata():
     assert step.model == "fake-model"
     assert step.tools_enabled is False
     assert step.tool_count == 0
-    assert step.temperature == 0.25
-    assert step.max_tokens == 32768
-    assert step.top_p == 0.95
     assert step.output_tokens == 7
     assert step.total_tokens == 18
     assert step.finish_reason == "stop"
