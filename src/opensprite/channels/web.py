@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from .identity import build_session_id, normalize_identifier
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfile
-from ..agent.tool_access import ToolAccessResolver
+from ..agent.tool_access import ToolAccessResolver, summarize_effective_risks
 from ..auth.credentials import (
     CredentialNotFoundError,
     CredentialStoreError,
@@ -103,7 +103,7 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
-from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, ToolPermissionPolicy
+from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, CompositeToolPermissionPolicy, ToolPermissionPolicy
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
@@ -565,12 +565,25 @@ class WebAdapter(MessageAdapter):
                 if profile_permission_config is not None
                 else None
             )
+            user_policy = (
+                CompositeToolPermissionPolicy(global_permission_policy, profile_permission_policy)
+                if profile_permission_policy is not None
+                else global_permission_policy
+            )
+            user_risks = summarize_effective_risks(user_policy)
             resolution = resolver.resolve_policy(global_permission_policy, policy, profile_permission_policy)
             effective_risks = resolution.metadata["effective_risks"]
             rows.append(
                 {
                     "profile": profile.to_metadata(),
                     "profile_override": profile_override,
+                    "user": {
+                        "allowed_risk_levels": user_risks["allowed_risk_levels"],
+                        "denied_risk_levels": user_risks["denied_risk_levels"],
+                        "approval_required_risk_levels": user_risks["approval_required_risk_levels"],
+                        "approval_mode": override_approval_mode,
+                        "permissions_enabled": bool(user_permissions["enabled"]),
+                    },
                     "policy": policy.to_metadata(),
                     "effective": {
                         "allowed_risk_levels": effective_risks["allowed_risk_levels"],

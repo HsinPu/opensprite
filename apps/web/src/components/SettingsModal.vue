@@ -3960,6 +3960,7 @@ const harnessPolicyPreviewRows = computed(() => {
   return rows.map((row) => {
     const profile = row.profile || {};
     const policy = row.policy || {};
+    const user = row.user || {};
     const effective = row.effective || {};
     const profileName = profile.name || "unknown";
     const taskType = profile.task_type || "task";
@@ -3970,7 +3971,7 @@ const harnessPolicyPreviewRows = computed(() => {
       policy: policy.name || "policy",
       description: policy.reason || profile.reason || "",
       harnessAllowed: formatRiskList(policy.allowed_risk_levels),
-      userAllowed: formatRiskList(userPermissions.allowed_risk_levels),
+      userAllowed: formatRiskList(user.allowed_risk_levels || userPermissions.allowed_risk_levels),
       effectiveAllowed: formatRiskList(effective.allowed_risk_levels),
       denied: formatRiskList(effective.denied_risk_levels),
       approval: formatRiskList(effective.approval_required_risk_levels),

@@ -901,6 +901,7 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 policies = {row["policy"]["name"]: row for row in preview["rows"]}
                 assert "chat_read_policy" in policies
                 assert "workspace_change_policy" in policies
+                assert policies["chat_read_policy"]["user"]["allowed_risk_levels"] == ["read"]
                 assert policies["chat_read_policy"]["effective"]["allowed_risk_levels"] == ["read"]
                 assert "mcp" in policies["workspace_change_policy"]["effective"]["denied_risk_levels"]
                 assert policies["operations_approval_policy"]["profile_override"]["approval_mode"] == "ask"
@@ -949,6 +950,8 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert policies["operations_approval_policy"]["effective"]["user_approval_mode"] == "ask"
                 assert "configuration" in policies["operations_approval_policy"]["effective"]["approval_required_risk_levels"]
                 assert "mcp" in policies["operations_approval_policy"]["effective"]["denied_risk_levels"]
+                assert policies["research_source_policy"]["user"]["allowed_risk_levels"] == ["read"]
+                assert "network" in policies["research_source_policy"]["user"]["denied_risk_levels"]
                 assert policies["research_source_policy"]["effective"]["allowed_risk_levels"] == ["read"]
 
         loaded = Config.load(config_path)
