@@ -1,21 +1,4 @@
 const DEFAULT_RISK_LEVELS = ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"];
-export const PERMISSION_PROFILES = ["chat", "research", "coding", "media", "ops"];
-
-function createDefaultProfileOverrides() {
-  return {
-    chat: createProfileOverride({ allowed_risk_levels: ["read"] }),
-    research: createProfileOverride({ allowed_risk_levels: ["read", "network"] }),
-    coding: createProfileOverride({
-      allowed_risk_levels: ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory"],
-      denied_risk_levels: ["mcp"],
-    }),
-    media: createProfileOverride({ allowed_risk_levels: ["read", "network", "external_side_effect"] }),
-    ops: createProfileOverride({
-      approval_mode: "ask",
-      approval_required_risk_levels: ["external_side_effect", "configuration", "mcp"],
-    }),
-  };
-}
 
 function createProfileOverride(overrides = {}) {
   return {
@@ -42,7 +25,7 @@ export function createDefaultPermissionsState() {
     denied_risk_levels: [],
     approval_required_tools: [],
     approval_required_risk_levels: [],
-    profile_overrides: createDefaultProfileOverrides(),
+    profile_overrides: {},
     risk_level_options: [...DEFAULT_RISK_LEVELS],
     approval_mode_options: ["ask", "auto", "block"],
   };
@@ -59,7 +42,6 @@ export function createDefaultPermissionsForm() {
     deniedRiskLevels: [],
     approvalRequiredTools: "",
     approvalRequiredRiskLevels: [],
-    profileOverrides: createDefaultProfileOverrides(),
   };
 }
 
@@ -78,7 +60,7 @@ export function normalizePermissionsSettings(value) {
     denied_risk_levels: normalizeList(payload.denied_risk_levels || payload.deniedRiskLevels),
     approval_required_tools: normalizeList(payload.approval_required_tools || payload.approvalRequiredTools),
     approval_required_risk_levels: normalizeList(payload.approval_required_risk_levels || payload.approvalRequiredRiskLevels),
-    profile_overrides: normalizeProfileOverrides(payload.profile_overrides || payload.profileOverrides || defaults.profile_overrides),
+    profile_overrides: normalizeProfileOverrides(payload.profile_overrides || payload.profileOverrides),
     risk_level_options: riskOptions.length ? riskOptions : defaults.risk_level_options,
     approval_mode_options: normalizeList(payload.approval_mode_options || payload.approvalModeOptions || defaults.approval_mode_options),
   };
@@ -95,7 +77,6 @@ export function syncPermissionsForm(settingsState) {
   settingsState.permissionsForm.deniedRiskLevels = [...permissions.denied_risk_levels];
   settingsState.permissionsForm.approvalRequiredTools = permissions.approval_required_tools.join("\n");
   settingsState.permissionsForm.approvalRequiredRiskLevels = [...permissions.approval_required_risk_levels];
-  settingsState.permissionsForm.profileOverrides = normalizeProfileOverrides(permissions.profile_overrides);
 }
 
 export function splitPermissionList(value) {
@@ -116,12 +97,14 @@ function normalizeList(value) {
 }
 
 function normalizeProfileOverrides(value) {
-  const defaults = createDefaultProfileOverrides();
   const source = value && typeof value === "object" ? value : {};
-  return Object.fromEntries(PERMISSION_PROFILES.map((profile) => {
-    const override = source[profile] && typeof source[profile] === "object" ? source[profile] : {};
-    const base = defaults[profile] || createProfileOverride();
-    return [profile, {
+  return Object.fromEntries(Object.entries(source).flatMap(([profile, override]) => {
+    const profileName = String(profile || "").trim();
+    if (!profileName || !override || typeof override !== "object") {
+      return [];
+    }
+    const base = createProfileOverride();
+    return [[profileName, {
       ...base,
       enabled: override.enabled !== false,
       approval_mode: override.approval_mode ?? override.approvalMode ?? base.approval_mode,
@@ -131,7 +114,7 @@ function normalizeProfileOverrides(value) {
       denied_risk_levels: normalizeList(override.denied_risk_levels || override.deniedRiskLevels || base.denied_risk_levels),
       approval_required_tools: normalizeList(override.approval_required_tools || override.approvalRequiredTools || base.approval_required_tools),
       approval_required_risk_levels: normalizeList(override.approval_required_risk_levels || override.approvalRequiredRiskLevels || base.approval_required_risk_levels),
-    }];
+    }]];
   }));
 }
 
