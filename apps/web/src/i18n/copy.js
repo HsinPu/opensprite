@@ -1117,9 +1117,8 @@ export const DISPLAY_COPY = {
         },
         approvalMode: {
           title: "預設核准模式",
-          description: "auto 直接允許、ask 需要使用者核准、block 直接拒絕。留空使用 config 預設。",
+          description: "auto 直接允許、ask 需要使用者核准、block 直接拒絕。",
         },
-        inheritMode: "沿用設定預設",
         approvalModes: {
           auto: "Auto",
           ask: "Ask",
@@ -2904,9 +2903,8 @@ export const DISPLAY_COPY = {
         },
         approvalMode: {
           title: "Default approval mode",
-          description: "auto allows, ask requires user approval, and block denies. Leave blank to inherit the config default.",
+          description: "auto allows, ask requires user approval, and block denies.",
         },
-        inheritMode: "Inherit config default",
         approvalModes: {
           auto: "Auto",
           ask: "Ask",

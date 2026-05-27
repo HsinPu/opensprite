@@ -1086,7 +1086,6 @@
                 <span>{{ copy.settings.permissions.approvalMode.description }}</span>
               </div>
               <select v-model="settingsState.permissionsForm.approvalMode" :disabled="settingsState.permissionsLoading">
-                <option value="">{{ copy.settings.permissions.inheritMode }}</option>
                 <option v-for="mode in permissionApprovalModeOptions" :key="mode" :value="mode">
                   {{ copy.settings.permissions.approvalModes[mode] || mode }}
                 </option>
@@ -3934,7 +3933,7 @@ const permissionApprovalModeOptions = computed(() => {
 
 const permissionSummary = computed(() => {
   const form = props.settingsState.permissionsForm || {};
-  const mode = form.approvalMode || props.copy.settings.permissions.inheritMode;
+  const mode = form.approvalMode || "auto";
   const required = [
     ...(Array.isArray(form.approvalRequiredRiskLevels) ? form.approvalRequiredRiskLevels : []),
     ...String(form.approvalRequiredTools || "").split(/[\n,]/).map((item) => item.trim()).filter(Boolean),
