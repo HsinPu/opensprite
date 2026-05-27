@@ -225,8 +225,8 @@ class HarnessProfileService:
             selection_signals=("contract:pure_answer",),
         )
 
-    def select(self, task_intent: TaskIntent) -> HarnessProfile:
-        """Legacy fallback for previews/tests that have not built a contract yet."""
+    def chat_fallback(self, task_intent: TaskIntent) -> HarnessProfile:
+        """Return the no-tool chat profile when no task contract is available."""
         return HarnessProfile(
             name="chat",
             task_type=task_intent.kind,

@@ -1,6 +1,7 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
@@ -26,7 +27,13 @@ def test_work_progress_creates_coding_plan_from_intent():
 
 def test_work_progress_uses_harness_profile_plan_steps():
     intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().from_contract(
+        TaskContract(
+            objective=intent.objective,
+            task_type="web_research",
+            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        )
+    )
 
     plan = WorkProgressService().create_plan(intent, harness_profile=profile)
 
@@ -43,7 +50,7 @@ def test_work_progress_uses_harness_profile_plan_steps():
 def test_work_progress_uses_harness_profile_continuation_budget():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
 
     assert profile.name == "chat"
     assert service.continuation_budget(intent, harness_profile=profile) == 0

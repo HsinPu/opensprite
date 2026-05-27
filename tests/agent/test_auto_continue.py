@@ -2,6 +2,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 
@@ -34,7 +35,13 @@ def test_auto_continue_allows_missing_verification_once():
 
 def test_auto_continue_prompt_includes_harness_profile_guidance():
     intent = TaskIntentService().classify("幫我查一下 OpenAI Codex 的最新消息")
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().from_contract(
+        TaskContract(
+            objective=intent.objective,
+            task_type="web_research",
+            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        )
+    )
     completion = CompletionGateResult(
         status="incomplete",
         reason="required task evidence was not produced",

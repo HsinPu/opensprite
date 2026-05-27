@@ -81,7 +81,7 @@ def test_harness_profile_derives_ops_from_contract():
 def test_legacy_select_no_longer_routes_by_user_text_markers():
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
 
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
 
     assert profile.name == "chat"
     assert profile.selection_signals == ("legacy:fallback:chat",)

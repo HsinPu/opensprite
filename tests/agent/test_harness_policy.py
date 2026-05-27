@@ -35,7 +35,7 @@ class DummyTool(Tool):
 
 def _policy(text: str):
     intent = TaskIntentService().classify(text)
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     return HarnessPolicyService().select(profile)
 
 
@@ -63,7 +63,7 @@ def test_chat_harness_policy_is_read_only():
 
 def test_no_web_constraint_keeps_summary_in_chat_profile():
     intent = TaskIntentService().classify("用三點列出 OpenSprite 可以幫使用者做什麼，不要上網。")
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     contract = TaskContractService.build_deterministic(
         task_intent=intent,
         current_message=intent.objective,
@@ -78,14 +78,14 @@ def test_translation_and_runtime_context_stay_chat_profile():
     translate_intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
     context_intent = TaskIntentService().classify("請回答你目前看到的 channel、session id、current time。")
 
-    assert HarnessProfileService().select(translate_intent).name == "chat"
-    assert HarnessProfileService().select(context_intent).name == "chat"
+    assert HarnessProfileService().chat_fallback(translate_intent).name == "chat"
+    assert HarnessProfileService().chat_fallback(context_intent).name == "chat"
 
 
 def test_translation_with_test_word_does_not_require_workspace_verification():
     text = "\u8acb\u628a\u9019\u53e5\u7ffb\u6210\u82f1\u6587\uff1a\u4eca\u5929\u6211\u60f3\u6e2c\u8a66 CLI \u5c0d\u8a71\u6d41\u7a0b\u3002"
     intent = TaskIntentService().classify(text)
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     contract = TaskContractService.build_deterministic(
         task_intent=intent,
         current_message=intent.objective,
@@ -99,7 +99,7 @@ def test_translation_with_test_word_does_not_require_workspace_verification():
 
 def test_generic_python_debug_question_does_not_require_workspace_or_web():
     intent = TaskIntentService().classify("請說明如果我要 debug Python ModuleNotFoundError，前三個檢查步驟是什麼，不要上網。")
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     contract = TaskContractService.build_deterministic(
         task_intent=intent,
         current_message=intent.objective,
@@ -113,7 +113,7 @@ def test_generic_python_debug_question_does_not_require_workspace_or_web():
 def test_standalone_connection_timeout_question_does_not_require_workspace_with_history():
     text = "What can cause Connection timed out?"
     intent = TaskIntentService().classify(text)
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     contract = TaskContractService.build_deterministic(
         task_intent=intent,
         current_message=intent.objective,
@@ -132,7 +132,7 @@ def test_standalone_connection_timeout_question_does_not_require_workspace_with_
 def test_explicit_no_web_and_no_file_constraints_hide_tools():
     text = "\u4e0d\u8981\u8b80\u6a94\u4e5f\u4e0d\u8981\u4e0a\u7db2\uff0c\u53ea\u56de\u7b54\u9019\u662f\u4ec0\u9ebc\u985e\u578b\u7684\u554f\u984c"
     intent = TaskIntentService().classify(text)
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     policy = HarnessPolicyService().select(profile)
     permission_policy = policy.to_permission_policy()
     contract = TaskContractService.build_deterministic(
@@ -153,7 +153,7 @@ def test_explicit_no_web_and_no_file_constraints_hide_tools():
 def test_compound_english_no_web_and_no_file_constraints_hide_tools():
     text = "Do not read files or use the web. Explain Python ModuleNotFoundError in plain English."
     intent = TaskIntentService().classify(text)
-    profile = HarnessProfileService().select(intent)
+    profile = HarnessProfileService().chat_fallback(intent)
     policy = HarnessPolicyService().select(profile)
     permission_policy = policy.to_permission_policy()
     contract = TaskContractService.build_deterministic(
