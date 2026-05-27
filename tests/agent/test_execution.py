@@ -641,6 +641,18 @@ def test_tool_result_failure_detection_honors_structured_error_payload():
     assert ExecutionEngine._tool_result_looks_like_failure(json.dumps(payload)) is True
 
 
+def test_tool_result_failure_detection_allows_successful_batch_summary():
+    result = "Batch completed: 3 call(s), 0 failed.\n\n[1] list_dir\nACTIVE_TASK.md"
+
+    assert ExecutionEngine._tool_result_looks_like_failure(result) is False
+
+
+def test_tool_result_failure_detection_flags_failed_batch_summary():
+    result = "Batch completed: 3 call(s), 1 failed.\n\n[1] read_file\nError: missing file"
+
+    assert ExecutionEngine._tool_result_looks_like_failure(result) is True
+
+
 def test_execution_engine_warns_then_blocks_repeated_read_only_results():
     tool = RepeatingReadFileTool()
     registry = ToolRegistry()

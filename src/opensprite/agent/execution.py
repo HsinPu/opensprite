@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
@@ -21,6 +22,12 @@ from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
+
+
+def _batch_result_succeeded(text: str) -> bool:
+    first_line = (text or "").splitlines()[0] if text else ""
+    match = re.match(r"Batch completed: \d+ call\(s\), (\d+) failed\.", first_line)
+    return bool(match and int(match.group(1)) == 0)
 
 
 @dataclass
@@ -295,6 +302,8 @@ Output exactly these sections when applicable:
     def _tool_result_looks_like_failure(result: str) -> bool:
         text = str(result or "")
         stripped = text.lstrip()
+        if _batch_result_succeeded(stripped):
+            return False
         if stripped.startswith("{"):
             try:
                 payload = json.loads(stripped)
