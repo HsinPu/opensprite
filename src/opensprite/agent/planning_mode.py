@@ -135,8 +135,8 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolRegistry":
     """Return a read-only registry used for explicit plan-only turns."""
-    from ..tools import BatchTool
-    from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
+    from ..tools.permissions import ToolPermissionPolicy
+    from .tool_access import ToolAccessResolver
 
     planning_policy = ToolPermissionPolicy(
         allowed_tools=list(PLANNING_ALLOWED_TOOLS),
@@ -151,10 +151,10 @@ def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolReg
             "mcp",
         ],
     )
-    registry = base_registry.filtered(
+    resolution = ToolAccessResolver().resolve_overlay(
+        base_registry,
+        overlay_policy=planning_policy,
         include_names=PLANNING_ALLOWED_TOOLS,
-        permission_policy=CompositeToolPermissionPolicy(base_registry.permission_policy, planning_policy),
+        metadata_kind="planning_mode",
     )
-    if "batch" in registry.tool_names:
-        registry.register(BatchTool(registry_resolver=lambda: registry))
-    return registry
+    return resolution.registry
