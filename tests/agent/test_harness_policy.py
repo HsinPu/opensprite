@@ -1,7 +1,7 @@
 from opensprite.agent.harness_policy import HarnessPolicyService
 from opensprite.agent.harness_profile import HarnessProfile
 from opensprite.agent.harness_profile import HarnessProfileService
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, TaskContractService, semantic_contract_skip_reason
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -72,11 +72,6 @@ def test_no_web_constraint_keeps_summary_in_chat_profile():
 
     assert profile.name == "chat"
     assert contract.requirements == ()
-    assert semantic_contract_skip_reason(
-        current_message=intent.objective,
-        task_intent=intent,
-        deterministic_contract=contract,
-    ) == "user explicitly disabled web/search evidence"
 
 
 def test_translation_and_runtime_context_stay_chat_profile():

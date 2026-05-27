@@ -973,7 +973,7 @@ function formatSemanticContractDetail(payload = {}) {
   const contractSources = coerceStringList(payload.contract_sources || payload.contractSources);
   const source = contractSources.length
     ? contractSources.join(", ")
-    : String(payload.contract_source || payload.contractSource || payload.source || "semantic classifier").trim();
+    : String(payload.contract_source || payload.contractSource || payload.source || "task contract").trim();
   const reason = String(payload.reason || "").trim();
   const fallbackReason = String(payload.fallback_reason || payload.fallbackReason || "").trim();
   return [

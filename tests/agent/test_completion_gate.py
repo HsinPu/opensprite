@@ -719,7 +719,7 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
     answer = (
         "我回頭查過前面的內容了。剛剛提到的三個方案是：\n"
         "1. 先收斂 deterministic regex。\n"
-        "2. 再補 semantic classifier 的安全合併。\n"
+        "2. 再補 planner contract 的安全合併。\n"
         "3. 最後把 trace observability 顯示補齊。"
     )
 
@@ -746,7 +746,7 @@ def test_completion_gate_requires_history_answer_to_reference_prior_context():
     answer = (
         "三個方案是：\n"
         "1. 收斂 deterministic regex。\n"
-        "2. 補 semantic classifier。\n"
+        "2. 補 planner contract。\n"
         "3. 補 trace observability。"
     )
 
@@ -774,7 +774,7 @@ def test_completion_gate_requires_enough_history_items():
     answer = (
         "我回頭查過前面的內容了，但目前只整理出兩個方案，還缺少第三個：\n"
         "1. 收斂 deterministic regex，避免模糊查詢直接被硬判成 web。\n"
-        "2. 補 semantic classifier，讓不明確的請求可加上更嚴格 evidence。"
+        "2. 補 planner contract，讓不明確的請求可加上更嚴格 evidence。"
     )
 
     completion = CompletionGateService().evaluate(
@@ -799,7 +799,7 @@ def test_completion_gate_rejects_answer_after_empty_history_retrieval():
         current_message=intent.objective,
     )
     answer = (
-        "前面說過 threshold 是 0.7，這是 semantic classifier 的預設信心門檻，"
+        "前面說過 threshold 是 0.7，這是 planner contract 的預設信心門檻，"
         "因此我會直接用這個數值作為目前設定的答案。"
     )
 

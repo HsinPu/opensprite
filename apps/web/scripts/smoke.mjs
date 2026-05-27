@@ -399,7 +399,7 @@ assertIncludes(chatClient, "task_contract.semantic_classified", "semantic contra
 assertIncludes(chatClient, "completion_gate.evaluated", "completion gate timeline event");
 assertIncludes(chatClient, "formatTaskObjectiveDetail", "task objective timeline detail");
 assertIncludes(chatClient, "formatSemanticContractDetail", "semantic contract timeline detail");
-assertIncludes(chatClient, "classifier_status", "semantic classifier health detail");
+assertIncludes(chatClient, "classifier_status", "task contract status detail");
 assertIncludes(chatClient, "formatCompletionGateDetail", "completion gate timeline detail");
 assertIncludes(chatClient, "needsWebResearch", "web evidence timeline label");
 assertIncludes(chatClient, "needsWorkspaceInspection", "workspace evidence timeline label");

@@ -70,8 +70,6 @@ _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u6210\u4e2d\u6587",
     "\u8a08\u7b97",
 )
-_ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
-_ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "history_retrieval", "task", "analysis", "pure_answer"})
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_TASK_TYPES = frozenset(
     {
@@ -94,10 +92,6 @@ _PLANNER_TASK_TYPE_ALIASES = {
     "media_analysis": "media_extraction",
     "ops": "operations",
 }
-_SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
-    "Classify whether a user request needs tool-derived evidence before the final answer. "
-    "Return only JSON. You may only add stricter requirements; never remove deterministic evidence requirements."
-)
 _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
@@ -201,76 +195,6 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
     )
 
 
-@dataclass(frozen=True)
-class SemanticContractDecision:
-    """Optional semantic contract signal from a classifier or test stub."""
-
-    requires_tool_evidence: bool = False
-    required_tool_group: str | None = None
-    task_type: str | None = None
-    allow_no_tool_final: bool | None = None
-    confidence: float = 0.0
-    reason: str = ""
-
-    def to_metadata(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "requires_tool_evidence": self.requires_tool_evidence,
-            "confidence": self.confidence,
-            "reason": self.reason,
-        }
-        if self.required_tool_group:
-            payload["required_tool_group"] = self.required_tool_group
-        if self.task_type:
-            payload["task_type"] = self.task_type
-        if self.allow_no_tool_final is not None:
-            payload["allow_no_tool_final"] = self.allow_no_tool_final
-        return payload
-
-
-class SemanticContractClassifier:
-    """LLM-backed classifier for ambiguous task contracts."""
-
-    def __init__(self, llm_config: DocumentLlmConfig):
-        self.llm_config = llm_config
-
-    async def classify(
-        self,
-        *,
-        provider: Any,
-        model: str | None,
-        task_intent: TaskIntent,
-        current_message: str,
-        history: list[dict[str, Any]] | None,
-        deterministic_contract: TaskContract,
-    ) -> SemanticContractDecision | None:
-        if semantic_contract_skip_reason(
-            current_message=current_message,
-            task_intent=task_intent,
-            deterministic_contract=deterministic_contract,
-        ):
-            return None
-        if provider is None or str(model or "").strip().lower() == "unconfigured":
-            return SemanticContractDecision(reason="semantic classifier unavailable: llm not configured")
-
-        response = await provider.chat(
-            [
-                ChatMessage(role="system", content=_SEMANTIC_CONTRACT_SYSTEM_PROMPT),
-                ChatMessage(
-                    role="user",
-                    content=_build_semantic_contract_prompt(
-                        current_message=current_message,
-                        history=history or [],
-                        task_intent=task_intent,
-                        deterministic_contract=deterministic_contract,
-                    ),
-                ),
-            ],
-            model=model,
-            **self.llm_config.decoding_kwargs(),
-        )
-        return _semantic_decision_from_payload(_parse_json_object(str(getattr(response, "content", "") or "")))
-
-
 class TaskContractPlanner:
     """LLM-backed planner that produces the authoritative per-turn task contract."""
 
@@ -341,10 +265,9 @@ class TaskContractService:
         current_audio_files: list[str] | None = None,
         current_video_files: list[str] | None = None,
         task_context_decision: TaskContextDecision | None = None,
-        semantic_decision: SemanticContractDecision | None = None,
         harness_profile: HarnessProfile | None = None,
     ) -> TaskContract:
-        deterministic = cls.build_deterministic(
+        return cls.build_deterministic(
             task_intent=task_intent,
             current_message=current_message,
             history=history,
@@ -354,7 +277,6 @@ class TaskContractService:
             task_context_decision=task_context_decision,
             harness_profile=harness_profile,
         )
-        return merge_semantic_contract(deterministic, semantic_decision)
 
     @classmethod
     def build_deterministic(
@@ -608,85 +530,6 @@ class TaskContractService:
         return bool(_HISTORY_TASK_HINT_RE.search(text or ""))
 
 
-def merge_semantic_contract(
-    contract: TaskContract,
-    semantic_decision: SemanticContractDecision | None,
-    *,
-    min_confidence: float = 0.7,
-) -> TaskContract:
-    """Merge a semantic contract decision without loosening deterministic requirements."""
-    if semantic_decision is None:
-        return contract
-
-    metadata = semantic_decision.to_metadata()
-    metadata["merge_policy"] = "semantic_may_only_add_requirements"
-    confidence = max(0.0, min(1.0, float(semantic_decision.confidence or 0.0)))
-    tool_group = str(semantic_decision.required_tool_group or "").strip()
-    can_apply = bool(
-        semantic_decision.requires_tool_evidence
-        and tool_group
-        and confidence >= min_confidence
-    )
-    metadata["applied"] = can_apply
-    if not can_apply:
-        return TaskContract(
-            objective=contract.objective,
-            task_type=contract.task_type,
-            requirements=contract.requirements,
-            acceptance_criteria=contract.acceptance_criteria,
-            selected_resources=contract.selected_resources,
-            final_answer_required=contract.final_answer_required,
-            allow_no_tool_final=contract.allow_no_tool_final,
-            contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
-            harness_profile=contract.harness_profile,
-            semantic_contract=metadata,
-        )
-
-    requirements = list(contract.requirements)
-    if not any(item.kind == "tool_group" and item.tool_group == tool_group for item in requirements):
-        requirements.append(_semantic_tool_requirement(tool_group))
-
-    acceptance_criteria = list(contract.acceptance_criteria)
-    if tool_group == "web_research":
-        acceptance_criteria = _append_acceptance_criteria(
-            acceptance_criteria,
-            (
-                AcceptanceCriterion(
-                    kind="source_artifact",
-                    min_count=2,
-                    description="Produce enough traceable web sources before finalizing the answer.",
-                ),
-                AcceptanceCriterion(
-                    kind="source_detail",
-                    min_count=1,
-                    description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
-                ),
-                _web_final_answer_criterion(),
-                _web_source_reference_criterion(),
-            ),
-        )
-
-    next_task_type = contract.task_type
-    semantic_task_type = str(semantic_decision.task_type or "").strip()
-    if semantic_task_type and contract.task_type in {"pure_answer", "task", "conversation", "question"}:
-        next_task_type = semantic_task_type
-    elif tool_group == "web_research" and contract.task_type in {"pure_answer", "task", "conversation", "question"}:
-        next_task_type = "web_research"
-
-    return TaskContract(
-        objective=contract.objective,
-        task_type=next_task_type,
-        requirements=tuple(requirements),
-        acceptance_criteria=tuple(acceptance_criteria),
-        selected_resources=contract.selected_resources,
-        final_answer_required=contract.final_answer_required,
-        allow_no_tool_final=contract.allow_no_tool_final and not requirements,
-        contract_sources=_append_unique(contract.contract_sources, "semantic_classifier"),
-        harness_profile=contract.harness_profile,
-        semantic_contract=metadata,
-    )
-
-
 def _apply_harness_profile(
     *,
     requirements: list[EvidenceRequirement],
@@ -798,53 +641,6 @@ def _has_requirement(
     )
 
 
-def should_classify_semantic_contract(
-    *,
-    current_message: str,
-    task_intent: TaskIntent,
-    deterministic_contract: TaskContract,
-) -> bool:
-    """Return whether an optional semantic pass may add missing requirements."""
-    return semantic_contract_skip_reason(
-        current_message=current_message,
-        task_intent=task_intent,
-        deterministic_contract=deterministic_contract,
-    ) is None
-
-
-def semantic_contract_skip_reason(
-    *,
-    current_message: str,
-    task_intent: TaskIntent,
-    deterministic_contract: TaskContract,
-) -> str | None:
-    """Return why the optional semantic pass should not run, or None when eligible."""
-    if deterministic_contract.requirements:
-        return "deterministic contract already requires evidence"
-    if task_intent.expects_code_change or task_intent.expects_verification:
-        return "code or verification task uses deterministic completion rules"
-    if task_intent.kind in {"command", "media_upload"}:
-        return f"task intent kind {task_intent.kind} is not eligible"
-    message = _compact(current_message)
-    if not message or len(message) > 500:
-        return "message is empty or too long for semantic classification"
-    if has_no_web_constraint(message):
-        return "user explicitly disabled web/search evidence"
-    if has_no_workspace_constraint(message):
-        return "user explicitly disabled workspace/file evidence"
-    if _PURE_ANSWER_RE.search(message):
-        return "pure answer request does not need semantic evidence"
-    if _LOCAL_RUNTIME_RE.search(message):
-        return "local runtime context request does not need semantic evidence"
-    if _URL_RE.search(message):
-        return "message already has a deterministic URL requirement"
-    if task_intent.kind == "conversation" and not _looks_like_semantic_lookup_candidate(message):
-        return "conversation does not look like an evidence lookup"
-    if task_intent.kind not in {"task", "question", "conversation", "analysis", "writing", "planning"}:
-        return f"task intent kind {task_intent.kind} is not eligible"
-    return None
-
-
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
     """Return human-readable missing evidence items for a contract."""
     if contract is None:
@@ -909,7 +705,7 @@ def _append_unique(items: tuple[str, ...], item: str) -> tuple[str, ...]:
     return tuple(values)
 
 
-def _semantic_tool_requirement(tool_group: str) -> EvidenceRequirement:
+def _tool_group_requirement(tool_group: str) -> EvidenceRequirement:
     if tool_group == "web_research":
         return EvidenceRequirement(
             kind="tool_group",
@@ -937,34 +733,6 @@ def _append_acceptance_criteria(
             existing.append(criterion)
             seen.add(criterion.kind)
     return existing
-
-
-def _build_semantic_contract_prompt(
-    *,
-    current_message: str,
-    history: list[dict[str, Any]],
-    task_intent: TaskIntent,
-    deterministic_contract: TaskContract,
-) -> str:
-    context = {
-        "current_message": _truncate(current_message, max_chars=700),
-        "task_intent": task_intent.to_metadata(),
-        "recent_history": _recent_history(history),
-        "deterministic_contract": deterministic_contract.to_metadata(),
-    }
-    return (
-        "Decide if the latest user request requires tool-derived evidence before the final answer.\n"
-        "Use this for ambiguous, multilingual, shorthand, typo-heavy, or code-mixed requests.\n"
-        "Classify requests for current/external facts, prices, finance/stock data, weather, news, web pages, or public data as web_research.\n"
-        "Classify requests about local files, repo contents, code paths, configs, TODOs, or project structure as workspace_read.\n"
-        "Classify requests about earlier chat decisions or previously mentioned items as history_retrieval.\n"
-        "Do not require tools for opinions, brainstorming, casual chat, or answers that can be completed from existing context.\n"
-        "Return only JSON with keys: requires_tool_evidence, required_tool_group, task_type, allow_no_tool_final, confidence, reason.\n"
-        "required_tool_group must be one of: web_research, workspace_read, history_retrieval, or null.\n"
-        "task_type must be one of: web_research, workspace_read, history_retrieval, task, analysis, pure_answer, or null.\n"
-        "If unsure, use confidence below 0.7.\n\n"
-        f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
-    )
 
 
 def _build_planner_contract_prompt(
@@ -1087,13 +855,13 @@ def _contract_from_planner_payload(
                     )
                 )
             else:
-                requirements.append(_semantic_tool_requirement("media"))
+                requirements.append(_tool_group_requirement("media"))
             acceptance_criteria = _append_acceptance_criteria(
                 acceptance_criteria,
                 (_media_artifact_criterion(), _media_final_answer_criterion()),
             )
         elif tool_group == "history_retrieval":
-            requirements.append(_semantic_tool_requirement("history_retrieval"))
+            requirements.append(_tool_group_requirement("history_retrieval"))
             acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
         elif tool_group == "verification":
             requirements.append(
@@ -1212,19 +980,6 @@ def _append_workspace_contract(
     acceptance_criteria[:] = _append_acceptance_criteria(acceptance_criteria, (_workspace_final_answer_criterion(),))
 
 
-def _semantic_decision_from_payload(payload: dict[str, Any]) -> SemanticContractDecision:
-    tool_group = _allowed_string(payload.get("required_tool_group"), _ALLOWED_SEMANTIC_TOOL_GROUPS)
-    task_type = _allowed_string(payload.get("task_type"), _ALLOWED_SEMANTIC_TASK_TYPES)
-    return SemanticContractDecision(
-        requires_tool_evidence=_coerce_bool(payload.get("requires_tool_evidence")),
-        required_tool_group=tool_group,
-        task_type=task_type,
-        allow_no_tool_final=(None if "allow_no_tool_final" not in payload else _coerce_bool(payload.get("allow_no_tool_final"))),
-        confidence=_coerce_confidence(payload.get("confidence")),
-        reason=_truncate(str(payload.get("reason") or "semantic classifier returned a decision"), max_chars=240),
-    )
-
-
 def _parse_json_object(text: str) -> dict[str, Any]:
     fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
     raw = fenced.group(1) if fenced else text
@@ -1251,34 +1006,6 @@ def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
 
 def _compact(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
-
-
-def _looks_like_semantic_lookup_candidate(text: str) -> bool:
-    lowered = str(text or "").lower()
-    return bool(
-        re.search(r"\d", lowered)
-        or lowered.endswith(("?", "？"))
-        or any(
-            marker in lowered
-            for marker in (
-                "多少",
-                "哪",
-                "哪裡",
-                "什麼",
-                "現在",
-                "剛剛",
-                "前面",
-                "之前",
-                "repo",
-                "config",
-                "todo",
-                "threshold",
-                "current",
-                "latest",
-                "history",
-            )
-        )
-    )
 
 
 def _truncate(text: str, *, max_chars: int) -> str:
