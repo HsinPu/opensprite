@@ -215,28 +215,7 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        harness_profile = self.harness_profiles.select(task_intent)
-        initial_profile_metadata = {
-            **harness_profile.to_metadata(),
-            "selection_phase": "initial",
-        }
-        await self._emit_run_event(
-            turn.session_id,
-            run_id,
-            "harness_profile.initial_selected",
-            initial_profile_metadata,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-        )
-        await self._emit_run_event(
-            turn.session_id,
-            run_id,
-            "harness_profile.selected",
-            initial_profile_metadata,
-            channel=turn.channel,
-            external_chat_id=turn.external_chat_id,
-        )
-        work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
+        work_plan = self.work_progress.create_plan(task_intent)
         current_work_state = self.work_progress.build_initial_state(
             session_id=turn.session_id,
             task_intent=task_intent,
@@ -284,7 +263,7 @@ class AgentTurnRunner:
                         turn=turn,
                         run_id=run_id,
                         task_intent=task_intent,
-                        harness_profile=harness_profile,
+                        harness_profile=None,
                         work_plan=work_plan,
                         current_work_state=current_work_state,
                     )
@@ -610,6 +589,8 @@ class AgentTurnRunner:
                     task_intent=task_intent,
                 )
                 exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
+                if exec_result.task_contract is not None:
+                    harness_profile = self.harness_profiles.from_contract(exec_result.task_contract)
                 response = exec_result.content
             execution_results.append(exec_result)
 
@@ -1163,11 +1144,15 @@ def _harness_checkpoint_metadata(
     auto_continue_attempts: int,
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
+    contract_profile = getattr(task_contract, "harness_profile", None)
+    profile_metadata = dict(contract_profile) if isinstance(contract_profile, dict) else (
+        harness_profile.to_metadata() if harness_profile is not None else None
+    )
     return {
         "schema_version": 1,
         "pass_index": max(1, pass_index),
         "auto_continue_attempts": max(0, auto_continue_attempts),
-        "harness_profile": harness_profile.to_metadata() if harness_profile is not None else None,
+        "harness_profile": profile_metadata,
         "harness_policy": dict(aggregate_result.harness_policy or {}),
         "task_contract": task_contract.to_metadata() if task_contract is not None else None,
         "completion": completion_result.to_metadata(),
@@ -1185,14 +1170,18 @@ def _harness_scorecard_metadata(
     completion_result: CompletionGateResult,
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
-    task_type = harness_profile.task_type if harness_profile is not None else ""
+    contract_profile = getattr(task_contract, "harness_profile", None)
+    profile_metadata = dict(contract_profile) if isinstance(contract_profile, dict) else (
+        harness_profile.to_metadata() if harness_profile is not None else {}
+    )
+    task_type = str(profile_metadata.get("task_type") or "")
     sensors = evaluate_harness_sensors(
         task_type=task_type,
         execution_result=aggregate_result,
         completion_result=completion_result,
     )
     scorecard = HarnessScorecard(
-        profile=harness_profile.to_metadata() if harness_profile is not None else {},
+        profile=profile_metadata,
         contract=task_contract.to_metadata() if task_contract is not None else {},
         tools={
             "executed_tool_calls": aggregate_result.executed_tool_calls,

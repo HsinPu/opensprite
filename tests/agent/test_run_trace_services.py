@@ -468,18 +468,16 @@ def test_serialize_run_event_projects_task_artifact_summary():
     }
 
 
-def test_serialize_run_event_classifies_semantic_contract_event():
+def test_serialize_run_event_classifies_planned_contract_event():
     event = SimpleNamespace(
         event_id=45,
         run_id="run-1",
         session_id="web:browser-1",
-        event_type="task_contract.semantic_classified",
+        event_type="task_contract.planned",
         payload={
-            "requires_tool_evidence": True,
-            "required_tool_group": "web_research",
             "task_type": "web_research",
-            "confidence": 0.88,
-            "reason": "Current stock price needs web evidence.",
+            "requirements": [{"kind": "tool_group", "tool_group": "web_research"}],
+            "semantic_contract": {"reason": "Current stock price needs web evidence."},
         },
         created_at=12.9,
     )
@@ -491,7 +489,7 @@ def test_serialize_run_event_classifies_semantic_contract_event():
     assert payload["artifact"] is None
 
 
-def test_serialize_run_events_preserves_semantic_contract_routes():
+def test_serialize_run_events_preserves_planned_contract_routes():
     events = []
     for event_id, tool_group in enumerate(("web_research", "workspace_read", "history_retrieval"), start=1):
         events.append(
@@ -499,14 +497,11 @@ def test_serialize_run_events_preserves_semantic_contract_routes():
                 event_id=event_id,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="task_contract.semantic_classified",
+                event_type="task_contract.planned",
                 payload={
-                    "requires_tool_evidence": True,
-                    "required_tool_group": tool_group,
                     "task_type": tool_group,
-                    "confidence": 0.88,
-                    "applied": True,
-                    "reason": f"Route to {tool_group}.",
+                    "requirements": [{"kind": "tool_group", "tool_group": tool_group}],
+                    "semantic_contract": {"planner_status": "validated", "reason": f"Route to {tool_group}."},
                 },
                 created_at=12.0 + event_id,
             )
@@ -515,12 +510,12 @@ def test_serialize_run_events_preserves_semantic_contract_routes():
     payload = serialize_run_events(events)
 
     assert [event["kind"] for event in payload] == ["work", "work", "work"]
-    assert [event["payload"]["required_tool_group"] for event in payload] == [
+    assert [event["payload"]["requirements"][0]["tool_group"] for event in payload] == [
         "web_research",
         "workspace_read",
         "history_retrieval",
     ]
-    assert all(event["payload"]["applied"] is True for event in payload)
+    assert all(event["payload"]["semantic_contract"]["planner_status"] == "validated" for event in payload)
 
 
 def test_serialize_run_event_projects_curator_artifact():

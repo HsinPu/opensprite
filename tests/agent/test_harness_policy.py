@@ -1,7 +1,7 @@
 from opensprite.agent.harness_policy import HarnessPolicyService
 from opensprite.agent.harness_profile import HarnessProfile
 from opensprite.agent.harness_profile import HarnessProfileService
-from opensprite.agent.task_contract import TaskContractService, semantic_contract_skip_reason
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, TaskContractService, semantic_contract_skip_reason
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -36,6 +36,18 @@ class DummyTool(Tool):
 def _policy(text: str):
     intent = TaskIntentService().classify(text)
     profile = HarnessProfileService().select(intent)
+    return HarnessPolicyService().select(profile)
+
+
+def _policy_for_contract(task_type: str, *requirements: EvidenceRequirement):
+    contract = TaskContract(
+        objective="test objective",
+        task_type=task_type,
+        requirements=tuple(requirements),
+        allow_no_tool_final=not requirements,
+        contract_sources=("llm_planner",),
+    )
+    profile = HarnessProfileService().from_contract(contract)
     return HarnessPolicyService().select(profile)
 
 
@@ -136,12 +148,10 @@ def test_explicit_no_web_and_no_file_constraints_hide_tools():
 
     assert profile.name == "chat"
     assert contract.requirements == ()
-    assert "constraint:no_web" in profile.to_metadata()["selection"]["matched_signals"]
-    assert "constraint:no_workspace" in profile.to_metadata()["selection"]["matched_signals"]
     assert permission_policy.is_tool_exposed("web_research") is False
     assert permission_policy.is_tool_exposed("web_search") is False
-    assert permission_policy.is_tool_exposed("read_file") is False
-    assert permission_policy.is_tool_exposed("list_dir") is False
+    assert permission_policy.is_tool_exposed("read_file") is True
+    assert permission_policy.is_tool_exposed("list_dir") is True
     assert permission_policy.is_tool_exposed("search_history") is True
 
 
@@ -159,16 +169,14 @@ def test_compound_english_no_web_and_no_file_constraints_hide_tools():
 
     assert profile.name == "chat"
     assert contract.requirements == ()
-    assert "constraint:no_web" in profile.to_metadata()["selection"]["matched_signals"]
-    assert "constraint:no_workspace" in profile.to_metadata()["selection"]["matched_signals"]
     assert permission_policy.is_tool_exposed("web_research") is False
     assert permission_policy.is_tool_exposed("web_search") is False
-    assert permission_policy.is_tool_exposed("read_file") is False
-    assert permission_policy.is_tool_exposed("list_dir") is False
+    assert permission_policy.is_tool_exposed("read_file") is True
+    assert permission_policy.is_tool_exposed("list_dir") is True
 
 
 def test_research_harness_policy_allows_web_without_workspace_mutation():
-    policy = _policy("幫我查一下最新消息並附來源")
+    policy = _policy_for_contract("web_research", EvidenceRequirement(kind="tool_group", tool_group="web_research"))
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "research_source_policy"
@@ -180,7 +188,7 @@ def test_research_harness_policy_allows_web_without_workspace_mutation():
 
 
 def test_coding_change_policy_requires_approval_for_configuration_tools():
-    policy = _policy("Please fix the failing pytest in src/opensprite/agent/task_intent.py")
+    policy = _policy_for_contract("code_change", EvidenceRequirement(kind="tool_group", tool_group="workspace_write"))
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "workspace_change_policy"
@@ -192,7 +200,7 @@ def test_coding_change_policy_requires_approval_for_configuration_tools():
 
 
 def test_coding_analysis_policy_blocks_write_and_execute_tools():
-    policy = _policy("Review src/opensprite/agent/task_intent.py and explain the logic")
+    policy = _policy_for_contract("workspace_read", EvidenceRequirement(kind="tool_group", tool_group="workspace_read"))
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "workspace_analysis_policy"
@@ -202,7 +210,7 @@ def test_coding_analysis_policy_blocks_write_and_execute_tools():
 
 
 def test_ops_policy_requires_approval_for_external_side_effects_and_mcp():
-    policy = _policy("Update the MCP server configuration and restart the service")
+    policy = _policy_for_contract("operations")
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "operations_approval_policy"
@@ -216,7 +224,7 @@ def test_ops_policy_requires_approval_for_external_side_effects_and_mcp():
 
 
 def test_media_policy_allows_media_tools_without_workspace_writes():
-    policy = _policy("請分析這張圖片並做 OCR")
+    policy = _policy_for_contract("media_extraction", EvidenceRequirement(kind="tool_group", tool_group="media"))
     permission_policy = policy.to_permission_policy()
 
     assert policy.name == "media_artifact_policy"
@@ -229,7 +237,7 @@ def test_harness_policy_filters_tool_registry_for_research_turns():
     registry = ToolRegistry()
     for name in ("read_file", "web_search", "web_fetch", "edit_file", "verify"):
         registry.register(DummyTool(name))
-    policy = _policy("Search the web and cite sources for the latest release")
+    policy = _policy_for_contract("web_research", EvidenceRequirement(kind="tool_group", tool_group="web_research"))
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
 
@@ -255,7 +263,7 @@ def test_profile_permission_override_is_composed_with_harness_policy():
     registry = ToolRegistry()
     registry.register(DummyTool("read_file", risk_levels=frozenset({"read"})))
     registry.register(DummyTool("web_fetch", risk_levels=frozenset({"network"})))
-    policy = _policy("Search the web and cite sources for the latest release")
+    policy = _policy_for_contract("web_research", EvidenceRequirement(kind="tool_group", tool_group="web_research"))
     profile_override = ToolPermissionPolicy(allowed_risk_levels=["read"])
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy, profile_override)
@@ -267,7 +275,7 @@ def test_harness_policy_resolution_metadata_explains_blocked_relaxations():
     registry = ToolRegistry(
         permission_policy=ToolPermissionPolicy(approval_mode="auto", allowed_risk_levels=["read", "write", "configuration", "mcp"])
     )
-    policy = _policy("Update the MCP server configuration and restart the service")
+    policy = _policy_for_contract("operations")
     profile_override = ToolPermissionPolicy(allowed_risk_levels=["read", "write", "mcp"], approval_mode="auto")
 
     filtered = HarnessPolicyService().build_tool_registry(registry, policy, profile_override)

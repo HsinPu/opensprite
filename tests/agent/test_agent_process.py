@@ -11,6 +11,7 @@ import sys
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import AgentTurnRunner
 from opensprite.bus import MessageBus
 from opensprite.bus.events import InboundMessage, OutboundMessage
@@ -63,9 +64,29 @@ def _extract_session_id(result: str) -> str:
     raise AssertionError(f"Session ID missing from result: {result}")
 
 
+def _is_planner_call(messages, tools=None) -> bool:
+    if tools:
+        return False
+    first = str(getattr(messages[0], "content", "") or "") if messages else ""
+    return "task-contract planner" in first
+
+
+def _planner_response(task_type: str = "code_change") -> LLMResponse:
+    payload = {
+        "task_type": task_type,
+        "required_tool_groups": ["workspace_read", "workspace_write"] if task_type == "code_change" else [],
+        "allow_no_tool_final": task_type == "pure_answer",
+        "final_answer_required": True,
+        "reason": "test planner contract",
+    }
+    return LLMResponse(content=json.dumps(payload), model="fake-model")
+
+
 class FakeProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        raise AssertionError("provider.chat should not be called in this test")
+        if _is_planner_call(messages, tools):
+            return _planner_response()
+        raise AssertionError("provider.chat should only be called by the planner in this test")
 
     def get_default_model(self) -> str:
         return "fake-model"
@@ -102,6 +123,8 @@ class WorkflowAuthorityProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
+        if _is_planner_call(messages, tools):
+            return _planner_response()
         latest_user_text = next(
             (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
             "",
@@ -451,6 +474,13 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
             return ExecutionResult(
                 content="assistant reply",
                 executed_tool_calls=0,
+                task_contract=TaskContract(
+                    objective="hello",
+                    task_type="pure_answer",
+                    contract_sources=("test",),
+                    harness_profile={"name": "chat", "task_type": "pure_answer"},
+                ),
+                harness_policy={"name": "chat_read_policy"},
                 context_compactions=1,
                 context_compaction_events=[
                     ContextCompactionEvent(
@@ -494,8 +524,6 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert [event.event_type for event in events] == [
         "run_started",
         "task_intent.detected",
-        "harness_profile.initial_selected",
-        "harness_profile.selected",
         "llm_status",
         "completion_gate.evaluated",
         "work_progress.updated",
@@ -506,14 +534,11 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert events[0].payload["status"] == "running"
     assert events[1].payload["kind"] == "conversation"
     assert events[1].payload["objective"] == "hello"
-    assert events[2].payload["name"] == "chat"
-    assert events[2].payload["selection_phase"] == "initial"
-    assert events[3].payload["name"] == "chat"
-    assert events[5].payload["status"] == "complete"
-    assert events[6].payload["next_action"] == "finalize"
-    assert events[7].payload["next_action"] == "finalize"
-    assert events[8].payload["profile"]["name"] == "chat"
-    assert events[8].payload["completion"]["status"] == "complete"
+    assert events[3].payload["status"] == "complete"
+    assert events[4].payload["next_action"] == "finalize"
+    assert events[5].payload["next_action"] == "finalize"
+    assert events[6].payload["profile"]["name"] == "chat"
+    assert events[6].payload["completion"]["status"] == "complete"
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == ["context_compaction", "harness_checkpoint", "harness_scorecard", "assistant_message"]
     assert parts[0].content == "proactive:deterministic:compacted"
@@ -1420,7 +1445,22 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         async def fake_call_llm(session_id, current_message, **kwargs):
             calls.append(current_message)
             if len(calls) == 1:
-                return ExecutionResult(content="Completed the refactor.", executed_tool_calls=0)
+                return ExecutionResult(
+                    content="Completed the refactor.",
+                    executed_tool_calls=0,
+                    task_contract=TaskContract(
+                        objective="Please refactor the agent and run tests.",
+                        task_type="code_change",
+                        requirements=(
+                            EvidenceRequirement(kind="file_change", min_count=1),
+                            EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                        ),
+                        allow_no_tool_final=False,
+                        contract_sources=("test",),
+                        harness_profile={"name": "coding", "task_type": "workspace_change"},
+                    ),
+                    harness_policy={"name": "workspace_change_policy"},
+                )
             return ExecutionResult(
                 content="Verification passed and the refactor is complete.",
                 executed_tool_calls=1,
@@ -1428,6 +1468,18 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
                 touched_paths=("src/opensprite/agent.py",),
                 verification_attempted=True,
                 verification_passed=True,
+                task_contract=TaskContract(
+                    objective="Please refactor the agent and run tests.",
+                    task_type="code_change",
+                    requirements=(
+                        EvidenceRequirement(kind="file_change", min_count=1),
+                        EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                    ),
+                    allow_no_tool_final=False,
+                    contract_sources=("test",),
+                    harness_profile={"name": "coding", "task_type": "workspace_change"},
+                ),
+                harness_policy={"name": "workspace_change_policy"},
             )
 
         agent.call_llm = fake_call_llm
@@ -1454,8 +1506,6 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert [event.event_type for event in events] == [
         "run_started",
         "task_intent.detected",
-        "harness_profile.initial_selected",
-        "harness_profile.selected",
         "work_plan.created",
         "llm_status",
         "completion_gate.evaluated",
@@ -1472,19 +1522,16 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
         "task_checklist.updated",
         "run_finished",
     ]
-    assert events[2].payload["name"] == "coding"
-    assert events[2].payload["selection_phase"] == "initial"
-    assert events[3].payload["name"] == "coding"
-    assert events[6].payload["status"] == "incomplete"
-    assert events[6].payload["reason"] == "expected code changes were not recorded"
-    assert events[7].payload["next_action"] == "continue_work"
-    assert events[11].payload["status"] == "needs_review"
-    assert events[11].payload["reason"] == "delegated review was not recorded for code changes"
-    assert events[12].payload["next_action"] == "collect_review_evidence"
-    assert events[13].payload["next_action"] == "collect_review_evidence"
-    assert events[14].payload["completion"]["status"] == "needs_review"
-    assert events[15].payload["completion_status"] == "needs_review"
-    assert events[16].payload["reason"] == "review_evidence_still_missing"
+    assert events[4].payload["status"] == "incomplete"
+    assert events[4].payload["reason"] == "expected code changes were not recorded"
+    assert events[5].payload["next_action"] == "continue_work"
+    assert events[9].payload["status"] == "needs_review"
+    assert events[9].payload["reason"] == "delegated review was not recorded for code changes"
+    assert events[10].payload["next_action"] == "collect_review_evidence"
+    assert events[11].payload["next_action"] == "collect_review_evidence"
+    assert events[12].payload["completion"]["status"] == "needs_review"
+    assert events[13].payload["completion_status"] == "needs_review"
+    assert events[14].payload["reason"] == "review_evidence_still_missing"
     assert events[-1].payload["status"] == "needs_review"
     assert events[-1].payload["completion_gate"]["status"] == "needs_review"
     assert sum(1 for part in parts if part.part_type == "harness_checkpoint") == 2
@@ -2248,6 +2295,18 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
                 executed_tool_calls=1,
                 file_change_count=1,
                 touched_paths=("src/agent.py",),
+                task_contract=TaskContract(
+                    objective="Please refactor the agent and run tests.",
+                    task_type="code_change",
+                    requirements=(
+                        EvidenceRequirement(kind="file_change", min_count=1),
+                        EvidenceRequirement(kind="verification", tool_group="verification", min_count=1),
+                    ),
+                    allow_no_tool_final=False,
+                    contract_sources=("test",),
+                    harness_profile={"name": "coding", "task_type": "workspace_change"},
+                ),
+                harness_policy={"name": "workspace_change_policy"},
             )
 
         agent.call_llm = fake_call_llm
@@ -2265,7 +2324,7 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
     task_block, events = asyncio.run(scenario())
 
     assert "- Status: active" in task_block
-    assert "- Current step: 4. summarize changes, evidence, and remaining risk" in task_block
+    assert "- Current step: 3. verify the result" in task_block
     progress_event = next(event for event in reversed(events) if event["event_type"] == "work_progress")
     assert progress_event["details"]["next_action"] == "stop_budget_exhausted"
 

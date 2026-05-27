@@ -76,6 +76,9 @@ def _profile_from_payload(payload: dict[str, Any]) -> str:
     value = payload.get("name")
     if isinstance(value, str):
         return value
+    effective = payload.get("effective")
+    if isinstance(effective, dict) and isinstance(effective.get("name"), str):
+        return str(effective["name"])
     profile = payload.get("harness_profile")
     if isinstance(profile, dict) and isinstance(profile.get("name"), str):
         return str(profile["name"])

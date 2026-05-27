@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
 from ..config import AgentConfig
@@ -13,41 +14,10 @@ from ..utils.log import logger
 from .execution import ExecutionResult
 from .harness_policy import HarnessPolicy
 from .harness_profile import HarnessProfile
-from .task_contract import (
-    SemanticContractDecision,
-    TaskContract,
-    TaskContractService,
-    merge_semantic_contract,
-    semantic_contract_skip_reason,
-)
+from .task_contract import TaskContract
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision
-
-
-def _semantic_classifier_trace_metadata(
-    *,
-    enabled: bool,
-    status: str,
-    reason: str | None,
-    task_contract: TaskContract,
-    semantic_decision: SemanticContractDecision | None,
-) -> dict[str, Any]:
-    metadata = dict(task_contract.semantic_contract or (semantic_decision.to_metadata() if semantic_decision is not None else {}))
-    metadata.setdefault("requires_tool_evidence", False)
-    metadata.setdefault("confidence", 0.0)
-    metadata.setdefault("applied", False)
-    metadata["classifier_enabled"] = enabled
-    metadata["classifier_status"] = status
-    metadata["classifier_invoked"] = status in {"invoked", "failed"}
-    metadata["classifier_skipped"] = status in {"disabled", "skipped"}
-    fallback_reason = str(reason or metadata.get("reason") or "").strip()
-    if fallback_reason:
-        metadata.setdefault("reason", fallback_reason)
-        if status in {"disabled", "skipped", "failed"}:
-            metadata["fallback_reason"] = fallback_reason
-    metadata["contract_sources"] = list(task_contract.contract_sources)
-    return metadata
 
 
 class LlmCallService:
@@ -75,8 +45,8 @@ class LlmCallService:
         read_active_task_snapshot: Callable[[str], str],
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
-        classify_semantic_contract: Callable[..., Awaitable[SemanticContractDecision | None]],
-        select_harness_profile: Callable[[TaskIntent], HarnessProfile],
+        plan_task_contract: Callable[..., Awaitable[TaskContract]],
+        select_harness_profile: Callable[[TaskContract], HarnessProfile],
         select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
         build_harness_tool_registry: Callable[[ToolRegistry, HarnessProfile, HarnessPolicy], ToolRegistry],
         emit_run_event: Callable[..., Awaitable[None]],
@@ -111,7 +81,7 @@ class LlmCallService:
         self._read_active_task_snapshot = read_active_task_snapshot
         self._resolve_task_context = resolve_task_context
         self._resolve_task_objective = resolve_task_objective
-        self._classify_semantic_contract = classify_semantic_contract
+        self._plan_task_contract = plan_task_contract
         self._select_harness_profile = select_harness_profile
         self._select_harness_policy = select_harness_policy
         self._build_harness_tool_registry = build_harness_tool_registry
@@ -302,37 +272,70 @@ class LlmCallService:
         harness_tool_registry = None
         base_tool_registry = self._get_tool_registry()
         if effective_task_intent is not None:
-            initial_harness_profile = self._select_harness_profile(task_intent) if task_intent is not None else None
-            harness_profile = self._select_harness_profile(effective_task_intent)
-            harness_policy = self._select_harness_policy(harness_profile)
-            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
             if run_id is not None:
-                effective_profile_metadata = {
-                    **harness_profile.to_metadata(),
-                    "selection_phase": "effective",
-                }
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "harness_profile.effective_selected",
-                    effective_profile_metadata,
+                    "task_contract.planning_started",
+                    {
+                        "schema_version": 1,
+                        "objective": effective_task_intent.objective,
+                        "task_kind": effective_task_intent.kind,
+                        "history_messages": len(history_dicts),
+                    },
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-                if initial_harness_profile is not None and _harness_profile_changed(initial_harness_profile, harness_profile):
-                    await self._emit_run_event(
-                        session_id,
-                        run_id,
-                        "harness_profile.changed",
-                        {
-                            "schema_version": 1,
-                            "initial": initial_harness_profile.to_metadata(),
-                            "effective": effective_profile_metadata,
-                            "reason": "resolved task objective changed the selected harness profile",
-                        },
-                        channel=channel,
-                        external_chat_id=external_chat_id,
-                    )
+            task_contract = await self._plan_task_contract(
+                task_intent=effective_task_intent,
+                current_message=prompt_message,
+                history=history_dicts,
+                current_image_files=user_image_files,
+                current_audio_files=user_audio_files,
+                current_video_files=user_video_files,
+                task_context_decision=task_context_decision,
+            )
+            if run_id is not None:
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_contract.planned",
+                    task_contract.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_contract.validated",
+                    task_contract.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+            harness_profile = self._select_harness_profile(task_contract)
+            task_contract = replace(task_contract, harness_profile=harness_profile.to_metadata())
+            harness_policy = self._select_harness_policy(harness_profile)
+            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
+            if run_id is not None:
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "harness_profile.selected",
+                    {
+                        **harness_profile.to_metadata(),
+                        "selection_phase": "contract",
+                    },
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
+                await self._emit_run_event(
+                    session_id,
+                    run_id,
+                    "task_contract.created",
+                    task_contract.to_metadata(),
+                    channel=channel,
+                    external_chat_id=external_chat_id,
+                )
                 await self._emit_run_event(
                     session_id,
                     run_id,
@@ -351,70 +354,6 @@ class LlmCallService:
                         channel=channel,
                         external_chat_id=external_chat_id,
                     )
-            deterministic_contract = TaskContractService.build_deterministic(
-                task_intent=effective_task_intent,
-                current_message=prompt_message,
-                history=history_dicts,
-                current_image_files=user_image_files,
-                current_audio_files=user_audio_files,
-                current_video_files=user_video_files,
-                task_context_decision=task_context_decision,
-                harness_profile=harness_profile,
-            )
-            semantic_decision = None
-            semantic_classifier_status = "disabled"
-            semantic_classifier_reason = "semantic classifier disabled by config"
-            if self.config.semantic_contract_classifier_enabled:
-                semantic_classifier_reason = semantic_contract_skip_reason(
-                    current_message=prompt_message,
-                    task_intent=effective_task_intent,
-                    deterministic_contract=deterministic_contract,
-                )
-                if semantic_classifier_reason:
-                    semantic_classifier_status = "skipped"
-                else:
-                    semantic_classifier_status = "invoked"
-                    try:
-                        semantic_decision = await self._classify_semantic_contract(
-                            task_intent=effective_task_intent,
-                            current_message=prompt_message,
-                            history=history_dicts,
-                            deterministic_contract=deterministic_contract,
-                        )
-                    except Exception as exc:
-                        logger.warning("[{}] task.semantic_contract | failed={}", session_id, exc)
-                        semantic_classifier_status = "failed"
-                        semantic_classifier_reason = f"semantic classifier failed: {exc}"
-                        semantic_decision = SemanticContractDecision(reason=semantic_classifier_reason)
-            task_contract = merge_semantic_contract(
-                deterministic_contract,
-                semantic_decision,
-                min_confidence=self.config.semantic_contract_classifier_confidence_threshold,
-            )
-            if run_id is not None:
-                semantic_metadata = _semantic_classifier_trace_metadata(
-                    enabled=self.config.semantic_contract_classifier_enabled,
-                    status=semantic_classifier_status,
-                    reason=semantic_classifier_reason,
-                    task_contract=task_contract,
-                    semantic_decision=semantic_decision,
-                )
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
-                    "task_contract.semantic_classified",
-                    semantic_metadata,
-                    channel=channel,
-                    external_chat_id=external_chat_id,
-                )
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
-                    "task_contract.created",
-                    task_contract.to_metadata(),
-                    channel=channel,
-                    external_chat_id=external_chat_id,
-                )
             guidance = _build_task_contract_guidance(task_contract)
             if guidance:
                 prompt_message = f"{prompt_message}\n\n{guidance}"
@@ -632,13 +571,6 @@ def _effective_task_intent(
     if not resolved_objective:
         return task_intent
     return TaskIntentService().classify(resolved_objective)
-
-
-def _harness_profile_changed(initial_profile: Any, effective_profile: Any) -> bool:
-    return (
-        getattr(initial_profile, "name", None) != getattr(effective_profile, "name", None)
-        or getattr(initial_profile, "task_type", None) != getattr(effective_profile, "task_type", None)
-    )
 
 
 def _message_with_resolved_objective(

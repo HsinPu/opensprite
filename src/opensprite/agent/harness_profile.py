@@ -9,61 +9,21 @@ from typing import Any
 from .task_intent import TaskIntent
 
 
-_URL_RE = re.compile(r"https?://", re.IGNORECASE)
-_RESEARCH_MARKERS = (
-    "web",
-    "internet",
-    "online",
-    "search",
-    "source",
-    "sources",
-    "citation",
-    "cite",
-    "news",
-    "current",
-    "latest",
-    "url",
-    "link",
-    "website",
-    "site",
-    "上網",
-    "網路",
-    "搜尋",
-    "查資料",
-    "資料來源",
-    "來源",
-    "引用",
-    "新聞",
-    "最新",
-    "目前",
-    "網站",
-    "連結",
-)
 _NO_WEB_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|sources?)\b"
-    r"|(?:不要|不用|不需要|別)(?:上網|搜尋|搜索|查資料|查網路|使用\s*web)",
-    re.IGNORECASE,
-)
-_NO_WEB_EN_RE = re.compile(
     r"\b(?:do not|don't|dont|without|no)\s+(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
     r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:use\s+)?(?:the\s+)?(?:web|internet|online|search|browse|sources?)\b"
     r"|\b(?:do not|don't|dont)\s+(?:search|browse|look\s+up|google)\b"
     r"|\b(?:offline|no\s+internet|no\s+web|no\s+search)\b",
     re.IGNORECASE,
 )
-_NO_WEB_ZH_RE = re.compile(
-    r"(?:不要|不用|別)[^。！？\n]{0,40}(?:上網|搜尋|查網路|查網頁|web_search|web_research)",
-    re.IGNORECASE,
-)
-_NO_WORKSPACE_EN_RE = re.compile(
+_NO_WORKSPACE_RE = re.compile(
     r"\b(?:do not|don't|dont|without|no)\s+(?:read|inspect|access|open|use)?\s*(?:files?|workspace|repo|repository|codebase)\b"
     r"|\b(?:do not|don't|dont)\s+(?:read|inspect|access|open)\s+(?:files?|workspace|repo|repository|codebase)\b"
     r"|\b(?:no\s+file\s+access|no\s+workspace\s+access)\b",
     re.IGNORECASE,
 )
 _NO_TOOL_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:call|use|invoke|run)\s+(?:any\s+)?tools?\b"
-    r"|(?:不要|不用|別)[^。！？\n]{0,30}(?:呼叫|使用|執行)[^。！？\n]{0,20}(?:工具|tool)",
+    r"\b(?:do not|don't|dont|without|no)\s+(?:call|use|invoke|run)\s+(?:any\s+)?tools?\b",
     re.IGNORECASE,
 )
 _NO_WEB_LITERAL_PHRASES = (
@@ -91,6 +51,11 @@ _NO_WORKSPACE_LITERAL_PHRASES = (
     "\u4e0d\u8981\u770b\u5c08\u6848",
     "\u4e0d\u8981\u67e5 workspace",
     "\u4e0d\u8981\u8b80 AGENTS.md",
+)
+_NO_TOOL_LITERAL_PHRASES = (
+    "\u4e0d\u8981\u7528\u5de5\u5177",
+    "\u4e0d\u7528\u5de5\u5177",
+    "\u4e0d\u8981\u547c\u53eb\u5de5\u5177",
 )
 _WEB_DENIED_TOOLS = (
     "web_search",
@@ -131,7 +96,6 @@ _NO_TOOL_DENIED_TOOLS = tuple(
             "credential_store",
             "exec",
             "process",
-            "verify",
             "analyze_image",
             "ocr_image",
             "transcribe_audio",
@@ -145,105 +109,6 @@ _NO_TOOL_DENIED_TOOLS = tuple(
             "batch",
         )
     )
-)
-_LOCAL_RUNTIME_RE = re.compile(
-    r"\b(?:channel|session id|current time|trace metrics?|cli chat)\b|(?:目前時間|現在時間|對話|工作階段|執行階段)",
-    re.IGNORECASE,
-)
-_PURE_ANSWER_RE = re.compile(
-    r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
-    re.IGNORECASE,
-)
-_TESTING_DISCUSSION_PHRASES = (
-    "\u6e2c\u8a66\u91cd\u9ede",
-    "\u6e2c\u8a66\u7d00\u9304",
-    "\u6e2c\u8a66\u6458\u8981",
-    "\u6d41\u7a0b\u98a8\u96aa",
-)
-_CODING_MARKERS = (
-    "repo",
-    "repository",
-    "codebase",
-    "code",
-    "file",
-    "files",
-    "function",
-    "class",
-    "method",
-    "tests",
-    "pytest",
-    "build",
-    "compile",
-    "traceback",
-    "stack trace",
-    "src/",
-    "tests/",
-    "apps/",
-    "程式",
-    "程式碼",
-    "專案",
-    "檔案",
-    "函式",
-    "類別",
-    "測試",
-    "建置",
-    "編譯",
-    "修正",
-    "修改",
-    "重構",
-)
-_CODE_PATH_RE = re.compile(
-    r"(?:^|\s)(?:[\w.-]+[\\/])+[\w.-]+|"
-    r"(?:^|\s)[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)(?:\s|$)",
-    re.IGNORECASE,
-)
-_MEDIA_MARKERS = (
-    "image",
-    "images",
-    "photo",
-    "picture",
-    "screenshot",
-    "audio",
-    "voice",
-    "speech",
-    "transcribe",
-    "video",
-    "clip",
-    "ocr",
-    "圖片",
-    "照片",
-    "截圖",
-    "音訊",
-    "語音",
-    "轉錄",
-    "影片",
-    "辨識",
-)
-_OPS_MARKERS = (
-    "credential",
-    "credentials",
-    "token",
-    "secret",
-    "provider",
-    "schedule",
-    "cron",
-    "deploy",
-    "restart",
-    "service",
-    "settings",
-    "configuration",
-    "configure",
-    "mcp server",
-    "憑證",
-    "金鑰",
-    "權杖",
-    "供應商",
-    "設定",
-    "配置",
-    "排程",
-    "部署",
-    "重啟",
-    "服務",
 )
 _PROFILE_PRIORITY_ORDER = ("ops", "media", "coding", "research", "chat")
 
@@ -285,25 +150,14 @@ class HarnessProfile:
 
 
 class HarnessProfileService:
-    """Choose the narrowest harness profile that fits the current task."""
+    """Derive the executable harness profile from an already-planned task contract."""
 
-    def select(self, task_intent: TaskIntent) -> HarnessProfile:
-        """Select a profile from deterministic intent and objective hints."""
-        text = task_intent.objective or ""
-        lowered = text.lower()
-        denied_tools = denied_tools_for_constraints(text)
-        if _looks_like_direct_chat(task_intent, lowered, text):
-            direct_signals = _direct_chat_signals(text, denied_tools)
-            return HarnessProfile(
-                name="chat",
-                task_type=task_intent.kind,
-                verification_policy="none",
-                continuation_policy="minimal",
-                denied_tools=denied_tools,
-                reason="request is a direct answer or explicitly avoids external lookup",
-                selection_signals=direct_signals,
-            )
-        if _looks_like_ops(lowered):
+    def from_contract(self, task_contract: Any) -> HarnessProfile:
+        """Select a profile from the authoritative task contract, not from user text."""
+        task_type = str(getattr(task_contract, "task_type", "") or "")
+        tool_groups = _contract_tool_groups(task_contract)
+        requirement_kinds = _contract_requirement_kinds(task_contract)
+        if task_type == "operations":
             return HarnessProfile(
                 name="ops",
                 task_type="operations",
@@ -312,33 +166,10 @@ class HarnessProfileService:
                 verification_policy="validate_or_report",
                 continuation_policy="approval_bounded",
                 approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
-                reason="objective references configuration, credentials, scheduling, services, or external side effects",
-                selection_signals=_selection_signals("ops", lowered, _OPS_MARKERS),
+                reason="task contract selected operations profile",
+                selection_signals=("contract:operations",),
             )
-        if _looks_like_media(task_intent, lowered):
-            return HarnessProfile(
-                name="media",
-                task_type="media_extraction",
-                required_tool_groups=("media",),
-                required_evidence=("media_artifact",),
-                verification_policy="artifact_required",
-                continuation_policy="bounded",
-                reason="objective references media analysis or an attachment-only media turn",
-                selection_signals=_selection_signals("media", lowered, _MEDIA_MARKERS, extra=(task_intent.kind,)),
-            )
-        if _looks_like_coding(task_intent, lowered, text):
-            return HarnessProfile(
-                name="coding",
-                task_type="workspace_change" if task_intent.expects_code_change else "workspace_analysis",
-                required_tool_groups=("workspace_read", "workspace_write") if task_intent.expects_code_change else ("workspace_read",),
-                required_evidence=("file_change",) if task_intent.expects_code_change else ("workspace_evidence",),
-                verification_policy="focused_if_possible",
-                continuation_policy="bounded_with_verification",
-                approval_required_risk_levels=("external_side_effect", "configuration"),
-                reason="objective references code, files, tests, or a repository task",
-                selection_signals=_coding_selection_signals(task_intent, lowered, text),
-            )
-        if _looks_like_research(lowered):
+        if "web_research" in tool_groups or task_type == "web_research":
             return HarnessProfile(
                 name="research",
                 task_type="web_research",
@@ -347,17 +178,62 @@ class HarnessProfileService:
                 verification_policy="source_grounded",
                 continuation_policy="bounded_with_source_fetch",
                 approval_required_risk_levels=("external_side_effect",),
-                reason="objective references web research, URLs, sources, or current information",
-                selection_signals=_selection_signals("research", lowered, _RESEARCH_MARKERS, extra=("url" if _URL_RE.search(lowered) else "",)),
+                reason="task contract requires web research evidence",
+                selection_signals=("contract:web_research",),
             )
+        if task_type == "media_extraction" or "media" in tool_groups:
+            return HarnessProfile(
+                name="media",
+                task_type="media_extraction",
+                required_tool_groups=("media",),
+                required_evidence=("media_artifact",),
+                verification_policy="artifact_required",
+                continuation_policy="bounded",
+                reason="task contract requires media evidence",
+                selection_signals=("contract:media",),
+            )
+        if "workspace_write" in tool_groups or "file_change" in requirement_kinds or task_type == "code_change":
+            return HarnessProfile(
+                name="coding",
+                task_type="workspace_change",
+                required_tool_groups=("workspace_read", "workspace_write"),
+                required_evidence=("file_change",),
+                verification_policy="focused_if_possible",
+                continuation_policy="bounded_with_verification",
+                approval_required_risk_levels=("external_side_effect", "configuration"),
+                reason="task contract requires workspace changes",
+                selection_signals=("contract:workspace_write",),
+            )
+        if "workspace_read" in tool_groups or task_type == "workspace_read":
+            return HarnessProfile(
+                name="coding",
+                task_type="workspace_analysis",
+                required_tool_groups=("workspace_read",),
+                required_evidence=("workspace_evidence",),
+                verification_policy="focused_if_possible",
+                continuation_policy="bounded_with_verification",
+                approval_required_risk_levels=("external_side_effect", "configuration"),
+                reason="task contract requires workspace evidence",
+                selection_signals=("contract:workspace_read",),
+            )
+        return HarnessProfile(
+            name="chat",
+            task_type=task_type or "pure_answer",
+            verification_policy="none",
+            continuation_policy="minimal",
+            reason="task contract does not require tool-backed evidence",
+            selection_signals=("contract:pure_answer",),
+        )
+
+    def select(self, task_intent: TaskIntent) -> HarnessProfile:
+        """Legacy fallback for previews/tests that have not built a contract yet."""
         return HarnessProfile(
             name="chat",
             task_type=task_intent.kind,
             verification_policy="none",
             continuation_policy="minimal",
-            denied_tools=denied_tools,
-            reason="no tool-backed harness profile matched",
-            selection_signals=_constraint_signals(denied_tools) + ("fallback:chat",),
+            reason="legacy pre-contract selection defaults to chat",
+            selection_signals=("legacy:fallback:chat",),
         )
 
 
@@ -423,93 +299,28 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
     )
 
 
-def _has_marker(lowered: str, markers: tuple[str, ...]) -> bool:
-    for marker in markers:
-        if _is_ascii_word_marker(marker):
-            if re.search(rf"(?<![A-Za-z0-9_]){re.escape(marker)}(?![A-Za-z0-9_])", lowered):
-                return True
-        elif marker in lowered:
-            return True
-    return False
-
-
-def _is_ascii_word_marker(marker: str) -> bool:
-    return bool(re.fullmatch(r"[a-z0-9_]+", marker))
-
-
-def _looks_like_research(lowered: str) -> bool:
-    if has_no_web_constraint(lowered) or _LOCAL_RUNTIME_RE.search(lowered):
-        return False
-    return bool(_URL_RE.search(lowered)) or _has_marker(lowered, _RESEARCH_MARKERS)
-
-
-def _looks_like_coding(task_intent: TaskIntent, lowered: str, text: str) -> bool:
-    if has_no_workspace_constraint(text):
-        return False
-    if _looks_like_testing_discussion(text) and not _CODE_PATH_RE.search(text):
-        return False
-    if has_no_web_constraint(text) and task_intent.kind == "debug" and not _CODE_PATH_RE.search(text):
-        return False
-    if task_intent.expects_code_change:
-        return True
-    if task_intent.kind in {"refactor", "implementation"}:
-        return True
-    if task_intent.kind == "debug":
-        return bool(_CODE_PATH_RE.search(text)) or _has_marker(lowered, _CODING_MARKERS)
-    return bool(_CODE_PATH_RE.search(text)) or _has_marker(lowered, _CODING_MARKERS)
-
-
-def _looks_like_media(task_intent: TaskIntent, lowered: str) -> bool:
-    return task_intent.kind == "media_upload" or _has_marker(lowered, _MEDIA_MARKERS)
-
-
-def _looks_like_ops(lowered: str) -> bool:
-    return _has_marker(lowered, _OPS_MARKERS)
-
-
-def _looks_like_direct_chat(task_intent: TaskIntent, lowered: str, text: str) -> bool:
-    if _PURE_ANSWER_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
-        return True
-    if _looks_like_testing_discussion(text) and not _CODE_PATH_RE.search(text):
-        return True
-    if has_no_tool_constraint(text):
-        return True
-    if has_no_web_constraint(text) and not _CODE_PATH_RE.search(text):
-        if task_intent.kind == "debug" or not _has_marker(lowered, _CODING_MARKERS):
-            return True
-    if has_no_workspace_constraint(text):
-        return True
-    if _URL_RE.search(lowered) or _has_marker(lowered, _RESEARCH_MARKERS):
-        return False
-    return task_intent.kind in {"question", "conversation"} and not _CODE_PATH_RE.search(text) and not _has_marker(lowered, _CODING_MARKERS)
-
-
 def has_no_web_constraint(text: str) -> bool:
     """Return whether the user explicitly forbids web/search evidence."""
     text = text or ""
     lowered = text.lower()
-    return bool(
-        _NO_WEB_RE.search(text)
-        or _NO_WEB_EN_RE.search(text)
-        or _NO_WEB_ZH_RE.search(text)
-        or any(phrase in lowered for phrase in _NO_WEB_LITERAL_PHRASES)
-    )
-
-
-def _looks_like_testing_discussion(text: str) -> bool:
-    return any(phrase in (text or "") for phrase in _TESTING_DISCUSSION_PHRASES)
+    return bool(_NO_WEB_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_WEB_LITERAL_PHRASES))
 
 
 def has_no_workspace_constraint(text: str) -> bool:
     """Return whether the user explicitly forbids file/workspace inspection."""
     text = text or ""
     lowered = text.lower()
-    return bool(_NO_WORKSPACE_EN_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_WORKSPACE_LITERAL_PHRASES))
+    return bool(
+        _NO_WORKSPACE_RE.search(text)
+        or any(phrase.lower() in lowered for phrase in _NO_WORKSPACE_LITERAL_PHRASES)
+    )
 
 
 def has_no_tool_constraint(text: str) -> bool:
     """Return whether the user explicitly forbids tool calls."""
-    return bool(_NO_TOOL_RE.search(text or ""))
+    text = text or ""
+    lowered = text.lower()
+    return bool(_NO_TOOL_RE.search(text) or any(phrase.lower() in lowered for phrase in _NO_TOOL_LITERAL_PHRASES))
 
 
 def denied_tools_for_constraints(text: str) -> tuple[str, ...]:
@@ -524,44 +335,17 @@ def denied_tools_for_constraints(text: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(denied))
 
 
-def _constraint_signals(denied_tools: tuple[str, ...]) -> tuple[str, ...]:
-    signals: list[str] = []
-    if any(tool in denied_tools for tool in _WEB_DENIED_TOOLS):
-        signals.append("constraint:no_web")
-    if any(tool in denied_tools for tool in _WORKSPACE_DENIED_TOOLS):
-        signals.append("constraint:no_workspace")
-    if any(tool in denied_tools for tool in _NO_TOOL_DENIED_TOOLS):
-        signals.append("constraint:no_tools")
-    return tuple(signals)
+def _contract_tool_groups(task_contract: Any) -> set[str]:
+    return {
+        str(getattr(requirement, "tool_group", "") or "")
+        for requirement in getattr(task_contract, "requirements", ()) or ()
+        if str(getattr(requirement, "tool_group", "") or "")
+    }
 
 
-def _direct_chat_signals(text: str, denied_tools: tuple[str, ...]) -> tuple[str, ...]:
-    signals = list(_constraint_signals(denied_tools))
-    signals.append("fallback:chat")
-    if signals[:-1] or _PURE_ANSWER_RE.search(text or "") or _LOCAL_RUNTIME_RE.search(text or ""):
-        signals.append("signal:direct_answer")
-    return tuple(signals)
-
-
-def _selection_signals(profile: str, lowered: str, markers: tuple[str, ...], *, extra: tuple[str, ...] = ()) -> tuple[str, ...]:
-    signals = [f"priority:{profile}"]
-    signals.extend(f"marker:{marker}" for marker in markers if marker and _marker_matches(lowered, marker))
-    signals.extend(f"signal:{item}" for item in extra if item)
-    return tuple(signals)
-
-
-def _coding_selection_signals(task_intent: TaskIntent, lowered: str, text: str) -> tuple[str, ...]:
-    signals = list(_selection_signals("coding", lowered, _CODING_MARKERS))
-    if task_intent.expects_code_change:
-        signals.append("intent:expects_code_change")
-    if task_intent.kind in {"debug", "refactor", "implementation"}:
-        signals.append(f"intent:{task_intent.kind}")
-    if _CODE_PATH_RE.search(text):
-        signals.append("pattern:code_path")
-    return tuple(signals)
-
-
-def _marker_matches(lowered: str, marker: str) -> bool:
-    if _is_ascii_word_marker(marker):
-        return bool(re.search(rf"(?<![A-Za-z0-9_]){re.escape(marker)}(?![A-Za-z0-9_])", lowered))
-    return marker in lowered
+def _contract_requirement_kinds(task_contract: Any) -> set[str]:
+    return {
+        str(getattr(requirement, "kind", "") or "")
+        for requirement in getattr(task_contract, "requirements", ()) or ()
+        if str(getattr(requirement, "kind", "") or "")
+    }

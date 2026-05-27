@@ -72,9 +72,40 @@ _PURE_ANSWER_LITERAL_PHRASES = (
 )
 _ALLOWED_SEMANTIC_TOOL_GROUPS = frozenset({"web_research", "workspace_read", "history_retrieval"})
 _ALLOWED_SEMANTIC_TASK_TYPES = frozenset({"web_research", "workspace_read", "history_retrieval", "task", "analysis", "pure_answer"})
+_ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
+_ALLOWED_PLANNER_TASK_TYPES = frozenset(
+    {
+        "pure_answer",
+        "web_research",
+        "workspace_read",
+        "workspace_change",
+        "code_change",
+        "media_analysis",
+        "media_extraction",
+        "history_retrieval",
+        "ops",
+        "operations",
+        "task",
+        "analysis",
+    }
+)
+_PLANNER_TASK_TYPE_ALIASES = {
+    "workspace_change": "code_change",
+    "media_analysis": "media_extraction",
+    "ops": "operations",
+}
 _SEMANTIC_CONTRACT_SYSTEM_PROMPT = (
     "Classify whether a user request needs tool-derived evidence before the final answer. "
     "Return only JSON. You may only add stricter requirements; never remove deterministic evidence requirements."
+)
+_PLANNER_CONTRACT_SYSTEM_PROMPT = (
+    "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
+    "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
+    "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, media_analysis, "
+    "history_retrieval, ops, task, analysis. Choose required_tool_groups only from: web_research, "
+    "workspace_read, workspace_write, media, history_retrieval, verification. If no tool evidence is needed, "
+    "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
+    "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
 )
 
 
@@ -222,6 +253,62 @@ class SemanticContractClassifier:
             **self.llm_config.decoding_kwargs(),
         )
         return _semantic_decision_from_payload(_parse_json_object(str(getattr(response, "content", "") or "")))
+
+
+class TaskContractPlanner:
+    """LLM-backed planner that produces the authoritative per-turn task contract."""
+
+    def __init__(self, llm_config: DocumentLlmConfig):
+        self.llm_config = llm_config
+
+    async def plan(
+        self,
+        *,
+        provider: Any,
+        model: str | None,
+        task_intent: TaskIntent,
+        current_message: str,
+        history: list[dict[str, Any]] | None,
+        current_image_files: list[str] | None = None,
+        current_audio_files: list[str] | None = None,
+        current_video_files: list[str] | None = None,
+        task_context_decision: TaskContextDecision | None = None,
+    ) -> TaskContract:
+        if provider is None or str(model or "").strip().lower() == "unconfigured":
+            return _planner_blocked_contract(
+                objective=str(task_intent.objective or current_message or "").strip(),
+                reason="task contract planner unavailable: llm not configured",
+            )
+        response = await provider.chat(
+            [
+                ChatMessage(role="system", content=_PLANNER_CONTRACT_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=_build_planner_contract_prompt(
+                        current_message=current_message,
+                        history=history or [],
+                        task_intent=task_intent,
+                        current_image_files=current_image_files,
+                        current_audio_files=current_audio_files,
+                        current_video_files=current_video_files,
+                        task_context_decision=task_context_decision,
+                    ),
+                ),
+            ],
+            model=model,
+            **self.llm_config.decoding_kwargs(),
+        )
+        payload = _parse_json_object(str(getattr(response, "content", "") or ""))
+        return _contract_from_planner_payload(
+            payload,
+            task_intent=task_intent,
+            current_message=current_message,
+            history=history,
+            current_image_files=current_image_files,
+            current_audio_files=current_audio_files,
+            current_video_files=current_video_files,
+            task_context_decision=task_context_decision,
+        )
 
 
 class TaskContractService:
@@ -862,6 +949,251 @@ def _build_semantic_contract_prompt(
         "If unsure, use confidence below 0.7.\n\n"
         f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
+
+
+def _build_planner_contract_prompt(
+    *,
+    current_message: str,
+    history: list[dict[str, Any]],
+    task_intent: TaskIntent,
+    current_image_files: list[str] | None,
+    current_audio_files: list[str] | None,
+    current_video_files: list[str] | None,
+    task_context_decision: TaskContextDecision | None,
+) -> str:
+    context = {
+        "current_message": _truncate(current_message, max_chars=1200),
+        "task_intent": task_intent.to_metadata(),
+        "recent_history": _recent_history(history),
+        "attachments": {
+            "image_files": list(current_image_files or []),
+            "audio_files": list(current_audio_files or []),
+            "video_files": list(current_video_files or []),
+        },
+        "task_context": task_context_decision.to_metadata() if task_context_decision is not None else None,
+    }
+    return (
+        "Create the task contract for the latest user turn. The contract controls which tools the main assistant can see.\n"
+        "Use semantic judgment from the message and recent history, not string matching. If the user asks for current, "
+        "external, public, financial, weather, news, webpage, or source-grounded facts, choose web_research. "
+        "If the user asks about local files, repo code, project state, or wants code changes, choose workspace_read or "
+        "workspace_change. If the user asks about attached media, choose media_analysis. If the user asks about previous "
+        "conversation state, choose history_retrieval. If no tool evidence is needed, choose pure_answer.\n"
+        "Return JSON only with this shape:\n"
+        "{\n"
+        '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | media_analysis | history_retrieval | ops | task | analysis",\n'
+        '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | verification"],\n'
+        '  "final_answer_required": true,\n'
+        '  "allow_no_tool_final": true,\n'
+        '  "reason": "short explanation for trace only"\n'
+        "}\n\n"
+        f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
+    )
+
+
+def _planner_blocked_contract(*, objective: str, reason: str) -> TaskContract:
+    return TaskContract(
+        objective=objective,
+        task_type="pure_answer",
+        final_answer_required=True,
+        allow_no_tool_final=True,
+        contract_sources=("llm_planner",),
+        semantic_contract={
+            "planner_status": "blocked",
+            "reason": reason,
+        },
+    )
+
+
+def _contract_from_planner_payload(
+    payload: dict[str, Any],
+    *,
+    task_intent: TaskIntent,
+    current_message: str,
+    history: list[dict[str, Any]] | None,
+    current_image_files: list[str] | None,
+    current_audio_files: list[str] | None,
+    current_video_files: list[str] | None,
+    task_context_decision: TaskContextDecision | None,
+) -> TaskContract:
+    objective = str(task_intent.objective or current_message or "").strip()
+    resource_index = ResourceIndex.from_turn_and_history(
+        current_message=current_message,
+        history=history,
+        current_image_files=current_image_files,
+        current_audio_files=current_audio_files,
+        current_video_files=current_video_files,
+    )
+    raw_task_type = _allowed_string(payload.get("task_type"), _ALLOWED_PLANNER_TASK_TYPES) or "pure_answer"
+    task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
+    tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
+    if inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS and inherited_tool_group not in tool_groups:
+        tool_groups.append(inherited_tool_group)
+    _ensure_task_type_tool_groups(task_type, tool_groups)
+
+    requirements: list[EvidenceRequirement] = []
+    acceptance_criteria: list[AcceptanceCriterion] = []
+    selected: list[ResourceRef] = []
+
+    for tool_group in tool_groups:
+        if tool_group == "web_research":
+            _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
+        elif tool_group == "workspace_read":
+            _append_workspace_contract(requirements, acceptance_criteria)
+        elif tool_group == "workspace_write":
+            _append_workspace_contract(requirements, acceptance_criteria)
+            if not _has_requirement(requirements, kind="file_change"):
+                requirements.append(
+                    EvidenceRequirement(
+                        kind="file_change",
+                        min_count=1,
+                        description="Record at least one workspace file change.",
+                    )
+                )
+            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
+        elif tool_group == "media":
+            media_resources = (
+                resource_index.by_kind("image")
+                + resource_index.by_kind("audio")
+                + resource_index.by_kind("video")
+            )
+            selected.extend(media_resources)
+            if media_resources:
+                requirements.append(
+                    EvidenceRequirement(
+                        kind="resource_coverage",
+                        tool_group="media",
+                        resource_ids=tuple(item.id for item in media_resources),
+                        coverage="all",
+                        min_count=len(media_resources),
+                        description="Inspect each referenced media resource before finalizing the answer.",
+                    )
+                )
+            else:
+                requirements.append(_semantic_tool_requirement("media"))
+            acceptance_criteria = _append_acceptance_criteria(
+                acceptance_criteria,
+                (_media_artifact_criterion(), _media_final_answer_criterion()),
+            )
+        elif tool_group == "history_retrieval":
+            requirements.append(_semantic_tool_requirement("history_retrieval"))
+            acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
+        elif tool_group == "verification":
+            requirements.append(
+                EvidenceRequirement(
+                    kind="verification",
+                    tool_group="verification",
+                    min_count=1,
+                    description="Record verification evidence before finalizing.",
+                )
+            )
+
+    planner_reason = _truncate(str(payload.get("reason") or "llm planner returned a task contract"), max_chars=240)
+    metadata = {
+        "planner_status": "validated",
+        "raw_task_type": raw_task_type,
+        "required_tool_groups": list(tool_groups),
+        "reason": planner_reason,
+    }
+    return TaskContract(
+        objective=objective,
+        task_type=task_type,
+        requirements=tuple(requirements),
+        acceptance_criteria=tuple(acceptance_criteria),
+        selected_resources=tuple(dict.fromkeys(selected)),
+        final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
+        allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
+        contract_sources=("llm_planner",),
+        semantic_contract=metadata,
+    )
+
+
+def _normalize_planner_tool_groups(value: Any) -> list[str]:
+    raw_values = value if isinstance(value, list) else []
+    groups: list[str] = []
+    for item in raw_values:
+        text = str(item or "").strip()
+        if text == "workspace_change":
+            text = "workspace_write"
+        elif text == "media_analysis":
+            text = "media"
+        elif text == "ops":
+            text = "verification"
+        if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
+            groups.append(text)
+    return groups
+
+
+def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
+    required: tuple[str, ...]
+    if task_type == "web_research":
+        required = ("web_research",)
+    elif task_type == "workspace_read":
+        required = ("workspace_read",)
+    elif task_type == "code_change":
+        required = ("workspace_read", "workspace_write")
+    elif task_type == "media_extraction":
+        required = ("media",)
+    elif task_type == "history_retrieval":
+        required = ("history_retrieval",)
+    else:
+        required = ()
+    for tool_group in required:
+        if tool_group not in tool_groups:
+            tool_groups.append(tool_group)
+
+
+def _append_web_contract(
+    requirements: list[EvidenceRequirement],
+    acceptance_criteria: list[AcceptanceCriterion],
+    *,
+    min_source_count: int,
+) -> None:
+    if not _has_requirement(requirements, kind="tool_group", tool_group="web_research"):
+        requirements.append(
+            EvidenceRequirement(
+                kind="tool_group",
+                tool_group="web_research",
+                coverage="any",
+                min_count=1,
+                description="Use web research tools before answering this external information request.",
+            )
+        )
+    acceptance_criteria[:] = _append_acceptance_criteria(
+        acceptance_criteria,
+        (
+            AcceptanceCriterion(
+                kind="source_artifact",
+                min_count=min_source_count,
+                description="Produce enough traceable web sources before finalizing the answer.",
+            ),
+            AcceptanceCriterion(
+                kind="source_detail",
+                min_count=1,
+                description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
+            ),
+            _web_final_answer_criterion(),
+            _web_source_reference_criterion(),
+        ),
+    )
+
+
+def _append_workspace_contract(
+    requirements: list[EvidenceRequirement],
+    acceptance_criteria: list[AcceptanceCriterion],
+) -> None:
+    if not _has_requirement(requirements, kind="tool_group", tool_group="workspace_read"):
+        requirements.append(
+            EvidenceRequirement(
+                kind="tool_group",
+                tool_group="workspace_read",
+                coverage="any",
+                min_count=1,
+                description="Inspect the relevant workspace files or code context before answering.",
+            )
+        )
+    acceptance_criteria[:] = _append_acceptance_criteria(acceptance_criteria, (_workspace_final_answer_criterion(),))
 
 
 def _semantic_decision_from_payload(payload: dict[str, Any]) -> SemanticContractDecision:

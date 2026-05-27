@@ -89,7 +89,7 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
-from .task_contract import SemanticContractClassifier
+from .task_contract import SemanticContractClassifier, TaskContractPlanner
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
 from .tool_registration import (
@@ -686,6 +686,7 @@ class AgentLoop:
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
         self.semantic_contract_classifier = SemanticContractClassifier(self.config.task_contract_llm)
+        self.task_contract_planner = TaskContractPlanner(self.config.task_contract_llm)
         self.completion_gate = CompletionGateService()
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
@@ -930,12 +931,12 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            classify_semantic_contract=lambda **kwargs: self.semantic_contract_classifier.classify(
+            plan_task_contract=lambda **kwargs: self.task_contract_planner.plan(
                 provider=self.provider,
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            select_harness_profile=lambda task_intent: self.harness_profiles.select(task_intent),
+            select_harness_profile=lambda task_contract: self.harness_profiles.from_contract(task_contract),
             select_harness_policy=lambda harness_profile: self.harness_policies.select(harness_profile),
             build_harness_tool_registry=lambda registry, profile, policy: self.harness_policies.build_tool_registry_for_profile(
                 registry,

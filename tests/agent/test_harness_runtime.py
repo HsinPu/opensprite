@@ -42,14 +42,15 @@ class NamedTool(Tool):
 
 
 class RecordingProvider:
-    def __init__(self, content: str = "Harness runtime reply."):
-        self.content = content
+    def __init__(self, content: str | list[str] = "Harness runtime reply."):
+        self.contents = list(content) if isinstance(content, list) else [content]
         self.tool_names_by_call: list[list[str]] = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         tool_names = [tool["function"]["name"] for tool in tools or []]
         self.tool_names_by_call.append(tool_names)
-        return LLMResponse(content=self.content, model=model or "fake-model")
+        content = self.contents.pop(0) if self.contents else "Harness runtime reply."
+        return LLMResponse(content=content, model=model or "fake-model")
 
     def get_default_model(self) -> str:
         return "fake-model"
@@ -106,12 +107,13 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
 
     assert response.text == "Harness runtime reply."
     assert tool_names_by_call[-1] == ["read_file"]
-    assert "harness_profile.initial_selected" in event_types
-    assert "harness_profile.effective_selected" in event_types
+    assert "task_contract.planned" in event_types
+    assert "task_contract.validated" in event_types
+    assert "harness_profile.selected" in event_types
     assert "harness_policy.selected" in event_types
-    effective_profile = next(event for event in events if event.event_type == "harness_profile.effective_selected")
+    effective_profile = next(event for event in events if event.event_type == "harness_profile.selected")
     assert effective_profile.payload["name"] == "chat"
-    assert effective_profile.payload["selection_phase"] == "effective"
+    assert effective_profile.payload["selection_phase"] == "contract"
     assert checkpoint.payload["harness_profile"]["name"] == "chat"
     assert checkpoint.payload["harness_policy"]["name"] == "chat_read_policy"
     assert checkpoint.payload["completion"]["status"] == "complete"
@@ -119,9 +121,8 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert scorecard.payload["profile"]["name"] == "chat"
     assert scorecard.payload["permissions"]["harness_policy"]["name"] == "chat_read_policy"
     assert scorecard.payload["trace_health"]["status"] == "pass"
-    assert scorecard.payload["trace_health"]["sensor_counts"]["pass"] == 2
-    assert scorecard.payload["sensors"][0]["sensor_id"] == "chat.no_unexpected_tools"
-    assert scorecard.payload["sensors"][0]["status"] == "pass"
+    assert scorecard.payload["trace_health"]["sensor_counts"]["pass"] == 0
+    assert scorecard.payload["sensors"] == []
     assert checkpoint_part.metadata["harness_profile"]["name"] == "chat"
     assert checkpoint_part.metadata["completion"]["status"] == "complete"
     assert "profile=chat" in checkpoint_part.content
@@ -132,7 +133,12 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
     async def scenario():
-        provider = RecordingProvider(content="I will use source-grounded research.")
+        provider = RecordingProvider(
+            content=[
+                '{"task_type":"web_research","required_tool_groups":["web_research"],"allow_no_tool_final":false,"reason":"needs sources"}',
+                "I will use source-grounded research.",
+            ]
+        )
         agent = _agent(tmp_path, provider)
         intent = agent.task_intents.classify("Search the web for the latest OpenSprite release and cite sources")
 
@@ -147,7 +153,7 @@ def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
 
     result, tool_names_by_call = asyncio.run(scenario())
 
-    assert tool_names_by_call == [["read_file", "web_search", "web_fetch"]]
+    assert tool_names_by_call == [[], ["read_file", "web_search", "web_fetch"]]
     assert result.task_contract is not None
     assert result.task_contract.task_type == "web_research"
     assert result.harness_policy is not None
