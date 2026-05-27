@@ -154,6 +154,12 @@ _PURE_ANSWER_RE = re.compile(
     r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
     re.IGNORECASE,
 )
+_TESTING_DISCUSSION_PHRASES = (
+    "\u6e2c\u8a66\u91cd\u9ede",
+    "\u6e2c\u8a66\u7d00\u9304",
+    "\u6e2c\u8a66\u6458\u8981",
+    "\u6d41\u7a0b\u98a8\u96aa",
+)
 _CODING_MARKERS = (
     "repo",
     "repository",
@@ -440,6 +446,8 @@ def _looks_like_research(lowered: str) -> bool:
 def _looks_like_coding(task_intent: TaskIntent, lowered: str, text: str) -> bool:
     if has_no_workspace_constraint(text):
         return False
+    if _looks_like_testing_discussion(text) and not _CODE_PATH_RE.search(text):
+        return False
     if has_no_web_constraint(text) and task_intent.kind == "debug" and not _CODE_PATH_RE.search(text):
         return False
     if task_intent.expects_code_change:
@@ -461,6 +469,8 @@ def _looks_like_ops(lowered: str) -> bool:
 
 def _looks_like_direct_chat(task_intent: TaskIntent, lowered: str, text: str) -> bool:
     if _PURE_ANSWER_RE.search(text) or _LOCAL_RUNTIME_RE.search(text):
+        return True
+    if _looks_like_testing_discussion(text) and not _CODE_PATH_RE.search(text):
         return True
     if has_no_tool_constraint(text):
         return True
@@ -484,6 +494,10 @@ def has_no_web_constraint(text: str) -> bool:
         or _NO_WEB_ZH_RE.search(text)
         or any(phrase in lowered for phrase in _NO_WEB_LITERAL_PHRASES)
     )
+
+
+def _looks_like_testing_discussion(text: str) -> bool:
+    return any(phrase in (text or "") for phrase in _TESTING_DISCUSSION_PHRASES)
 
 
 def has_no_workspace_constraint(text: str) -> bool:

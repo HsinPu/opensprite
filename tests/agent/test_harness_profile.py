@@ -82,6 +82,17 @@ def test_harness_profile_treats_api_key_code_question_as_coding_not_ops():
     assert profile.task_type == "workspace_analysis"
 
 
+def test_harness_profile_keeps_testing_risk_summary_as_chat():
+    profile = _profile(
+        "\u73fe\u5728\u8acb\u7528\u76ee\u524d session \u7684\u8108\u7d61\uff0c\u7e3d\u7d50\u525b\u525b\u6e2c\u8a66\u5230\u76ee\u524d\u70ba\u6b62\u53ef\u80fd\u66b4\u9732\u51fa\u7684\u5169\u7a2e\u6d41\u7a0b\u98a8\u96aa\uff1b\u4e0d\u8981\u4e0a\u7db2\u3002"
+    )
+    metadata = profile.to_metadata()
+
+    assert profile.name == "chat"
+    assert "marker:\u6e2c\u8a66" not in metadata["selection"]["matched_signals"]
+    assert "constraint:no_web" in metadata["selection"]["matched_signals"]
+
+
 def test_chinese_no_edit_and_no_test_constraints_downgrade_code_change():
     intent = TaskIntentService().classify(
         "\u5ef6\u7e8c\u525b\u525b\u7684\u7a0b\u5f0f\u78bc\u89c0\u5bdf\uff0c\u8acb\u8a2d\u8a08\u6700\u5c0f regression test \u6848\u4f8b\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\u3001\u4e0d\u8981\u57f7\u884c\u6e2c\u8a66\u3002"
