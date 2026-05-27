@@ -119,6 +119,9 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert scorecard.payload["profile"]["name"] == "chat"
     assert scorecard.payload["permissions"]["harness_policy"]["name"] == "chat_read_policy"
     assert scorecard.payload["trace_health"]["status"] == "pass"
+    assert scorecard.payload["trace_health"]["sensor_counts"]["pass"] == 2
+    assert scorecard.payload["sensors"][0]["sensor_id"] == "chat.no_unexpected_tools"
+    assert scorecard.payload["sensors"][0]["status"] == "pass"
     assert checkpoint_part.metadata["harness_profile"]["name"] == "chat"
     assert checkpoint_part.metadata["completion"]["status"] == "complete"
     assert "profile=chat" in checkpoint_part.content

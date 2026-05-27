@@ -15,7 +15,7 @@ from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
-from .harness_scorecard import HarnessScorecard
+from .harness_scorecard import HarnessScorecard, HarnessSensorResult
 from .harness_sensors import evaluate_harness_sensors
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
@@ -1186,6 +1186,11 @@ def _harness_scorecard_metadata(
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
     task_type = harness_profile.task_type if harness_profile is not None else ""
+    sensors = evaluate_harness_sensors(
+        task_type=task_type,
+        execution_result=aggregate_result,
+        completion_result=completion_result,
+    )
     scorecard = HarnessScorecard(
         profile=harness_profile.to_metadata() if harness_profile is not None else {},
         contract=task_contract.to_metadata() if task_contract is not None else {},
@@ -1199,17 +1204,50 @@ def _harness_scorecard_metadata(
         permissions={
             "harness_policy": dict(aggregate_result.harness_policy or {}),
         },
-        sensors=evaluate_harness_sensors(
-            task_type=task_type,
-            execution_result=aggregate_result,
-            completion_result=completion_result,
-        ),
+        sensors=sensors,
         completion=completion_result.to_metadata(),
-        trace_health={
-            "status": "pass",
-            "has_profile": harness_profile is not None,
-            "has_contract": task_contract is not None,
-            "has_completion": bool(completion_result.status),
-        },
+        trace_health=_harness_trace_health(
+            has_profile=harness_profile is not None,
+            has_contract=task_contract is not None,
+            has_completion=bool(completion_result.status),
+            sensors=sensors,
+        ),
     )
     return scorecard.to_metadata()
+
+
+def _harness_trace_health(
+    *,
+    has_profile: bool,
+    has_contract: bool,
+    has_completion: bool,
+    sensors: tuple[HarnessSensorResult, ...],
+) -> dict[str, Any]:
+    sensor_statuses = [sensor.status for sensor in sensors]
+    missing_sections = [
+        section
+        for section, present in (
+            ("profile", has_profile),
+            ("contract", has_contract),
+            ("completion", has_completion),
+        )
+        if not present
+    ]
+    status = "pass"
+    if missing_sections or "fail" in sensor_statuses:
+        status = "fail"
+    elif "warn" in sensor_statuses or "not_applicable" in sensor_statuses:
+        status = "warn"
+    return {
+        "status": status,
+        "has_profile": has_profile,
+        "has_contract": has_contract,
+        "has_completion": has_completion,
+        "missing_sections": missing_sections,
+        "sensor_counts": {
+            "pass": sensor_statuses.count("pass"),
+            "warn": sensor_statuses.count("warn"),
+            "fail": sensor_statuses.count("fail"),
+            "not_applicable": sensor_statuses.count("not_applicable"),
+        },
+    }
