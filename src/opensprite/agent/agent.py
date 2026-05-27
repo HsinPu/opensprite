@@ -572,14 +572,14 @@ class AgentLoop:
         config_path: str | Path | None = None,
         llm_config: Any | None = None,
         *,
-        llm_chat_max_tokens: int,
+        llm_output_reserve_tokens: int,
         llm_context_window_tokens: int | None = None,
         llm_configured: bool = True,
         messages_config: MessagesConfig | None = None,
     ):
         ...
         self.config = config
-        self.llm_chat_max_tokens = llm_chat_max_tokens
+        self.llm_output_reserve_tokens = llm_output_reserve_tokens
         self.llm_context_window_tokens = llm_context_window_tokens
         self.llm_configured = llm_configured
         self.messages = messages_config or MessagesConfig()
@@ -832,7 +832,7 @@ class AgentLoop:
             tools=self.tools,
             history_token_budget_getter=lambda: self.config.history_token_budget,
             context_window_tokens_getter=lambda: self.llm_context_window_tokens,
-            output_token_reserve_getter=lambda: self.llm_chat_max_tokens,
+            output_token_reserve_getter=lambda: self.llm_output_reserve_tokens,
         )
         self.mcp_lifecycle = McpLifecycleService(
             tools=self.tools,
@@ -913,7 +913,7 @@ class AgentLoop:
             trim_history_to_token_budget=lambda *args, **kwargs: self._trim_history_to_token_budget(*args, **kwargs),
             effective_context_token_budget=self._effective_context_token_budget,
             llm_context_window_tokens=lambda: self.llm_context_window_tokens,
-            llm_chat_max_tokens=lambda: self.llm_chat_max_tokens,
+            llm_output_reserve_tokens=lambda: self.llm_output_reserve_tokens,
             sync_runtime_mcp_tools_context=self._sync_runtime_mcp_tools_context,
             build_messages=lambda **kwargs: self._context_builder.build_messages(**kwargs),
             build_system_prompt=lambda session_id: self._context_builder.build_system_prompt(session_id),
@@ -1121,7 +1121,7 @@ class AgentLoop:
             context_compaction_enabled=self.config.context_compaction_enabled,
             context_compaction_token_budget=self._effective_context_token_budget(),
             context_window_tokens=self.llm_context_window_tokens,
-            context_output_reserve_tokens=self.llm_chat_max_tokens,
+            context_output_reserve_tokens=self.llm_output_reserve_tokens,
             context_compaction_threshold_ratio=self.config.context_compaction_threshold_ratio,
             context_compaction_min_messages=self.config.context_compaction_min_messages,
             context_compaction_strategy=self.config.context_compaction_strategy,
@@ -1395,7 +1395,7 @@ class AgentLoop:
         provider = create_llm_from_runtime(llm_runtime)
 
         self.provider = provider
-        self.llm_chat_max_tokens = config.agent.context_output_reserve_tokens
+        self.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
         self.llm_context_window_tokens = cfg.context_window_tokens
         self.llm_configured = config.is_llm_configured
 
@@ -1403,7 +1403,7 @@ class AgentLoop:
         self.execution_engine.provider = provider
         self.execution_engine.context_compaction_token_budget = self._effective_context_token_budget()
         self.execution_engine.context_window_tokens = self.llm_context_window_tokens
-        self.execution_engine.context_output_reserve_tokens = max(0, self.llm_chat_max_tokens)
+        self.execution_engine.context_output_reserve_tokens = max(0, self.llm_output_reserve_tokens)
 
         self.memory_consolidation.provider = provider
         self._refresh_consolidator_llm(self.user_profile_update.consolidator, provider)

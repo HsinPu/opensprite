@@ -66,7 +66,7 @@ class LlmCallService:
         trim_history_to_token_budget: Callable[..., tuple[list[dict[str, Any]], int, int, int]],
         effective_context_token_budget: Callable[[], int],
         llm_context_window_tokens: Callable[[], int | None],
-        llm_chat_max_tokens: Callable[[], int],
+        llm_output_reserve_tokens: Callable[[], int],
         sync_runtime_mcp_tools_context: Callable[[], None],
         build_messages: Callable[..., list[dict[str, Any]]],
         build_system_prompt: Callable[[str], str],
@@ -102,7 +102,7 @@ class LlmCallService:
         self._trim_history_to_token_budget = trim_history_to_token_budget
         self._effective_context_token_budget = effective_context_token_budget
         self._llm_context_window_tokens = llm_context_window_tokens
-        self._llm_chat_max_tokens = llm_chat_max_tokens
+        self._llm_output_reserve_tokens = llm_output_reserve_tokens
         self._sync_runtime_mcp_tools_context = sync_runtime_mcp_tools_context
         self._build_messages = build_messages
         self._build_system_prompt = build_system_prompt
@@ -476,7 +476,7 @@ class LlmCallService:
         logger.info(
             f"[{session_id}] prompt.tokens | budget={effective_context_budget} "
             f"history_budget={self.config.history_token_budget} model_window={self._llm_context_window_tokens() or '-'} "
-            f"output_reserve={self._llm_chat_max_tokens()} base={base_tokens} tools={tool_schema_tokens} "
+            f"output_reserve={self._llm_output_reserve_tokens()} base={base_tokens} tools={tool_schema_tokens} "
             f"history={history_tokens} final_estimated={final_tokens}"
         )
         if run_id is not None:
@@ -488,7 +488,7 @@ class LlmCallService:
                     "budget": effective_context_budget,
                     "history_budget": self.config.history_token_budget,
                     "model_window": self._llm_context_window_tokens(),
-                    "output_reserve": self._llm_chat_max_tokens(),
+                    "output_reserve": self._llm_output_reserve_tokens(),
                     "base_tokens": base_tokens,
                     "tool_schema_tokens": tool_schema_tokens,
                     "history_tokens": history_tokens,

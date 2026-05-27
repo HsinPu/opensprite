@@ -1362,7 +1362,7 @@ class Config:
         """Map packaged ``llm`` to :class:`opensprite.agent.agent.AgentLoop` keyword arguments."""
         agent = cls.load_template_data().get("agent", {})
         return {
-            "llm_chat_max_tokens": agent.get("context_output_reserve_tokens", 32768),
+            "llm_output_reserve_tokens": agent.get("context_output_reserve_tokens", 32768),
         }
 
     @classmethod

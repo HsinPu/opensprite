@@ -3086,7 +3086,7 @@ def test_trim_history_reports_base_tokens_without_history(tmp_path):
 
 def test_effective_context_budget_uses_model_window_and_manual_cap(tmp_path):
     chat_kwargs = Config.packaged_agent_llm_chat_kwargs()
-    chat_kwargs["llm_chat_max_tokens"] = 200
+    chat_kwargs["llm_output_reserve_tokens"] = 200
     agent = AgentLoop(
         config=Config.load_agent_template_config(history_token_budget=1000),
         provider=FakeProvider(),
