@@ -8,7 +8,8 @@ from typing import Any
 from ..agent.harness_inventory import expected_sensor_ids_for_task_type
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
-from ..agent.task_contract import TaskContractService
+from ..agent.resource_index import ResourceRef
+from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from ..agent.task_intent import TaskIntentService
 
 
@@ -18,7 +19,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
         "label": "Plain chat question",
         "prompt": "Why does an agent harness improve reliability?",
         "expected_profile": "chat",
-        "expected_profile_task_type": "question",
+        "expected_profile_task_type": "pure_answer",
         "expected_policy": "chat_read_policy",
         "expected_verification_policy": "none",
         "expected_continuation_policy": "minimal",
@@ -122,16 +123,9 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
     videos = _string_sequence(case.get("videos"))
 
     intent = TaskIntentService().classify(prompt, images=images, audios=audios, videos=videos)
-    profile = HarnessProfileService().select(intent)
+    contract = _planned_contract_from_case(case, prompt=prompt, images=images, audios=audios, videos=videos)
+    profile = HarnessProfileService().from_contract(contract)
     policy = HarnessPolicyService().select(profile)
-    contract = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=prompt,
-        current_image_files=list(images),
-        current_audio_files=list(audios),
-        current_video_files=list(videos),
-        harness_profile=profile,
-    )
 
     expected_sensor_ids = expected_sensor_ids_for_task_type(profile.task_type)
     checks = [
@@ -218,6 +212,69 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
         "contract": contract.to_metadata(),
         "expected_sensor_ids": list(expected_sensor_ids),
     }
+
+
+def _planned_contract_from_case(
+    case: Mapping[str, Any],
+    *,
+    prompt: str,
+    images: tuple[str, ...],
+    audios: tuple[str, ...],
+    videos: tuple[str, ...],
+) -> TaskContract:
+    requirements = _requirements_from_case(case)
+    selected_resources = _selected_resources(images=images, audios=audios, videos=videos)
+    return TaskContract(
+        objective=prompt,
+        task_type=_string(case.get("expected_contract_task_type"), default="pure_answer"),
+        requirements=requirements,
+        acceptance_criteria=tuple(
+            AcceptanceCriterion(kind=kind)
+            for kind in _string_sequence(case.get("expected_contract_acceptance_kinds"))
+        ),
+        selected_resources=selected_resources,
+        final_answer_required=True,
+        allow_no_tool_final=not requirements,
+        contract_sources=("eval_planner",),
+        planner_metadata={
+            "planner_status": "controlled_eval",
+            "reason": "Synthetic planner contract for harness profile evaluation.",
+        },
+    )
+
+
+def _requirements_from_case(case: Mapping[str, Any]) -> tuple[EvidenceRequirement, ...]:
+    kinds = _string_sequence(case.get("expected_contract_requirement_kinds"))
+    tool_groups = list(_string_sequence(case.get("expected_contract_tool_groups")))
+    requirements: list[EvidenceRequirement] = []
+    for kind in kinds:
+        if kind == "tool_group":
+            tool_group = tool_groups.pop(0) if tool_groups else ""
+            requirements.append(EvidenceRequirement(kind="tool_group", tool_group=tool_group))
+        elif kind == "resource_coverage":
+            tool_group = tool_groups.pop(0) if tool_groups else "media"
+            requirements.append(EvidenceRequirement(kind="resource_coverage", tool_group=tool_group, min_count=1))
+        elif kind == "verification":
+            requirements.append(EvidenceRequirement(kind="verification", tool_group="verification"))
+        else:
+            requirements.append(EvidenceRequirement(kind=kind))
+    return tuple(requirements)
+
+
+def _selected_resources(
+    *,
+    images: tuple[str, ...],
+    audios: tuple[str, ...],
+    videos: tuple[str, ...],
+) -> tuple[ResourceRef, ...]:
+    resources: list[ResourceRef] = []
+    for index, path in enumerate(images, start=1):
+        resources.append(ResourceRef(id=f"image_current_{index}", kind="image", path=path, source="current_turn"))
+    for index, path in enumerate(audios, start=1):
+        resources.append(ResourceRef(id=f"audio_current_{index}", kind="audio", path=path, source="current_turn"))
+    for index, path in enumerate(videos, start=1):
+        resources.append(ResourceRef(id=f"video_current_{index}", kind="video", path=path, source="current_turn"))
+    return tuple(resources)
 
 
 def _summarize_cases(cases: list[dict[str, Any]]) -> dict[str, Any]:
