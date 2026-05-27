@@ -374,7 +374,7 @@ assertIncludes(settingsLogic, "/api/settings/permissions", "permission settings 
 assertIncludes(settingsLogic, "/api/settings/harness-policy-preview", "harness policy preview fetch");
 assertIncludes(settingsLogic, "approval_required_risk_levels", "permission settings approval-risk save payload");
 assertIncludes(settingsLogic, "profile_overrides", "permission profile override save payload");
-assertIncludes(settingsLogic, "applyPermissionProfilePreset", "permission profile preset helper");
+assertNotIncludes(settingsLogic, "applyPermissionProfilePreset", "unused permission profile preset helper removed");
 assertIncludes(settingsLogic, "launch_args", "browser launch args save payload");
 assertIncludes(browserDefaults, "DEFAULT_BROWSER_SESSION_TIMEOUT = 1800", "browser default session timeout");
 assertIncludes(browserDefaults, 'DEFAULT_BROWSER_LAUNCH_ARGS = "--no-sandbox"', "browser default launch args");
@@ -388,7 +388,7 @@ assertIncludes(settingsModal, "save-permissions-settings", "permissions settings
 assertIncludes(settingsModal, "permissionRiskLevelOptions", "permissions risk level option rendering");
 assertIncludes(settingsModal, "harnessPolicyPreviewRows", "permissions harness policy preview rendering");
 assertIncludes(settingsModal, "permissionProfiles", "permission profile override rendering");
-assertIncludes(settingsModal, "permissionProfilePresets", "permission profile preset rendering");
+assertNotIncludes(settingsModal, "permissionProfilePresets", "unused permission profile preset rendering removed");
 assertIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy");
 assertIncludes(styles, ".settings-policy-preview", "harness policy preview styling");
 assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
