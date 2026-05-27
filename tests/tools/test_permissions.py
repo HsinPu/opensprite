@@ -264,6 +264,43 @@ def test_permission_request_classification_fields():
     assert inline_wrapper_destructive["destructive_reason"] == "bash -c -> git reset --hard"
 
 
+def test_permission_request_classification_uses_decision_risk_levels():
+    classification = classify_permission_request(
+        "custom_tool",
+        {"query": "status"},
+        risk_levels=["read"],
+    )
+
+    assert classification["action_type"] == "read"
+    assert classification["risk_level"] == "low"
+    assert classification["risk_levels"] == ["read"]
+
+
+def test_permission_request_manager_uses_decision_risk_levels():
+    async def scenario():
+        manager = PermissionRequestManager(timeout_seconds=1)
+        task = asyncio.create_task(
+            manager.request(
+                tool_name="custom_tool",
+                params={"query": "status"},
+                reason="approval required",
+                risk_levels=["read"],
+            )
+        )
+        request = await _wait_for_pending(manager)
+
+        await manager.approve_once(request.request_id)
+        result = await task
+        return result, request
+
+    result, request = asyncio.run(scenario())
+
+    assert result.approved is True
+    assert request.action_type == "read"
+    assert request.risk_level == "low"
+    assert request.risk_levels == ["read"]
+
+
 def test_approval_required_policy_denies_pending_request_in_ask_mode():
     async def scenario():
         manager = PermissionRequestManager(timeout_seconds=1)

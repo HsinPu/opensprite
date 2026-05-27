@@ -56,6 +56,7 @@ class AgentPermissionService:
             tool_name=tool_name,
             params=params,
             reason=decision.reason,
+            risk_levels=decision.risk_levels,
             session_id=self._current_session_id(),
             run_id=self._current_run_id(),
             channel=self._current_channel(),

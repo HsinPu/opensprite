@@ -1024,7 +1024,12 @@ class WebAdapter(MessageAdapter):
         }
 
     def _serialize_permission_request(self, request: Any) -> dict[str, Any]:
-        classification = classify_permission_request(getattr(request, "tool_name", ""), getattr(request, "params", {}))
+        request_risk_levels = getattr(request, "risk_levels", None)
+        classification = classify_permission_request(
+            getattr(request, "tool_name", ""),
+            getattr(request, "params", {}),
+            risk_levels=request_risk_levels,
+        )
         payload = {
             "request_id": request.request_id,
             "tool_name": request.tool_name,

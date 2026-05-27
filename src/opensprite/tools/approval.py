@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Iterable
 from uuid import uuid4
 
 from ..utils.log import logger
@@ -36,9 +36,14 @@ def _preview_params(params: Any, *, max_chars: int = 240) -> str:
     return _text(params)[:max_chars]
 
 
-def classify_permission_request(tool_name: str, params: Any) -> dict[str, Any]:
+def classify_permission_request(
+    tool_name: str,
+    params: Any,
+    *,
+    risk_levels: Iterable[str] | None = None,
+) -> dict[str, Any]:
     """Classify one tool approval request for safer user-facing decisions."""
-    risks = sorted(ToolPermissionPolicy.risk_levels_for_tool(tool_name))
+    risks = sorted(set(risk_levels) if risk_levels is not None else ToolPermissionPolicy.risk_levels_for_tool(tool_name))
     command = _param_value(params, "command", "cmd")
     lowered_command = command.lower()
     destructive_reason = classify_destructive_shell_command(command)
@@ -139,6 +144,7 @@ class PermissionRequestManager:
         tool_name: str,
         params: Any,
         reason: str,
+        risk_levels: Iterable[str] | None = None,
         session_id: str | None = None,
         run_id: str | None = None,
         channel: str | None = None,
@@ -146,7 +152,7 @@ class PermissionRequestManager:
     ) -> PermissionApprovalResult:
         """Create a pending request and wait until it is approved, denied, or timed out."""
         created_at = time.time()
-        classification = classify_permission_request(tool_name, params)
+        classification = classify_permission_request(tool_name, params, risk_levels=risk_levels)
         request = PermissionRequest(
             request_id=f"perm_{uuid4().hex}",
             tool_name=tool_name,
