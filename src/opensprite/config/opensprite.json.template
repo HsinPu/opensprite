@@ -78,8 +78,15 @@
       "default_timezone": "UTC"
     },
     "permissions": {
+      "enabled": true,
       "approval_mode": "auto",
       "approval_timeout_seconds": 300,
+      "allowed_tools": ["*"],
+      "denied_tools": [],
+      "allowed_risk_levels": ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"],
+      "denied_risk_levels": [],
+      "approval_required_tools": [],
+      "approval_required_risk_levels": [],
       "profile_overrides": {
         "chat": {"allowed_risk_levels": ["read"]},
         "research": {"allowed_risk_levels": ["read", "network"]},
