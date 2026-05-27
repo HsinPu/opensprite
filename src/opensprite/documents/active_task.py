@@ -200,6 +200,13 @@ _BLOCKED_PATTERNS = (
     "unable to proceed",
     "failed and needs to be fixed",
 )
+_STRONG_BLOCKED_PATTERNS = (
+    "\u6240\u9700\u6a94\u6848\u4e0d\u5b58\u5728",
+    "\u6a94\u6848\u4e0d\u5b58\u5728",
+    "\u7121\u6cd5\u7e7c\u7e8c",
+    "\u963b\u64cb\u539f\u56e0",
+    "\u5df2\u660e\u78ba\u963b\u64cb",
+)
 
 
 class ActiveTaskStore(ConversationDocumentStore):
@@ -641,7 +648,9 @@ def infer_immediate_task_transition(
 
     normalized = re.sub(r"\s+", " ", (response_text or "").strip())
     lowered = normalized.lower()
-    if had_tool_error and any(pattern in lowered for pattern in _BLOCKED_PATTERNS):
+    has_blocker = any(pattern in lowered for pattern in _BLOCKED_PATTERNS)
+    has_strong_blocker = any(pattern in normalized for pattern in _STRONG_BLOCKED_PATTERNS)
+    if (had_tool_error and (has_blocker or has_strong_blocker)) or has_strong_blocker:
         return "blocked", normalized[:240] if normalized else "blocked"
 
     return None

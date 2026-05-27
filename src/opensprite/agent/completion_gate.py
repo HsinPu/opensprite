@@ -296,6 +296,29 @@ class CompletionGateService:
                 review_finding_count=workflow_review_finding_count,
             )
 
+        immediate_transition = infer_immediate_task_transition(
+            response_text,
+            had_tool_error=execution_result.had_tool_error,
+        )
+        if immediate_transition is not None and immediate_transition[0] == "blocked":
+            _, detail = immediate_transition
+            return CompletionGateResult(
+                status="blocked",
+                reason="assistant reported a blocker",
+                active_task_status="blocked",
+                active_task_detail=detail,
+                should_update_active_task=True,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         if expects_code_change and execution_result.file_change_count <= 0:
             return CompletionGateResult(
                 status="incomplete",

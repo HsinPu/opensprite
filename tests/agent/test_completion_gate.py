@@ -312,6 +312,42 @@ def test_completion_gate_marks_blocked_when_tool_error_reports_blocker():
     assert result.should_update_active_task is True
 
 
+def test_completion_gate_marks_chinese_missing_files_as_blocked():
+    intent = TaskIntentService().classify(
+        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u554f\u984c"
+    )
+    response = "\u7d50\u679c\uff1a\u6240\u9700\u6a94\u6848\u4e0d\u5b58\u5728\uff0c\u7121\u6cd5\u7e7c\u7e8c\u3002"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(
+            content=response,
+            executed_tool_calls=1,
+            had_tool_error=True,
+        ),
+    )
+
+    assert result.status == "blocked"
+    assert result.active_task_status == "blocked"
+
+
+def test_completion_gate_marks_strong_chinese_blocker_without_tool_error():
+    intent = TaskIntentService().classify(
+        "\u5ef6\u7e8c\u525b\u525b\u7684\u7a0b\u5f0f\u78bc\u89c0\u5bdf\uff0c\u8acb\u8a2d\u8a08\u6700\u5c0f regression test \u6848\u4f8b\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\u3001\u4e0d\u8981\u57f7\u884c\u6e2c\u8a66\u3002"
+    )
+    response = "\u5b8c\u6210\u72c0\u614b\uff1a\u5df2\u660e\u78ba\u963b\u64cb\uff0c\u7121\u6cd5\u7e7c\u7e8c\u3002"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "blocked"
+    assert result.active_task_status == "blocked"
+
+
 def test_completion_gate_marks_waiting_when_response_asks_for_input():
     intent = TaskIntentService().classify("繼續做")
 
