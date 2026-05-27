@@ -43,6 +43,7 @@ from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
 from ..config.schema import PERMISSION_PROFILE_NAMES
+from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -104,7 +105,7 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.approval import classify_permission_request
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
-from ..tools.permissions import ALL_RISK_LEVELS, APPROVAL_MODES, ToolPermissionPolicy
+from ..tools.permissions import ToolPermissionPolicy
 from ..utils.log import logger, setup_log
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
