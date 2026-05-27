@@ -119,7 +119,7 @@ class ToolPermissionPolicy:
             enabled=bool(get("enabled", True)),
             allowed_tools=list(get("allowed_tools", ["*"]) or ["*"]),
             denied_tools=list(get("denied_tools", []) or []),
-            allowed_risk_levels=list(get("allowed_risk_levels", list(ALL_RISK_LEVELS)) or []),
+            allowed_risk_levels=list(get("allowed_risk_levels", list(ALL_RISK_LEVELS_ORDER)) or []),
             denied_risk_levels=list(get("denied_risk_levels", []) or []),
             approval_mode=get("approval_mode", None),
             approval_required_tools=list(get("approval_required_tools", []) or []),

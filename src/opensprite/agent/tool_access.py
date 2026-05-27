@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import denied_risks_except
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, denied_risks_except
 from ..tools import BatchTool, ToolRegistry
 from ..tools.permissions import ALL_RISK_LEVELS, CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_policy import HarnessPolicy, HarnessPolicyService
@@ -170,7 +170,7 @@ def summarize_effective_risks(policy: ToolPermissionPolicy) -> dict[str, list[st
     allowed: list[str] = []
     denied: list[str] = []
     approval_required: list[str] = []
-    for risk in sorted(ALL_RISK_LEVELS):
+    for risk in ALL_RISK_LEVELS_ORDER:
         tool_name = _RISK_PROBE_TOOLS.get(risk, f"__risk_probe_{risk}")
         tool_risks = frozenset({risk})
         if policy.is_tool_exposed(tool_name, tool_risk_levels=tool_risks):

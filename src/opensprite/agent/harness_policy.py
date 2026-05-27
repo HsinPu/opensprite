@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import denied_risks_except
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, denied_risks_except
 from ..tools import ToolRegistry
 from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
 from .harness_profile import HarnessProfile
@@ -39,7 +39,7 @@ class HarnessPolicy:
     harness_profile_name: str
     allowed_tools: tuple[str, ...] = ("*",)
     denied_tools: tuple[str, ...] = ()
-    allowed_risk_levels: tuple[str, ...] = tuple(sorted(ALL_RISK_LEVELS))
+    allowed_risk_levels: tuple[str, ...] = ALL_RISK_LEVELS_ORDER
     denied_risk_levels: tuple[str, ...] = ()
     approval_required_tools: tuple[str, ...] = ()
     approval_required_risk_levels: tuple[str, ...] = ()
@@ -104,7 +104,7 @@ class HarnessPolicyService:
                 name="workspace_change_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=("*",),
-                allowed_risk_levels=tuple(sorted(ALL_RISK_LEVELS - {"mcp"})),
+                allowed_risk_levels=tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk != "mcp"),
                 denied_risk_levels=("mcp",),
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
                 reason="workspace change turns may edit and verify but require approval for configuration or external side effects",
@@ -122,7 +122,7 @@ class HarnessPolicyService:
                 name="operations_approval_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=("*",),
-                allowed_risk_levels=tuple(sorted(ALL_RISK_LEVELS)),
+                allowed_risk_levels=ALL_RISK_LEVELS_ORDER,
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
                 reason="operations turns must ask approval before configuration, MCP, or external side effects",
             ), harness_profile)
