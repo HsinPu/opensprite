@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..agent.harness_inventory import SENSOR_IDS_BY_TASK_TYPE
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.task_contract import TaskContractService
@@ -83,6 +84,11 @@ def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]
     checks = [
         _check("profile", profile.name == case["expected_profile"], f"Selected {profile.name}."),
         _check("contract", bool(contract.to_metadata()), f"Contract task type {contract.task_type}."),
+        _check(
+            "expected_sensors",
+            bool(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type)),
+            f"Expected sensors: {', '.join(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())) or '-'}.",
+        ),
     ]
     checks.extend(_check(f"visible:{tool}", tool in visible, f"{tool} visible={tool in visible}.") for tool in case.get("visible_tools", ()))
     checks.extend(_check(f"blocked:{tool}", tool not in visible, f"{tool} visible={tool in visible}.") for tool in case.get("blocked_tools", ()))
@@ -97,6 +103,7 @@ def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]
         "policy": policy.to_metadata(),
         "visible_tools": sorted(visible),
         "contract": contract.to_metadata(),
+        "expected_sensor_ids": list(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())),
     }
 
 
