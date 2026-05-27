@@ -146,6 +146,19 @@ def test_get_service_status_cleans_stale_pid(tmp_path, monkeypatch):
     assert not pid_file.exists()
 
 
+def test_get_service_status_ignores_unremovable_stale_pid(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background, "is_process_running", lambda pid: False)
+    pid_file = service_background.get_pid_file(tmp_path)
+    pid_file.parent.mkdir(parents=True, exist_ok=True)
+    pid_file.write_text("1234\n", encoding="utf-8")
+    monkeypatch.setattr(type(pid_file), "unlink", lambda self: (_ for _ in ()).throw(PermissionError("denied")))
+
+    status = service_background.get_service_status(home=tmp_path)
+
+    assert status.running is False
+    assert status.pid is None
+
+
 def test_stop_service_uses_taskkill_on_windows(tmp_path, monkeypatch):
     monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
     states = [True, False]

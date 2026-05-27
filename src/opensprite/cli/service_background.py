@@ -115,7 +115,7 @@ def _cleanup_stale_pid(pid_file: Path) -> None:
         return
     try:
         pid_file.unlink()
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         pass
 
 
