@@ -408,6 +408,16 @@ def test_template_web_search_defaults_match_backend_defaults():
     assert web_search["searxng_max_pages"] == DEFAULT_SEARXNG_MAX_PAGES
 
 
+def test_template_permission_defaults_match_backend_defaults():
+    template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
+    template = json.loads(template_path.read_text(encoding="utf-8"))
+
+    template_permissions = ToolsConfig.model_validate({"permissions": template["tools"]["permissions"]}).permissions
+    default_permissions = ToolsConfig().permissions
+
+    assert template_permissions.model_dump(by_alias=True) == default_permissions.model_dump(by_alias=True)
+
+
 def test_template_browser_defaults_match_backend_defaults():
     template_path = Path(__file__).resolve().parents[2] / "src" / "opensprite" / "config" / "opensprite.json.template"
     template = json.loads(template_path.read_text(encoding="utf-8"))
