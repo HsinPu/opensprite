@@ -162,6 +162,14 @@ def test_check_trace_requires_web_tool_for_web_case():
     assert check_trace(web_case, {"tools": ["web_fetch"]}) == []
 
 
+def test_check_trace_flags_incomplete_completion_gate():
+    case = SmokeCase("web", "search", expect_web_tools=True)
+
+    failures = check_trace(case, {"tools": ["web_research"], "completion_status": "incomplete"})
+
+    assert failures == ["completion gate status was incomplete"]
+
+
 def test_select_cases_rejects_unknown_case():
     try:
         select_cases(["missing"])

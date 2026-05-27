@@ -382,7 +382,7 @@ def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str 
             continue
         missing_queries = _string_list(coverage.get("queries_without_successful_fetch"))
         target_met = _truthy(coverage.get("target_met"))
-        if target_met and not missing_queries:
+        if target_met:
             continue
 
         target_fetch_count = _coerce_int(coverage.get("target_fetch_count"), default=0)

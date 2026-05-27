@@ -142,6 +142,7 @@ async def run_web_chat(
     run_events: list[dict[str, Any]] = []
     reply_text = ""
     terminal_run_seen = False
+    terminal_reply_deadline: float | None = None
     resolved_session_id = session_id or ""
     resolved_external_chat_id = external_chat_id
 
@@ -165,13 +166,21 @@ async def run_web_chat(
                 await ws.send_json(outgoing)
 
                 while True:
-                    remaining = deadline - time.monotonic()
+                    now = time.monotonic()
+                    effective_deadline = deadline
+                    if terminal_reply_deadline is not None:
+                        effective_deadline = min(effective_deadline, terminal_reply_deadline)
+                    remaining = effective_deadline - now
                     if remaining <= 0:
+                        if terminal_run_seen and reply_text:
+                            break
                         raise TimeoutError(f"Timed out waiting for chat reply after {timeout_seconds:g}s")
                     msg = await ws.receive(timeout=remaining)
                     if msg.type == WSMsgType.TEXT:
                         frame = json.loads(msg.data)
                     elif msg.type in {WSMsgType.CLOSED, WSMsgType.CLOSE, WSMsgType.ERROR}:
+                        if terminal_run_seen and reply_text:
+                            break
                         raise RuntimeError("WebSocket closed before a reply was received")
                     else:
                         continue
@@ -190,11 +199,26 @@ async def run_web_chat(
                             run_status = str(frame.get("status") or "")
                             if not run_status and isinstance(frame.get("payload"), dict):
                                 run_status = str(frame["payload"].get("status") or "")
+                            if reply_text:
+                                terminal_reply_deadline = time.monotonic() + 1.0
                     elif frame.get("type") == "message":
                         reply_text = str(frame.get("text") or "")
                         if terminal_run_seen or not run_id:
                             break
     except (ClientError, asyncio.TimeoutError, TimeoutError, OSError, RuntimeError) as exc:
+        if reply_text and run_id and isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+            return _web_chat_payload(
+                ok=True,
+                gateway_url=gateway_url,
+                socket_url=socket_url,
+                resolved_session_id=resolved_session_id,
+                resolved_external_chat_id=resolved_external_chat_id,
+                run_id=run_id,
+                run_status=run_status,
+                reply_text=reply_text,
+                run_events=run_events,
+                started=started,
+            )
         return _web_chat_payload(
             ok=False,
             gateway_url=gateway_url,

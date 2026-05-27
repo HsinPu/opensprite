@@ -28,13 +28,13 @@ class SmokeCase:
 
 
 DEFAULT_SMOKE_CASES: tuple[SmokeCase, ...] = (
-    SmokeCase("pong", "請只回覆 pong。", expect_web_tools=False),
-    SmokeCase("summary-no-web", "用三點列出 OpenSprite 可以幫使用者做什麼，不要上網。", expect_web_tools=False),
-    SmokeCase("math", "請計算 17 * 23 + 19，最後只輸出答案。", expect_web_tools=False),
-    SmokeCase("translate", "請把這句翻成英文：今天我想測試 CLI 對話流程。", expect_web_tools=False),
-    SmokeCase("runtime-context", "請回答你目前看到的 channel、session id、current time。", expect_web_tools=False),
-    SmokeCase("direct-debug", "請說明 debug Python ModuleNotFoundError 的前三個檢查步驟，不要上網。", expect_web_tools=False),
-    SmokeCase("trace-metric", "請用一句話總結 CLI chat trace 最該觀察的指標。", expect_web_tools=False),
+    SmokeCase("pong", "請只回答 pong。", expect_web_tools=False),
+    SmokeCase("summary-no-web", "請用三句話介紹 OpenSprite，不要讀檔也不要上網。", expect_web_tools=False),
+    SmokeCase("math", "請計算 17 * 23 + 19，請用三個編號列出：算式、計算過程、最終答案。", expect_web_tools=False),
+    SmokeCase("translate", "請把這句翻成英文：我正在測試 CLI 對話流程。", expect_web_tools=False),
+    SmokeCase("format-list", "請把 apple、banana、cherry 改成三行編號清單。不要上網。", expect_web_tools=False),
+    SmokeCase("direct-debug", "請幫我 debug Python ModuleNotFoundError 的常見原因，不要讀檔、不要上網。", expect_web_tools=False),
+    SmokeCase("trace-metric", "請用一個表格列出 CLI chat trace 最重要的三個欄位。不要讀檔、不要上網。", expect_web_tools=False),
     SmokeCase("web-search", "請務必使用 web_search 搜尋 OpenAI 2026 最新消息，回覆一個來源網址即可。", expect_web_tools=True),
     SmokeCase(
         "web-research",
@@ -298,6 +298,9 @@ def check_trace(case: SmokeCase, trace_summary: dict[str, Any]) -> list[str]:
     failures: list[str] = []
     tools = {str(tool) for tool in trace_summary.get("tools") or []}
     web_tools = tools & WEB_TOOL_NAMES
+    completion_status = str(trace_summary.get("completion_status") or "").strip().lower()
+    if completion_status and completion_status != "complete":
+        failures.append(f"completion gate status was {completion_status}")
     if case.expect_web_tools is True and not web_tools:
         failures.append("expected at least one web tool")
     elif case.expect_web_tools is False and web_tools:
@@ -335,15 +338,26 @@ async def run_smoke_cases(
         trace = load_trace_readonly(session_id, run_id, db_path=db_path) if run_id else None
         trace_summary = summarize_trace(trace, fallback=payload)
         failures = check_trace(case, trace_summary)
+        payload_ok = bool(payload.get("ok", True))
+        payload_error = str(payload.get("error") or "").strip()
+        if not payload_ok:
+            if trace_summary.get("run_status") == "completed" and trace_summary.get("completion_status") == "complete":
+                payload_ok = True
+            elif payload_error:
+                failures.append(payload_error)
+            else:
+                failures.append("web chat payload reported failure")
         results.append(
             {
                 "case": case.case_id,
-                "ok": not failures and bool(payload.get("ok", True)),
+                "ok": not failures and payload_ok,
                 "prompt": case.prompt,
                 "session_id": session_id,
                 "external_chat_id": external_chat_id,
                 "reply_preview": str(payload.get("reply") or "")[:240],
                 "elapsed_seconds": payload.get("elapsed_seconds"),
+                "payload_ok": bool(payload.get("ok", True)),
+                "payload_error": payload_error,
                 "failures": failures,
                 "trace": trace_summary,
             }

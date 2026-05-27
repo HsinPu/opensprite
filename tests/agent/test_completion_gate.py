@@ -134,6 +134,61 @@ def _web_research_coverage_gap_artifact() -> TaskArtifact:
     )
 
 
+def _web_research_partial_query_artifact() -> TaskArtifact:
+    return TaskArtifact(
+        kind="web_source",
+        source_tool="web_research",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://docs.test/browser",
+                    "title": "AI Browser Docs",
+                    "snippet": "Official AI browser documentation.",
+                    "query": "ai browser",
+                    "provider": "duckduckgo",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://market.test/browser",
+                    "title": "AI Browser Market",
+                    "snippet": "Market research for AI browser tools.",
+                    "query": "ai browser market",
+                    "provider": "duckduckgo",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                    "min_content_chars": 800,
+                },
+            ],
+            "source_count": 2,
+            "coverage": {
+                "target_fetch_count": 2,
+                "target_met": True,
+                "search_result_count": 4,
+                "fetched_count": 2,
+                "failed_count": 1,
+                "too_short_count": 0,
+                "blocked_count": 0,
+                "missing_url_count": 0,
+                "fetched_domains": ["docs.test", "market.test"],
+                "fetched_domain_count": 2,
+                "fetched_queries": ["ai browser", "ai browser market"],
+                "fetched_query_count": 2,
+                "queries_with_search_results": ["ai browser", "ai browser market", "ai browser pricing"],
+                "queries_without_successful_fetch": ["ai browser pricing"],
+            },
+        },
+    )
+
+
 class _JsonProvider:
     def __init__(self, content: str):
         self.content = content
@@ -264,6 +319,34 @@ def test_completion_gate_marks_waiting_when_response_asks_for_input():
     assert result.status == "waiting_user"
     assert result.active_task_status == "waiting_user"
     assert result.should_update_active_task is True
+
+
+def test_completion_gate_completes_generic_task_with_substantive_answer():
+    intent = TaskIntentService().classify("請用三句話介紹 OpenSprite，不要讀檔也不要上網。")
+    answer = "OpenSprite 是一個本機 AI 助手。它可以協助處理對話、工具與任務流程。它重視 trace 與可驗證結果。"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(content=answer),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "generic task returned a response"
+
+
+def test_completion_gate_completes_debug_answer_even_when_it_contains_questions():
+    intent = TaskIntentService().classify("請幫我 debug Python ModuleNotFoundError 的常見原因，不要讀檔、不要上網。")
+    answer = "常見原因包括套件未安裝、Python 環境不一致，以及模組路徑錯誤。可以先檢查 which python? 再確認 pip 安裝位置。"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(content=answer),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "debug diagnosis was provided without requiring code changes"
 
 
 def test_completion_gate_requires_web_evidence_for_external_search_task():
@@ -1328,6 +1411,32 @@ def test_completion_gate_rejects_web_research_coverage_gaps():
     assert "Web research coverage gap" in (completion.active_task_detail or "")
     assert "Target fetch count not met: need 2, fetched 1" in (completion.active_task_detail or "")
     assert "ai browser pricing" in (completion.active_task_detail or "")
+
+
+def test_completion_gate_accepts_web_research_when_fetch_target_met_with_partial_query_gap():
+    intent = TaskIntentService().classify("Please search online for current AI browser pricing.")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "Two useful sources are AI Browser Docs at https://docs.test/browser and "
+        "AI Browser Market at https://market.test/browser."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_research", ok=True),),
+            task_artifacts=(_web_research_partial_query_artifact(),),
+        ),
+    )
+
+    assert completion.status == "complete"
 
 
 def test_completion_gate_rejects_empty_web_research_even_when_assistant_asks_user():

@@ -398,30 +398,6 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        immediate_transition = infer_immediate_task_transition(
-            response_text,
-            had_tool_error=execution_result.had_tool_error,
-        )
-        if immediate_transition is not None:
-            active_task_status, detail = immediate_transition
-            reason = "assistant requested user input" if active_task_status == "waiting_user" else "assistant reported a blocker"
-            return CompletionGateResult(
-                status=active_task_status,
-                reason=reason,
-                active_task_status=active_task_status,
-                active_task_detail=detail,
-                should_update_active_task=True,
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
-
         is_direct_reply = _looks_like_direct_reply_instruction(task_intent.objective)
         if is_direct_reply and response_text.strip() and not _looks_incomplete(response_text):
             return CompletionGateResult(
@@ -439,6 +415,31 @@ class CompletionGateService:
                 review_prompt_types=review["prompt_types"],
                 review_finding_count=review["finding_count"],
             )
+
+        if task_intent.kind not in {"analysis", "debug", "review", "writing"}:
+            immediate_transition = infer_immediate_task_transition(
+                response_text,
+                had_tool_error=execution_result.had_tool_error,
+            )
+            if immediate_transition is not None:
+                active_task_status, detail = immediate_transition
+                reason = "assistant requested user input" if active_task_status == "waiting_user" else "assistant reported a blocker"
+                return CompletionGateResult(
+                    status=active_task_status,
+                    reason=reason,
+                    active_task_status=active_task_status,
+                    active_task_detail=detail,
+                    should_update_active_task=True,
+                    verification_required=verification_required,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
+                    review_required=review_required,
+                    review_attempted=review["attempted"],
+                    review_passed=review["passed"],
+                    review_summary=review["summary"],
+                    review_prompt_types=review["prompt_types"],
+                    review_finding_count=review["finding_count"],
+                )
 
         if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
             return CompletionGateResult(
@@ -481,6 +482,23 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="complete",
                 reason="debug diagnosis was provided without requiring code changes",
+                active_task_status="done",
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
+        if task_intent.kind == "task" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text):
+            return CompletionGateResult(
+                status="complete",
+                reason="generic task returned a response",
                 active_task_status="done",
                 should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
