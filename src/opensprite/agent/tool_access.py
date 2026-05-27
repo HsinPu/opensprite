@@ -105,28 +105,50 @@ class ToolAccessResolver:
         metadata_kind: str,
     ) -> ToolAccessResolution:
         """Return a registry constrained by a non-harness overlay policy."""
-        policies: list[ToolPermissionPolicy] = [base_registry.permission_policy, overlay_policy]
-        policies.extend(extra_policies)
-        effective_policy = CompositeToolPermissionPolicy(*policies)
+        policy_resolution = self.resolve_overlay_policy(
+            base_registry.permission_policy,
+            overlay_policy=overlay_policy,
+            extra_policies=extra_policies,
+            metadata_kind=metadata_kind,
+        )
+        effective_policy = policy_resolution.effective_policy
         registry = base_registry.filtered(
             include_names=include_names,
             permission_policy=effective_policy,
         )
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
+        metadata = policy_resolution.metadata
+        metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
+        registry.permission_resolution_metadata = metadata
+        return ToolAccessResolution(
+            registry=registry,
+            effective_policy=effective_policy,
+            metadata=metadata,
+        )
+
+    def resolve_overlay_policy(
+        self,
+        base_policy: ToolPermissionPolicy,
+        *,
+        overlay_policy: ToolPermissionPolicy,
+        extra_policies: tuple[ToolPermissionPolicy, ...] = (),
+        metadata_kind: str,
+    ) -> EffectivePolicyResolution:
+        """Return the effective policy for a non-harness overlay."""
+        policies: list[ToolPermissionPolicy] = [base_policy, overlay_policy]
+        policies.extend(extra_policies)
+        effective_policy = CompositeToolPermissionPolicy(*policies)
         metadata: dict[str, Any] = {
             "schema_version": 1,
             "kind": metadata_kind,
-            "base_permission_policy": base_registry.permission_policy.to_metadata(),
+            "base_permission_policy": base_policy.to_metadata(),
             "overlay_permission_policy": overlay_policy.to_metadata(),
             "extra_permission_policies": [policy.to_metadata() for policy in extra_policies],
             "effective_policy": effective_policy.to_metadata(),
             "effective_risks": summarize_effective_risks(effective_policy),
         }
-        metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
-        registry.permission_resolution_metadata = metadata
-        return ToolAccessResolution(
-            registry=registry,
+        return EffectivePolicyResolution(
             effective_policy=effective_policy,
             metadata=metadata,
         )

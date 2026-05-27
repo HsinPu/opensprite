@@ -91,3 +91,20 @@ def test_tool_access_resolver_resolves_overlay_policy_and_metadata():
     blocked = {item["name"]: item for item in resolution.metadata["tool_access"]["blocked_tools"]}
     assert blocked["web_search"]["reason"] == "tool 'web_search' is not in allowed_tools"
     assert blocked["apply_patch"]["reason"] == "tool 'apply_patch' is not in allowed_tools"
+
+
+def test_tool_access_resolver_resolves_overlay_policy_without_registry():
+    base = ToolPermissionPolicy(allowed_risk_levels=["read", "network"])
+    overlay = ToolPermissionPolicy(allowed_risk_levels=["read"])
+
+    resolution = ToolAccessResolver().resolve_overlay_policy(
+        base,
+        overlay_policy=overlay,
+        metadata_kind="profile_override:chat",
+    )
+
+    assert resolution.metadata["kind"] == "profile_override:chat"
+    assert resolution.metadata["base_permission_policy"]["allowed_risk_levels"] == ["network", "read"]
+    assert resolution.metadata["overlay_permission_policy"]["allowed_risk_levels"] == ["read"]
+    assert resolution.metadata["effective_risks"]["allowed_risk_levels"] == ["read"]
+    assert "network" in resolution.metadata["effective_risks"]["denied_risk_levels"]
