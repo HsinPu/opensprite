@@ -5,7 +5,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..channels.registry import coerce_channel_instances, default_channel_instances
-from ..permission_constants import ALL_RISK_LEVELS_ORDER, DEFAULT_APPROVAL_MODE
+from ..permission_constants import ALL_RISK_LEVELS_ORDER, DEFAULT_APPROVAL_MODE, PERMISSION_PROFILE_NAMES
 from .defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -500,9 +500,6 @@ class ToolPermissionProfileOverrideConfig(BaseModel):
     denied_risk_levels: list[str] = Field(default_factory=list)
     approval_required_tools: list[str] = Field(default_factory=list)
     approval_required_risk_levels: list[str] = Field(default_factory=list)
-
-
-PERMISSION_PROFILE_NAMES = frozenset({"chat", "research", "coding", "media", "ops"})
 
 
 def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOverrideConfig]:

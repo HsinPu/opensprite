@@ -24,6 +24,8 @@ APPROVAL_MODES_ORDER = (APPROVAL_MODE_AUTO, APPROVAL_MODE_ASK, APPROVAL_MODE_BLO
 
 APPROVAL_MODES = frozenset(APPROVAL_MODES_ORDER)
 
+PERMISSION_PROFILE_NAMES = frozenset({"chat", "research", "coding", "media", "ops"})
+
 
 def denied_risks_except(allowed: tuple[str, ...] | list[str] | set[str] | frozenset[str]) -> tuple[str, ...]:
     """Return all known risk levels not present in the allowed set."""

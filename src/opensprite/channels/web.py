@@ -42,8 +42,7 @@ from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
-from ..config.schema import PERMISSION_PROFILE_NAMES
-from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES, DEFAULT_APPROVAL_MODE
+from ..permission_constants import ALL_RISK_LEVELS, APPROVAL_MODES, DEFAULT_APPROVAL_MODE, PERMISSION_PROFILE_NAMES
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
