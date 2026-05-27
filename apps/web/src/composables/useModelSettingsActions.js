@@ -8,25 +8,10 @@ import {
 
 function normalizeLlmSettings(payload = {}) {
   const llm = payload?.llm || {};
-  const decodingMode = String(llm.decoding_mode || "").trim() || (llm.pass_decoding_params ? "custom" : "provider_default");
   return {
-    decoding_mode: decodingMode,
-    decoding_modes: Array.isArray(llm.decoding_modes) ? llm.decoding_modes : ["provider_default", "precise", "balanced", "creative", "custom"],
-    pass_decoding_params: Boolean(llm.pass_decoding_params),
-    decoding: llm.decoding && typeof llm.decoding === "object" ? llm.decoding : {},
     semantic_contract_classifier_enabled: Boolean(llm.semantic_contract_classifier_enabled),
     semantic_contract_classifier_confidence_threshold: Number(llm.semantic_contract_classifier_confidence_threshold ?? 0.7),
     effective_request: llm.effective_request && typeof llm.effective_request === "object" ? llm.effective_request : null,
-  };
-}
-
-function serializeLlmDecoding(decoding = {}) {
-  return {
-    temperature: decoding.temperature,
-    max_tokens: decoding.max_tokens,
-    top_p: decoding.top_p,
-    frequency_penalty: decoding.frequency_penalty,
-    presence_penalty: decoding.presence_penalty,
   };
 }
 
@@ -173,8 +158,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       const payload = await requestSettingsJson("/api/settings/llm", {
         method: "PUT",
         body: JSON.stringify({
-          decoding_mode: settingsState.llm.decoding_mode || "provider_default",
-          decoding: serializeLlmDecoding(settingsState.llm.decoding || {}),
           semantic_contract_classifier_enabled: Boolean(settingsState.llm.semantic_contract_classifier_enabled),
           semantic_contract_classifier_confidence_threshold: Number(settingsState.llm.semantic_contract_classifier_confidence_threshold ?? 0.7),
         }),

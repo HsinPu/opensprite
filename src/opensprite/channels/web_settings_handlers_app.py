@@ -21,21 +21,6 @@ async def handle_settings_llm_update(adapter: Any, request: web.Request) -> web.
     body = await adapter._read_json_body(request)
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
-    decoding_mode = adapter._coerce_optional_text(body.get("decoding_mode"))
-    if decoding_mode:
-        if decoding_mode == "custom":
-            decoding = body.get("decoding")
-            if decoding is not None and not isinstance(decoding, dict):
-                raise web.HTTPBadRequest(text="decoding must be a JSON object")
-            adapter._apply_custom_llm_decoding(config, decoding or {})
-        else:
-            adapter._apply_llm_decoding_preset(config, decoding_mode)
-    elif "pass_decoding_params" in body:
-        config.llm.pass_decoding_params = adapter._coerce_bool(
-            body.get("pass_decoding_params"),
-            field="pass_decoding_params",
-            default=config.llm.pass_decoding_params,
-        )
     if "semantic_contract_classifier_enabled" in body:
         config.agent.semantic_contract_classifier_enabled = adapter._coerce_bool(
             body.get("semantic_contract_classifier_enabled"),

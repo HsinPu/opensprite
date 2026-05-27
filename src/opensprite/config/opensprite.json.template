@@ -2,13 +2,7 @@
   "llm": {
     "providers_file": "llm.providers.json",
     "default": null,
-    "context_window_tokens": 1047576,
-    "temperature": 0.25,
-    "max_tokens": 32768,
-    "top_p": 0.95,
-    "frequency_penalty": 0,
-    "presence_penalty": 0,
-    "pass_decoding_params": false
+    "context_window_tokens": 1047576
   },
   "storage": {
     "type": "sqlite",
@@ -99,6 +93,7 @@
   "agent": {
     "max_history": 300,
     "history_token_budget": 200000,
+    "context_output_reserve_tokens": 32768,
     "context_compaction_enabled": true,
     "context_compaction_threshold_ratio": 0.9,
     "context_compaction_min_messages": 8,

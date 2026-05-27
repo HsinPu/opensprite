@@ -72,13 +72,6 @@ class LLMsConfig(BaseModel):
     model: str = ""
     base_url: str | None = None
     context_window_tokens: int | None = Field(default=None, ge=1)
-    temperature: float
-    max_tokens: int
-    top_p: float = Field(ge=0.0, le=1.0)
-    frequency_penalty: float = Field(ge=-2.0, le=2.0)
-    presence_penalty: float = Field(ge=-2.0, le=2.0)
-    # 主對話（ExecutionEngine）呼叫 LLM 時是否帶入 temperature / max_tokens / top_p / penalties
-    pass_decoding_params: bool
 
     def get_active(self) -> ProviderConfig:
         """Get the active provider configuration."""
@@ -139,6 +132,7 @@ class AgentConfig(BaseModel):
     
     max_history: int
     history_token_budget: int
+    context_output_reserve_tokens: int = Field(default=32768, ge=1)
     context_compaction_enabled: bool
     context_compaction_threshold_ratio: float = Field(gt=0.0, le=1.0)
     context_compaction_min_messages: int = Field(ge=2)
@@ -1366,9 +1360,9 @@ class Config:
     @classmethod
     def packaged_agent_llm_chat_kwargs(cls) -> dict[str, Any]:
         """Map packaged ``llm`` to :class:`opensprite.agent.agent.AgentLoop` keyword arguments."""
-        llm = cls.packaged_llm_flat_dict()
+        agent = cls.load_template_data().get("agent", {})
         return {
-            "llm_chat_max_tokens": llm["max_tokens"],
+            "llm_chat_max_tokens": agent.get("context_output_reserve_tokens", 32768),
         }
 
     @classmethod
@@ -1461,12 +1455,6 @@ class Config:
                 "providers_file": self.llm.providers_file,
                 "default": self.llm.default,
                 "context_window_tokens": self.llm.context_window_tokens,
-                "temperature": self.llm.temperature,
-                "max_tokens": self.llm.max_tokens,
-                "top_p": self.llm.top_p,
-                "frequency_penalty": self.llm.frequency_penalty,
-                "presence_penalty": self.llm.presence_penalty,
-                "pass_decoding_params": self.llm.pass_decoding_params,
             },
             "storage": {"type": self.storage.type, "path": self.storage.path},
             "channels_file": self.channels_file,
@@ -1497,6 +1485,7 @@ class Config:
             "agent": {
                 "max_history": self.agent.max_history,
                 "history_token_budget": self.agent.history_token_budget,
+                "context_output_reserve_tokens": self.agent.context_output_reserve_tokens,
                 "context_compaction_enabled": self.agent.context_compaction_enabled,
                 "context_compaction_threshold_ratio": self.agent.context_compaction_threshold_ratio,
                 "context_compaction_min_messages": self.agent.context_compaction_min_messages,

@@ -1395,7 +1395,7 @@ class AgentLoop:
         provider = create_llm_from_runtime(llm_runtime)
 
         self.provider = provider
-        self.llm_chat_max_tokens = config.llm.max_tokens
+        self.llm_chat_max_tokens = config.agent.context_output_reserve_tokens
         self.llm_context_window_tokens = cfg.context_window_tokens
         self.llm_configured = config.is_llm_configured
 

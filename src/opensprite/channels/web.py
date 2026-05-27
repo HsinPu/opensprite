@@ -123,7 +123,6 @@ class WebAdapter(MessageAdapter):
     """WebSocket adapter for browser-based chat clients."""
 
     LOG_LEVELS = DEFAULT_LOG_LEVELS
-    LLM_DECODING_MODE_ORDER = ("provider_default", "precise", "balanced", "creative", "custom")
     WEB_SEARCH_PROVIDERS = DEFAULT_WEB_SEARCH_PROVIDERS
     WEB_SEARCH_FRESHNESS = WEB_SEARCH_FRESHNESS_OPTIONS
     SEARXNG_OPTIONS_USER_AGENT = "Mozilla/5.0 AppleWebKit/537.36 OpenSprite/0.1"
@@ -144,30 +143,6 @@ class WebAdapter(MessageAdapter):
     )
     SEARXNG_FALLBACK_CATEGORIES = ("general", "images", "videos", "news", "map", "music", "it", "science", "files", "social media")
     BROWSER_BACKENDS = DEFAULT_BROWSER_BACKENDS
-    LLM_DECODING_PRESETS = {
-        "precise": {
-            "temperature": 0.25,
-            "max_tokens": 32768,
-            "top_p": 0.95,
-            "frequency_penalty": 0.0,
-            "presence_penalty": 0.0,
-        },
-        "balanced": {
-            "temperature": 0.7,
-            "max_tokens": 32768,
-            "top_p": 1.0,
-            "frequency_penalty": 0.0,
-            "presence_penalty": 0.0,
-        },
-        "creative": {
-            "temperature": 1.0,
-            "max_tokens": 32768,
-            "top_p": 0.95,
-            "frequency_penalty": 0.0,
-            "presence_penalty": 0.0,
-        },
-    }
-
     DEFAULT_CONFIG = {
         "host": "127.0.0.1",
         "port": 8765,
@@ -490,35 +465,6 @@ class WebAdapter(MessageAdapter):
         )
 
     @staticmethod
-    def _llm_decoding_payload(config: Config) -> dict[str, Any]:
-        return web_settings_payloads.llm_decoding_payload(config)
-
-    @classmethod
-    def _llm_decoding_mode(cls, config: Config) -> str:
-        return web_settings_payloads.llm_decoding_mode(config, presets=cls.LLM_DECODING_PRESETS)
-
-    @classmethod
-    def _apply_llm_decoding_preset(cls, config: Config, mode: str) -> None:
-        web_settings_payloads.apply_llm_decoding_preset(
-            config,
-            mode,
-            presets=cls.LLM_DECODING_PRESETS,
-            mode_order=cls.LLM_DECODING_MODE_ORDER,
-        )
-
-    @staticmethod
-    def _coerce_llm_float(value: Any, *, field: str, minimum: float | None = None, maximum: float | None = None) -> float:
-        return web_settings_payloads.coerce_llm_float(value, field=field, minimum=minimum, maximum=maximum)
-
-    @classmethod
-    def _apply_custom_llm_decoding(cls, config: Config, decoding: dict[str, Any]) -> None:
-        web_settings_payloads.apply_custom_llm_decoding(
-            config,
-            decoding,
-            coerce_positive_int_fn=cls._coerce_positive_int,
-        )
-
-    @staticmethod
     def _anthropic_reasoning_budget(effort: str | None) -> int:
         return web_settings_payloads.anthropic_reasoning_budget(effort)
 
@@ -528,11 +474,7 @@ class WebAdapter(MessageAdapter):
 
     @classmethod
     def _llm_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.llm_payload(
-            config,
-            mode_order=cls.LLM_DECODING_MODE_ORDER,
-            presets=cls.LLM_DECODING_PRESETS,
-        )
+        return web_settings_payloads.llm_payload(config)
 
     @classmethod
     def _log_payload(cls, config: Config) -> dict[str, Any]:

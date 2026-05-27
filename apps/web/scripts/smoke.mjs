@@ -345,9 +345,9 @@ assertIncludes(settingsModal, "providerCredentials", "credential picker renderin
 assertIncludes(settingsModal, "providerEffectiveCredentialId", "effective credential selection");
 assertIncludes(settingsModal, "credentialSourceLabel", "credential source status rendering");
 assertIncludes(settingsModal, "set-provider-credential", "provider credential selection event");
-assertIncludes(settingsModal, "decodingModeOptions", "request parameter mode options");
-assertIncludes(settingsLogic, "decoding_mode", "LLM decoding mode save payload");
-assertIncludes(copy, "Provider default", "request parameter provider default copy");
+assertNotIncludes(settingsModal, "decodingModeOptions", "request parameter mode options removed");
+assertNotIncludes(settingsLogic, "decoding_mode", "LLM decoding mode save payload removed");
+assertNotIncludes(copy, "decodingMode", "request parameter mode copy removed");
 assertIncludes(settingsModal, "section === 'data'", "data settings section");
 assertIncludes(settingsModal, "settingsState.dataSessions", "data session rendering");
 assertIncludes(settingsModal, "selectedDataSession", "data maintenance dialog state");

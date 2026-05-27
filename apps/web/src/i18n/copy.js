@@ -910,58 +910,6 @@ export const DISPLAY_COPY = {
         customPlaceholder: "輸入模型名稱",
         useCustom: "使用自訂模型",
         requestTitle: "請求參數",
-        decodingMode: {
-          title: "請求參數模式",
-          description: "選擇通用解碼參數要交給 provider 預設，或由 OpenSprite 套用一組預設值。",
-          options: {
-            provider_default: {
-              label: "廠商預設",
-              description: "不送通用解碼參數，使用 provider 或模型自己的預設值。",
-            },
-            precise: {
-              label: "精準",
-              description: "低隨機性，回答更穩定，適合程式、修 bug 與規格工作。",
-            },
-            balanced: {
-              label: "平衡",
-              description: "兼顧穩定與彈性，適合一般聊天、分析與寫作。",
-            },
-            creative: {
-              label: "創意",
-              description: "提高變化度，適合發想、命名、文案與探索。",
-            },
-            custom: {
-              label: "自訂",
-              description: "手動設定 temperature、max tokens、top_p 與 penalties。",
-            },
-          },
-        },
-        decodingFields: {
-          temperature: {
-            title: "Temperature",
-            description: "越低越穩定，越高越有變化。",
-          },
-          maxTokens: {
-            title: "Max tokens",
-            description: "限制單次回覆長度，不代表上下文窗口。",
-          },
-          topP: {
-            title: "Top-p",
-            description: "控制候選 token 範圍，通常維持 0.9 到 1.0。",
-          },
-          frequencyPenalty: {
-            title: "Frequency penalty",
-            description: "提高後會降低重複用詞。",
-          },
-          presencePenalty: {
-            title: "Presence penalty",
-            description: "提高後會更鼓勵新主題。",
-          },
-        },
-        passDecodingParams: {
-          title: "傳送解碼參數",
-          description: "開啟時會送出 temperature、max tokens、top_p 與 penalties；關閉時交給 provider 或模型預設值。",
-        },
         semanticContract: {
           title: "語意任務合約分類",
           description: "開啟後會用目前文字模型做一個低溫分類，用來替模糊任務加嚴工具證據需求；不會放寬既有規則。",
@@ -979,12 +927,10 @@ export const DISPLAY_COPY = {
           notSent: "未送出",
           on: "開啟",
           off: "關閉",
-          decodingOmitted: "不送出通用解碼參數，改用 provider 或模型預設值。",
           reasoningNone: "這個 provider mode 目前不送出 reasoning/thinking 參數。",
           labels: {
             model: "模型",
             contextWindow: "設定的上下文窗口",
-            decoding: "通用解碼參數",
             reasoning: "Reasoning / thinking",
             providerOptions: "Provider 專屬選項",
           },
@@ -2705,58 +2651,6 @@ export const DISPLAY_COPY = {
         customPlaceholder: "Enter a model name",
         useCustom: "Use custom model",
         requestTitle: "Request parameters",
-        decodingMode: {
-          title: "Request parameter mode",
-          description: "Choose whether common decoding parameters use provider defaults or an OpenSprite preset.",
-          options: {
-            provider_default: {
-              label: "Provider default",
-              description: "Do not send common decoding parameters; use the provider or model defaults.",
-            },
-            precise: {
-              label: "Precise",
-              description: "Lower randomness for stable answers, coding, bug fixes, and spec-driven work.",
-            },
-            balanced: {
-              label: "Balanced",
-              description: "Balances stability and flexibility for chat, analysis, and writing.",
-            },
-            creative: {
-              label: "Creative",
-              description: "Higher variation for ideation, naming, copywriting, and exploration.",
-            },
-            custom: {
-              label: "Custom",
-              description: "Manually set temperature, max tokens, top_p, and penalties.",
-            },
-          },
-        },
-        decodingFields: {
-          temperature: {
-            title: "Temperature",
-            description: "Lower is more stable; higher is more varied.",
-          },
-          maxTokens: {
-            title: "Max tokens",
-            description: "Limits response length; this is not the context window.",
-          },
-          topP: {
-            title: "Top-p",
-            description: "Controls the candidate token range; 0.9 to 1.0 is typical.",
-          },
-          frequencyPenalty: {
-            title: "Frequency penalty",
-            description: "Higher values reduce repeated wording.",
-          },
-          presencePenalty: {
-            title: "Presence penalty",
-            description: "Higher values encourage new topics.",
-          },
-        },
-        passDecodingParams: {
-          title: "Send decoding parameters",
-          description: "When enabled, requests include temperature, max tokens, top_p, and penalties. Turn it off to use provider or model defaults.",
-        },
         semanticContract: {
           title: "Semantic task contract classifier",
           description: "Use the current text model for a low-temperature classification pass that can add stricter tool-evidence requirements for ambiguous tasks. It cannot weaken deterministic rules.",
@@ -2774,12 +2668,10 @@ export const DISPLAY_COPY = {
           notSent: "not sent",
           on: "on",
           off: "off",
-          decodingOmitted: "General decoding parameters are not sent; provider or model defaults apply.",
           reasoningNone: "This provider mode does not currently send reasoning/thinking parameters.",
           labels: {
             model: "Model",
             contextWindow: "Configured context window",
-            decoding: "General decoding parameters",
             reasoning: "Reasoning / thinking",
             providerOptions: "Provider-specific options",
           },

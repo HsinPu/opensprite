@@ -97,16 +97,6 @@ export function createSettingsState() {
     llmError: "",
     llmNotice: "",
     llm: {
-      decoding_mode: "provider_default",
-      decoding_modes: ["provider_default", "precise", "balanced", "creative", "custom"],
-      pass_decoding_params: false,
-      decoding: {
-        temperature: null,
-        max_tokens: null,
-        top_p: null,
-        frequency_penalty: null,
-        presence_penalty: null,
-      },
       semantic_contract_classifier_enabled: true,
       semantic_contract_classifier_confidence_threshold: 0.7,
       effective_request: null,

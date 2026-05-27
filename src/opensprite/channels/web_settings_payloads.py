@@ -5,8 +5,6 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from aiohttp import web
-
 from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
 from ..config.llm_presets import provider_profile_defaults, provider_request_options
@@ -78,70 +76,6 @@ def web_search_payload(
     }
 
 
-def llm_decoding_payload(config: Config) -> dict[str, Any]:
-    llm = config.llm
-    return {
-        "temperature": llm.temperature,
-        "max_tokens": llm.max_tokens,
-        "top_p": llm.top_p,
-        "frequency_penalty": llm.frequency_penalty,
-        "presence_penalty": llm.presence_penalty,
-    }
-
-
-def llm_decoding_mode(config: Config, *, presets: dict[str, dict[str, Any]]) -> str:
-    if not config.llm.pass_decoding_params:
-        return "provider_default"
-    decoding = llm_decoding_payload(config)
-    for mode, preset in presets.items():
-        if all(decoding.get(key) == value for key, value in preset.items()):
-            return mode
-    return "custom"
-
-
-def apply_llm_decoding_preset(config: Config, mode: str, *, presets: dict[str, dict[str, Any]], mode_order: tuple[str, ...] | list[str]) -> None:
-    if mode == "provider_default":
-        config.llm.pass_decoding_params = False
-        return
-    preset = presets.get(mode)
-    if preset is None:
-        raise web.HTTPBadRequest(text=f"decoding_mode must be one of: {', '.join(mode_order)}")
-    config.llm.pass_decoding_params = True
-    for key, value in preset.items():
-        setattr(config.llm, key, value)
-
-
-def coerce_llm_float(value: Any, *, field: str, minimum: float | None = None, maximum: float | None = None) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError) as exc:
-        raise web.HTTPBadRequest(text=f"{field} must be a number") from exc
-    if minimum is not None and number < minimum:
-        raise web.HTTPBadRequest(text=f"{field} must be at least {minimum}")
-    if maximum is not None and number > maximum:
-        raise web.HTTPBadRequest(text=f"{field} must be at most {maximum}")
-    return number
-
-
-def apply_custom_llm_decoding(
-    config: Config,
-    decoding: dict[str, Any],
-    *,
-    coerce_positive_int_fn: Callable[..., int],
-) -> None:
-    config.llm.pass_decoding_params = True
-    if "temperature" in decoding:
-        config.llm.temperature = coerce_llm_float(decoding["temperature"], field="temperature")
-    if "max_tokens" in decoding:
-        config.llm.max_tokens = coerce_positive_int_fn(decoding["max_tokens"], field="max_tokens", default=config.llm.max_tokens, minimum=1, maximum=1_000_000)
-    if "top_p" in decoding:
-        config.llm.top_p = coerce_llm_float(decoding["top_p"], field="top_p", minimum=0.0, maximum=1.0)
-    if "frequency_penalty" in decoding:
-        config.llm.frequency_penalty = coerce_llm_float(decoding["frequency_penalty"], field="frequency_penalty", minimum=-2.0, maximum=2.0)
-    if "presence_penalty" in decoding:
-        config.llm.presence_penalty = coerce_llm_float(decoding["presence_penalty"], field="presence_penalty", minimum=-2.0, maximum=2.0)
-
-
 def anthropic_reasoning_budget(effort: str | None) -> int:
     budgets = {"minimal": 4000, "low": 4000, "medium": 8000, "high": 16000, "xhigh": 32000}
     return budgets.get(str(effort or "medium").lower(), budgets["medium"])
@@ -159,8 +93,6 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
     )
     provider_name = defaults.provider_id or provider_name
     api_mode = str(defaults.api_mode or "chat_completions").strip()
-    decoding = llm_decoding_payload(config)
-    sent_decoding = dict(decoding) if llm.pass_decoding_params else {key: None for key in decoding}
     reasoning_source = "none"
     reasoning_payload: dict[str, Any] = {}
     provider_options: dict[str, Any] = {}
@@ -186,11 +118,10 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
         reasoning_source = "anthropic_messages"
         if active.reasoning_enabled:
             budget = anthropic_reasoning_budget(active.reasoning_effort)
-            base_max_tokens = sent_decoding.get("max_tokens") or 131072
             reasoning_payload = {
                 "thinking": {"type": "enabled", "budget_tokens": budget},
                 "temperature": 1,
-                "max_tokens": max(int(base_max_tokens), budget + 4096),
+                "max_tokens": max(131072, budget + 4096),
             }
     elif provider_name == "minimax":
         reasoning_source = "minimax_chat_completions"
@@ -203,7 +134,6 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
         "api_mode": api_mode,
         "model": str(getattr(active, "model", "") or llm.model or ""),
         "context_window_tokens": active.context_window_tokens,
-        "decoding": {"status": "sent" if llm.pass_decoding_params else "omitted", "params": sent_decoding},
         "reasoning": {
             "source": reasoning_source,
             "sent": bool(reasoning_payload),
@@ -219,15 +149,8 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
 
 def llm_payload(
     config: Config,
-    *,
-    mode_order: tuple[str, ...] | list[str],
-    presets: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     return {
-        "decoding_mode": llm_decoding_mode(config, presets=presets),
-        "decoding_modes": list(mode_order),
-        "pass_decoding_params": bool(config.llm.pass_decoding_params),
-        "decoding": llm_decoding_payload(config),
         "effective_request": effective_llm_request_payload(config),
         "semantic_contract_classifier_enabled": bool(config.agent.semantic_contract_classifier_enabled),
         "semantic_contract_classifier_confidence_threshold": float(config.agent.semantic_contract_classifier_confidence_threshold),
