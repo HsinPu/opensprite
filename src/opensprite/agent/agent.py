@@ -52,7 +52,7 @@ from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotion
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
-from ..tools.permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
+from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.verify import classify_verification_result
 from ..tools.web_research import WebResearchTool
@@ -947,12 +947,11 @@ class AgentLoop:
             ),
             select_harness_profile=lambda task_intent: self.harness_profiles.select(task_intent),
             select_harness_policy=lambda harness_profile: self.harness_policies.select(harness_profile),
-            build_harness_tool_registry=lambda registry, profile, policy: self.harness_policies.build_tool_registry(
+            build_harness_tool_registry=lambda registry, profile, policy: self.harness_policies.build_tool_registry_for_profile(
                 registry,
+                profile,
                 policy,
-                ToolPermissionPolicy.from_config(self.tools_config.permissions.profile_overrides.get(profile.name))
-                if self.tools_config.permissions.profile_overrides.get(profile.name) is not None
-                else None,
+                self.tools_config.permissions,
             ),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,

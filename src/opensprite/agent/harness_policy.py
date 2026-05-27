@@ -145,6 +145,23 @@ class HarnessPolicyService:
             profile_permission_policy,
         ).registry
 
+    def build_tool_registry_for_profile(
+        self,
+        base_registry: ToolRegistry,
+        harness_profile: HarnessProfile,
+        harness_policy: HarnessPolicy,
+        permissions_config: Any,
+    ) -> ToolRegistry:
+        """Return a registry constrained by global, profile, and harness config."""
+        profile_overrides = getattr(permissions_config, "profile_overrides", {}) or {}
+        profile_config = profile_overrides.get(harness_profile.name)
+        profile_permission_policy = (
+            ToolPermissionPolicy.from_config(profile_config)
+            if profile_config is not None
+            else None
+        )
+        return self.build_tool_registry(base_registry, harness_policy, profile_permission_policy)
+
     def policy_resolution_metadata(
         self,
         global_policy: ToolPermissionPolicy,
