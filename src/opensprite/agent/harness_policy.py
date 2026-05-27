@@ -5,8 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..tools import BatchTool, ToolRegistry
-from ..tools.permissions import ALL_RISK_LEVELS, CompositeToolPermissionPolicy, ToolPermissionPolicy
+from ..tools import ToolRegistry
+from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
 from .harness_profile import HarnessProfile
 
 
@@ -136,23 +136,13 @@ class HarnessPolicyService:
 
     def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy, profile_permission_policy: ToolPermissionPolicy | None = None) -> ToolRegistry:
         """Return a registry constrained by the selected harness policy."""
-        policies = [base_registry.permission_policy]
-        if profile_permission_policy is not None:
-            policies.append(profile_permission_policy)
-        policies.append(harness_policy.to_permission_policy())
-        composite_policy = CompositeToolPermissionPolicy(*policies)
-        registry = base_registry.filtered(
-            permission_policy=composite_policy
-        )
-        registry.permission_resolution_metadata = self.policy_resolution_metadata(
-            base_registry.permission_policy,
-            profile_permission_policy,
+        from .tool_access import ToolAccessResolver
+
+        return ToolAccessResolver(harness_policies=self).resolve(
+            base_registry,
             harness_policy,
-            composite_policy,
-        )
-        if "batch" in registry.tool_names:
-            registry.register(BatchTool(registry_resolver=lambda: registry))
-        return registry
+            profile_permission_policy,
+        ).registry
 
     def policy_resolution_metadata(
         self,
