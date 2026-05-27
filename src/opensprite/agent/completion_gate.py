@@ -586,8 +586,6 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
     for item in failed_evidence:
         if item.name in {"web_search", "web_research"}:
             continue
-        if item.name == "search_knowledge" and has_successful_fetch_sources:
-            continue
         if item.name == "web_fetch" and has_successful_fetch_sources:
             continue
         return False
