@@ -142,8 +142,6 @@ class AgentConfig(BaseModel):
     auto_continue_long_running_budget: int = Field(default=3, ge=0, le=100)
     auto_continue_deterministic_action_budget: int = Field(default=4, ge=0, le=100)
     subagent_max_tool_iterations: int = Field(default=100, ge=1, le=100)
-    semantic_contract_classifier_enabled: bool = True
-    semantic_contract_classifier_confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     task_context_llm: DocumentLlmConfig
     task_objective_llm: DocumentLlmConfig
     task_contract_llm: DocumentLlmConfig
@@ -1498,8 +1496,6 @@ class Config:
                 "auto_continue_long_running_budget": self.agent.auto_continue_long_running_budget,
                 "auto_continue_deterministic_action_budget": self.agent.auto_continue_deterministic_action_budget,
                 "subagent_max_tool_iterations": self.agent.subagent_max_tool_iterations,
-                "semantic_contract_classifier_enabled": self.agent.semantic_contract_classifier_enabled,
-                "semantic_contract_classifier_confidence_threshold": self.agent.semantic_contract_classifier_confidence_threshold,
                 "task_context_llm": self.agent.task_context_llm.model_dump(),
                 "task_objective_llm": self.agent.task_objective_llm.model_dump(),
                 "task_contract_llm": self.agent.task_contract_llm.model_dump(),

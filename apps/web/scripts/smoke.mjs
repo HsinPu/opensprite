@@ -277,9 +277,6 @@ assertIncludes(settingsNormalizers, "providerRequestOptions", "provider profile 
 assertNotIncludes(settingsLogic, "openRouterOptions", "provider request option state is not provider-specific");
 assertIncludes(settingsModal, "textModelOptionLabel", "provider model context option labels");
 assertIncludes(settingsModal, "<optgroup", "grouped model select rendering");
-assertIncludes(settingsModal, "semantic_contract_classifier_enabled", "semantic classifier settings switch");
-assertIncludes(settingsModal, "semantic_contract_classifier_confidence_threshold", "semantic classifier threshold setting");
-assertIncludes(modelSettingsActions, "semantic_contract_classifier_enabled", "semantic classifier settings save payload");
 assertIncludes(settingsModal, "@click=\"$emit('select-model', selectedTextProvider.id, settingsState.modelSelections[selectedTextProvider.id])\"", "model selection applies on explicit action");
 assertNotIncludes(settingsModal, "@change=\"$emit('select-model', settingsState.selectedTextProviderId", "provider selection does not auto-apply model");
 assertIncludes(settingsModal, "settingsState.copilotAuth.userCode", "Copilot auth code rendering");

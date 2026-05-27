@@ -18,23 +18,8 @@ async def handle_settings_llm(adapter: Any, request: web.Request) -> web.Respons
 
 
 async def handle_settings_llm_update(adapter: Any, request: web.Request) -> web.Response:
-    body = await adapter._read_json_body(request)
     config_path = adapter._get_config_path()
     config = Config.load(config_path)
-    if "semantic_contract_classifier_enabled" in body:
-        config.agent.semantic_contract_classifier_enabled = adapter._coerce_bool(
-            body.get("semantic_contract_classifier_enabled"),
-            field="semantic_contract_classifier_enabled",
-            default=config.agent.semantic_contract_classifier_enabled,
-        )
-    if "semantic_contract_classifier_confidence_threshold" in body:
-        config.agent.semantic_contract_classifier_confidence_threshold = adapter._coerce_float_range(
-            body.get("semantic_contract_classifier_confidence_threshold"),
-            field="semantic_contract_classifier_confidence_threshold",
-            default=config.agent.semantic_contract_classifier_confidence_threshold,
-            minimum=0.0,
-            maximum=1.0,
-        )
     config.save(config_path)
     payload = {"llm": adapter._llm_payload(config), "restart_required": True}
     payload = adapter._reload_agent_llm_from_config(payload, force=True)

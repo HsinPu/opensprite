@@ -1,5 +1,3 @@
-import asyncio
-
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
@@ -13,8 +11,6 @@ from opensprite.agent.task_contract import (
     TaskContractService,
 )
 from opensprite.agent.task_intent import TaskIntentService
-from opensprite.config import Config
-from opensprite.llms.base import LLMResponse
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
 
@@ -217,26 +213,6 @@ def _itemized_contract(intent) -> TaskContract:
         allow_no_tool_final=True,
         contract_sources=("test",),
     )
-
-
-class _JsonProvider:
-    def __init__(self, content: str):
-        self.content = content
-        self.calls = []
-
-    async def chat(self, messages, tools=None, model=None, temperature=None, max_tokens=None, **kwargs):
-        self.calls.append(
-            {
-                "messages": list(messages),
-                "model": model,
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-            }
-        )
-        return LLMResponse(content=self.content, model=model or "fake-model")
-
-    def get_default_model(self) -> str:
-        return "fake-model"
 
 
 def test_completion_gate_requires_requested_verification_before_completion():

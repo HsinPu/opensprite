@@ -152,8 +152,6 @@ def llm_payload(
 ) -> dict[str, Any]:
     return {
         "effective_request": effective_llm_request_payload(config),
-        "semantic_contract_classifier_enabled": bool(config.agent.semantic_contract_classifier_enabled),
-        "semantic_contract_classifier_confidence_threshold": float(config.agent.semantic_contract_classifier_confidence_threshold),
     }
 
 

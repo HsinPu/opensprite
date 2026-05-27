@@ -805,8 +805,6 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
     assert config.agent.auto_continue_long_running_budget == 3
     assert config.agent.auto_continue_deterministic_action_budget == 4
     assert config.agent.subagent_max_tool_iterations == 100
-    assert config.agent.semantic_contract_classifier_enabled is True
-    assert config.agent.semantic_contract_classifier_confidence_threshold == 0.7
     assert config.agent.worktree_sandbox_enabled is False
     assert config.tools.exec_tool.timeout == 60
     assert config.tools.web_search.provider == "duckduckgo"

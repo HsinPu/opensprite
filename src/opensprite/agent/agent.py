@@ -89,7 +89,7 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
-from .task_contract import SemanticContractClassifier, TaskContractPlanner
+from .task_contract import TaskContractPlanner
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
 from .tool_registration import (
@@ -685,7 +685,6 @@ class AgentLoop:
         self.harness_policies = HarnessPolicyService()
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
-        self.semantic_contract_classifier = SemanticContractClassifier(self.config.task_contract_llm)
         self.task_contract_planner = TaskContractPlanner(self.config.task_contract_llm)
         self.completion_gate = CompletionGateService()
         self.auto_continue = AutoContinueService(
@@ -1401,7 +1400,7 @@ class AgentLoop:
         self.llm_configured = config.is_llm_configured
         self.task_context_resolver.llm_config = config.agent.task_context_llm
         self.task_objective_resolver.llm_config = config.agent.task_objective_llm
-        self.semantic_contract_classifier.llm_config = config.agent.task_contract_llm
+        self.task_contract_planner.llm_config = config.agent.task_contract_llm
 
         self.prompt_budget.provider = provider
         self.execution_engine.provider = provider

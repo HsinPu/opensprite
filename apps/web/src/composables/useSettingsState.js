@@ -97,8 +97,6 @@ export function createSettingsState() {
     llmError: "",
     llmNotice: "",
     llm: {
-      semantic_contract_classifier_enabled: true,
-      semantic_contract_classifier_confidence_threshold: 0.7,
       effective_request: null,
     },
     models: {

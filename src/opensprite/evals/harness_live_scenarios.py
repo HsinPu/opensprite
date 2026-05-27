@@ -11,8 +11,7 @@ from typing import Any
 from ..agent.harness_inventory import expected_sensor_ids_for_task_type
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
-from ..agent.task_contract import TaskContractService
-from ..agent.task_intent import TaskIntentService
+from ..agent.task_contract import EvidenceRequirement, TaskContract
 from ..tools.base import Tool
 from ..tools.registry import ToolRegistry
 
@@ -43,11 +42,11 @@ class _ScenarioTool(Tool):
 
 
 CONTROLLED_HARNESS_SCENARIOS: tuple[dict[str, Any], ...] = (
-    {"id": "chat_read_only", "prompt": "Explain what an agent harness does.", "expected_profile": "chat", "blocked_tools": ("edit_file", "exec"), "visible_tools": ("read_file",)},
-    {"id": "research_sources", "prompt": "Search the web and cite sources for current OpenSprite news.", "expected_profile": "research", "visible_tools": ("web_search", "web_fetch"), "blocked_tools": ("edit_file",)},
-    {"id": "coding_analysis", "prompt": "Review src/opensprite/agent/harness_profile.py and explain the logic.", "expected_profile": "coding", "visible_tools": ("read_file",), "blocked_tools": ("edit_file", "exec")},
-    {"id": "coding_change", "prompt": "Fix tests in src/opensprite/agent/harness_profile.py and run pytest.", "expected_profile": "coding", "visible_tools": ("edit_file", "verify"), "blocked_tools": ("mcp_config",)},
-    {"id": "ops_approval", "prompt": "Update the MCP server configuration and restart the service after approval.", "expected_profile": "ops", "visible_tools": ("credential_store",), "approval_tools": ("mcp_example_tool", "browser_click")},
+    {"id": "chat_read_only", "task_type": "conversation", "expected_profile": "chat", "blocked_tools": ("edit_file", "exec"), "visible_tools": ("read_file",)},
+    {"id": "research_sources", "task_type": "web_research", "tool_groups": ("web_research",), "expected_profile": "research", "visible_tools": ("web_search", "web_fetch"), "blocked_tools": ("edit_file",)},
+    {"id": "coding_analysis", "task_type": "workspace_read", "tool_groups": ("workspace_read",), "expected_profile": "coding", "visible_tools": ("read_file",), "blocked_tools": ("edit_file", "exec")},
+    {"id": "coding_change", "task_type": "code_change", "tool_groups": ("workspace_read", "workspace_write"), "require_file_change": True, "expected_profile": "coding", "visible_tools": ("edit_file", "verify"), "blocked_tools": ("mcp_config",)},
+    {"id": "ops_approval", "task_type": "operations", "expected_profile": "ops", "visible_tools": ("credential_store",), "approval_tools": ("mcp_example_tool", "browser_click")},
 )
 
 
@@ -70,16 +69,11 @@ def run_controlled_harness_scenarios(cases: tuple[dict[str, Any], ...] | None = 
 
 
 def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]:
-    intent = TaskIntentService().classify(str(case["prompt"]))
-    profile = HarnessProfileService().select(intent)
+    contract = _scenario_contract(case)
+    profile = HarnessProfileService().from_contract(contract)
     policy = HarnessPolicyService().select(profile)
     registry = _scenario_registry()
     filtered = HarnessPolicyService().build_tool_registry(registry, policy)
-    contract = TaskContractService.build_deterministic(
-        task_intent=intent,
-        current_message=str(case["prompt"]),
-        harness_profile=profile,
-    )
     visible = set(filtered.tool_names)
     expected_sensor_ids = expected_sensor_ids_for_task_type(profile.task_type)
     checks = [
@@ -106,6 +100,22 @@ def evaluate_controlled_harness_scenario(case: dict[str, Any]) -> dict[str, Any]
         "contract": contract.to_metadata(),
         "expected_sensor_ids": list(expected_sensor_ids),
     }
+
+
+def _scenario_contract(case: dict[str, Any]) -> TaskContract:
+    requirements = [
+        EvidenceRequirement(kind="tool_group", tool_group=str(tool_group))
+        for tool_group in case.get("tool_groups", ())
+    ]
+    if case.get("require_file_change"):
+        requirements.append(EvidenceRequirement(kind="file_change"))
+    return TaskContract(
+        objective=str(case.get("prompt") or case["id"]),
+        task_type=str(case.get("task_type") or "conversation"),
+        requirements=tuple(requirements),
+        allow_no_tool_final=not requirements,
+        contract_sources=("controlled_eval",),
+    )
 
 
 def _scenario_registry() -> ToolRegistry:

@@ -9,8 +9,6 @@ import {
 function normalizeLlmSettings(payload = {}) {
   const llm = payload?.llm || {};
   return {
-    semantic_contract_classifier_enabled: Boolean(llm.semantic_contract_classifier_enabled),
-    semantic_contract_classifier_confidence_threshold: Number(llm.semantic_contract_classifier_confidence_threshold ?? 0.7),
     effective_request: llm.effective_request && typeof llm.effective_request === "object" ? llm.effective_request : null,
   };
 }
@@ -157,10 +155,7 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
     try {
       const payload = await requestSettingsJson("/api/settings/llm", {
         method: "PUT",
-        body: JSON.stringify({
-          semantic_contract_classifier_enabled: Boolean(settingsState.llm.semantic_contract_classifier_enabled),
-          semantic_contract_classifier_confidence_threshold: Number(settingsState.llm.semantic_contract_classifier_confidence_threshold ?? 0.7),
-        }),
+        body: JSON.stringify({}),
       });
       settingsState.llm = normalizeLlmSettings(payload);
       setSettingsSuccess(

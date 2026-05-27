@@ -2142,6 +2142,15 @@ async def _run_web_run_events_api():
                     "file": 1,
                     "verification": 0,
                 },
+                "harness_scorecard": {
+                    "present": False,
+                    "status": "missing",
+                    "profile": "",
+                    "task_type": "",
+                    "sensor_counts": {"pass": 0, "warn": 0, "fail": 0, "not_applicable": 0},
+                    "failing_sensors": [],
+                    "warning_sensors": [],
+                },
                 "completion": {"status": "complete"},
                 "next_action": None,
                 "warnings": [],
@@ -3215,42 +3224,16 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 assert resp.status == 200
                 llm_payload = await resp.json()
 
-            assert llm_payload["llm"]["semantic_contract_classifier_enabled"] is True
-            assert llm_payload["llm"]["semantic_contract_classifier_confidence_threshold"] == 0.7
             assert llm_payload["llm"]["effective_request"]["configured"] is False
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/llm",
-                json={
-                    "semantic_contract_classifier_enabled": True,
-                    "semantic_contract_classifier_confidence_threshold": 0.82,
-                },
+                json={},
             ) as resp:
                 assert resp.status == 200
-                semantic_llm_payload = await resp.json()
+                llm_update_payload = await resp.json()
 
-            assert semantic_llm_payload["llm"]["semantic_contract_classifier_enabled"] is True
-            assert semantic_llm_payload["llm"]["semantic_contract_classifier_confidence_threshold"] == 0.82
-            loaded_config = Config.from_json(config_path)
-            assert loaded_config.agent.semantic_contract_classifier_enabled is True
-            assert loaded_config.agent.semantic_contract_classifier_confidence_threshold == 0.82
-            assert agent.config.semantic_contract_classifier_enabled is True
-            assert agent.llm_calls.config.semantic_contract_classifier_enabled is True
-
-            async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/llm",
-                json={
-                    "semantic_contract_classifier_enabled": "false",
-                },
-            ) as resp:
-                assert resp.status == 200
-                semantic_disabled_payload = await resp.json()
-
-            assert semantic_disabled_payload["llm"]["semantic_contract_classifier_enabled"] is False
-            loaded_config = Config.from_json(config_path)
-            assert loaded_config.agent.semantic_contract_classifier_enabled is False
-            assert agent.config.semantic_contract_classifier_enabled is False
-            assert agent.llm_calls.config.semantic_contract_classifier_enabled is False
+            assert llm_update_payload["llm"]["effective_request"]["configured"] is False
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/log") as resp:
                 assert resp.status == 200
@@ -3336,7 +3319,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 "model": "qwen3:14b",
                 "configured": True,
             }
-            assert agent.reloads[-1] == ("ollama", "qwen3:14b", False)
+            assert agent.reloads[-1] == ("ollama", "qwen3:14b")
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/auth/openai-codex") as resp:
                 assert resp.status == 200
@@ -3445,7 +3428,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 "model": selected_openai_model,
                 "configured": True,
             }
-            assert agent.reloads[-1] == ("openai", selected_openai_model, False)
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
             assert providers["openai"]["api_key"] == ""
             assert providers["openai"]["credential_id"] == connect_payload["provider"]["credential_id"]
@@ -3481,7 +3464,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 "runtime_reloaded": True,
                 "runtime": {"provider_id": "openai", "model": selected_openai_model, "configured": True},
             }
-            assert agent.reloads[-1] == ("openai", selected_openai_model, False)
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
             assert set(providers) == {"openai", "ollama"}
 
@@ -3496,7 +3479,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 "runtime_reloaded": True,
                 "runtime": {"provider_id": "openai", "model": selected_openai_model, "configured": True},
             }
-            assert agent.reloads[-1] == ("openai", selected_openai_model, False)
+            assert agent.reloads[-1] == ("openai", selected_openai_model)
 
             async with session.post(f"http://127.0.0.1:{port}/api/settings/providers/openai/disconnect") as resp:
                 assert resp.status == 200
@@ -3509,7 +3492,7 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
                 "runtime_reloaded": True,
                 "runtime": {"provider_id": None, "model": "", "configured": False},
             }
-            assert agent.reloads[-1] == (None, "", False)
+            assert agent.reloads[-1] == (None, "")
             main_config = json.loads(config_path.read_text(encoding="utf-8"))
             providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
             assert main_config["llm"]["default"] is None
