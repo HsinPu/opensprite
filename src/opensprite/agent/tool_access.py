@@ -44,11 +44,39 @@ class ToolAccessResolver:
             harness_policy,
             effective_policy,
         )
-        registry.permission_resolution_metadata = metadata
         if "batch" in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
+        metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
+        registry.permission_resolution_metadata = metadata
         return ToolAccessResolution(
             registry=registry,
             effective_policy=effective_policy,
             metadata=metadata,
         )
+
+
+def _tool_access_metadata(
+    base_registry: ToolRegistry,
+    resolved_registry: ToolRegistry,
+    effective_policy: ToolPermissionPolicy,
+) -> dict[str, Any]:
+    registered = list(base_registry.registered_tools())
+    exposed_tools = list(resolved_registry.tool_names)
+    blocked_tools = []
+    for tool in registered:
+        if effective_policy.is_tool_exposed(tool.name, tool_risk_levels=tool.risk_levels):
+            continue
+        decision = effective_policy.check(tool.name, {}, tool_risk_levels=tool.risk_levels)
+        blocked_tools.append({
+            "name": tool.name,
+            "reason": decision.reason,
+            "risk_levels": list(decision.risk_levels),
+            "requires_approval": decision.requires_approval,
+        })
+    return {
+        "registered_tool_count": len(registered),
+        "exposed_tool_count": len(exposed_tools),
+        "blocked_tool_count": len(blocked_tools),
+        "exposed_tools": exposed_tools,
+        "blocked_tools": blocked_tools,
+    }

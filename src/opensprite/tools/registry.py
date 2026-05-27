@@ -47,6 +47,10 @@ class ToolRegistry:
         """Get a tool by name."""
         return self._tools.get(name)
 
+    def registered_tools(self) -> tuple[Tool, ...]:
+        """Return every registered tool before permission filtering."""
+        return tuple(self._tools.values())
+
     def unregister(self, name: str) -> Tool | None:
         """Remove one registered tool by name."""
         return self._tools.pop(name, None)
