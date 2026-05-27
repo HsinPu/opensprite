@@ -1327,6 +1327,53 @@ def test_serialize_run_summary_warns_on_external_http_exec():
     assert "external_http_via_exec" in summary["warnings"]
 
 
+def test_serialize_run_summary_includes_harness_scorecard_health():
+    trace = SimpleNamespace(
+        run=SimpleNamespace(
+            run_id="run-harness",
+            session_id="web:browser-1",
+            status="completed",
+            metadata={"objective": "Research"},
+            created_at=10.0,
+            updated_at=11.0,
+            finished_at=11.0,
+        ),
+        events=[
+            SimpleNamespace(
+                event_id=1,
+                run_id="run-harness",
+                session_id="web:browser-1",
+                event_type="harness_scorecard.recorded",
+                payload={
+                    "profile": {"name": "research"},
+                    "contract": {"task_type": "web_research"},
+                    "trace_health": {"status": "warn", "sensor_counts": {"pass": 2, "warn": 1, "fail": 0}},
+                    "sensors": [
+                        {"sensor_id": "research.source_coverage", "status": "pass"},
+                        {"sensor_id": "research.freshness", "status": "warn"},
+                    ],
+                },
+                created_at=10.5,
+            )
+        ],
+        parts=[],
+        file_changes=[],
+    )
+
+    summary = serialize_run_summary(trace)
+
+    assert summary["harness_scorecard"] == {
+        "present": True,
+        "status": "warn",
+        "profile": "research",
+        "task_type": "web_research",
+        "sensor_counts": {"pass": 2, "warn": 1, "fail": 0, "not_applicable": 0},
+        "failing_sensors": [],
+        "warning_sensors": ["research.freshness"],
+    }
+    assert "harness_warn" in summary["warnings"]
+
+
 def test_serialize_run_summary_collects_structured_subagent_results():
     trace = SimpleNamespace(
         run=SimpleNamespace(

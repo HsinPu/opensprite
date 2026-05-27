@@ -1180,6 +1180,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     parallel_delegation = _summarize_parallel_delegation(events)
     structured_subagents = _summarize_structured_subagents(events)
     workflows = _summarize_workflows(events)
+    harness_scorecard = _summarize_harness_scorecard(events, parts)
     artifacts = serialize_run_artifacts(trace)
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
@@ -1193,6 +1194,8 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         warnings.append("parallel_delegation_failed")
     if any(str(group.get("status") or "") in {"cancelled", "cancelling"} for group in parallel_delegation.get("groups", [])):
         warnings.append("parallel_delegation_cancelled")
+    if harness_scorecard.get("status") in {"warn", "fail"}:
+        warnings.append(f"harness_{harness_scorecard['status']}")
     if getattr(run, "status", None) in {"failed", "cancelled"}:
         warnings.append(run.status)
     if _has_external_http_exec_artifact(artifacts):
@@ -1221,6 +1224,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
         "parallel_delegation": parallel_delegation,
         "structured_subagents": structured_subagents,
         "workflows": workflows,
+        "harness_scorecard": harness_scorecard,
         "artifact_counts": {
             "total": len(artifacts),
             "tool": sum(1 for artifact in artifacts if artifact.get("kind") == "tool"),
@@ -1237,6 +1241,55 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
             "file_changes": len(file_changes),
         },
     }
+
+
+def _summarize_harness_scorecard(events: list[Any], parts: list[Any]) -> dict[str, Any]:
+    payload = _latest_event_payload(events, "harness_scorecard.recorded") or {}
+    if not payload:
+        for part in reversed(parts):
+            if getattr(part, "part_type", None) == "harness_scorecard":
+                payload = dict(getattr(part, "metadata", {}) or {})
+                break
+    if not payload:
+        return {
+            "present": False,
+            "status": "missing",
+            "profile": "",
+            "task_type": "",
+            "sensor_counts": {"pass": 0, "warn": 0, "fail": 0, "not_applicable": 0},
+            "failing_sensors": [],
+            "warning_sensors": [],
+        }
+    profile = payload.get("profile") if isinstance(payload.get("profile"), dict) else {}
+    contract = payload.get("contract") if isinstance(payload.get("contract"), dict) else {}
+    trace_health = payload.get("trace_health") if isinstance(payload.get("trace_health"), dict) else {}
+    sensor_counts = trace_health.get("sensor_counts") if isinstance(trace_health.get("sensor_counts"), dict) else {}
+    sensors = payload.get("sensors") if isinstance(payload.get("sensors"), list) else []
+    return {
+        "present": True,
+        "status": _text(trace_health.get("status") or "unknown"),
+        "profile": _text(profile.get("name")),
+        "task_type": _text(contract.get("task_type")),
+        "sensor_counts": {
+            "pass": _non_negative_int(sensor_counts.get("pass")),
+            "warn": _non_negative_int(sensor_counts.get("warn")),
+            "fail": _non_negative_int(sensor_counts.get("fail")),
+            "not_applicable": _non_negative_int(sensor_counts.get("not_applicable")),
+        },
+        "failing_sensors": _sensor_ids_by_status(sensors, "fail"),
+        "warning_sensors": _sensor_ids_by_status(sensors, "warn"),
+    }
+
+
+def _sensor_ids_by_status(sensors: list[Any], status: str) -> list[str]:
+    ids: list[str] = []
+    for sensor in sensors:
+        if not isinstance(sensor, dict) or sensor.get("status") != status:
+            continue
+        sensor_id = _text(sensor.get("sensor_id"))
+        if sensor_id:
+            ids.append(sensor_id)
+    return ids
 
 
 def _has_external_http_exec_artifact(artifacts: list[dict[str, Any]]) -> bool:
