@@ -16,6 +16,7 @@ from .completion_gate import CompletionGateResult, CompletionGateService
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
 from .harness_scorecard import HarnessScorecard
+from .harness_sensors import evaluate_harness_sensors
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
@@ -1184,6 +1185,7 @@ def _harness_scorecard_metadata(
     completion_result: CompletionGateResult,
 ) -> dict[str, Any]:
     task_contract = getattr(aggregate_result, "task_contract", None)
+    task_type = harness_profile.task_type if harness_profile is not None else ""
     scorecard = HarnessScorecard(
         profile=harness_profile.to_metadata() if harness_profile is not None else {},
         contract=task_contract.to_metadata() if task_contract is not None else {},
@@ -1197,7 +1199,11 @@ def _harness_scorecard_metadata(
         permissions={
             "harness_policy": dict(aggregate_result.harness_policy or {}),
         },
-        sensors=(),
+        sensors=evaluate_harness_sensors(
+            task_type=task_type,
+            execution_result=aggregate_result,
+            completion_result=completion_result,
+        ),
         completion=completion_result.to_metadata(),
         trace_health={
             "status": "pass",
