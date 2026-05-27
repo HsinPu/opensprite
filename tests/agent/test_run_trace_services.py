@@ -191,6 +191,7 @@ def test_run_trace_recorder_persists_harness_scorecard_part():
                 "profile": {"name": "coding"},
                 "contract": {"task_type": "code_change"},
                 "completion": {"status": "incomplete"},
+                "trace_health": {"status": "fail", "sensor_counts": {"pass": 1, "warn": 1, "fail": 2}},
             },
         )
         return await storage.get_run_parts("web:browser-1", "run-1")
@@ -199,7 +200,11 @@ def test_run_trace_recorder_persists_harness_scorecard_part():
 
     assert len(parts) == 1
     assert parts[0].part_type == "harness_scorecard"
-    assert parts[0].content == "profile=coding 繚 contract=code_change 繚 completion=incomplete"
+    assert "profile=coding" in parts[0].content
+    assert "contract=code_change" in parts[0].content
+    assert "completion=incomplete" in parts[0].content
+    assert "trace=fail" in parts[0].content
+    assert "sensors=1 pass/1 warn/2 fail" in parts[0].content
     assert parts[0].metadata["profile"]["name"] == "coding"
     serialized = serialize_run_part(parts[0])
     assert serialized["kind"] == "harness"

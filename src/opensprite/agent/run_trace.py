@@ -316,12 +316,16 @@ class RunTraceRecorder:
         profile = scorecard.get("profile") if isinstance(scorecard, dict) else {}
         contract = scorecard.get("contract") if isinstance(scorecard, dict) else {}
         completion = scorecard.get("completion") if isinstance(scorecard, dict) else {}
-        content = " 繚 ".join(
+        trace_health = scorecard.get("trace_health") if isinstance(scorecard, dict) else {}
+        sensor_counts = trace_health.get("sensor_counts") if isinstance(trace_health, dict) else {}
+        content = " · ".join(
             item
             for item in (
                 f"profile={profile.get('name')}" if isinstance(profile, dict) and profile.get("name") else "",
                 f"contract={contract.get('task_type')}" if isinstance(contract, dict) and contract.get("task_type") else "",
                 f"completion={completion.get('status')}" if isinstance(completion, dict) and completion.get("status") else "",
+                f"trace={trace_health.get('status')}" if isinstance(trace_health, dict) and trace_health.get("status") else "",
+                _scorecard_sensor_summary(sensor_counts),
             )
             if item
         )
@@ -469,3 +473,16 @@ class RunTraceRecorder:
             external_chat_id=external_chat_id,
         )
         await self.update_run_status(session_id, run_id, status, finished_at=finished_at)
+
+
+def _scorecard_sensor_summary(sensor_counts: Any) -> str:
+    if not isinstance(sensor_counts, dict):
+        return ""
+    fail_count = int(sensor_counts.get("fail") or 0)
+    warn_count = int(sensor_counts.get("warn") or 0)
+    pass_count = int(sensor_counts.get("pass") or 0)
+    if fail_count or warn_count:
+        return f"sensors={pass_count} pass/{warn_count} warn/{fail_count} fail"
+    return f"sensors={pass_count} pass" if pass_count else ""
+
+
