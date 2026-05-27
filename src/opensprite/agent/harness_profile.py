@@ -51,6 +51,10 @@ _NO_WEB_EN_RE = re.compile(
     r"|\b(?:offline|no\s+internet|no\s+web|no\s+search)\b",
     re.IGNORECASE,
 )
+_NO_WEB_ZH_RE = re.compile(
+    r"(?:不要|不用|別)[^。！？\n]{0,40}(?:上網|搜尋|查網路|查網頁|web_search|web_research)",
+    re.IGNORECASE,
+)
 _NO_WORKSPACE_EN_RE = re.compile(
     r"\b(?:do not|don't|dont|without|no)\s+(?:read|inspect|access|open|use)?\s*(?:files?|workspace|repo|repository|codebase)\b"
     r"|\b(?:do not|don't|dont)\s+(?:read|inspect|access|open)\s+(?:files?|workspace|repo|repository|codebase)\b"
@@ -247,6 +251,17 @@ class HarnessProfileService:
         text = task_intent.objective or ""
         lowered = text.lower()
         denied_tools = denied_tools_for_constraints(text)
+        if _looks_like_direct_chat(task_intent, lowered, text):
+            direct_signals = _direct_chat_signals(text, denied_tools)
+            return HarnessProfile(
+                name="chat",
+                task_type=task_intent.kind,
+                verification_policy="none",
+                continuation_policy="minimal",
+                denied_tools=denied_tools,
+                reason="request is a direct answer or explicitly avoids external lookup",
+                selection_signals=direct_signals,
+            )
         if _looks_like_ops(lowered):
             return HarnessProfile(
                 name="ops",
@@ -269,17 +284,6 @@ class HarnessProfileService:
                 continuation_policy="bounded",
                 reason="objective references media analysis or an attachment-only media turn",
                 selection_signals=_selection_signals("media", lowered, _MEDIA_MARKERS, extra=(task_intent.kind,)),
-            )
-        if _looks_like_direct_chat(task_intent, lowered, text):
-            direct_signals = _direct_chat_signals(text, denied_tools)
-            return HarnessProfile(
-                name="chat",
-                task_type=task_intent.kind,
-                verification_policy="none",
-                continuation_policy="minimal",
-                denied_tools=denied_tools,
-                reason="request is a direct answer or explicitly avoids external lookup",
-                selection_signals=direct_signals,
             )
         if _looks_like_coding(task_intent, lowered, text):
             return HarnessProfile(
@@ -437,7 +441,12 @@ def has_no_web_constraint(text: str) -> bool:
     """Return whether the user explicitly forbids web/search evidence."""
     text = text or ""
     lowered = text.lower()
-    return bool(_NO_WEB_RE.search(text) or _NO_WEB_EN_RE.search(text) or any(phrase in lowered for phrase in _NO_WEB_LITERAL_PHRASES))
+    return bool(
+        _NO_WEB_RE.search(text)
+        or _NO_WEB_EN_RE.search(text)
+        or _NO_WEB_ZH_RE.search(text)
+        or any(phrase in lowered for phrase in _NO_WEB_LITERAL_PHRASES)
+    )
 
 
 def has_no_workspace_constraint(text: str) -> bool:

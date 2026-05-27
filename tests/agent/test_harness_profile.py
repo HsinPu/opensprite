@@ -59,6 +59,18 @@ def test_harness_profile_respects_explicit_no_web_and_no_file_constraints():
     assert "constraint:no_workspace" in metadata["selection"]["matched_signals"]
 
 
+def test_harness_profile_no_web_direct_answer_overrides_api_key_ops_marker():
+    profile = _profile("\u5ef6\u7e8c\u4e0a\u4e00\u984c\uff0c\u8acb\u518d\u7528\u4e00\u53e5\u8a71\u8aaa\u660e API key \u662f\u4ec0\u9ebc\uff0c\u4e5f\u4e0d\u8981\u8b80\u6a94\u6848\u6216\u4e0a\u7db2\u3002")
+    metadata = profile.to_metadata()
+
+    assert profile.name == "chat"
+    assert "web_research" in profile.denied_tools
+    assert "read_file" in profile.denied_tools
+    assert "marker:api key" not in metadata["selection"]["matched_signals"]
+    assert "constraint:no_web" in metadata["selection"]["matched_signals"]
+    assert "constraint:no_workspace" in metadata["selection"]["matched_signals"]
+
+
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
     intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)
