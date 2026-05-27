@@ -1,12 +1,10 @@
-const DEFAULT_RISK_LEVELS = ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory", "mcp"];
-
 function createProfileOverride(overrides = {}) {
   return {
     enabled: true,
     approval_mode: null,
     allowed_tools: ["*"],
     denied_tools: [],
-    allowed_risk_levels: [...DEFAULT_RISK_LEVELS],
+    allowed_risk_levels: [],
     denied_risk_levels: [],
     approval_required_tools: [],
     approval_required_risk_levels: [],
@@ -21,13 +19,13 @@ export function createDefaultPermissionsState() {
     approval_timeout_seconds: 300,
     allowed_tools: ["*"],
     denied_tools: [],
-    allowed_risk_levels: [...DEFAULT_RISK_LEVELS],
+    allowed_risk_levels: [],
     denied_risk_levels: [],
     approval_required_tools: [],
     approval_required_risk_levels: [],
     profile_overrides: {},
-    risk_level_options: [...DEFAULT_RISK_LEVELS],
-    approval_mode_options: ["ask", "auto", "block"],
+    risk_level_options: [],
+    approval_mode_options: [],
   };
 }
 
@@ -38,7 +36,7 @@ export function createDefaultPermissionsForm() {
     approvalTimeoutSeconds: 300,
     allowedTools: "*",
     deniedTools: "",
-    allowedRiskLevels: [...DEFAULT_RISK_LEVELS],
+    allowedRiskLevels: [],
     deniedRiskLevels: [],
     approvalRequiredTools: "",
     approvalRequiredRiskLevels: [],

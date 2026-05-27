@@ -3929,7 +3929,7 @@ const permissionRiskLevelOptions = computed(() => {
 
 const permissionApprovalModeOptions = computed(() => {
   const options = props.settingsState.permissions?.approval_mode_options;
-  return Array.isArray(options) && options.length ? options : ["ask", "auto", "block"];
+  return Array.isArray(options) && options.length ? options : [];
 });
 
 const permissionSummary = computed(() => {
