@@ -1368,26 +1368,13 @@ class Config:
         """Map packaged ``llm`` to :class:`opensprite.agent.agent.AgentLoop` keyword arguments."""
         llm = cls.packaged_llm_flat_dict()
         return {
-            "llm_chat_temperature": llm["temperature"],
             "llm_chat_max_tokens": llm["max_tokens"],
-            "llm_chat_top_p": llm["top_p"],
-            "llm_chat_frequency_penalty": llm["frequency_penalty"],
-            "llm_chat_presence_penalty": llm["presence_penalty"],
-            "llm_pass_decoding_params": llm["pass_decoding_params"],
         }
 
     @classmethod
     def packaged_execution_engine_chat_kwargs(cls) -> dict[str, Any]:
         """Map packaged ``llm`` to :class:`opensprite.agent.execution.ExecutionEngine` keyword arguments."""
-        llm = cls.packaged_llm_flat_dict()
-        return {
-            "chat_temperature": llm["temperature"],
-            "chat_max_tokens": llm["max_tokens"],
-            "chat_top_p": llm["top_p"],
-            "chat_frequency_penalty": llm["frequency_penalty"],
-            "chat_presence_penalty": llm["presence_penalty"],
-            "pass_decoding_params": llm["pass_decoding_params"],
-        }
+        return {}
 
     @classmethod
     def load_external_template_data(cls, name: str) -> dict[str, Any]:

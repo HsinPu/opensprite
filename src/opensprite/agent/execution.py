@@ -242,12 +242,6 @@ Output exactly these sections when applicable:
         format_log_preview: Callable[..., str],
         summarize_messages: Callable[..., str],
         sanitize_response_content: Callable[[str], str],
-        chat_temperature: float,
-        chat_max_tokens: int,
-        chat_top_p: float | None,
-        chat_frequency_penalty: float | None,
-        chat_presence_penalty: float | None,
-        pass_decoding_params: bool,
         context_compaction_enabled: bool = False,
         context_compaction_token_budget: int = 0,
         context_window_tokens: int | None = None,
@@ -259,12 +253,6 @@ Output exactly these sections when applicable:
     ):
         self.provider = provider
         self.tools = tools
-        self.chat_temperature = chat_temperature
-        self.chat_max_tokens = chat_max_tokens
-        self.chat_top_p = chat_top_p
-        self.chat_frequency_penalty = chat_frequency_penalty
-        self.chat_presence_penalty = chat_presence_penalty
-        self.pass_decoding_params = pass_decoding_params
         self.context_compaction_enabled = context_compaction_enabled
         self.context_compaction_token_budget = max(0, context_compaction_token_budget)
         self.context_window_tokens = context_window_tokens

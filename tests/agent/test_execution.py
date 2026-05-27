@@ -679,7 +679,7 @@ def test_execution_engine_records_llm_step_usage_metadata():
             finish_reason="stop",
         )
     ])
-    engine = _make_engine(provider, ToolRegistry(), [], pass_decoding_params=True)
+    engine = _make_engine(provider, ToolRegistry(), [])
 
     result = asyncio.run(
         engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)

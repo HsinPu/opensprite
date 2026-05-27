@@ -572,24 +572,14 @@ class AgentLoop:
         config_path: str | Path | None = None,
         llm_config: Any | None = None,
         *,
-        llm_chat_temperature: float,
         llm_chat_max_tokens: int,
-        llm_chat_top_p: float | None,
-        llm_chat_frequency_penalty: float | None,
-        llm_chat_presence_penalty: float | None,
-        llm_pass_decoding_params: bool,
         llm_context_window_tokens: int | None = None,
         llm_configured: bool = True,
         messages_config: MessagesConfig | None = None,
     ):
         ...
         self.config = config
-        self.llm_chat_temperature = llm_chat_temperature
         self.llm_chat_max_tokens = llm_chat_max_tokens
-        self.llm_chat_top_p = llm_chat_top_p
-        self.llm_chat_frequency_penalty = llm_chat_frequency_penalty
-        self.llm_chat_presence_penalty = llm_chat_presence_penalty
-        self.llm_pass_decoding_params = llm_pass_decoding_params
         self.llm_context_window_tokens = llm_context_window_tokens
         self.llm_configured = llm_configured
         self.messages = messages_config or MessagesConfig()
@@ -1128,12 +1118,6 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
             summarize_messages=self._summarize_messages,
             sanitize_response_content=self._sanitize_response_content,
-            chat_temperature=self.llm_chat_temperature,
-            chat_max_tokens=self.llm_chat_max_tokens,
-            chat_top_p=self.llm_chat_top_p,
-            chat_frequency_penalty=self.llm_chat_frequency_penalty,
-            chat_presence_penalty=self.llm_chat_presence_penalty,
-            pass_decoding_params=self.llm_pass_decoding_params,
             context_compaction_enabled=self.config.context_compaction_enabled,
             context_compaction_token_budget=self._effective_context_token_budget(),
             context_window_tokens=self.llm_context_window_tokens,
@@ -1411,23 +1395,12 @@ class AgentLoop:
         provider = create_llm_from_runtime(llm_runtime)
 
         self.provider = provider
-        self.llm_chat_temperature = config.llm.temperature
         self.llm_chat_max_tokens = config.llm.max_tokens
-        self.llm_chat_top_p = config.llm.top_p
-        self.llm_chat_frequency_penalty = config.llm.frequency_penalty
-        self.llm_chat_presence_penalty = config.llm.presence_penalty
-        self.llm_pass_decoding_params = config.llm.pass_decoding_params
         self.llm_context_window_tokens = cfg.context_window_tokens
         self.llm_configured = config.is_llm_configured
 
         self.prompt_budget.provider = provider
         self.execution_engine.provider = provider
-        self.execution_engine.chat_temperature = self.llm_chat_temperature
-        self.execution_engine.chat_max_tokens = self.llm_chat_max_tokens
-        self.execution_engine.chat_top_p = self.llm_chat_top_p
-        self.execution_engine.chat_frequency_penalty = self.llm_chat_frequency_penalty
-        self.execution_engine.chat_presence_penalty = self.llm_chat_presence_penalty
-        self.execution_engine.pass_decoding_params = self.llm_pass_decoding_params
         self.execution_engine.context_compaction_token_budget = self._effective_context_token_budget()
         self.execution_engine.context_window_tokens = self.llm_context_window_tokens
         self.execution_engine.context_output_reserve_tokens = max(0, self.llm_chat_max_tokens)
