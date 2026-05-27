@@ -5,7 +5,8 @@ from typer.testing import CliRunner
 
 from opensprite.cli import commands
 from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, load_trace_readonly, select_cases, summarize_trace
-from opensprite.storage.base import StoredRun, StoredRunEvent, StoredRunTrace
+from opensprite.cli.commands_trace import trace_payload
+from opensprite.storage.base import StoredRun, StoredRunEvent, StoredRunPart, StoredRunTrace
 
 
 def test_summarize_trace_extracts_profile_tools_and_completion():
@@ -211,3 +212,114 @@ def test_chat_smoke_command_outputs_json(monkeypatch):
     payload = json.loads(result.output)
     assert payload["ok"] is True
     assert payload["results"][0]["trace"]["profile"] == "chat"
+
+
+def test_trace_payload_can_include_full_serialized_trace():
+    trace = StoredRunTrace(
+        run=StoredRun(
+            run_id="run-1",
+            session_id="web:smoke",
+            status="completed",
+            created_at=1.0,
+            updated_at=2.0,
+        ),
+        events=[
+            StoredRunEvent(
+                run_id="run-1",
+                session_id="web:smoke",
+                event_type="completion_gate.evaluated",
+                payload={"status": "complete", "reason": "done"},
+            ),
+        ],
+        parts=[
+            StoredRunPart(
+                run_id="run-1",
+                session_id="web:smoke",
+                part_type="assistant_message",
+                content="pong",
+            )
+        ],
+    )
+
+    payload = trace_payload(trace, full=True)
+
+    assert payload["ok"] is True
+    assert payload["run"]["run_id"] == "run-1"
+    assert payload["trace"]["completion_status"] == "complete"
+    assert payload["events"][0]["event_type"] == "completion_gate.evaluated"
+    assert payload["parts"][0]["content"] == "pong"
+
+
+def test_trace_command_outputs_json_from_readonly_db(tmp_path):
+    db_path = tmp_path / "sessions.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE runs (
+                run_id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                status TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                finished_at REAL
+            );
+            CREATE TABLE run_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            CREATE TABLE run_parts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                part_type TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                tool_name TEXT,
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            CREATE TABLE run_file_changes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                session_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                path TEXT NOT NULL,
+                action TEXT NOT NULL,
+                before_sha256 TEXT,
+                after_sha256 TEXT,
+                before_content TEXT,
+                after_content TEXT,
+                diff TEXT NOT NULL DEFAULT '',
+                metadata_json TEXT NOT NULL DEFAULT '{}',
+                created_at REAL NOT NULL
+            );
+            """
+        )
+        conn.execute(
+            "INSERT INTO runs VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("run-1", "web:smoke", "completed", "{}", 1.0, 2.0, 3.0),
+        )
+        conn.execute(
+            "INSERT INTO run_events (run_id, session_id, event_type, payload_json, created_at) VALUES (?, ?, ?, ?, ?)",
+            ("run-1", "web:smoke", "completion_gate.evaluated", '{"status":"complete","reason":"done"}', 1.5),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    runner = CliRunner()
+    result = runner.invoke(
+        commands.app,
+        ["trace", "run-1", "--session-id", "web:smoke", "--db-path", str(db_path), "--json"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["ok"] is True
+    assert payload["run"]["status"] == "completed"
+    assert payload["trace"]["completion_status"] == "complete"

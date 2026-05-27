@@ -16,6 +16,7 @@ from . import (
     commands_auth,
     commands_chat,
     commands_chat_smoke,
+    commands_trace,
     commands_cron,
     commands_search,
     commands_service,
@@ -325,6 +326,40 @@ def chat_smoke(
         external_chat_prefix=external_chat_prefix,
         db_path=db_path,
         case_ids=case_ids,
+        json_output=json_output,
+    )
+
+
+@app.command("trace")
+def trace(
+    run_id: str = typer.Argument(..., help="Run id to inspect."),
+    session_id: str = typer.Option(
+        ...,
+        "--session-id",
+        help="Session id that owns the run, for example web:my-chat.",
+    ),
+    db_path: str | None = typer.Option(
+        None,
+        "--db-path",
+        help="SQLite sessions.db path to inspect. Defaults to ~/.opensprite/data/sessions.db.",
+    ),
+    full: bool = typer.Option(
+        False,
+        "--full",
+        help="Include serialized events, parts, file changes, diff summary, and artifacts.",
+    ),
+    json_output: bool = typer.Option(
+        False,
+        "--json",
+        help="Output machine-readable JSON.",
+    ),
+) -> None:
+    """Inspect one persisted run trace."""
+    commands_trace.trace_command(
+        run_id=run_id,
+        session_id=session_id,
+        db_path=db_path,
+        full=full,
         json_output=json_output,
     )
 
