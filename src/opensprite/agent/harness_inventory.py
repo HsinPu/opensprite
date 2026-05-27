@@ -11,6 +11,7 @@ from .harness_profile import HarnessProfile, preview_harness_profiles
 
 SENSOR_IDS_BY_TASK_TYPE: dict[str, tuple[str, ...]] = {
     "conversation": ("chat.no_unexpected_tools", "completion.final_answer"),
+    "question": ("chat.no_unexpected_tools", "completion.final_answer"),
     "web_research": ("research.source_coverage", "research.freshness", "completion.source_grounding"),
     "workspace_analysis": ("coding.workspace_evidence", "completion.verification_or_gap"),
     "workspace_change": ("coding.file_change", "coding.verification", "completion.change_summary"),

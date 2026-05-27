@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ..agent.harness_inventory import SENSOR_IDS_BY_TASK_TYPE
 from ..agent.harness_policy import HarnessPolicyService
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.task_contract import TaskContractService
@@ -196,6 +197,11 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
             case.get("expected_contract_acceptance_kinds"),
         ),
         _expect_scenario(case.get("expected_scenario_check"), profile, policy, contract),
+        _expect_non_empty(
+            "expected_sensors",
+            "Harness inventory declares expected sensors",
+            SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ()),
+        ),
     ]
 
     return {
@@ -209,6 +215,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
         "profile": profile.to_metadata(),
         "policy": policy.to_metadata(),
         "contract": contract.to_metadata(),
+        "expected_sensor_ids": list(SENSOR_IDS_BY_TASK_TYPE.get(profile.task_type, ())),
     }
 
 
@@ -250,6 +257,16 @@ def _expect_contains_all(id_: str, description: str, observed: Any, expected: An
         description,
         not missing,
         f"Missing {', '.join(missing)}." if missing else f"Observed {', '.join(sorted(observed_values)) or '-'}.",
+    )
+
+
+def _expect_non_empty(id_: str, description: str, observed: Any) -> dict[str, Any]:
+    observed_values = _string_sequence(observed)
+    return _check(
+        id_,
+        description,
+        bool(observed_values),
+        f"Observed {', '.join(observed_values) or '-'}.",
     )
 
 
