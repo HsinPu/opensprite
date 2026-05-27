@@ -478,6 +478,33 @@ function checkpointDecision(payload, event, index) {
   };
 }
 
+function scorecardDecision(payload, event, index) {
+  const profile = payload.profile || {};
+  const contract = payload.contract || {};
+  const completion = payload.completion || {};
+  const traceHealth = payload.trace_health || payload.traceHealth || {};
+  const sensors = Array.isArray(payload.sensors) ? payload.sensors : [];
+  return {
+    id: decisionId(event, index),
+    eventIds: decisionEventId(event),
+    phase: "checkpoint",
+    status: traceHealth.status === "fail" ? "failed" : traceHealth.status === "warn" ? "warning" : "success",
+    titleKey: "scorecard",
+    title: "Harness scorecard",
+    summary: compactJoin([profile.name || contract.task_type || contract.taskType, completion.status, traceHealth.status]),
+    reason: coerceText(completion.reason),
+    createdAt: event.createdAt,
+    details: compactDetails([
+      decisionDetail("profile", profile.name),
+      decisionDetail("taskType", contract.task_type || contract.taskType),
+      decisionDetail("status", completion.status),
+      decisionDetail("reason", completion.reason),
+      decisionDetail("traceHealth", traceHealth.status),
+      decisionDetail("sensors", sensors.length),
+    ]),
+  };
+}
+
 function evalDecision(eventType, payload, event, index) {
   const summary = payload.summary || {};
   return {
@@ -535,6 +562,8 @@ export function deriveDecisionTimelineItems(events = []) {
       item = autoContinueDecision(eventType, payload, eventWithTimestamp, items.length);
     } else if (eventType === "harness_checkpoint.recorded") {
       item = checkpointDecision(payload, eventWithTimestamp, items.length);
+    } else if (eventType === "harness_scorecard.recorded") {
+      item = scorecardDecision(payload, eventWithTimestamp, items.length);
     } else if (eventType.startsWith("harness_eval.")) {
       item = evalDecision(eventType, payload, eventWithTimestamp, items.length);
     }

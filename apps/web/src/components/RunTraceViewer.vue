@@ -516,6 +516,9 @@ const harnessSummaryRows = computed(() => {
   const failedEvalPayload = latestEventPayload("harness_eval.failed");
   const evalPartPayload = latestPartMetadata("harness_eval_result");
   const evalSource = Object.keys(evalPayload).length ? evalPayload : (Object.keys(failedEvalPayload).length ? failedEvalPayload : evalPartPayload);
+  const scorecardEventPayload = latestEventPayload("harness_scorecard.recorded");
+  const scorecardPartPayload = latestPartMetadata("harness_scorecard");
+  const scorecardPayload = Object.keys(scorecardEventPayload).length ? scorecardEventPayload : scorecardPartPayload;
   const hasEventCheckpoint = Object.keys(eventCheckpointPayload).length > 0;
   const checkpointPayload = hasEventCheckpoint ? eventCheckpointPayload : partCheckpointPayload;
   const checkpointSource = hasEventCheckpoint ? "event" : (Object.keys(partCheckpointPayload).length ? "part" : "");
@@ -532,7 +535,7 @@ const harnessSummaryRows = computed(() => {
   const profileName = profilePayload.name || contractProfile.name || "";
   const taskType = contractSource.task_type || contractSource.taskType || profilePayload.task_type || profilePayload.taskType || "";
   const profileSelection = profilePayload.selection || contractProfile.selection || {};
-  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length && !Object.keys(changedProfilePayload).length) {
+  if (!profileName && !taskType && !Object.keys(contractSource).length && !Object.keys(policySource).length && !Object.keys(checkpointPayload).length && !Object.keys(policyResolutionPayload).length && !Object.keys(evalSource).length && !Object.keys(scorecardPayload).length && !Object.keys(changedProfilePayload).length) {
     return [];
   }
   const toolPermissionCounts = countToolPermissionDecisions();
@@ -562,6 +565,7 @@ const harnessSummaryRows = computed(() => {
     { label: labels.autoContinue || "Auto", value: autoContinueEvent ? compactJoin([autoContinueEvent.eventType.replace("auto_continue.", ""), autoContinueEvent.payload?.reason], " · ") : "", kind: "next" },
     { label: labels.operationAudit || "Audit", value: formatOperationAudit(operationAuditPayload), kind: "checkpoint" },
     { label: labels.evalResults || "Eval", value: formatHarnessEvalResult(evalSource, evalSummary, labels), kind: "checkpoint" },
+    { label: labels.scorecard || "Scorecard", value: formatHarnessScorecard(scorecardPayload, labels), kind: "checkpoint" },
   ];
   return rows.filter((row) => row.value !== "" && row.value !== null && row.value !== undefined);
 });
@@ -807,6 +811,23 @@ function formatHarnessEvalResult(payload, summary, labels) {
   ], " · ");
 }
 
+function formatHarnessScorecard(payload, labels) {
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+  const profile = payload.profile || {};
+  const contract = payload.contract || {};
+  const completion = payload.completion || {};
+  const traceHealth = payload.trace_health || payload.traceHealth || {};
+  const sensorCount = Array.isArray(payload.sensors) ? payload.sensors.length : 0;
+  return compactJoin([
+    profile.name || contract.task_type || contract.taskType,
+    completion.status,
+    traceHealth.status ? `${labels.traceHealth || "trace"} ${traceHealth.status}` : "",
+    sensorCount ? `${sensorCount} ${labels.sensors || "sensors"}` : "",
+  ], " · ");
+}
+
 function decisionTimelineTitle(item) {
   return props.copy.trace.decisionTimeline.titles?.[item.titleKey] || item.title || item.titleKey;
 }
@@ -852,6 +873,9 @@ function eventSummary(event) {
   if (event.eventType === "harness_checkpoint.recorded") {
     const completion = payload.completion || {};
     return compactJoin([payload.next_action || payload.nextAction, completion.status, completion.reason], " · ");
+  }
+  if (event.eventType === "harness_scorecard.recorded") {
+    return formatHarnessScorecard(payload, props.copy.trace.harnessLabels || {});
   }
   if (String(event.eventType || "").startsWith("tool_permission.")) {
     return compactJoin([payload.tool_name || payload.toolName, payload.decision, payload.reason], " · ");
