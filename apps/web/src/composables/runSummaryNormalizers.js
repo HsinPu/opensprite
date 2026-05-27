@@ -187,6 +187,35 @@ function normalizeParallelDelegationSummary(payload) {
   };
 }
 
+function normalizeHarnessScorecardSummary(payload) {
+  if (!payload || typeof payload !== "object") {
+    return {
+      present: false,
+      status: "missing",
+      profile: "",
+      taskType: "",
+      sensorCounts: { pass: 0, warn: 0, fail: 0, notApplicable: 0 },
+      failingSensors: [],
+      warningSensors: [],
+    };
+  }
+  const sensorCounts = payload.sensor_counts && typeof payload.sensor_counts === "object" ? payload.sensor_counts : {};
+  return {
+    present: coerceBoolean(payload.present),
+    status: String(payload.status || "missing").trim() || "missing",
+    profile: String(payload.profile || "").trim(),
+    taskType: String(payload.task_type || payload.taskType || "").trim(),
+    sensorCounts: {
+      pass: coerceNonNegativeInteger(sensorCounts.pass),
+      warn: coerceNonNegativeInteger(sensorCounts.warn),
+      fail: coerceNonNegativeInteger(sensorCounts.fail),
+      notApplicable: coerceNonNegativeInteger(sensorCounts.not_applicable ?? sensorCounts.notApplicable),
+    },
+    failingSensors: coerceStringList(payload.failing_sensors || payload.failingSensors),
+    warningSensors: coerceStringList(payload.warning_sensors || payload.warningSensors),
+  };
+}
+
 export function normalizeRunSummary(payload) {
   if (!payload || typeof payload !== "object") {
     return null;
@@ -199,6 +228,7 @@ export function normalizeRunSummary(payload) {
   const parallelDelegation = normalizeParallelDelegationSummary(payload.parallel_delegation || payload.parallelDelegation);
   const structuredSubagents = normalizeStructuredSubagentsSummary(payload.structured_subagents || payload.structuredSubagents);
   const workflows = normalizeWorkflowSummary(payload.workflows);
+  const harnessScorecard = normalizeHarnessScorecardSummary(payload.harness_scorecard || payload.harnessScorecard);
   return {
     schemaVersion: coerceNonNegativeInteger(payload.schema_version ?? payload.schemaVersion),
     runId: String(payload.run_id || payload.runId || "").trim(),
@@ -252,6 +282,7 @@ export function normalizeRunSummary(payload) {
     parallelDelegation,
     structuredSubagents,
     workflows,
+    harnessScorecard,
     completion: payload.completion && typeof payload.completion === "object" ? payload.completion : {},
     nextAction: String(payload.next_action || payload.nextAction || "").trim(),
     warnings: coerceStringList(payload.warnings),

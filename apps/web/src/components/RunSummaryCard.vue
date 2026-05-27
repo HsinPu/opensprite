@@ -65,6 +65,12 @@
           <small v-if="summary.verification.summary">{{ summary.verification.summary }}</small>
         </div>
 
+        <div v-if="harnessScorecard.present" class="run-summary-card__note" :data-tone="harnessScorecardTone">
+          <strong>{{ copy.runSummary.harness }}</strong>
+          <span>{{ harnessScorecardLabel }}</span>
+          <small v-if="harnessScorecardDetail">{{ harnessScorecardDetail }}</small>
+        </div>
+
         <div v-if="summary.review.required" class="run-summary-card__note" :data-tone="reviewTone">
           <strong>{{ copy.runSummary.review }}</strong>
           <span>{{ reviewLabel }}</span>
@@ -319,6 +325,41 @@ const verificationTone = computed(() => {
     return "neutral";
   }
   return summary.value.verification.passed ? "success" : "warning";
+});
+
+const harnessScorecard = computed(() => summary.value?.harnessScorecard || {
+  present: false,
+  status: "missing",
+  profile: "",
+  taskType: "",
+  sensorCounts: { pass: 0, warn: 0, fail: 0, notApplicable: 0 },
+  failingSensors: [],
+  warningSensors: [],
+});
+
+const harnessScorecardTone = computed(() => {
+  if (harnessScorecard.value.status === "fail") {
+    return "warning";
+  }
+  if (harnessScorecard.value.status === "warn") {
+    return "warning";
+  }
+  return "success";
+});
+
+const harnessScorecardLabel = computed(() => {
+  const scorecard = harnessScorecard.value;
+  return props.copy.runSummary.harnessSummary(scorecard.status, scorecard.profile, scorecard.taskType);
+});
+
+const harnessScorecardDetail = computed(() => {
+  const counts = harnessScorecard.value.sensorCounts || {};
+  return props.copy.runSummary.harnessSensors(
+    counts.pass || 0,
+    counts.warn || 0,
+    counts.fail || 0,
+    counts.notApplicable || 0,
+  );
 });
 
 const reviewLabel = computed(() => {
@@ -674,6 +715,10 @@ function buildRunReport() {
 
   if (data.verification.summary) {
     lines.push(`- ${data.verification.summary}`);
+  }
+
+  if (data.harnessScorecard?.present) {
+    lines.push("", `## ${props.copy.runSummary.harness}`, `- ${harnessScorecardLabel.value}`, `- ${harnessScorecardDetail.value}`);
   }
 
   if (hasDiffSummary.value) {
