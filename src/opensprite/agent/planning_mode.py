@@ -135,25 +135,11 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolRegistry":
     """Return a read-only registry used for explicit plan-only turns."""
-    from ..tools.permissions import ToolPermissionPolicy
-    from .tool_access import ToolAccessResolver
+    from .tool_access import ToolAccessResolver, planning_mode_permission_policy
 
-    planning_policy = ToolPermissionPolicy(
-        allowed_tools=list(PLANNING_ALLOWED_TOOLS),
-        allowed_risk_levels=["read", "network"],
-        denied_risk_levels=[
-            "write",
-            "execute",
-            "external_side_effect",
-            "configuration",
-            "delegation",
-            "memory",
-            "mcp",
-        ],
-    )
     resolution = ToolAccessResolver().resolve_overlay(
         base_registry,
-        overlay_policy=planning_policy,
+        overlay_policy=planning_mode_permission_policy(PLANNING_ALLOWED_TOOLS),
         include_names=PLANNING_ALLOWED_TOOLS,
         metadata_kind="planning_mode",
     )

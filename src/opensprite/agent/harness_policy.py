@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import ALL_RISK_LEVELS_ORDER
+from ..permission_constants import denied_risks_except
 from ..tools import ToolRegistry
 from ..tools.permissions import ALL_RISK_LEVELS, ToolPermissionPolicy
 from .harness_profile import HarnessProfile
@@ -29,11 +29,6 @@ _CHAT_RISKS = ("read",)
 _RESEARCH_RISKS = ("read", "network")
 _MEDIA_RISKS = ("read", "network", "external_side_effect")
 _WORKSPACE_ANALYSIS_RISKS = ("read", "network", "delegation")
-
-
-def _deny_risks_except(allowed: tuple[str, ...]) -> tuple[str, ...]:
-    allowed_set = set(allowed)
-    return tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk not in allowed_set)
 
 
 @dataclass(frozen=True)
@@ -92,7 +87,7 @@ class HarnessPolicyService:
                 harness_profile_name=profile_name,
                 allowed_tools=_WEB_RESEARCH_TOOLS,
                 allowed_risk_levels=_RESEARCH_RISKS,
-                denied_risk_levels=_deny_risks_except(_RESEARCH_RISKS),
+                denied_risk_levels=denied_risks_except(_RESEARCH_RISKS),
                 reason="research turns may inspect local context and web sources but cannot mutate workspace or external state",
             ), harness_profile)
         if profile_name == "coding":
@@ -102,7 +97,7 @@ class HarnessPolicyService:
                     harness_profile_name=profile_name,
                     allowed_tools=("*",),
                     allowed_risk_levels=_WORKSPACE_ANALYSIS_RISKS,
-                    denied_risk_levels=_deny_risks_except(_WORKSPACE_ANALYSIS_RISKS),
+                    denied_risk_levels=denied_risks_except(_WORKSPACE_ANALYSIS_RISKS),
                     reason="workspace analysis turns can inspect and delegate review but should not mutate or execute",
                 ), harness_profile)
             return _with_profile_denied_tools(HarnessPolicy(
@@ -136,7 +131,7 @@ class HarnessPolicyService:
             harness_profile_name=profile_name,
             allowed_tools=("*",),
             allowed_risk_levels=_CHAT_RISKS,
-            denied_risk_levels=_deny_risks_except(_CHAT_RISKS),
+            denied_risk_levels=denied_risks_except(_CHAT_RISKS),
             reason="chat turns default to read-only local context and avoid external side effects",
         ), harness_profile)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..permission_constants import denied_risks_except
 from ..tools import BatchTool, ToolRegistry
 from ..tools.permissions import ALL_RISK_LEVELS, CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_policy import HarnessPolicy, HarnessPolicyService
@@ -152,6 +153,16 @@ class ToolAccessResolver:
             effective_policy=effective_policy,
             metadata=metadata,
         )
+
+
+def planning_mode_permission_policy(allowed_tools: set[str] | frozenset[str]) -> ToolPermissionPolicy:
+    """Return the read/network overlay policy for explicit plan-only turns."""
+    allowed_risks = ("read", "network")
+    return ToolPermissionPolicy(
+        allowed_tools=sorted(allowed_tools),
+        allowed_risk_levels=list(allowed_risks),
+        denied_risk_levels=list(denied_risks_except(allowed_risks)),
+    )
 
 
 def summarize_effective_risks(policy: ToolPermissionPolicy) -> dict[str, list[str]]:
