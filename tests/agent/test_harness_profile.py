@@ -71,6 +71,28 @@ def test_harness_profile_no_web_direct_answer_overrides_api_key_ops_marker():
     assert "constraint:no_workspace" in metadata["selection"]["matched_signals"]
 
 
+def test_harness_profile_treats_api_key_code_question_as_coding_not_ops():
+    intent = TaskIntentService().classify(
+        "\u8acb\u53ea\u8b80\u5fc5\u8981\u7684\u5c08\u6848\u6a94\u6848\uff0c\u627e\u51fa harness profile selection \u70ba\u4ec0\u9ebc\u53ef\u80fd\u628a API key \u554f\u984c\u5224\u6210 ops\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\uff0c\u53ea\u8981\u8aaa\u660e\u8def\u5f91\u8207\u539f\u56e0\u3002"
+    )
+    profile = HarnessProfileService().select(intent)
+
+    assert profile.name == "coding"
+    assert profile.task_type == "workspace_analysis"
+
+
+def test_chinese_no_edit_and_no_test_constraints_downgrade_code_change():
+    intent = TaskIntentService().classify(
+        "\u5ef6\u7e8c\u525b\u525b\u7684\u7a0b\u5f0f\u78bc\u89c0\u5bdf\uff0c\u8acb\u8a2d\u8a08\u6700\u5c0f regression test \u6848\u4f8b\uff1b\u4e0d\u8981\u4fee\u6539\u6a94\u6848\u3001\u4e0d\u8981\u57f7\u884c\u6e2c\u8a66\u3002"
+    )
+    profile = HarnessProfileService().select(intent)
+
+    assert intent.expects_code_change is False
+    assert intent.expects_verification is False
+    assert profile.name == "coding"
+    assert profile.task_type == "workspace_analysis"
+
+
 def test_task_contract_uses_research_harness_profile_for_source_requirements():
     intent = TaskIntentService().classify("請上網查 OpenAI Codex 的最新資料並附來源")
     profile = HarnessProfileService().select(intent)

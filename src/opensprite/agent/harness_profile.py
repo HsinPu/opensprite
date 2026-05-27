@@ -180,7 +180,6 @@ _MEDIA_MARKERS = (
 _OPS_MARKERS = (
     "credential",
     "credentials",
-    "api key",
     "token",
     "secret",
     "provider",

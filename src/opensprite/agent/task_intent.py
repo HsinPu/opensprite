@@ -168,7 +168,15 @@ _PURE_ANSWER_LITERAL_PHRASES = (
 _NO_CODE_CHANGE_RE = re.compile(
     r"\b(?:do not|don't|dont|without|no)\s+(?:edit|modify|change|write|patch|implement)\b"
     r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:edit|modify|change|write|patch|implement)\s+(?:files?|code)?\b"
-    r"|\b(?:plan only|analysis only|read[- ]only|no code changes?)\b",
+    r"|\b(?:plan only|analysis only|read[- ]only|no code changes?)\b"
+    r"|(?:不要|不用|別)[^。！？\n]{0,40}(?:修改|改檔|改動|編輯|寫入|實作)[^。！？\n]{0,20}(?:檔案|文件|程式碼|code)?"
+    r"|(?:不改|不修改|不編輯|不寫入)(?:檔案|文件|程式碼|code)?",
+    re.IGNORECASE,
+)
+_NO_VERIFICATION_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\s+(?:run|execute)?\s*(?:tests?|pytest|verification|build|compile)\b"
+    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:run|execute)\s+(?:tests?|pytest|build|compile)\b"
+    r"|(?:不要|不用|別)[^。！？\n]{0,40}(?:執行|跑|驗證)[^。！？\n]{0,20}(?:測試|pytest|build|編譯)?",
     re.IGNORECASE,
 )
 
@@ -393,6 +401,8 @@ def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[s
 
 
 def _verification_hint(kind: str, text: str) -> str | None:
+    if _NO_VERIFICATION_RE.search(text or ""):
+        return None
     if _expects_verification(kind, text):
         return "Run the requested verification and report pass or fail."
     if kind in {"debug", "implementation", "refactor"}:
@@ -419,6 +429,8 @@ def _expects_code_change(kind: str, text: str) -> bool:
 
 def _expects_verification(kind: str, text: str) -> bool:
     lowered = text.lower()
+    if _NO_VERIFICATION_RE.search(text):
+        return False
     if _is_pure_answer_request(text):
         return False
     if any(marker in lowered for marker in ("pytest", "verify", "verification", "測試", "驗證", "建置", "編譯")):
