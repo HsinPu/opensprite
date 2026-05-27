@@ -56,12 +56,12 @@ def coerce_permission_profile_overrides(
     *,
     default: dict[str, ToolPermissionProfileOverrideConfig],
     all_risk_levels: set[str] | frozenset[str],
+    allowed_profiles: set[str] | frozenset[str],
 ) -> dict[str, ToolPermissionProfileOverrideConfig]:
     if value is None:
         return dict(default)
     if not isinstance(value, dict):
         raise web.HTTPBadRequest(text="profile_overrides must be a JSON object")
-    allowed_profiles = {"chat", "research", "coding", "media", "ops"}
     result: dict[str, ToolPermissionProfileOverrideConfig] = {}
     for profile, raw_override in value.items():
         profile_name = str(profile or "").strip().lower()

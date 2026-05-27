@@ -533,6 +533,9 @@ def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOv
     }
 
 
+PERMISSION_PROFILE_NAMES = frozenset(_default_permission_profile_overrides().keys())
+
+
 class ToolPermissionsConfig(BaseModel):
     """Centralized tool exposure and execution policy."""
 

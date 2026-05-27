@@ -42,6 +42,7 @@ from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
 from ..cli import update as update_cli
 from ..cli import service_background, service_linux
 from ..config import Config, MessagesConfig, ToolPermissionProfileOverrideConfig
+from ..config.schema import PERMISSION_PROFILE_NAMES
 from ..config.defaults import (
     DEFAULT_BROWSER_BACKEND,
     DEFAULT_BROWSER_COMMAND_TIMEOUT,
@@ -685,6 +686,7 @@ class WebAdapter(MessageAdapter):
             value,
             default=default,
             all_risk_levels=ALL_RISK_LEVELS,
+            allowed_profiles=PERMISSION_PROFILE_NAMES,
         )
 
     @classmethod
