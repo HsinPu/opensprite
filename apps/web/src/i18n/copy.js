@@ -1155,25 +1155,6 @@ export const DISPLAY_COPY = {
           title: "需要核准的風險等級",
           description: "符合的風險等級會要求使用者核准。",
         },
-        profileOverrides: {
-          title: "Profile 權限覆寫",
-          presetsTitle: "快速套用 preset",
-          presetsDescription: "Fast 偏自動化，Balanced 使用建議預設，Strict 對高風險 profile 要求核准。",
-          presets: {
-            fast: "Fast",
-            balanced: "Balanced",
-            strict: "Strict",
-          },
-          approvalModeDescription: "留空使用全域模式；設定後只套用在這個 Harness profile。",
-          description: (profile) => `只套用在 ${profile} 任務的額外使用者權限。`,
-          profiles: {
-            chat: "Chat",
-            research: "Research",
-            coding: "Coding",
-            media: "Media",
-            ops: "Ops",
-          },
-        },
         riskLevels: {
           read: "Read",
           write: "Write",
@@ -2960,25 +2941,6 @@ export const DISPLAY_COPY = {
         approvalRequiredRiskLevels: {
           title: "Risks requiring approval",
           description: "Matching risk levels require user approval.",
-        },
-        profileOverrides: {
-          title: "Profile permission overrides",
-          presetsTitle: "Apply a preset",
-          presetsDescription: "Fast favors automation, Balanced restores recommended defaults, and Strict asks before high-risk profile actions.",
-          presets: {
-            fast: "Fast",
-            balanced: "Balanced",
-            strict: "Strict",
-          },
-          approvalModeDescription: "Leave blank to use the global mode. Set this to affect only this Harness profile.",
-          description: (profile) => `Extra user permissions applied only to ${profile} tasks.`,
-          profiles: {
-            chat: "Chat",
-            research: "Research",
-            coding: "Coding",
-            media: "Media",
-            ops: "Ops",
-          },
         },
         riskLevels: {
           read: "Read",
