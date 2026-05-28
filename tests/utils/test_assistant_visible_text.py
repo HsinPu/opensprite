@@ -95,6 +95,24 @@ def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in
     assert sanitize_assistant_visible_text(text) == text
 
 
+def test_sanitize_assistant_visible_text_strips_direct_tool_tag_blocks():
+    text = (
+        "<search_history>\n"
+        "<query>AMD stock price 2026-05-28 web research</query>\n"
+        "<limit>10</limit>\n"
+        "</search_history>\n"
+        "Visible answer"
+    )
+
+    assert sanitize_assistant_visible_text(text) == "Visible answer"
+
+
+def test_sanitize_assistant_visible_text_preserves_direct_tool_tag_examples_in_code():
+    text = "Example:\n```xml\n<search_history>literal</search_history>\n```\nVisible answer"
+
+    assert sanitize_assistant_visible_text(text) == text
+
+
 def test_sanitize_assistant_visible_text_strips_dsml_tool_call_blocks():
     text = (
         "<｜｜DSML｜｜tool_calls>\n"

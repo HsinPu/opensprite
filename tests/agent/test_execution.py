@@ -1265,6 +1265,33 @@ def test_execution_engine_retries_when_generic_xml_text_tool_call_is_visible_con
     assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
 
 
+def test_execution_engine_retries_when_direct_tool_tag_text_call_is_visible_content():
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content=(
+                    "<search_history>\n"
+                    "<query>AMD stock price 2026-05-28 web research</query>\n"
+                    "<limit>10</limit>\n"
+                    "</search_history>"
+                ),
+                model="fake-model",
+            ),
+            LLMResponse(content="plain final answer", model="fake-model"),
+        ]
+    )
+    engine = _make_engine(provider, ToolRegistry(), [])
+    engine.sanitize_response_content = PromptLoggingService.sanitize_response_content
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)
+    )
+
+    assert result.content == "plain final answer"
+    assert len(provider.calls) == 2
+    assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
+
+
 def test_execution_engine_retries_when_dsml_text_tool_call_is_visible_content():
     provider = FakeProvider(
         [

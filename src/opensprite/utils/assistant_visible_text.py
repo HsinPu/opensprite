@@ -17,6 +17,12 @@ MINIMAX_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*minimax:tool_call\b[^<>]*>", 
 GENERIC_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*tool_call\b[^<>]*>", re.IGNORECASE)
 DSML_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*｜+DSML｜+\s*(/?)\s*tool_calls\b[^<>]*>", re.IGNORECASE)
 BRACKET_TOOL_CALL_RE = re.compile(r"\[\s*(/?)\s*tool_call\s*\]", re.IGNORECASE)
+DIRECT_TOOL_TAG_RE = re.compile(
+    r"<\s*(/?)\s*(?:search_history|web_search|web_fetch|web_research|read_file|list_dir|glob_files|grep_files|"
+    r"code_navigation|apply_patch|write_file|edit_file|task_update|exec|process|verify|"
+    r"delegate|delegate_many|run_workflow|batch)\b[^<>]*>",
+    re.IGNORECASE,
+)
 
 
 def _find_code_regions(text: str) -> list[tuple[int, int]]:
@@ -82,13 +88,14 @@ def _strip_tag_blocks(text: str, tag_re: re.Pattern[str]) -> str:
 
 def strip_assistant_internal_scaffolding(text: str) -> str:
     """Remove internal assistant control blocks from visible text."""
-    if not text or not QUICK_INTERNAL_TAG_RE.search(text):
+    if not text or not (QUICK_INTERNAL_TAG_RE.search(text) or DIRECT_TOOL_TAG_RE.search(text)):
         return text or ""
 
     cleaned = _strip_tag_blocks(text, THINKING_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, SYSTEM_REMINDER_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, MINIMAX_TOOL_CALL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, GENERIC_TOOL_CALL_TAG_RE)
+    cleaned = _strip_tag_blocks(cleaned, DIRECT_TOOL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, DSML_TOOL_CALL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, BRACKET_TOOL_CALL_RE)
     return cleaned
