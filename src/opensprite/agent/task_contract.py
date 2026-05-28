@@ -389,7 +389,11 @@ def _contract_from_planner_payload(
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
-    if inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS and inherited_tool_group not in tool_groups:
+    if (
+        inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS
+        and inherited_tool_group not in tool_groups
+        and not _message_forbids_inherited_tool_group(current_message, inherited_tool_group)
+    ):
         tool_groups.append(inherited_tool_group)
     _ensure_task_type_tool_groups(task_type, tool_groups)
 
@@ -631,6 +635,25 @@ def _coerce_confidence(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, confidence))
+
+
+def _message_forbids_inherited_tool_group(message: str, tool_group: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(message or "").strip().lower())
+    if not normalized:
+        return False
+    if tool_group == "web_research":
+        return bool(re.search(
+            r"(?:不要|不用|不需要|別|别)[^。.!?]{0,16}(?:重新)?(?:搜尋|搜寻|上網|上网|查網路|查网络)"
+            r"|\b(?:do not|don't|dont|without|no)\b[^.。!?]{0,32}\b(?:web|internet|online|search|research)\b",
+            normalized,
+        ))
+    if tool_group in {"workspace_read", "workspace_write"}:
+        return bool(re.search(
+            r"(?:不要|不用|不需要|別|别)[^。.!?]{0,16}(?:讀檔|读档|看檔|看档|改檔|改档|讀取檔案|读取文件)"
+            r"|\b(?:do not|don't|dont|without|no)\b[^.。!?]{0,32}\b(?:files?|workspace|read|edit|write)\b",
+            normalized,
+        ))
+    return False
 
 
 def _media_final_answer_criterion() -> AcceptanceCriterion:

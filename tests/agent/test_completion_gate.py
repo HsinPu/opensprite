@@ -8,7 +8,9 @@ from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
     TaskContract,
+    _contract_from_planner_payload,
 )
+from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
@@ -1672,6 +1674,36 @@ def test_completion_gate_completes_planning_answer_without_tools():
 
     assert result.status == "complete"
     assert result.reason == "planning task returned concrete steps"
+
+
+def test_task_contract_does_not_inherit_web_research_when_user_forbids_new_search():
+    intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
+
+    contract = _contract_from_planner_payload(
+        {
+            "task_type": "pure_answer",
+            "required_tool_groups": [],
+            "final_answer_required": True,
+            "allow_no_tool_final": True,
+            "reason": "Answer from previous sources.",
+        },
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=TaskContextDecision(
+            is_follow_up=True,
+            should_inherit_active_task=True,
+            inherited_task_type="web_research",
+            inherited_tool_group="web_research",
+            continuation_type="continue_active_task",
+        ),
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert not contract.requirements
 
 
 def test_quality_gate_reports_missing_requested_items():
