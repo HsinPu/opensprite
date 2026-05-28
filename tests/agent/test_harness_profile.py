@@ -91,13 +91,18 @@ class _FakeResponse:
 
 
 class _FakePlannerProvider:
-    def __init__(self, payload: dict | str):
-        self.payload = payload
+    def __init__(self, payload: dict | str | list[dict | str]):
+        self.payloads = list(payload) if isinstance(payload, list) else [payload]
+        self._last_payload = self.payloads[-1]
         self.messages = []
+        self.calls = []
 
     async def chat(self, messages, *, model=None, **kwargs):
         self.messages = messages
-        content = self.payload if isinstance(self.payload, str) else json.dumps(self.payload)
+        self.calls.append(messages)
+        payload = self.payloads.pop(0) if self.payloads else self._last_payload
+        self._last_payload = payload
+        content = payload if isinstance(payload, str) else json.dumps(payload)
         return _FakeResponse(content)
 
 
@@ -174,3 +179,34 @@ async def test_task_contract_planner_marks_invalid_json_as_unvalidated():
     assert contract.allow_no_tool_final is False
     assert contract.planner_metadata["planner_status"] == "invalid"
     assert "invalid JSON" in contract.planner_metadata["reason"]
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_repairs_invalid_json_with_second_llm_call():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
+    provider = _FakePlannerProvider(
+        [
+            "The user wants a simple planning answer, no tools are needed.",
+            {
+                "task_type": "pure_answer",
+                "required_tool_groups": [],
+                "final_answer_required": True,
+                "allow_no_tool_final": True,
+                "reason": "No external evidence is needed.",
+            },
+        ]
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert contract.allow_no_tool_final is True
+    assert contract.planner_metadata["planner_status"] == "validated"
+    assert len(provider.calls) == 2

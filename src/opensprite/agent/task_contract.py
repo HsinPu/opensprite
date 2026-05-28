@@ -47,6 +47,10 @@ _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
     "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
 )
+_PLANNER_REPAIR_SYSTEM_PROMPT = (
+    "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
+    "valid JSON object for the same schema. Return JSON only, no markdown, no explanation."
+)
 
 
 @dataclass(frozen=True)
@@ -165,27 +169,47 @@ class TaskContractPlanner:
                 objective=str(task_intent.objective or current_message or "").strip(),
                 reason="task contract planner unavailable: llm not configured",
             )
+        planner_prompt = _build_planner_contract_prompt(
+            current_message=current_message,
+            history=history or [],
+            task_intent=task_intent,
+            current_image_files=current_image_files,
+            current_audio_files=current_audio_files,
+            current_video_files=current_video_files,
+            task_context_decision=task_context_decision,
+        )
         response = await provider.chat(
             [
                 ChatMessage(role="system", content=_PLANNER_CONTRACT_SYSTEM_PROMPT),
-                ChatMessage(
-                    role="user",
-                    content=_build_planner_contract_prompt(
-                        current_message=current_message,
-                        history=history or [],
-                        task_intent=task_intent,
-                        current_image_files=current_image_files,
-                        current_audio_files=current_audio_files,
-                        current_video_files=current_video_files,
-                        task_context_decision=task_context_decision,
-                    ),
-                ),
+                ChatMessage(role="user", content=planner_prompt),
             ],
             model=model,
             **self.llm_config.decoding_kwargs(),
         )
         response_text = str(getattr(response, "content", "") or "")
         payload = _parse_json_object(response_text)
+        if not payload and response_text.strip():
+            repair_response = await provider.chat(
+                [
+                    ChatMessage(role="system", content=_PLANNER_REPAIR_SYSTEM_PROMPT),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            "Original planner prompt:\n"
+                            f"{planner_prompt}\n\n"
+                            "Invalid planner response:\n"
+                            f"{response_text}\n\n"
+                            "Return only the corrected JSON object."
+                        ),
+                    ),
+                ],
+                model=model,
+                **self.llm_config.decoding_kwargs(),
+            )
+            repair_text = str(getattr(repair_response, "content", "") or "")
+            payload = _parse_json_object(repair_text)
+            if not payload:
+                response_text = repair_text or response_text
         if not payload:
             return _planner_blocked_contract(
                 objective=str(task_intent.objective or current_message or "").strip(),
