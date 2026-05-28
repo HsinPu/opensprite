@@ -95,6 +95,25 @@ def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in
     assert sanitize_assistant_visible_text(text) == text
 
 
+def test_sanitize_assistant_visible_text_strips_dsml_tool_call_blocks():
+    text = (
+        "<｜｜DSML｜｜tool_calls>\n"
+        '<｜｜DSML｜｜invoke name="web_fetch">\n'
+        '<｜｜DSML｜｜parameter name="url" string="true">https://example.com</｜｜DSML｜｜parameter>\n'
+        "</｜｜DSML｜｜invoke>\n"
+        "<｜｜DSML｜｜/tool_calls>\n"
+        "Visible answer"
+    )
+
+    assert sanitize_assistant_visible_text(text) == "Visible answer"
+
+
+def test_sanitize_assistant_visible_text_preserves_dsml_tool_call_examples_in_code():
+    text = "Example:\n```xml\n<｜｜DSML｜｜tool_calls>literal<｜｜DSML｜｜/tool_calls>\n```\nVisible answer"
+
+    assert sanitize_assistant_visible_text(text) == text
+
+
 def test_sanitize_assistant_visible_text_strips_bracket_tool_call_blocks():
     text = (
         "[TOOL_CALL]\n"
