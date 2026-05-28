@@ -88,6 +88,7 @@ class AutoContinueDecision:
     direct_verify_path: str | None = None
     direct_verify_pytest_args: tuple[str, ...] = ()
     harness_profile_name: str = ""
+    allow_tools: bool = True
     emit_skipped_event: bool = False
 
     def to_metadata(self) -> dict[str, Any]:
@@ -113,6 +114,8 @@ class AutoContinueDecision:
             payload["direct_verify_pytest_args"] = list(self.direct_verify_pytest_args)
         if self.harness_profile_name:
             payload["harness_profile"] = self.harness_profile_name
+        if not self.allow_tools:
+            payload["allow_tools"] = False
         return payload
 
 
@@ -252,6 +255,7 @@ class AutoContinueService:
                 max_attempts=max_attempts,
                 emit_event=True,
             )
+        allow_tools = not _should_answer_from_existing_web_sources(completion_result, execution_result)
         return AutoContinueDecision(
             should_continue=True,
             reason=f"completion_gate_{completion_result.status}",
@@ -263,6 +267,8 @@ class AutoContinueService:
                 previous_response=previous_response,
                 compaction_handoff=compaction_handoff,
                 harness_profile=harness_profile,
+                execution_result=execution_result,
+                allow_tools=allow_tools,
             ),
             direct_workflow=direct_workflow,
             direct_start_step=direct_start_step,
@@ -270,6 +276,7 @@ class AutoContinueService:
             direct_verify_path=direct_verify_path,
             direct_verify_pytest_args=direct_verify_pytest_args,
             harness_profile_name=profile_name,
+            allow_tools=allow_tools,
         )
 
     def build_prompt(
@@ -280,6 +287,8 @@ class AutoContinueService:
         previous_response: str,
         compaction_handoff: str | None = None,
         harness_profile: HarnessProfile | None = None,
+        execution_result: ExecutionResult | None = None,
+        allow_tools: bool = True,
     ) -> str:
         """Build the synthetic continuation instruction for the next pass."""
         previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
@@ -344,6 +353,11 @@ class AutoContinueService:
                 "Do not repeat internal tags such as <system-reminder> or <think>. "
                 "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
             )
+            if not allow_tools:
+                incomplete_instruction += (
+                    "\n- Do not call tools again in this continuation. The runtime already gathered traceable sources; "
+                    "answer directly using those sources."
+                )
         if completion_result.reason == _INCOMPLETE_PENDING_WORK_REASON and _looks_like_concrete_pending_work(previous_response):
             incomplete_instruction += (
                 "\n- The previous response announced a concrete next action but did not perform it. "
@@ -356,6 +370,14 @@ class AutoContinueService:
                 "\n\nCompaction handoff from the previous context window:\n"
                 f"{handoff}\n"
                 "Use this as continuity context only. It does not satisfy missing verification, review, evidence, or quality requirements."
+            )
+        source_context = _existing_web_source_context(execution_result)
+        source_section = ""
+        if source_context:
+            source_section = (
+                "\n\nExisting gathered web sources from the previous pass:\n"
+                f"{source_context}\n"
+                "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
             )
         quality_instruction = _quality_follow_up_instruction(completion_result)
         profile_instruction = _profile_follow_up_instruction(harness_profile)
@@ -376,6 +398,7 @@ class AutoContinueService:
             "- If the task cannot proceed, state the blocker clearly.\n\n"
             "Previous assistant response:\n"
             f"{previous}"
+            f"{source_section}"
             f"{handoff_section}"
         )
 
@@ -505,6 +528,46 @@ def _looks_like_concrete_pending_work(text: str) -> bool:
     if any(marker in normalized for marker in _PENDING_WORK_BLOCKER_MARKERS):
         return False
     return any(marker in normalized for marker in _PENDING_WORK_ACTION_MARKERS)
+
+
+def _should_answer_from_existing_web_sources(
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult,
+) -> bool:
+    if completion_result.reason != "assistant only emitted internal control text":
+        return False
+    return bool(_existing_web_source_context(execution_result))
+
+
+def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:
+    if execution_result is None:
+        return ""
+
+    lines: list[str] = []
+    seen_urls: set[str] = set()
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok or artifact.kind != "web_source":
+            continue
+        sources = artifact.metadata.get("sources")
+        if not isinstance(sources, list):
+            continue
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            url = str(source.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            seen_urls.add(url)
+            title = str(source.get("title") or "").strip()
+            snippet = " ".join(str(source.get("snippet") or "").split())
+            label = title or url
+            line = f"- {label}: {url}"
+            if snippet:
+                line += f" — {snippet[:220]}"
+            lines.append(line)
+            if len(lines) >= 6:
+                return "\n".join(lines)
+    return "\n".join(lines)
 
 
 def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> str:

@@ -538,6 +538,7 @@ class AgentTurnRunner:
         same_target_verify_attempts = 0
         pending_direct_verify: dict[str, Any] | None = self._extract_direct_verify_request(user_message.metadata)
         current_message = user_message.text
+        current_allow_tools = True
 
         pending_direct_resume = self._extract_follow_up_resume_request(user_message.metadata)
 
@@ -587,6 +588,7 @@ class AgentTurnRunner:
                     external_chat_id=turn.external_chat_id,
                     emit_tool_progress=True,
                     task_intent=task_intent,
+                    allow_tools=current_allow_tools,
                 )
                 exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
                 if exec_result.task_contract is not None:
@@ -710,6 +712,7 @@ class AgentTurnRunner:
                     )
                 else:
                     current_message = decision.prompt
+                    current_allow_tools = decision.allow_tools
                 continue
 
             if decision.emit_skipped_event:

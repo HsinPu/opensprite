@@ -2,6 +2,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
@@ -83,6 +84,49 @@ def test_auto_continue_skips_direct_verify_when_verify_tool_is_unavailable():
 
     assert decision.should_continue is True
     assert decision.direct_verify_action is None
+
+
+def test_auto_continue_retries_internal_only_web_answer_without_tools():
+    intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant only emitted internal control text",
+    )
+    execution = ExecutionResult(
+        content="",
+        assistant_internal_only_response=True,
+        executed_tool_calls=1,
+        task_artifacts=(
+            TaskArtifact(
+                kind="web_source",
+                source_tool="web_research",
+                metadata={
+                    "sources": [
+                        {
+                            "title": "TSMC quote",
+                            "url": "https://example.com/tsmc",
+                            "snippet": "Latest market quote.",
+                        }
+                    ],
+                    "coverage": {"target_met": True},
+                },
+            ),
+        ),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=execution,
+        attempts_used=0,
+        previous_response="",
+    )
+
+    assert decision.should_continue is True
+    assert decision.allow_tools is False
+    assert decision.to_metadata()["allow_tools"] is False
+    assert "Do not call tools again" in (decision.prompt or "")
+    assert "https://example.com/tsmc" in (decision.prompt or "")
 
 
 def test_auto_continue_allows_missing_review_once():
