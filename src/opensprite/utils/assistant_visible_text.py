@@ -23,6 +23,10 @@ DIRECT_TOOL_TAG_RE = re.compile(
     r"delegate|delegate_many|run_workflow|batch)\b[^<>]*>",
     re.IGNORECASE,
 )
+INTERNAL_PREFIX_RE = re.compile(
+    r"^\s*Focus on writing the answer rather than hyper-optimizing citations\.\s*",
+    re.IGNORECASE,
+)
 
 
 def _find_code_regions(text: str) -> list[tuple[int, int]]:
@@ -88,7 +92,11 @@ def _strip_tag_blocks(text: str, tag_re: re.Pattern[str]) -> str:
 
 def strip_assistant_internal_scaffolding(text: str) -> str:
     """Remove internal assistant control blocks from visible text."""
-    if not text or not (QUICK_INTERNAL_TAG_RE.search(text) or DIRECT_TOOL_TAG_RE.search(text)):
+    if not text:
+        return ""
+
+    text = INTERNAL_PREFIX_RE.sub("", text)
+    if not (QUICK_INTERNAL_TAG_RE.search(text) or DIRECT_TOOL_TAG_RE.search(text)):
         return text or ""
 
     cleaned = _strip_tag_blocks(text, THINKING_TAG_RE)

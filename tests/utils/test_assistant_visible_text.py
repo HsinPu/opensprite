@@ -23,6 +23,12 @@ def test_sanitize_assistant_visible_text_strips_system_reminder_blocks():
     assert sanitize_assistant_visible_text(text) == "Visible answer"
 
 
+def test_sanitize_assistant_visible_text_strips_internal_prefix_sentence():
+    text = "Focus on writing the answer rather than hyper-optimizing citations.## Result\n\nVisible answer"
+
+    assert sanitize_assistant_visible_text(text) == "## Result\n\nVisible answer"
+
+
 def test_sanitize_assistant_visible_text_strips_multilingual_system_reminder_blocks():
     text = "<system-reminder>你的操作模式已從計畫切換成建置。</system-reminder>可見回覆"
 
