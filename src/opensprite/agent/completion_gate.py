@@ -745,7 +745,21 @@ def _contract_has_completion_criteria(task_contract: Any) -> bool:
 
 def _looks_incomplete(response_text: str) -> bool:
     lowered = re.sub(r"\s+", " ", (response_text or "").strip().lower())
-    return any(marker in lowered for marker in _INCOMPLETE_MARKERS)
+    return any(marker in lowered for marker in _INCOMPLETE_MARKERS) or _looks_like_pending_action_response(lowered)
+
+
+def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
+    text = normalized_lowered.strip()
+    if not text:
+        return False
+    pending_patterns = (
+        r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
+        r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
+        r"^.{0,20}\blet.*先.*(?:搜尋|搜寻|查詢|查询|查一下|查)",
+        r"^.{0,16}(?:我|現在|现在)?(?:先|來|来).*(?:搜尋|搜寻|查詢|查询|查一下)",
+        r"^.{0,20}(?:透過|通过).*(?:網路|网络|web).*(?:搜尋|搜寻|查詢|查询)",
+    )
+    return any(re.search(pattern, text) for pattern in pending_patterns)
 
 
 def _looks_like_direct_reply_instruction(objective: str) -> bool:

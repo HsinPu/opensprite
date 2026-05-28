@@ -1625,6 +1625,21 @@ def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     assert result.status == "incomplete"
     assert result.reason == "assistant did not provide the requested itemized result"
 
+
+def test_completion_gate_marks_pending_search_response_incomplete():
+    intent = TaskIntentService().classify("幫我查一下今天台積電股價，請列出來源網址。")
+    response = "Let我先透过网路搜寻来查今天台积电（TSMC）美股即时股价。"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response, executed_tool_calls=1),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "assistant response did not explicitly complete the task"
+
+
 def test_quality_gate_reports_missing_requested_items():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
     contract = _itemized_contract(intent)
