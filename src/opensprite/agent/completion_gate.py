@@ -523,6 +523,23 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        if task_intent.kind == "planning" and response_text.strip() and not _looks_incomplete(response_text):
+            return CompletionGateResult(
+                status="complete",
+                reason="planning task returned concrete steps",
+                active_task_status="done",
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         if task_intent.kind == "debug" and not expects_code_change and response_text.strip() and not _looks_incomplete(response_text):
             return CompletionGateResult(
                 status="complete",
@@ -756,7 +773,7 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
         r"^.{0,20}\blet.*先.*(?:搜尋|搜寻|查詢|查询|查一下|查)",
-        r"^.{0,16}(?:我|現在|现在)?(?:先|來|来).*(?:搜尋|搜寻|查詢|查询|查一下)",
+        r"^.{0,16}(?:我先|先|我來|我来|來查|来查|來搜尋|来搜寻|現在.*先|现在.*先).*(?:搜尋|搜寻|查詢|查询|查一下)",
         r"^.{0,20}(?:透過|通过).*(?:網路|网络|web).*(?:搜尋|搜寻|查詢|查询)",
     )
     return any(re.search(pattern, text) for pattern in pending_patterns)

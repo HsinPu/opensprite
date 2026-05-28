@@ -1640,6 +1640,40 @@ def test_completion_gate_marks_pending_search_response_incomplete():
     assert result.reason == "assistant response did not explicitly complete the task"
 
 
+def test_completion_gate_does_not_mark_source_reliability_answer_as_pending():
+    intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
+    response = (
+        "根據剛才 fetch 的來源網址，我來說明其可靠性：TechNews 是台灣科技財經媒體，"
+        "可作新聞來源參考；但若要即時股價，仍應優先看交易所、券商或 Yahoo 股市報價頁。"
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "generic task returned a response"
+
+
+def test_completion_gate_completes_planning_answer_without_tools():
+    intent = TaskIntentService().classify("幫我規劃明天 30 分鐘學 Python 的安排，不要上網。")
+    response = (
+        "明天 30 分鐘安排：0-5 分鐘確認環境，5-15 分鐘練變數與基本型別，"
+        "15-25 分鐘完成一個小練習，25-30 分鐘回顧並記錄明天要接續的主題。"
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "planning task returned concrete steps"
+
+
 def test_quality_gate_reports_missing_requested_items():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
     contract = _itemized_contract(intent)
