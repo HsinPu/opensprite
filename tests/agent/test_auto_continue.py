@@ -167,6 +167,8 @@ def test_auto_continue_retries_terse_web_answer_without_tools():
     assert decision.allow_tools is False
     assert "previous final answer was too terse" in (decision.prompt or "")
     assert "https://example.com/tsmc" in (decision.prompt or "")
+    assert "Write the final answer now" in (decision.prompt or "")
+    assert "inspect history" in (decision.prompt or "")
 
 
 def test_auto_continue_allows_missing_review_once():

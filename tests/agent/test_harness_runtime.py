@@ -207,3 +207,33 @@ def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
     assert result.task_contract.task_type == "web_research"
     assert result.harness_policy is not None
     assert result.harness_policy["name"] == "research_source_policy"
+
+
+def test_harness_runtime_skips_replanning_when_tools_are_disabled(tmp_path):
+    async def scenario():
+        provider = RecordingProvider(
+            "Final answer from existing gathered sources.",
+            planner_content=(
+                '{"task_type":"history_retrieval","required_tool_groups":["search_history"],'
+                '"allow_no_tool_final":false,"reason":"stale retry misclassification"}'
+            ),
+        )
+        agent = _agent(tmp_path, provider)
+        intent = agent.task_intents.classify("Find today's TSMC stock price and cite sources.")
+
+        result = await agent.call_llm(
+            "web:browser-1",
+            "Continue using existing gathered web sources.",
+            channel="web",
+            external_chat_id="browser-1",
+            task_intent=intent,
+            allow_tools=False,
+        )
+        return result, provider.tool_names_by_call
+
+    result, tool_names_by_call = asyncio.run(scenario())
+
+    assert result.content == "Final answer from existing gathered sources."
+    assert tool_names_by_call == [[]]
+    assert result.task_contract is None
+    assert result.harness_policy is None

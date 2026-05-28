@@ -271,7 +271,7 @@ class LlmCallService:
         harness_policy = None
         harness_tool_registry = None
         base_tool_registry = self._get_tool_registry()
-        if effective_task_intent is not None:
+        if effective_task_intent is not None and allow_tools:
             if run_id is not None:
                 await self._emit_run_event(
                     session_id,

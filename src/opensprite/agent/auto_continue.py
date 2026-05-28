@@ -382,10 +382,17 @@ class AutoContinueService:
         source_context = _existing_web_source_context(execution_result)
         source_section = ""
         if source_context:
+            no_tool_source_instruction = ""
+            if not allow_tools:
+                no_tool_source_instruction = (
+                    "\nDo not describe that you will search, fetch, inspect history, or use another tool. "
+                    "Write the final answer now from these gathered sources."
+                )
             source_section = (
                 "\n\nExisting gathered web sources from the previous pass:\n"
                 f"{source_context}\n"
                 "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
+                f"{no_tool_source_instruction}"
             )
         quality_instruction = _quality_follow_up_instruction(completion_result)
         profile_instruction = _profile_follow_up_instruction(harness_profile)
