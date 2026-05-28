@@ -370,6 +370,14 @@ class LlmCallService:
             )
         planning_mode = resolve_planning_mode(effective_current_message, base_registry=harness_tool_registry or base_tool_registry)
         selected_tool_registry = planning_mode.tool_registry or harness_tool_registry
+        if (
+            not planning_mode.enabled
+            and task_contract is not None
+            and _should_answer_contract_without_tools(task_contract)
+        ):
+            selected_tool_registry = ToolRegistry(
+                permission_policy=(harness_tool_registry or base_tool_registry).permission_policy
+            )
         if planning_mode.enabled and selected_tool_registry is not None:
             logger.info(
                 f"[{session_id}] prompt.mode | planning_mode=true allowed_tools={','.join(selected_tool_registry.tool_names)}"
@@ -596,6 +604,13 @@ def _message_with_resolved_objective(
 
 
 def _build_task_contract_guidance(contract: TaskContract) -> str:
+    if _should_answer_contract_without_tools(contract):
+        return "\n".join([
+            "## Runtime Task Contract",
+            f"- Task type: {contract.task_type}",
+            "- No tool evidence is required for this turn. Answer directly from general knowledge.",
+            "- Do not call tools just to prepare a generic answer.",
+        ])
     if not (contract.requirements or contract.acceptance_criteria or contract.selected_resources):
         return ""
     lines = [
@@ -632,6 +647,15 @@ def _build_task_contract_guidance(contract: TaskContract) -> str:
         "- Do not answer with only an acknowledgement, plan, or promise of future work when tool evidence or artifacts are required.",
     ])
     return "\n".join(lines)
+
+
+def _should_answer_contract_without_tools(contract: TaskContract) -> bool:
+    return (
+        bool(contract.allow_no_tool_final)
+        and not contract.requirements
+        and not contract.acceptance_criteria
+        and not contract.selected_resources
+    )
 
 
 def _format_acceptance_criterion(criterion: Any) -> str:

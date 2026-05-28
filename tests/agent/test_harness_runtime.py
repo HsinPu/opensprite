@@ -125,7 +125,7 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     scorecard_part = next(part for part in parts if part.part_type == "harness_scorecard")
 
     assert response.text == "Harness runtime reply."
-    assert tool_names_by_call[-1] == ["read_file"]
+    assert tool_names_by_call[-1] == []
     assert "task_contract.planned" in event_types
     assert "task_contract.validated" in event_types
     assert "harness_profile.selected" in event_types
@@ -153,7 +153,7 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert "profile=chat" in scorecard_part.content
 
 
-def test_harness_runtime_records_validation_failed_for_invalid_planner_json(tmp_path):
+def test_harness_runtime_records_fallback_contract_for_invalid_planner_json(tmp_path):
     async def scenario():
         provider = RecordingProvider(
             "I could not select a reliable tool profile.",
@@ -174,9 +174,9 @@ def test_harness_runtime_records_validation_failed_for_invalid_planner_json(tmp_
 
     result, event_types = asyncio.run(scenario())
 
-    assert result.text == "I could not select a reliable tool profile."
+    assert result.text == "Harness runtime reply."
     assert "task_contract.validation_failed" in event_types
-    assert "task_contract.validated" not in event_types
+    assert "task_contract.created" in event_types
 
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
