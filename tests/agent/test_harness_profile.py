@@ -162,7 +162,7 @@ async def test_task_contract_planner_builds_workspace_change_contract_from_llm_j
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_marks_invalid_json_as_unvalidated():
+async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
@@ -175,10 +175,11 @@ async def test_task_contract_planner_marks_invalid_json_as_unvalidated():
         history=[],
     )
 
-    assert contract.task_type == "planning_error"
+    assert contract.task_type == "web_research"
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["planner_status"] == "invalid"
+    assert contract.planner_metadata["planner_status"] == "fallback"
     assert "invalid JSON" in contract.planner_metadata["reason"]
+    assert any(item.tool_group == "web_research" for item in contract.requirements)
 
 
 @pytest.mark.anyio
@@ -210,3 +211,23 @@ async def test_task_contract_planner_repairs_invalid_json_with_second_llm_call()
     assert contract.allow_no_tool_final is True
     assert contract.planner_metadata["planner_status"] == "validated"
     assert len(provider.calls) == 2
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_falls_back_to_pure_answer_for_invalid_json_plain_request():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
+    provider = _FakePlannerProvider("This is a simple planning answer, no tools needed.")
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[],
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert contract.allow_no_tool_final is True
+    assert contract.requirements == ()
+    assert contract.planner_metadata["planner_status"] == "fallback"

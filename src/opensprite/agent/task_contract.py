@@ -51,6 +51,36 @@ _PLANNER_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
     "valid JSON object for the same schema. Return JSON only, no markdown, no explanation."
 )
+_FALLBACK_WEB_MARKERS = (
+    "stock price",
+    "share price",
+    "market price",
+    "financial",
+    "weather",
+    "news",
+    "source",
+    "url",
+    "website",
+    "\u80a1\u50f9",
+    "\u4eca\u5929",
+    "\u4eca\u65e5",
+    "\u6700\u65b0",
+    "\u5373\u6642",
+    "\u4f86\u6e90",
+    "\u7db2\u5740",
+    "\u65b0\u805e",
+)
+_FALLBACK_HISTORY_MARKERS = (
+    "previous",
+    "earlier",
+    "conversation",
+    "this chat",
+    "\u525b\u525b",
+    "\u524d\u9762",
+    "\u76ee\u524d\u9019\u6bb5\u5c0d\u8a71",
+    "\u9019\u6bb5\u5c0d\u8a71",
+    "\u5c0d\u8a71",
+)
 
 
 @dataclass(frozen=True)
@@ -211,9 +241,14 @@ class TaskContractPlanner:
             if not payload:
                 response_text = repair_text or response_text
         if not payload:
-            return _planner_blocked_contract(
-                objective=str(task_intent.objective or current_message or "").strip(),
-                status="invalid",
+            return _fallback_contract_from_intent(
+                task_intent=task_intent,
+                current_message=current_message,
+                history=history,
+                current_image_files=current_image_files,
+                current_audio_files=current_audio_files,
+                current_video_files=current_video_files,
+                task_context_decision=task_context_decision,
                 reason="task contract planner returned invalid JSON",
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
@@ -379,6 +414,77 @@ def _planner_blocked_contract(
                 description="Explain that task contract planning failed and a reliable tool profile could not be selected.",
             ),
         ),
+        planner_metadata=metadata,
+    )
+
+
+def _fallback_contract_from_intent(
+    *,
+    task_intent: TaskIntent,
+    current_message: str,
+    history: list[dict[str, Any]] | None,
+    current_image_files: list[str] | None,
+    current_audio_files: list[str] | None,
+    current_video_files: list[str] | None,
+    task_context_decision: TaskContextDecision | None,
+    reason: str,
+    raw_response_preview: str = "",
+) -> TaskContract:
+    text = f"{task_intent.objective} {current_message}".lower()
+    task_type = "pure_answer"
+    tool_groups: list[str] = []
+
+    if current_image_files or current_audio_files or current_video_files:
+        task_type = "media_analysis"
+        tool_groups = ["media"]
+    elif task_intent.expects_code_change:
+        task_type = "workspace_change"
+        tool_groups = ["workspace_read", "workspace_write"]
+    elif any(marker in text for marker in _FALLBACK_HISTORY_MARKERS):
+        task_type = "history_retrieval"
+        tool_groups = ["history_retrieval"]
+    elif (
+        not _message_forbids_inherited_tool_group(current_message, "web_research")
+        and any(marker in text for marker in _FALLBACK_WEB_MARKERS)
+    ):
+        task_type = "web_research"
+        tool_groups = ["web_research"]
+
+    contract = _contract_from_planner_payload(
+        {
+            "task_type": task_type,
+            "required_tool_groups": tool_groups,
+            "final_answer_required": True,
+            "allow_no_tool_final": not tool_groups,
+            "reason": reason,
+        },
+        task_intent=task_intent,
+        current_message=current_message,
+        history=history,
+        current_image_files=current_image_files,
+        current_audio_files=current_audio_files,
+        current_video_files=current_video_files,
+        task_context_decision=task_context_decision,
+    )
+    metadata = dict(contract.planner_metadata or {})
+    metadata.update(
+        {
+            "planner_status": "fallback",
+            "reason": reason,
+        }
+    )
+    if raw_response_preview:
+        metadata["raw_response_preview"] = raw_response_preview
+    return TaskContract(
+        objective=contract.objective,
+        task_type=contract.task_type,
+        requirements=contract.requirements,
+        acceptance_criteria=contract.acceptance_criteria,
+        selected_resources=contract.selected_resources,
+        final_answer_required=contract.final_answer_required,
+        allow_no_tool_final=contract.allow_no_tool_final,
+        contract_sources=("llm_planner", "fallback"),
+        harness_profile=contract.harness_profile,
         planner_metadata=metadata,
     )
 
