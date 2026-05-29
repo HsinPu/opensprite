@@ -162,7 +162,7 @@ async def test_task_contract_planner_builds_workspace_change_contract_from_llm_j
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_keeps_command_usage_question_no_tool():
+async def test_task_contract_planner_keeps_current_cli_usage_with_workspace_when_reading_allowed():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     message = "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"
     intent = TaskIntentService().classify(message)
@@ -172,6 +172,34 @@ async def test_task_contract_planner_keeps_command_usage_question_no_tool():
             "required_tool_groups": ["workspace_read"],
             "allow_no_tool_final": False,
             "reason": "The user mentioned current project CLI usage.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=message,
+        history=[],
+    )
+
+    assert contract.task_type == "workspace_read"
+    assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert "override_reason" not in contract.planner_metadata
+
+
+@pytest.mark.anyio
+async def test_task_contract_planner_keeps_command_usage_question_no_tool_when_reading_forbidden():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    message = "我想了解 trace CLI 怎麼用，不要讀檔，只給我一般測試指令與用途。"
+    intent = TaskIntentService().classify(message)
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "workspace_read",
+            "required_tool_groups": ["workspace_read"],
+            "allow_no_tool_final": False,
+            "reason": "The user mentioned CLI usage.",
         }
     )
 

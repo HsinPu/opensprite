@@ -111,6 +111,14 @@ _EXPLICIT_WORKSPACE_EVIDENCE_RE = re.compile(
     r"|(?:讀檔|讀取|查看檔案|檢查檔案|搜尋檔案|打開檔案)",
     re.IGNORECASE,
 )
+_NO_WORKSPACE_EVIDENCE_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\b[^.?!\n]{0,48}"
+    r"\b(?:read|inspect|open|grep|search)\b[^.?!\n]{0,48}"
+    r"\b(?:file|files|repo|repository|codebase|workspace|project|source)\b"
+    r"|(?:不要|別|不用|無需)[^。！？\n]{0,20}"
+    r"(?:讀檔|讀取檔案|看檔案|查看檔案|檢查檔案|搜尋檔案|看專案|看工作區|讀工作區)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -689,9 +697,10 @@ def _is_no_tool_command_usage_question(task_intent: TaskIntent, current_message:
         return False
     if task_intent.expects_code_change or task_intent.expects_verification:
         return False
-    if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text):
+    forbids_workspace_evidence = bool(_NO_WORKSPACE_EVIDENCE_RE.search(text))
+    if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text) and not forbids_workspace_evidence:
         return False
-    return bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
+    return forbids_workspace_evidence and bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
