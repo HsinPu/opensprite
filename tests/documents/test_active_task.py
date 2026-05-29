@@ -198,6 +198,30 @@ def test_normalize_active_task_block_clears_steps_when_done():
     assert "- Open questions:\n  - none" in normalized
 
 
+def test_normalize_active_task_block_preserves_windows_paths():
+    normalized = normalize_active_task_block(
+        "- Status: blocked\n"
+        "- Goal: Inspect AGENTS.md\n"
+        "- Deliverable: verification notes\n"
+        "- Definition of done:\n"
+        "  - report blocker\n"
+        "- Constraints:\n"
+        "  - none\n"
+        "- Assumptions:\n"
+        "  - none\n"
+        "- Plan:\n"
+        "  1. inspect\n"
+        "- Current step: inspect C:\\Users\\win10\\.opensprite\\bootstrap\\AGENTS.md\n"
+        "- Next step: not set\n"
+        "- Completed steps:\n"
+        "  - none\n"
+        "- Open questions:\n"
+        "  - copy C:\\Users\\win10\\.opensprite\\bootstrap\\AGENTS.md into workspace?"
+    )
+
+    assert "C:\\Users\\win10\\.opensprite\\bootstrap\\AGENTS.md" in normalized
+
+
 def test_normalize_active_task_block_preserves_terminal_manual_status():
     normalized = normalize_active_task_block(
         "- Status: active\n"

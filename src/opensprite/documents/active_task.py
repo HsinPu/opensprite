@@ -688,14 +688,14 @@ def _extract_task_field(task_block: str, field_name: str) -> str:
 def _replace_scalar_field(task_block: str, field_name: str, value: str) -> str:
     pattern = rf"^- {re.escape(field_name)}:\s*.*$"
     replacement = f"- {field_name}: {value}"
-    return re.sub(pattern, replacement, task_block, count=1, flags=re.MULTILINE)
+    return re.sub(pattern, lambda _match: replacement, task_block, count=1, flags=re.MULTILINE)
 
 
 def _replace_indented_section(task_block: str, field_name: str, lines: list[str]) -> str:
     section_body = "\n".join(f"  - {line}" for line in lines)
     replacement = f"- {field_name}:\n{section_body}"
     pattern = rf"^- {re.escape(field_name)}:\n(?:  .*\n?)*"
-    return re.sub(pattern, replacement, task_block, count=1, flags=re.MULTILINE)
+    return re.sub(pattern, lambda _match: replacement, task_block, count=1, flags=re.MULTILINE)
 
 
 def _extract_indented_section(task_block: str, field_name: str) -> list[str]:
