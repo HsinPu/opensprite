@@ -162,6 +162,34 @@ async def test_task_contract_planner_builds_workspace_change_contract_from_llm_j
 
 
 @pytest.mark.anyio
+async def test_task_contract_planner_keeps_command_usage_question_no_tool():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    message = "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"
+    intent = TaskIntentService().classify(message)
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "workspace_read",
+            "required_tool_groups": ["workspace_read"],
+            "allow_no_tool_final": False,
+            "reason": "The user mentioned current project CLI usage.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=message,
+        history=[],
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert contract.requirements == ()
+    assert contract.allow_no_tool_final is True
+    assert contract.planner_metadata["override_reason"] == "command usage question does not require workspace evidence"
+
+
+@pytest.mark.anyio
 async def test_task_contract_planner_falls_back_for_invalid_json_web_request():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")

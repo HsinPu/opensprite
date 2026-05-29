@@ -101,6 +101,16 @@ _FALLBACK_WORKSPACE_MARKERS = (
     "\u7a0b\u5f0f\u78bc",
     "\u6e2c\u8a66\u6a94",
 )
+_COMMAND_USAGE_DISCUSSION_RE = re.compile(
+    r"\b(?:cli|command|commands?|usage|how to use|examples?)\b"
+    r"|(?:指令|命令|怎麼用|如何用|用法|用途|範例)",
+    re.IGNORECASE,
+)
+_EXPLICIT_WORKSPACE_EVIDENCE_RE = re.compile(
+    r"\b(?:read|inspect|open|grep|search)\s+(?:the\s+)?(?:file|repo|repository|codebase|workspace)\b"
+    r"|(?:讀檔|讀取|查看檔案|檢查檔案|搜尋檔案|打開檔案)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -542,8 +552,13 @@ def _contract_from_planner_payload(
             reason="task contract planner returned an unsupported or missing task_type",
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
+    forced_no_tool = _is_no_tool_command_usage_question(task_intent, current_message)
+    if forced_no_tool:
+        raw_task_type = "pure_answer"
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    if forced_no_tool:
+        tool_groups = []
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
     if (
         inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS
@@ -637,6 +652,8 @@ def _contract_from_planner_payload(
         "required_tool_groups": list(tool_groups),
         "reason": planner_reason,
     }
+    if forced_no_tool:
+        metadata["override_reason"] = "command usage question does not require workspace evidence"
     return TaskContract(
         objective=objective,
         task_type=task_type,
@@ -644,7 +661,7 @@ def _contract_from_planner_payload(
         acceptance_criteria=tuple(acceptance_criteria),
         selected_resources=tuple(dict.fromkeys(selected)),
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
-        allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
+        allow_no_tool_final=(True if forced_no_tool else _coerce_bool(payload.get("allow_no_tool_final", not requirements))) and not requirements,
         contract_sources=("llm_planner",),
         planner_metadata=metadata,
     )
@@ -664,6 +681,17 @@ def _normalize_planner_tool_groups(value: Any) -> list[str]:
         if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
             groups.append(text)
     return groups
+
+
+def _is_no_tool_command_usage_question(task_intent: TaskIntent, current_message: str) -> bool:
+    text = str(current_message or task_intent.objective or "").strip()
+    if task_intent.kind != "question":
+        return False
+    if task_intent.expects_code_change or task_intent.expects_verification:
+        return False
+    if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text):
+        return False
+    return bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
