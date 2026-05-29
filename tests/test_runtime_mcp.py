@@ -136,3 +136,27 @@ def test_runtime_run_treats_channel_cancellation_as_shutdown(monkeypatch):
     assert fake_agent.calls == ["connect", "close-maintenance", "close-skill-review", "close-processes", "close"]
     assert fake_cron.calls == ["start", "stop"]
     assert "stop" in fake_queue.calls
+
+
+def test_runtime_signal_handler_sets_shutdown_event(monkeypatch):
+    callbacks = []
+
+    class FakeLoop:
+        def add_signal_handler(self, signum, callback, *args):
+            callbacks.append((signum, callback, args))
+
+    class FakeEvent:
+        def __init__(self):
+            self.set_called = False
+
+        def set(self):
+            self.set_called = True
+
+    event = FakeEvent()
+    monkeypatch.setattr(runtime.asyncio, "get_running_loop", lambda: FakeLoop())
+
+    runtime.install_shutdown_signal_handlers(event)
+
+    assert callbacks
+    callbacks[0][1](*callbacks[0][2])
+    assert event.set_called is True

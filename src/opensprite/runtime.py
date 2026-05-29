@@ -1,7 +1,9 @@
 """Service runtime for starting the OpenSprite gateway process."""
 
 import asyncio
+import contextlib
 import os
+import signal
 from pathlib import Path
 
 from .agent import AgentLoop
@@ -145,6 +147,19 @@ async def stop_background_task(task: asyncio.Task | None, *, name: str) -> None:
         await task
     except asyncio.CancelledError:
         logger.info("Stopped {}", name)
+
+
+def install_shutdown_signal_handlers(shutdown_event: asyncio.Event) -> None:
+    """Wire process signals to the runtime shutdown event when supported."""
+    loop = asyncio.get_running_loop()
+
+    def request_shutdown(signum: int) -> None:
+        logger.info("Received shutdown signal {}; stopping gateway...", signum)
+        shutdown_event.set()
+
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        with contextlib.suppress(NotImplementedError, RuntimeError, ValueError):
+            loop.add_signal_handler(signum, request_shutdown, signum)
 
 
 def create_media_router(config: Config) -> MediaRouter:
@@ -335,7 +350,9 @@ async def run(config_path: str | Path | None = None) -> None:
         logger.info("按 Ctrl+C 停止")
 
         # 等待直到被中斷
-        await asyncio.Event().wait()
+        shutdown_event = asyncio.Event()
+        install_shutdown_signal_handlers(shutdown_event)
+        await shutdown_event.wait()
     except (KeyboardInterrupt, asyncio.CancelledError):
         logger.info("正在關閉...")
     finally:
