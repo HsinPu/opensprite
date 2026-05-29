@@ -730,6 +730,12 @@ class AgentTurnRunner:
                 )
             break
 
+        response = _final_response_after_exhausted_continuation(
+            response=response,
+            completion_result=completion_result,
+            auto_continue_attempts=auto_continue_attempts,
+        )
+
         outbound_media = self._get_queued_outbound_media()
 
         response_metadata = {
@@ -1190,6 +1196,92 @@ def _harness_checkpoint_metadata(
         "tool_evidence_count": len(aggregate_result.tool_evidence),
         "task_artifact_count": len(aggregate_result.task_artifacts),
     }
+
+
+def _final_response_after_exhausted_continuation(
+    *,
+    response: str,
+    completion_result: CompletionGateResult,
+    auto_continue_attempts: int,
+) -> str:
+    if not _should_replace_nonfinal_response(
+        response=response,
+        completion_result=completion_result,
+        auto_continue_attempts=auto_continue_attempts,
+    ):
+        return response
+    return _completion_blocker_response(completion_result)
+
+
+def _should_replace_nonfinal_response(
+    *,
+    response: str,
+    completion_result: CompletionGateResult,
+    auto_continue_attempts: int,
+) -> bool:
+    if auto_continue_attempts <= 0:
+        return False
+    if completion_result.status == "complete":
+        return False
+    text = (response or "").strip()
+    if not text:
+        return True
+    lower_text = text.lower()
+    blocker_markers = (
+        "無法",
+        "不能",
+        "不足",
+        "缺少",
+        "阻礙",
+        "被封鎖",
+        "未完成",
+        "尚未完成",
+        "cannot",
+        "can't",
+        "unable",
+        "blocked",
+        "insufficient",
+        "missing",
+        "incomplete",
+        "not enough",
+    )
+    if any(marker in lower_text for marker in blocker_markers):
+        return False
+    progress_markers = (
+        "讓我",
+        "我會",
+        "我將",
+        "正在",
+        "進一步",
+        "再查",
+        "繼續",
+        "稍等",
+        "let me",
+        "i will",
+        "i'll",
+        "working on",
+        "one moment",
+        "next i",
+    )
+    return len(text) <= 320 and any(marker in lower_text for marker in progress_markers)
+
+
+def _completion_blocker_response(completion_result: CompletionGateResult) -> str:
+    reason = (completion_result.reason or completion_result.status or "completion gate did not pass").strip()
+    detail = (completion_result.active_task_detail or "").strip()
+    missing = [item.strip() for item in completion_result.missing_evidence if str(item).strip()]
+    sections = [
+        "目前還不能可靠完成這次請求。",
+        f"原因：{reason}",
+    ]
+    if detail:
+        detail_lines = [line.strip("- ").strip() for line in detail.splitlines() if line.strip()]
+        if detail_lines:
+            sections.append("仍缺的部分：\n" + "\n".join(f"- {line}" for line in detail_lines))
+    if missing:
+        sections.append("缺少的證據：\n" + "\n".join(f"- {item}" for item in missing))
+    sections.append("我已停止自動重試，避免用不足資訊硬回答。")
+    return "\n\n".join(sections)
 
 
 def _harness_scorecard_metadata(
