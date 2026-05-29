@@ -257,6 +257,11 @@ def chat(
         "--access-token",
         help="Web auth token used with --via-web when auth_token is configured.",
     ),
+    workspace_snapshot: str | None = typer.Option(
+        None,
+        "--workspace-snapshot",
+        help="Copy a local directory into this chat session workspace as repo/ before sending the message.",
+    ),
 ) -> None:
     """Send one message through a local one-shot CLI channel."""
     commands_chat.chat_command(
@@ -271,6 +276,7 @@ def chat(
         gateway_url=gateway_url,
         ws_url=ws_url,
         access_token=access_token,
+        workspace_snapshot=workspace_snapshot,
     )
 
 

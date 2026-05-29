@@ -8,7 +8,13 @@ from opensprite.bus.dispatcher import MessageQueue
 from opensprite.bus.message import AssistantMessage
 from opensprite.channels.cli import CliAdapter
 from opensprite.cli import commands
-from opensprite.cli.commands_chat import build_ws_url, _json_for_stdout, result_payload, run_web_chat
+from opensprite.cli.commands_chat import (
+    build_ws_url,
+    _json_for_stdout,
+    result_payload,
+    run_web_chat,
+    snapshot_workspace_for_session,
+)
 
 
 def test_build_ws_url_defaults_to_gateway_ws_path():
@@ -134,9 +140,41 @@ def test_json_for_stdout_preserves_unicode_for_utf8():
     assert "✅ 繁體中文" in rendered
 
 
-def test_run_web_chat_sends_message_to_gateway_websocket():
+def test_snapshot_workspace_for_session_copies_repo_under_session_workspace(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "AGENTS.md").write_text("repo instructions", encoding="utf-8")
+    (source / ".git").mkdir()
+    (source / ".git" / "config").write_text("secret-ish", encoding="utf-8")
+    (source / "apps").mkdir()
+    (source / "apps" / "web").mkdir()
+    (source / "apps" / "web" / "package.json").write_text("{}", encoding="utf-8")
+    (source / "apps" / "web" / "node_modules").mkdir()
+    (source / "apps" / "web" / "node_modules" / "leftpad.js").write_text("", encoding="utf-8")
+    (source / "tmp").mkdir()
+    (source / "tmp" / "screenshot.png").write_text("", encoding="utf-8")
+    config_path = tmp_path / "app-home" / "opensprite.json"
+
+    metadata = snapshot_workspace_for_session(source, session_id="web:smoke", config_path=config_path)
+
+    assert metadata is not None
+    snapshot_root = tmp_path / "app-home" / "workspace" / "sessions" / "web" / "smoke" / "repo"
+    assert snapshot_root.joinpath("AGENTS.md").read_text(encoding="utf-8") == "repo instructions"
+    assert snapshot_root.joinpath("apps", "web", "package.json").exists()
+    assert not snapshot_root.joinpath(".git").exists()
+    assert not snapshot_root.joinpath("apps", "web", "node_modules").exists()
+    assert not snapshot_root.joinpath("tmp").exists()
+    assert metadata["path"] == "repo"
+    assert metadata["files"] == 2
+
+
+def test_run_web_chat_sends_message_to_gateway_websocket(tmp_path):
     async def scenario():
         seen_messages = []
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "README.md").write_text("hello", encoding="utf-8")
+        config_path = tmp_path / "app-home" / "opensprite.json"
 
         async def handle_ws(request):
             ws = web.WebSocketResponse()
@@ -185,7 +223,13 @@ def test_run_web_chat_sends_message_to_gateway_websocket():
         await site.start()
         port = getattr(site, "_server").sockets[0].getsockname()[1]
         try:
-            payload = await run_web_chat("ping", gateway_url=f"http://127.0.0.1:{port}", external_chat_id="web-smoke")
+            payload = await run_web_chat(
+                "ping",
+                gateway_url=f"http://127.0.0.1:{port}",
+                external_chat_id="web-smoke",
+                config_path=config_path,
+                workspace_snapshot=source,
+            )
         finally:
             await runner.cleanup()
         return payload, seen_messages
@@ -194,7 +238,10 @@ def test_run_web_chat_sends_message_to_gateway_websocket():
 
     assert seen_messages[0]["text"] == "ping"
     assert seen_messages[0]["session_id"] == "web:web-smoke"
+    assert seen_messages[0]["metadata"]["workspace_snapshot"]["path"] == "repo"
+    assert (tmp_path / "app-home" / "workspace" / "sessions" / "web" / "web-smoke" / "repo" / "README.md").exists()
     assert payload["mode"] == "web"
+    assert payload["workspace_snapshot"]["files"] == 1
     assert payload["reply"] == "echo:ping"
     assert payload["run_id"] == "run-web"
     assert payload["run_status"] == "completed"

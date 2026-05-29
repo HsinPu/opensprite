@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+import shutil
 import sys
 import time
 from typing import Any
@@ -15,6 +16,7 @@ import typer
 
 from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
+from ..context.paths import get_session_workspace, get_tool_workspace
 from ..runtime import (
     apply_network_environment,
     create_agent,
@@ -25,6 +27,28 @@ from ..utils.log import setup_log
 
 
 TERMINAL_RUN_EVENTS = {"run_finished", "run_failed", "run_cancelled"}
+_SNAPSHOT_DIR_NAME = "repo"
+_SNAPSHOT_IGNORES = {
+    ".git",
+    ".hg",
+    ".svn",
+    ".codegraph",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tmp",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "htmlcov",
+    "playwright-report",
+    "test-results",
+    "tmp",
+}
 
 
 def build_ws_url(
@@ -74,6 +98,49 @@ def _echo_json(payload: dict[str, Any]) -> None:
     typer.echo(_json_for_stdout(payload))
 
 
+def _snapshot_ignore(directory: str, names: list[str]) -> set[str]:
+    _ = directory
+    ignored: set[str] = set()
+    for name in names:
+        if name in _SNAPSHOT_IGNORES or name.endswith((".pyc", ".pyo")):
+            ignored.add(name)
+    return ignored
+
+
+def snapshot_workspace_for_session(
+    source: str | Path | None,
+    *,
+    session_id: str,
+    config_path: str | Path | None = None,
+) -> dict[str, Any] | None:
+    """Copy a local source tree into the target session workspace for test chats."""
+    if source is None:
+        return None
+    src = Path(source).expanduser().resolve(strict=True)
+    if not src.is_dir():
+        raise ValueError(f"workspace snapshot source is not a directory: {src}")
+
+    app_home = Path(config_path).expanduser().resolve().parent if config_path is not None else Path.home() / ".opensprite"
+    workspace_root = get_tool_workspace(app_home)
+    session_workspace = get_session_workspace(session_id, workspace_root=workspace_root)
+    dest = (session_workspace / _SNAPSHOT_DIR_NAME).resolve(strict=False)
+    try:
+        dest.relative_to(session_workspace.resolve(strict=False))
+    except ValueError as exc:
+        raise ValueError("workspace snapshot destination escaped the session workspace") from exc
+
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(src, dest, ignore=_snapshot_ignore)
+    copied_files = sum(1 for item in dest.rglob("*") if item.is_file())
+    return {
+        "source": str(src),
+        "path": _SNAPSHOT_DIR_NAME,
+        "session_workspace": str(session_workspace),
+        "files": copied_files,
+    }
+
+
 def _web_chat_payload(
     *,
     ok: bool,
@@ -88,6 +155,7 @@ def _web_chat_payload(
     started: float,
     error: str = "",
     error_type: str = "",
+    workspace_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     tool_call_count = sum(1 for event in run_events if event.get("event_type") == "tool_started")
     payload: dict[str, Any] = {
@@ -117,6 +185,8 @@ def _web_chat_payload(
         payload["error"] = error
     if error_type:
         payload["error_type"] = error_type
+    if workspace_snapshot is not None:
+        payload["workspace_snapshot"] = workspace_snapshot
     return payload
 
 
@@ -129,6 +199,8 @@ async def run_web_chat(
     session_id: str | None = None,
     sender_name: str = "OpenSprite CLI",
     access_token: str | None = None,
+    config_path: str | Path | None = None,
+    workspace_snapshot: str | Path | None = None,
     timeout_seconds: float = 300.0,
 ) -> dict[str, Any]:
     """Send one message through an already-running Web gateway."""
@@ -145,6 +217,7 @@ async def run_web_chat(
     terminal_reply_deadline: float | None = None
     resolved_session_id = session_id or ""
     resolved_external_chat_id = external_chat_id
+    snapshot_metadata: dict[str, Any] | None = None
 
     try:
         async with ClientSession() as session:
@@ -154,6 +227,11 @@ async def run_web_chat(
                     raise RuntimeError(f"Expected session frame, got: {first}")
                 resolved_session_id = session_id or str(first.get("session_id") or "")
                 resolved_external_chat_id = external_chat_id or str(first.get("external_chat_id") or "")
+                snapshot_metadata = snapshot_workspace_for_session(
+                    workspace_snapshot,
+                    session_id=resolved_session_id,
+                    config_path=config_path,
+                )
 
                 outgoing: dict[str, Any] = {
                     "external_chat_id": resolved_external_chat_id,
@@ -161,6 +239,8 @@ async def run_web_chat(
                     "text": message,
                     "metadata": {"source": "cli_via_web"},
                 }
+                if snapshot_metadata is not None:
+                    outgoing["metadata"]["workspace_snapshot"] = snapshot_metadata
                 if resolved_session_id:
                     outgoing["session_id"] = resolved_session_id
                 await ws.send_json(outgoing)
@@ -225,6 +305,7 @@ async def run_web_chat(
                 reply_text=reply_text,
                 run_events=run_events,
                 started=started,
+                workspace_snapshot=snapshot_metadata,
             )
         return _web_chat_payload(
             ok=False,
@@ -239,6 +320,7 @@ async def run_web_chat(
             started=started,
             error=f"Web gateway chat failed: {exc}",
             error_type=exc.__class__.__name__,
+            workspace_snapshot=snapshot_metadata,
         )
 
     terminal_status = run_status.strip().lower()
@@ -256,6 +338,7 @@ async def run_web_chat(
         started=started,
         error=("Web gateway run ended with status: " + run_status) if not ok else "",
         error_type="RunStatusError" if not ok else "",
+        workspace_snapshot=snapshot_metadata,
     )
 
 
@@ -266,6 +349,7 @@ async def run_cli_chat(
     external_chat_id: str = "default",
     session_id: str | None = None,
     sender_name: str = "OpenSprite CLI",
+    workspace_snapshot: str | Path | None = None,
     timeout_seconds: float = 300.0,
 ) -> tuple[CliChatResult, dict[str, Any]]:
     """Run a one-shot local CLI channel turn through the normal agent queue."""
@@ -294,7 +378,16 @@ async def run_cli_chat(
             session_id=session_id,
             sender_name=sender_name,
         )
-        result = await adapter.run_once(message, timeout=timeout_seconds)
+        snapshot_metadata = snapshot_workspace_for_session(
+            workspace_snapshot,
+            session_id=adapter.session_id,
+            config_path=config_path,
+        )
+        result = await adapter.run_once(
+            message,
+            timeout=timeout_seconds,
+            metadata={"workspace_snapshot": snapshot_metadata} if snapshot_metadata is not None else None,
+        )
         if result.run_id:
             trace = await agent.storage.get_run_trace(result.response.session_id or adapter.session_id, result.run_id)
             if trace is not None:
@@ -303,6 +396,8 @@ async def run_cli_chat(
                     "part_count": len(trace.parts),
                     "file_change_count": len(trace.file_changes),
                 }
+        if snapshot_metadata is not None:
+            trace_summary["workspace_snapshot"] = snapshot_metadata
         trace_summary["elapsed_seconds"] = round(time.monotonic() - started, 3)
         return result, trace_summary
     finally:
@@ -382,6 +477,7 @@ def chat_command(
     gateway_url: str,
     ws_url: str | None,
     access_token: str | None,
+    workspace_snapshot: str | None,
 ) -> None:
     """Run the Typer-facing one-shot chat command."""
     try:
@@ -395,6 +491,8 @@ def chat_command(
                     session_id=session_id,
                     sender_name=sender_name,
                     access_token=access_token,
+                    config_path=config,
+                    workspace_snapshot=workspace_snapshot,
                     timeout_seconds=timeout_seconds,
                 )
             )
@@ -413,6 +511,7 @@ def chat_command(
                 external_chat_id=external_chat_id,
                 session_id=session_id,
                 sender_name=sender_name,
+                workspace_snapshot=workspace_snapshot,
                 timeout_seconds=timeout_seconds,
             )
         )
