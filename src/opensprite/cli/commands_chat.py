@@ -242,7 +242,7 @@ async def run_web_chat(
         )
 
     terminal_status = run_status.strip().lower()
-    ok = terminal_status not in {"failed", "incomplete", "cancelled", "canceled", "error"}
+    ok = terminal_status not in {"failed", "incomplete", "needs_verification", "cancelled", "canceled", "error"}
     return _web_chat_payload(
         ok=ok,
         gateway_url=gateway_url,

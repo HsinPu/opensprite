@@ -507,6 +507,66 @@ def test_run_web_chat_returns_trace_ids_when_gateway_fails_after_run_start():
     assert payload["error_type"] == "RuntimeError"
 
 
+def test_run_web_chat_marks_needs_verification_status_not_ok():
+    async def scenario():
+        async def handle_ws(request):
+            ws = web.WebSocketResponse()
+            await ws.prepare(request)
+            external_chat_id = request.query.get("external_chat_id") or "default"
+            session_id = f"web:{external_chat_id}"
+            await ws.send_json({"type": "session", "external_chat_id": external_chat_id, "session_id": session_id})
+            message = await ws.receive_json(timeout=2)
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-verify",
+                    "event_type": "run_started",
+                    "status": "running",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-verify",
+                    "event_type": "run_finished",
+                    "status": "needs_verification",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "message",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "text": "needs check:" + message["text"],
+                }
+            )
+            await ws.close()
+            return ws
+
+        app = web.Application()
+        app.router.add_get("/ws", handle_ws)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = getattr(site, "_server").sockets[0].getsockname()[1]
+        try:
+            return await run_web_chat("ping", gateway_url=f"http://127.0.0.1:{port}", external_chat_id="web-smoke")
+        finally:
+            await runner.cleanup()
+
+    payload = asyncio.run(scenario())
+
+    assert payload["ok"] is False
+    assert payload["run_id"] == "run-verify"
+    assert payload["run_status"] == "needs_verification"
+    assert payload["error_type"] == "RunStatusError"
+
+
 def test_run_web_chat_marks_run_failed_status_not_ok_even_with_apology_message():
     async def scenario():
         async def handle_ws(request):
