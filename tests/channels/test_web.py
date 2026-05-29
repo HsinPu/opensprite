@@ -38,6 +38,66 @@ class EchoAgent:
         )
 
 
+class FakeWebSocket:
+    def __init__(self):
+        self.closed = False
+        self.sent = []
+
+    async def send_json(self, payload):
+        self.sent.append(payload)
+
+
+def test_web_adapter_broadcasts_same_session_replies_and_events_to_all_sockets():
+    adapter = WebAdapter(mq=None, config={"frontend_auto_build": False})
+    session_id = "web:same-session"
+    first = FakeWebSocket()
+    second = FakeWebSocket()
+
+    adapter._bind_session(session_id, first)
+    adapter._bind_session(session_id, second)
+
+    asyncio.run(
+        adapter.send(
+            AssistantMessage(
+                text="done",
+                channel="web",
+                external_chat_id="same-session",
+                session_id=session_id,
+            )
+        )
+    )
+    asyncio.run(
+        adapter.send_run_event(
+            RunEvent(
+                channel="web",
+                external_chat_id="same-session",
+                run_id="run_123",
+                session_id=session_id,
+                event_type="run_finished",
+                payload={"status": "completed"},
+            )
+        )
+    )
+
+    assert [item["type"] for item in first.sent] == ["message", "run_event"]
+    assert [item["type"] for item in second.sent] == ["message", "run_event"]
+
+    adapter._unbind_socket(first)
+    asyncio.run(
+        adapter.send(
+            AssistantMessage(
+                text="after",
+                channel="web",
+                external_chat_id="same-session",
+                session_id=session_id,
+            )
+        )
+    )
+
+    assert len(first.sent) == 2
+    assert second.sent[-1]["text"] == "after"
+
+
 class _FakeSearxngConfigResponse:
     def __init__(self, *, error: Exception | None = None):
         self.error = error

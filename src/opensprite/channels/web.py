@@ -167,7 +167,7 @@ class WebAdapter(MessageAdapter):
         self.site: web.TCPSite | None = None
         self._shutdown_event = asyncio.Event()
         self._started_event = asyncio.Event()
-        self._session_connections: dict[str, web.WebSocketResponse] = {}
+        self._session_connections: dict[str, set[web.WebSocketResponse]] = {}
         self._socket_sessions: dict[web.WebSocketResponse, set[str]] = {}
         self._api = WebApiHandlers(self)
         self._maybe_build_frontend()
@@ -320,12 +320,16 @@ class WebAdapter(MessageAdapter):
         await asyncio.wait_for(self._started_event.wait(), timeout=timeout)
 
     def _bind_session(self, session_id: str, ws: web.WebSocketResponse) -> None:
-        self._session_connections[session_id] = ws
+        self._session_connections.setdefault(session_id, set()).add(ws)
         self._socket_sessions.setdefault(ws, set()).add(session_id)
 
     def _unbind_socket(self, ws: web.WebSocketResponse) -> None:
         for session_id in self._socket_sessions.pop(ws, set()):
-            if self._session_connections.get(session_id) is ws:
+            session_connections = self._session_connections.get(session_id)
+            if session_connections is None:
+                continue
+            session_connections.discard(ws)
+            if not session_connections:
                 self._session_connections.pop(session_id, None)
 
     @staticmethod
@@ -1048,22 +1052,23 @@ class WebAdapter(MessageAdapter):
 
     async def send(self, message: AssistantMessage) -> None:
         session_id = message.session_id or self._build_session_id(message.external_chat_id)
-        ws = self._session_connections.get(session_id)
-        if ws is None or ws.closed:
+        session_connections = self._session_connections.get(session_id) or set()
+        live_connections = [ws for ws in session_connections if not ws.closed]
+        if not live_connections:
             logger.warning("Web reply dropped because no active socket is bound to session {}", session_id)
             return
 
-        await ws.send_json(
-            {
-                "type": "message",
-                "channel": self.channel_instance_id,
-                "channel_type": self.channel_type,
-                "external_chat_id": message.external_chat_id,
-                "session_id": session_id,
-                "text": message.text,
-                "metadata": dict(message.metadata or {}),
-            }
-        )
+        payload = {
+            "type": "message",
+            "channel": self.channel_instance_id,
+            "channel_type": self.channel_type,
+            "external_chat_id": message.external_chat_id,
+            "session_id": session_id,
+            "text": message.text,
+            "metadata": dict(message.metadata or {}),
+        }
+        for ws in live_connections:
+            await ws.send_json(payload)
 
     async def send_run_event(self, event: RunEvent) -> None:
         """Send one structured run event to the browser session socket."""
@@ -1078,8 +1083,10 @@ class WebAdapter(MessageAdapter):
             },
         )
         sent: set[web.WebSocketResponse] = set()
-        session_ws = self._session_connections.get(event.session_id)
-        if session_ws is not None and not session_ws.closed:
+        session_connections = self._session_connections.get(event.session_id) or set()
+        for session_ws in list(session_connections):
+            if session_ws.closed:
+                continue
             await session_ws.send_json(payload)
             sent.add(session_ws)
 
@@ -1104,8 +1111,10 @@ class WebAdapter(MessageAdapter):
             "metadata": self._json_safe(dict(event.metadata or {})),
         }
         sent: set[web.WebSocketResponse] = set()
-        session_ws = self._session_connections.get(event.session_id)
-        if session_ws is not None and not session_ws.closed:
+        session_connections = self._session_connections.get(event.session_id) or set()
+        for session_ws in list(session_connections):
+            if session_ws.closed:
+                continue
             await session_ws.send_json(payload)
             sent.add(session_ws)
 
