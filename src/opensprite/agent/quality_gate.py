@@ -86,7 +86,7 @@ class QualityGateService:
                 if result is not None:
                     return result
             elif criterion.kind == "operation_report":
-                result = _evaluate_operation_report(criterion, response_text)
+                result = _evaluate_operation_report(criterion, response_text, execution_result)
                 if result is not None:
                     return result
         workspace_result = _evaluate_workspace_grounding(contract, response_text)
@@ -284,8 +284,11 @@ def _evaluate_verification_or_gap(
 def _evaluate_operation_report(
     criterion: AcceptanceCriterion,
     response_text: str,
+    execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
     if _OPERATION_REPORT_RE.search(response_text or ""):
+        return None
+    if _response_reports_tool_result(response_text, execution_result):
         return None
     return QualityGateResult(
         passed=False,
@@ -293,6 +296,37 @@ def _evaluate_operation_report(
         reason="operation validation or risk was not reported",
         active_task_detail=getattr(criterion, "description", "") or None,
     )
+
+
+def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
+    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
+    if not normalized_response:
+        return False
+    for evidence in execution_result.tool_evidence:
+        if not evidence.ok:
+            continue
+        preview = re.sub(r"\s+", " ", str(evidence.result_preview or "")).strip().lower()
+        if preview and preview in normalized_response:
+            return True
+        if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
+            return True
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok:
+            continue
+        preview = re.sub(r"\s+", " ", str(artifact.content_preview or "")).strip().lower()
+        if preview and preview in normalized_response:
+            return True
+        if preview and len(preview) > 16 and _meaningful_overlap(preview, normalized_response):
+            return True
+    return False
+
+
+def _meaningful_overlap(expected: str, actual: str) -> bool:
+    tokens = [token for token in re.split(r"[^0-9a-zA-Z._-]+", expected) if len(token) >= 3]
+    if not tokens:
+        return False
+    matched = sum(1 for token in tokens if token in actual)
+    return matched >= min(3, len(tokens))
 
 
 def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) -> QualityGateResult | None:
