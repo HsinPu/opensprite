@@ -120,3 +120,27 @@ def test_follow_up_prefers_history_context_from_recent_retrieval_tool():
     assert result.is_follow_up is True
     assert result.inherited_task_type == "history_retrieval"
     assert result.inherited_tool_group == "history_retrieval"
+
+
+def test_follow_up_uses_prior_web_context_when_current_says_no_new_web():
+    result = FollowUpIntentResolver.resolve(
+        current_message="根據剛剛搜尋到的官方文件，Authorization header 應該怎麼寫？不要再上網。",
+        history=[
+            {"role": "user", "content": "請看目前工作區的 AGENTS.md"},
+            {"role": "tool", "tool_name": "read_file", "content": "Error: File not found: AGENTS.md"},
+            {"role": "assistant", "content": "AGENTS.md 不在目前工作區內"},
+            {
+                "role": "tool",
+                "tool_name": "web_research",
+                "content": "OpenRouter official documentation source: https://openrouter.ai/docs/api-reference/overview",
+            },
+            {
+                "role": "assistant",
+                "content": "OpenRouter 官方文件說 API request 使用 Authorization header。",
+            },
+        ],
+    )
+
+    assert result.is_follow_up is True
+    assert result.inherited_task_type == "history_retrieval"
+    assert result.inherited_tool_group == "history_retrieval"

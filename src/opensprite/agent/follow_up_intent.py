@@ -29,6 +29,16 @@ _WEB_HISTORY_RE = re.compile(
     re.IGNORECASE,
 )
 _WEB_SEARCH_TERM_RE = re.compile(r"\b(?:search)\b|(?:搜尋)", re.IGNORECASE)
+_CURRENT_WEB_CONTEXT_RE = re.compile(
+    r"\b(?:searched|found|fetched|source|sources|url|link|official docs|documentation)\b"
+    r"|(?:搜尋到|搜到|查到|找到|來源|網址|官方文件|文件|文檔)",
+    re.IGNORECASE,
+)
+_CURRENT_NO_NEW_WEB_RE = re.compile(
+    r"\b(?:do not search|don't search|no web|without web|do not browse|don't browse)\b"
+    r"|(?:不要再上網|不用再上網|不要上網|不要再搜尋|不用再搜尋)",
+    re.IGNORECASE,
+)
 _MEDIA_HISTORY_RE = re.compile(
     r"\b(?:image|images|photo|photos|picture|screenshot|ocr|audio|voice|video|clip|transcribe)\b"
     r"|(?:圖片|照片|截圖|這張|圖|文字辨識|音訊|語音|錄音|影片|視頻)",
@@ -70,7 +80,7 @@ class FollowUpIntentResolver:
         if not _looks_like_follow_up(current):
             return FollowUpIntent(is_follow_up=False, reason="current message is not a short follow-up")
 
-        inherited = _infer_recent_context(history or [])
+        inherited = _infer_recent_context(history or [], current_message=current)
         if inherited is None:
             return FollowUpIntent(is_follow_up=True, confidence=0.35, reason="follow-up without inheritable recent context")
 
@@ -99,8 +109,11 @@ def _looks_like_follow_up(text: str) -> bool:
     return len(words) == 1 and bool(_ENTITY_ONLY_RE.match(text))
 
 
-def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str] | None:
+def _infer_recent_context(history: list[dict[str, Any]], *, current_message: str = "") -> tuple[str, str, str] | None:
     scores = {"web_research": 0, "media_extraction": 0, "workspace_read": 0, "history_retrieval": 0}
+    current = _compact(current_message)
+    current_mentions_prior_web = bool(_CURRENT_WEB_CONTEXT_RE.search(current))
+    current_forbids_new_web = bool(_CURRENT_NO_NEW_WEB_RE.search(current))
     for message in reversed(history[-12:]):
         content = _compact(str(message.get("content") or ""))
         tool_name = _compact(str(message.get("tool_name") or ""))
@@ -122,6 +135,14 @@ def _infer_recent_context(history: list[dict[str, Any]]) -> tuple[str, str, str]
             scores["workspace_read"] += weight
         if _HISTORY_RETRIEVAL_HISTORY_RE.search(content):
             scores["history_retrieval"] += weight
+
+    if current_mentions_prior_web and (scores["web_research"] > 0 or scores["history_retrieval"] > 0):
+        if current_forbids_new_web:
+            scores["history_retrieval"] += scores["web_research"] + 4
+            scores["web_research"] = 0
+            scores["workspace_read"] = min(scores["workspace_read"], 1)
+        else:
+            scores["web_research"] += 4
 
     task_type, score = max(scores.items(), key=lambda item: item[1])
     if score <= 0:
