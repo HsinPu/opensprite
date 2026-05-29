@@ -160,3 +160,10 @@ def test_runtime_signal_handler_sets_shutdown_event(monkeypatch):
     assert callbacks
     callbacks[0][1](*callbacks[0][2])
     assert event.set_called is True
+
+
+def test_runtime_shutdown_step_timeout_does_not_raise():
+    async def slow_close():
+        await asyncio.sleep(10)
+
+    asyncio.run(runtime.await_shutdown_step(slow_close(), name="slow close", timeout=0.001))

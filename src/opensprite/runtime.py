@@ -5,6 +5,7 @@ import contextlib
 import os
 import signal
 from pathlib import Path
+from typing import Any
 
 from .agent import AgentLoop
 from .bus.message import UserMessage
@@ -138,13 +139,31 @@ def start_search_queue_worker(search_store: SearchStore | None) -> asyncio.Task 
     return asyncio.create_task(search_store.run_queue(once=False))
 
 
+_SHUTDOWN_STEP_TIMEOUT_SECONDS = 5.0
+
+
+async def await_shutdown_step(
+    awaitable: Any,
+    *,
+    name: str,
+    timeout: float = _SHUTDOWN_STEP_TIMEOUT_SECONDS,
+) -> None:
+    """Await one shutdown step without letting it block gateway exit forever."""
+    try:
+        await asyncio.wait_for(awaitable, timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning("Timed out stopping {}", name)
+
+
 async def stop_background_task(task: asyncio.Task | None, *, name: str) -> None:
     """Cancel and await one runtime background task."""
     if task is None:
         return
     task.cancel()
     try:
-        await task
+        await asyncio.wait_for(task, timeout=_SHUTDOWN_STEP_TIMEOUT_SECONDS)
+    except asyncio.TimeoutError:
+        logger.warning("Timed out stopping {}", name)
     except asyncio.CancelledError:
         logger.info("Stopped {}", name)
 
@@ -357,17 +376,17 @@ async def run(config_path: str | Path | None = None) -> None:
         logger.info("正在關閉...")
     finally:
         if channel_manager is not None:
-            await channel_manager.stop_all()
-        await mq.stop()
+            await await_shutdown_step(channel_manager.stop_all(), name="channel manager")
+        await await_shutdown_step(mq.stop(), name="message queue")
         await stop_background_task(processor, name="message queue processor")
         await stop_background_task(search_queue_worker, name="search embedding queue worker")
-        await cron_manager.stop()
-        await agent.close_background_maintenance()
-        await agent.close_background_skill_reviews()
+        await await_shutdown_step(cron_manager.stop(), name="cron manager")
+        await await_shutdown_step(agent.close_background_maintenance(), name="background maintenance")
+        await await_shutdown_step(agent.close_background_skill_reviews(), name="background skill reviews")
         close_background_processes = getattr(agent, "close_background_processes", None)
         if close_background_processes is not None:
-            await close_background_processes()
-        await agent.close_mcp()
+            await await_shutdown_step(close_background_processes(), name="background processes")
+        await await_shutdown_step(agent.close_mcp(), name="MCP connections")
         logger.info("再見！")
 
 
