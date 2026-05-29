@@ -15,6 +15,7 @@ THINKING_TAG_RE = re.compile(r"<\s*(/?)\s*(?:think(?:ing)?)\b[^<>]*>", re.IGNORE
 SYSTEM_REMINDER_TAG_RE = re.compile(r"<\s*(/?)\s*system-reminder\b[^<>]*>", re.IGNORECASE)
 MINIMAX_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*minimax:tool_call\b[^<>]*>", re.IGNORECASE)
 GENERIC_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*tool_call\b[^<>]*>", re.IGNORECASE)
+GENERIC_TOOL_CALLS_TAG_RE = re.compile(r"<\s*(/?)\s*tool_calls\b[^<>]*>", re.IGNORECASE)
 DSML_TOOL_CALL_TAG_RE = re.compile(r"<\s*(/?)\s*｜+DSML｜+\s*(/?)\s*tool_calls\b[^<>]*>", re.IGNORECASE)
 BRACKET_TOOL_CALL_RE = re.compile(r"\[\s*(/?)\s*tool_call\s*\]", re.IGNORECASE)
 DIRECT_TOOL_TAG_RE = re.compile(
@@ -96,13 +97,18 @@ def strip_assistant_internal_scaffolding(text: str) -> str:
         return ""
 
     text = INTERNAL_PREFIX_RE.sub("", text)
-    if not (QUICK_INTERNAL_TAG_RE.search(text) or DIRECT_TOOL_TAG_RE.search(text)):
+    if not (
+        QUICK_INTERNAL_TAG_RE.search(text)
+        or DIRECT_TOOL_TAG_RE.search(text)
+        or GENERIC_TOOL_CALLS_TAG_RE.search(text)
+    ):
         return text or ""
 
     cleaned = _strip_tag_blocks(text, THINKING_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, SYSTEM_REMINDER_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, MINIMAX_TOOL_CALL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, GENERIC_TOOL_CALL_TAG_RE)
+    cleaned = _strip_tag_blocks(cleaned, GENERIC_TOOL_CALLS_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, DIRECT_TOOL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, DSML_TOOL_CALL_TAG_RE)
     cleaned = _strip_tag_blocks(cleaned, BRACKET_TOOL_CALL_RE)

@@ -95,6 +95,12 @@ def test_sanitize_assistant_visible_text_strips_generic_tool_call_blocks():
     assert sanitize_assistant_visible_text(text) == "Visible answer"
 
 
+def test_sanitize_assistant_visible_text_strips_empty_tool_calls_block():
+    text = "<tool_calls>\n\n</tool_calls>"
+
+    assert sanitize_assistant_visible_text(text) == ""
+
+
 def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in_code():
     text = 'Example:\n```xml\n<tool_call name="web_research">literal</tool_call>\n```\nVisible answer'
 
