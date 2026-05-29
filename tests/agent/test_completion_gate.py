@@ -760,7 +760,7 @@ def test_completion_gate_completes_history_retrieval_with_evidence_and_answer():
         ),
     )
 
-    assert completion.status == "complete"
+    assert completion.status == "complete", (contract.task_type, completion.reason, completion.active_task_detail)
 
 
 def test_completion_gate_accepts_chinese_history_grounding_phrase():
@@ -783,6 +783,56 @@ def test_completion_gate_accepts_chinese_history_grounding_phrase():
             task_contract=contract,
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_accepts_chinese_current_conversation_phrase():
+    intent = TaskIntentService().classify("請幫我檢查目前這段對話前面我問過什麼，列出兩點。")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = (
+        "根據這段對話的內容，我觀察到你問過：\n"
+        "1. 你要求我不要讀檔不要上網，只回答 pong。\n"
+        "2. 你要求我使用 web_search 搜尋 OpenRouter Authorization header。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_accepts_chinese_previous_search_result_phrase():
+    intent = TaskIntentService().classify("根據剛才的搜尋結果，用三句話說明 Authorization header 格式。")
+    contract = _history_contract(intent)
+    answer = (
+        "根據剛才的搜尋結果，Authorization header 使用 Bearer token 格式。\n"
+        "1. 格式是 `Authorization: Bearer YOUR_API_KEY`。\n"
+        "2. Bearer 和 API key 中間要有空格。\n"
+        "3. 每個 API request 都要帶這個 header。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 1}),),
         ),
     )
 

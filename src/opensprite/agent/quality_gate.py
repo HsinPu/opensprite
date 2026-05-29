@@ -584,9 +584,13 @@ def _references_prior_context(normalized_response: str) -> bool:
             "對話記錄",
             "對話紀錄",
             "根據對話",
+            "這段對話",
+            "對話的內容",
             "前面",
             "剛剛",
+            "剛才",
             "先前",
+            "搜尋結果",
         )
     )
 
