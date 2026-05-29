@@ -53,10 +53,11 @@ class HarnessProfileService:
         tool_groups = _contract_tool_groups(task_contract)
         requirement_kinds = _contract_requirement_kinds(task_contract)
         if task_type == "operations":
+            required_tool_groups = tuple(sorted(tool_groups))
             return HarnessProfile(
                 name="ops",
                 task_type="operations",
-                required_tool_groups=("workspace_read",),
+                required_tool_groups=required_tool_groups,
                 required_evidence=("audit_trace",),
                 verification_policy="validate_or_report",
                 continuation_policy="approval_bounded",
@@ -184,7 +185,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
         HarnessProfile(
             name="ops",
             task_type="operations",
-            required_tool_groups=("workspace_read",),
+            required_tool_groups=("scheduling",),
             required_evidence=("audit_trace",),
             verification_policy="validate_or_report",
             continuation_policy="approval_bounded",

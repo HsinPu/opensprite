@@ -298,6 +298,31 @@ def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tes
     assert result.verification_pytest_args == ("tests/agent/test_sample.py",)
 
 
+def test_completion_gate_does_not_require_verification_for_operations_report():
+    intent = TaskIntentService().classify("Remind me tomorrow to check the test report.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="scheduling"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+        allow_no_tool_final=False,
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Scheduled the reminder successfully. No rollback is needed; residual risk is low.",
+        execution_result=ExecutionResult(
+            content="Scheduled the reminder successfully. No rollback is needed; residual risk is low.",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="cron", ok=True),),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
+    assert result.verification_required is False
+
+
 def test_completion_gate_treats_max_tool_iterations_as_incomplete():
     intent = TaskIntentService().classify("Please implement the cleanup and run tests.")
 

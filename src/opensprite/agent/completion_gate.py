@@ -164,7 +164,7 @@ class CompletionGateService:
     ) -> CompletionGateResult:
         """Return the safest completion verdict for the current turn."""
         contract_allows_plain_answer = _contract_allows_plain_answer(execution_result.task_contract)
-        verification_required = False if contract_allows_plain_answer else _requires_verification(task_intent)
+        verification_required = False if contract_allows_plain_answer else _requires_verification(task_intent, execution_result.task_contract)
         expects_code_change = False if contract_allows_plain_answer else task_intent.expects_code_change
         verification_attempted = execution_result.verification_attempted
         verification_passed = execution_result.verification_passed
@@ -678,8 +678,20 @@ class CompletionGateService:
         return quality_result.passed
 
 
-def _requires_verification(task_intent: TaskIntent) -> bool:
+def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -> bool:
+    if _contract_requires_verification(task_contract):
+        return True
+    if str(getattr(task_contract, "task_type", "") or "") == "operations":
+        return False
     return task_intent.expects_verification
+
+
+def _contract_requires_verification(task_contract: Any) -> bool:
+    return any(
+        str(getattr(requirement, "kind", "") or "") == "verification"
+        or str(getattr(requirement, "tool_group", "") or "") == "verification"
+        for requirement in getattr(task_contract, "requirements", ()) or ()
+    )
 
 
 def _contract_allows_plain_answer(task_contract: Any) -> bool:
