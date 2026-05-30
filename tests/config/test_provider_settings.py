@@ -305,6 +305,28 @@ def test_provider_settings_includes_openrouter_context_metadata(tmp_path, monkey
     }
 
 
+def test_provider_settings_select_model_persists_discovered_context_window(tmp_path, monkeypatch):
+    def fake_read_json_url(url, *, headers=None):
+        return {
+            "data": [
+                {"id": "anthropic/live", "context_length": "200000", "supported_parameters": ["tools"]},
+            ]
+        }
+
+    config_path = _copy_config(tmp_path)
+    service = ProviderSettingsService(config_path)
+    monkeypatch.setattr(provider_settings, "fetch_openrouter_models", _ORIGINAL_FETCH_OPENROUTER_MODELS)
+    monkeypatch.setattr(provider_settings, "_read_json_url", fake_read_json_url)
+
+    service.connect_provider("openrouter", api_key="router-key")
+    service.list_models()
+    service.select_model("openrouter", "anthropic/live")
+
+    providers = json.loads((tmp_path / "llm.providers.json").read_text(encoding="utf-8"))
+    assert providers["openrouter"]["context_window_tokens"] == 200000
+    assert Config.from_json(config_path).llm.get_active().context_window_tokens == 200000
+
+
 def test_provider_settings_uses_discovered_codex_models(tmp_path, monkeypatch):
     config_path = _copy_config(tmp_path)
     service = ProviderSettingsService(config_path)

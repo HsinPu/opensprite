@@ -2,7 +2,7 @@
   "llm": {
     "providers_file": "llm.providers.json",
     "default": null,
-    "context_window_tokens": 1047576
+    "context_window_tokens": null
   },
   "storage": {
     "type": "sqlite",

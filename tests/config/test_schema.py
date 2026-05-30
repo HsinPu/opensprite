@@ -792,7 +792,7 @@ def test_config_load_defaults_agent_when_section_missing(tmp_path):
 
     config = Config.from_json(path)
 
-    assert config.llm.context_window_tokens == 1047576
+    assert config.llm.context_window_tokens is None
     assert config.agent is not None
     assert config.agent.max_history == 300
     assert config.agent.history_token_budget == 200000
@@ -1231,7 +1231,7 @@ def test_copy_template_creates_external_llm_providers_file(tmp_path):
     providers_path = tmp_path / "llm.providers.json"
 
     assert template_data["llm"]["providers_file"] == "llm.providers.json"
-    assert template_data["llm"]["context_window_tokens"] == 1047576
+    assert template_data["llm"]["context_window_tokens"] is None
     assert providers_path.exists()
     assert json.loads(providers_path.read_text(encoding="utf-8")) == Config.load_external_template_data("llm.providers")
 

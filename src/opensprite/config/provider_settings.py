@@ -505,6 +505,13 @@ def select_model_in_config(
     if not str(provider.get("base_url", "") or "").strip():
         provider["base_url"] = preset.default_base_url
     provider["model"] = normalized_model
+    if "model_metadata" in preset.capabilities:
+        metadata = cached_openrouter_model_metadata([normalized_model]).get(normalized_model, {})
+        context_length = _positive_int(metadata.get("context_length"))
+        if context_length is not None:
+            provider["context_window_tokens"] = context_length
+        else:
+            provider.pop("context_window_tokens", None)
     llm["default"] = provider_id
     for name, item in providers.items():
         if isinstance(item, dict):
