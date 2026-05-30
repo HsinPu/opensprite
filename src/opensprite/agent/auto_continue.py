@@ -73,7 +73,6 @@ _GENERIC_PENDING_RESPONSES = frozenset(
 )
 _EXISTING_WEB_SOURCE_FINAL_RETRY_REASONS = frozenset(
     {
-        "assistant only emitted internal control text",
         "assistant final answer did not reference gathered sources",
         "assistant final answer was too terse for the task",
         "assistant did not provide the requested itemized result",

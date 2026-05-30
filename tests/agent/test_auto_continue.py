@@ -86,7 +86,7 @@ def test_auto_continue_skips_direct_verify_when_verify_tool_is_unavailable():
     assert decision.direct_verify_action is None
 
 
-def test_auto_continue_retries_internal_only_web_answer_without_tools():
+def test_auto_continue_retries_internal_only_web_answer_with_tools_available():
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
@@ -123,9 +123,9 @@ def test_auto_continue_retries_internal_only_web_answer_without_tools():
     )
 
     assert decision.should_continue is True
-    assert decision.allow_tools is False
-    assert decision.to_metadata()["allow_tools"] is False
-    assert "Do not call tools again" in (decision.prompt or "")
+    assert decision.allow_tools is True
+    assert "allow_tools" not in decision.to_metadata()
+    assert "Do not call tools again" not in (decision.prompt or "")
     assert "https://example.com/tsmc" in (decision.prompt or "")
 
 
