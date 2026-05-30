@@ -1219,8 +1219,6 @@ def _should_replace_nonfinal_response(
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
 ) -> bool:
-    if auto_continue_attempts <= 0:
-        return False
     if completion_result.status == "complete":
         return False
     text = (response or "").strip()
@@ -1247,6 +1245,14 @@ def _should_replace_nonfinal_response(
     )
     if any(marker in lower_text for marker in blocker_markers):
         return False
+    fallback_markers = (
+        "no visible reply",
+        "try again",
+        "沒有產生可顯示",
+        "請再試一次",
+    )
+    if any(marker in lower_text for marker in fallback_markers):
+        return True
     progress_markers = (
         "讓我",
         "我會",

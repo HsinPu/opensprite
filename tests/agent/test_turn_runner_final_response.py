@@ -37,6 +37,20 @@ def test_exhausted_continuation_keeps_clear_blocker_response():
     assert response == original
 
 
+def test_incomplete_fallback_response_is_replaced_without_continuation_attempts():
+    response = _final_response_after_exhausted_continuation(
+        response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="tool execution reported an error without a clear blocker handoff",
+        ),
+        auto_continue_attempts=0,
+    )
+
+    assert "tool execution reported an error without a clear blocker handoff" in response
+    assert "沒有產生可顯示" not in response
+
+
 def test_complete_response_is_not_replaced_after_continuation():
     original = "已完成，這是整理結果。"
 
