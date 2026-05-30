@@ -741,6 +741,10 @@ def _normalize_source_url(url: str) -> str:
     if netloc.startswith("www."):
         netloc = netloc[4:]
     path = parsed.path.rstrip("/")
+    if netloc == "openrouter.ai":
+        path = path.replace("/docs/api-reference/", "/docs/api/reference/", 1)
+        if path.endswith(".md"):
+            path = path[:-3]
     normalized = f"{scheme}://{netloc}{path}"
     if parsed.params:
         normalized += f";{parsed.params}"

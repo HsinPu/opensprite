@@ -221,6 +221,39 @@ def test_web_fetcher_uses_jina_fallback_for_403(monkeypatch):
     assert result["text"] == "Fallback content from reader."
 
 
+def test_web_fetcher_recovers_openrouter_legacy_docs_markdown_not_found(monkeypatch):
+    calls = []
+
+    def fake_fetch_url(url, *args, **kwargs):
+        calls.append(url)
+        if "/docs/api-reference/" in url:
+            return (
+                "text/plain; charset=utf-8",
+                b"# Page Not Found\n\nThis page does not exist.",
+                200,
+                f"{url}.md",
+            )
+        return (
+            "text/markdown; charset=utf-8",
+            b"# Parameters\n\n## Max Tokens\n\nThis sets the upper limit for generated tokens.",
+            200,
+            f"{url}.md",
+        )
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.fetch_url", fake_fetch_url)
+    fetcher = WebFetcher(max_chars=5000)
+
+    result = fetcher.fetch("https://openrouter.ai/docs/api-reference/parameters")
+
+    assert calls == [
+        "https://openrouter.ai/docs/api-reference/parameters",
+        "https://openrouter.ai/docs/api/reference/parameters",
+    ]
+    assert result["url"] == "https://openrouter.ai/docs/api/reference/parameters"
+    assert result["finalUrl"] == "https://openrouter.ai/docs/api/reference/parameters.md"
+    assert "Max Tokens" in result["text"]
+
+
 @pytest.mark.parametrize(
     "url",
     [

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
@@ -1359,6 +1361,64 @@ def test_completion_gate_allows_gathered_source_urls_with_punctuation():
             executed_tool_calls=2,
             tool_evidence=(ToolEvidence(name="web_search", ok=True), ToolEvidence(name="web_fetch", ok=True)),
             task_artifacts=_web_research_artifacts(),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
+def test_completion_gate_normalizes_openrouter_docs_legacy_api_reference_urls():
+    intent = TaskIntentService().classify("Check OpenRouter API parameters and cite sources")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    contract = replace(
+        contract,
+        acceptance_criteria=contract.acceptance_criteria
+        + (AcceptanceCriterion(kind="source_reference", min_count=1, description="Cite source URLs."),),
+    )
+    answer = (
+        "OpenRouter documents `max_tokens` on its parameters page: "
+        "https://openrouter.ai/docs/api-reference/parameters. The page says it limits generated output "
+        "and that the maximum depends on context length minus prompt length."
+    )
+    artifact = TaskArtifact(
+        kind="web_source",
+        source_tool="web_fetch",
+        content_preview="source",
+        metadata={
+            "sources": [
+                {
+                    "tool_name": "web_search",
+                    "url": "https://openrouter.ai/docs/api/reference/overview",
+                    "title": "OpenRouter API Reference",
+                    "snippet": "OpenRouter API reference overview.",
+                },
+                {
+                    "tool_name": "web_fetch",
+                    "url": "https://openrouter.ai/docs/api/reference/parameters.md",
+                    "title": "API Parameters | OpenRouter",
+                    "snippet": "Max Tokens sets the upper limit for generated tokens.",
+                    "content_chars": 1200,
+                    "is_too_short": False,
+                    "has_main_content": True,
+                    "blocked_or_challenge": False,
+                }
+            ],
+            "source_count": 2,
+        },
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_fetch", ok=True),),
+            task_artifacts=(artifact,),
         ),
     )
 

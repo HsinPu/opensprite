@@ -737,6 +737,19 @@ class WebFetcher:
                         'is_image': False,
                     }
             raise
+
+        alternate_url = _openrouter_docs_alternate_url(url, final_url, decode_content(content, content_type))
+        if alternate_url:
+            try:
+                content_type, content, status, final_url = fetch_url(
+                    alternate_url,
+                    self.timeout,
+                    self.retry_on_403,
+                    self.max_response_size,
+                )
+                url = alternate_url
+            except Exception:
+                pass
         
         result = {
             'url': url, 'finalUrl': final_url, 'status': status,
@@ -837,6 +850,30 @@ class WebFetcher:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
         
         return result
+
+
+def _openrouter_docs_alternate_url(url: str, final_url: str, content: str) -> str | None:
+    if not _looks_like_openrouter_docs_not_found(content):
+        return None
+    for candidate in (url, final_url):
+        try:
+            parsed = urlparse(str(candidate or ""))
+        except Exception:
+            continue
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "openrouter.ai":
+            continue
+        path = parsed.path
+        if path.endswith(".md"):
+            path = path[:-3]
+        if "/docs/api-reference/" not in path:
+            continue
+        return parsed._replace(path=path.replace("/docs/api-reference/", "/docs/api/reference/", 1)).geturl()
+    return None
+
+
+def _looks_like_openrouter_docs_not_found(content: str) -> bool:
+    normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
+    return normalized in {"# page not found this page does not exist.", "page not found this page does not exist."}
 
 
 class WebFetchTool(Tool):
