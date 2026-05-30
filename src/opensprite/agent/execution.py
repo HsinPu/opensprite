@@ -1500,6 +1500,7 @@ Output exactly these sections when applicable:
                             context_compactions=context_compactions,
                             context_compaction_events=context_compaction_events,
                             llm_step_events=llm_step_events,
+                            assistant_internal_only_response=True,
                             tool_evidence=tuple(tool_evidence),
                             task_artifacts=tuple(task_artifacts),
                         )

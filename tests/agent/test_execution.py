@@ -1214,6 +1214,27 @@ def test_execution_engine_retries_when_minimax_text_tool_call_is_visible_content
     assert provider.calls[1]["messages"][-1].content == ExecutionEngine.SANITIZED_EMPTY_RESPONSE_RETRY_MESSAGE
 
 
+def test_execution_engine_marks_ignored_structured_tool_call_as_internal_only():
+    provider = FakeProvider(
+        [
+            LLMResponse(
+                content="",
+                model="fake-model",
+                tool_calls=[ToolCall(id="tc1", name="web_search", arguments={"query": "news"})],
+            ),
+        ]
+    )
+    engine = _make_engine(provider, ToolRegistry(), [])
+
+    result = asyncio.run(
+        engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=False)
+    )
+
+    assert result.content == "EMPTY"
+    assert result.assistant_internal_only_response is True
+    assert result.executed_tool_calls == 0
+
+
 def test_execution_engine_retries_when_bracket_text_tool_call_is_visible_content():
     provider = FakeProvider(
         [
