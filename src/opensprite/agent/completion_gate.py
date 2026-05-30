@@ -54,6 +54,39 @@ _INCOMPLETE_MARKERS = (
     "無法完成",
     "還需要",
 )
+_PENDING_ACTION_MARKERS = (
+    "讓我",
+    "让我",
+    "我來",
+    "我来",
+    "我會",
+    "我会",
+    "我將",
+    "我将",
+    "我先",
+    "正在",
+    "稍等",
+)
+_PENDING_ACTION_VERBS = (
+    "查",
+    "搜尋",
+    "搜索",
+    "搜",
+    "抓取",
+    "取得",
+    "確認",
+    "验证",
+    "驗證",
+    "分析",
+    "整理",
+    "處理",
+    "处理",
+    "fetch",
+    "search",
+    "check",
+    "verify",
+    "analyze",
+)
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _DIRECT_REPLY_INSTRUCTION_MARKERS = (
     "only reply",
@@ -833,6 +866,12 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
     text = normalized_lowered.strip()
     if not text:
         return False
+    if "我來說明" in text or "我来说明" in text:
+        return False
+    if len(text) <= 180 and any(marker in text for marker in _PENDING_ACTION_MARKERS) and any(
+        verb in text for verb in _PENDING_ACTION_VERBS
+    ):
+        return True
     pending_patterns = (
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",

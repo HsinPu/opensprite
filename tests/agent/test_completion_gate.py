@@ -1958,6 +1958,20 @@ def test_completion_gate_marks_pending_search_response_incomplete():
     assert result.reason == "assistant response did not explicitly complete the task"
 
 
+def test_completion_gate_marks_chinese_fetch_progress_response_incomplete():
+    intent = TaskIntentService().classify("幫我查一下今天台積電最近可取得的股價資訊，請附來源。")
+    response = "搜尋結果已取得，讓我抓取實質內容頁面來確認股價數據。"
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response, executed_tool_calls=1),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "assistant response did not explicitly complete the task"
+
+
 def test_completion_gate_does_not_mark_source_reliability_answer_as_pending():
     intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
     response = (
