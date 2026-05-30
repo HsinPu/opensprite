@@ -493,6 +493,70 @@ def test_web_research_adds_official_site_query_for_official_docs_query():
     ]
 
 
+def test_web_research_does_not_treat_mirror_subdomains_as_official_docs():
+    search = _FakeSearchToolByQuery(
+        {
+            "OpenRouter API request body parameters official docs": [
+                {
+                    "title": "OpenRouter API Mirror",
+                    "url": "https://openrouter-api.yestool.org/docs/api/reference/overview",
+                    "content": "Mirrored OpenRouter docs.",
+                },
+                {
+                    "title": "OpenRouter hosted copy",
+                    "url": "https://openrouter-docs.vercel.app/request-schema",
+                    "content": "Hosted copy of OpenRouter docs.",
+                },
+                {
+                    "title": "OpenRouter API Parameters",
+                    "url": "https://openrouter.ai/docs/api/reference/parameters",
+                    "content": "Official OpenRouter API parameters documentation.",
+                },
+            ],
+            "site:openrouter.ai OpenRouter API request body parameters official docs": [
+                {
+                    "title": "Parameters",
+                    "url": "https://openrouter.ai/docs/api/reference/parameters",
+                    "content": "OpenRouter official parameters page.",
+                },
+            ],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://openrouter-api.yestool.org/docs/api/reference/overview": _fetch_payload(
+                "https://openrouter-api.yestool.org/docs/api/reference/overview"
+            ),
+            "https://openrouter-docs.vercel.app/request-schema": _fetch_payload(
+                "https://openrouter-docs.vercel.app/request-schema"
+            ),
+            "https://openrouter.ai/docs/api/reference/parameters": _fetch_payload(
+                "https://openrouter.ai/docs/api/reference/parameters",
+                title="Parameters",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                "OpenRouter API request body parameters official docs",
+                count=3,
+                fetch_count=1,
+                freshness="month",
+            )
+        )
+    )
+
+    assert [call["query"] for call in search.calls] == [
+        "OpenRouter API request body parameters official docs",
+        "site:openrouter.ai OpenRouter API request body parameters official docs",
+    ]
+    assert [call["url"] for call in fetch.calls] == ["https://openrouter.ai/docs/api/reference/parameters"]
+    assert payload["fetched_sources"][0]["domain"] == "openrouter.ai"
+
+
 def test_web_research_deprioritizes_platform_sources_for_fetching():
     search = _FakeSearchTool(
         [

@@ -855,10 +855,18 @@ def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
     hints: set[str] = set()
     for item in items:
         domain = _candidate_domain(item)
-        compact_domain = domain.removeprefix("www.").replace("-", "")
-        if any(token in compact_domain for token in brand_tokens):
+        brand_label = _domain_brand_label(domain)
+        if any(token == brand_label for token in brand_tokens):
             hints.add(domain)
     return hints
+
+
+def _domain_brand_label(domain: str) -> str:
+    labels = _clean_text(domain).lower().removeprefix("www.").split(".")
+    labels = [label for label in labels if label]
+    if len(labels) < 2:
+        return ""
+    return labels[-2].replace("-", "")
 
 
 def _official_site_queries(query: str, official_domains: set[str], *, existing_queries: list[str]) -> list[str]:
