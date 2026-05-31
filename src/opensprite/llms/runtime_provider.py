@@ -18,6 +18,7 @@ from ..config.llm_presets import (
     provider_profile_defaults,
     provider_request_options,
 )
+from .context_window import resolve_context_window_tokens
 
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
@@ -45,6 +46,7 @@ class ResolvedProviderRuntime:
     provider_sort: str | None = None
     require_parameters: bool = False
     request_options: tuple[str, ...] = ()
+    context_window_tokens: int | None = None
 
 
 def default_app_home(config_path: str | Path | None = None) -> Path:
@@ -140,6 +142,12 @@ def resolve_provider_runtime(
         provider_sort=provider.provider_sort,
         require_parameters=provider.require_parameters,
         request_options=provider_request_options(configured_provider),
+        context_window_tokens=resolve_context_window_tokens(
+            provider_name=configured_provider,
+            model=provider.model,
+            base_url=base_url,
+            configured_context_window_tokens=provider.context_window_tokens,
+        ),
     )
 
 

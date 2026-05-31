@@ -142,6 +142,30 @@ def test_resolve_provider_runtime_includes_profile_request_options():
     assert runtime.request_options == ("reasoning", "provider_sort", "require_parameters")
 
 
+def test_resolve_provider_runtime_preserves_configured_context_window():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="openrouter",
+            api_key="router-key",
+            model="minimax/minimax-m2.7",
+            context_window_tokens=1_000_000,
+            enabled=True,
+        ),
+        provider_name="openrouter",
+    )
+
+    assert runtime.context_window_tokens == 1_000_000
+
+
+def test_resolve_provider_runtime_does_not_guess_openrouter_minimax_context():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(provider="openrouter", api_key="router-key", model="minimax/minimax-m2.7", enabled=True),
+        provider_name="openrouter",
+    )
+
+    assert runtime.context_window_tokens is None
+
+
 def test_resolve_runtime_applies_optional_api_key_profile_defaults():
     runtime = resolve_provider_runtime(
         ProviderConfig(provider="ollama", model="qwen3:14b", enabled=True),
@@ -223,6 +247,7 @@ def test_resolve_runtime_applies_minimax_profile_defaults():
     assert runtime.auth_type == "api_key"
     assert runtime.api_mode == "anthropic_messages"
     assert runtime.base_url == "https://api.minimax.io/anthropic"
+    assert runtime.context_window_tokens == 204800
     assert isinstance(provider, AnthropicMessagesLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
 

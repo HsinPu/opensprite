@@ -1397,7 +1397,7 @@ class AgentLoop:
 
         self.provider = provider
         self.llm_output_reserve_tokens = config.agent.context_output_reserve_tokens
-        self.llm_context_window_tokens = cfg.context_window_tokens
+        self.llm_context_window_tokens = llm_runtime.context_window_tokens
         self.llm_configured = config.is_llm_configured
         self.task_context_resolver.llm_config = config.agent.task_context_llm
         self.task_objective_resolver.llm_config = config.agent.task_objective_llm

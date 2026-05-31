@@ -8,6 +8,7 @@ from typing import Any, Callable
 from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
 from ..config.llm_presets import provider_profile_defaults, provider_request_options
+from ..llms.context_window import resolve_context_window_tokens
 from ..permission_constants import ALL_RISK_LEVELS_ORDER, APPROVAL_MODES_ORDER, DEFAULT_APPROVAL_MODE
 
 
@@ -127,14 +128,21 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
     elif provider_name == "minimax":
         reasoning_source = "minimax_chat_completions"
         reasoning_payload = {"extra_body": {"reasoning_split": True}}
+    model = str(getattr(active, "model", "") or llm.model or "")
+    context_window_tokens = resolve_context_window_tokens(
+        provider_name=provider_name,
+        model=model,
+        base_url=active.base_url,
+        configured_context_window_tokens=active.context_window_tokens,
+    )
 
     return {
         "configured": bool(config.is_llm_configured),
         "provider_id": provider_id,
         "provider": provider_name,
         "api_mode": api_mode,
-        "model": str(getattr(active, "model", "") or llm.model or ""),
-        "context_window_tokens": active.context_window_tokens,
+        "model": model,
+        "context_window_tokens": context_window_tokens,
         "reasoning": {
             "source": reasoning_source,
             "sent": bool(reasoning_payload),

@@ -242,6 +242,7 @@ async def create_agent(config: Config):
         )
         llm = create_llm_from_runtime(llm_runtime)
     else:
+        llm_runtime = None
         llm = UnconfiguredLLM()
     
     # 建立 Agent 設定
@@ -266,7 +267,7 @@ async def create_agent(config: Config):
         memory_config=config.memory,
         tools_config=config.tools,
         llm_output_reserve_tokens=config.agent.context_output_reserve_tokens,
-        llm_context_window_tokens=cfg.context_window_tokens,
+        llm_context_window_tokens=llm_runtime.context_window_tokens if llm_runtime is not None else None,
         log_config=config.log,
         search_store=search_store,
         search_config=config.search,

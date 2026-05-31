@@ -16,6 +16,7 @@ from aiohttp import web
 from . import web_api_control, web_api_evals, web_api_runs, web_api_sessions
 from ..bus.session_commands import session_command_catalog
 from ..config import Config
+from ..llms.context_window import resolve_context_window_tokens
 from ..evals.harness_live_scenarios import run_controlled_harness_scenarios
 from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
 from ..agent.run_trace import RunTraceRecorder
@@ -329,6 +330,9 @@ def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
     get_default_model = getattr(provider, "get_default_model", None)
     if callable(get_default_model):
         model = str(get_default_model() or "").strip()
+    agent_context_window = getattr(agent, "llm_context_window_tokens", None) if agent is not None else None
+    if isinstance(agent_context_window, int) and agent_context_window > 0:
+        context_window_tokens = agent_context_window
 
     llm_config = getattr(agent, "llm_config", None) if agent is not None else None
     if llm_config is not None:
@@ -338,7 +342,12 @@ def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
         if active is not None:
             provider_name = str(getattr(active, "provider", "") or "").strip()
             model = model or str(getattr(active, "model", "") or "").strip()
-            context_window_tokens = getattr(active, "context_window_tokens", None)
+            context_window_tokens = context_window_tokens or resolve_context_window_tokens(
+                provider_name=provider_name or provider_id,
+                model=model,
+                base_url=getattr(active, "base_url", None),
+                configured_context_window_tokens=getattr(active, "context_window_tokens", None),
+            )
         configured = bool(getattr(agent, "llm_configured", False))
 
     if not model:
@@ -349,7 +358,12 @@ def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
             provider_name = provider_name or str(getattr(active, "provider", "") or "").strip()
             model = str(getattr(active, "model", "") or "").strip()
             configured = bool(config.is_llm_configured)
-            context_window_tokens = getattr(active, "context_window_tokens", None)
+            context_window_tokens = context_window_tokens or resolve_context_window_tokens(
+                provider_name=provider_name or provider_id,
+                model=model,
+                base_url=getattr(active, "base_url", None),
+                configured_context_window_tokens=getattr(active, "context_window_tokens", None),
+            )
         except Exception:
             pass
 

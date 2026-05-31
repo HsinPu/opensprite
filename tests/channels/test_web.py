@@ -847,6 +847,7 @@ def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
 
     assert payload["provider"] == "minimax"
     assert payload["api_mode"] == "anthropic_messages"
+    assert payload["context_window_tokens"] == 204800
     assert payload["reasoning"]["source"] == "anthropic_messages"
     assert payload["reasoning"]["payload"] == {
         "thinking": {"type": "enabled", "budget_tokens": 16000},
