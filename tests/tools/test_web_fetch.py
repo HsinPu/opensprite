@@ -296,11 +296,11 @@ def test_web_fetcher_uses_openrouter_full_docs_when_docs_index_is_shell(monkeypa
 
     def fake_fetch_url(url, *args, **kwargs):
         calls.append(url)
-        if url.endswith("/docs/llms-full.txt"):
+        if url.endswith("/docs/llms.txt"):
             return (
                 "text/plain; charset=utf-8",
                 (
-                    "# OpenRouter full docs\n\n"
+                    "# OpenRouter documentation index\n\n"
                     "Authentication uses the Authorization header with a Bearer token, "
                     "for example Authorization: Bearer $OPENROUTER_API_KEY.\n"
                 ).encode(),
@@ -321,10 +321,10 @@ def test_web_fetcher_uses_openrouter_full_docs_when_docs_index_is_shell(monkeypa
 
     assert calls == [
         "https://openrouter.ai/docs",
-        "https://openrouter.ai/docs/llms-full.txt",
+        "https://openrouter.ai/docs/llms.txt",
     ]
-    assert result["url"] == "https://openrouter.ai/docs/llms-full.txt"
-    assert result["finalUrl"] == "https://openrouter.ai/docs/llms-full.txt"
+    assert result["url"] == "https://openrouter.ai/docs/llms.txt"
+    assert result["finalUrl"] == "https://openrouter.ai/docs/llms.txt"
     assert "Authorization: Bearer" in result["text"]
 
 

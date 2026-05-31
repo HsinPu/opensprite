@@ -952,7 +952,7 @@ def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) 
             path = path[:-3]
         if path.rstrip("/") != "/docs":
             continue
-        return parsed._replace(path="/docs/llms-full.txt", query="", fragment="").geturl()
+        return parsed._replace(path="/docs/llms.txt", query="", fragment="").geturl()
     return None
 
 
