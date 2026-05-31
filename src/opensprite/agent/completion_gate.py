@@ -198,7 +198,11 @@ class CompletionGateService:
         """Return the safest completion verdict for the current turn."""
         contract_allows_plain_answer = _contract_allows_plain_answer(execution_result.task_contract)
         verification_required = False if contract_allows_plain_answer else _requires_verification(task_intent, execution_result.task_contract)
-        expects_code_change = False if contract_allows_plain_answer else task_intent.expects_code_change
+        expects_code_change = (
+            False
+            if contract_allows_plain_answer or _contract_is_read_only(execution_result.task_contract)
+            else task_intent.expects_code_change
+        )
         verification_attempted = execution_result.verification_attempted
         verification_passed = execution_result.verification_passed
         verification_follow_up = _verification_follow_up(task_intent, execution_result)
@@ -735,6 +739,19 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
+
+
+def _contract_is_read_only(task_contract: Any) -> bool:
+    task_type = str(getattr(task_contract, "task_type", "") or "")
+    if task_type in {"workspace_read", "history_retrieval", "web_research", "analysis", "operations"}:
+        return True
+    for requirement in getattr(task_contract, "requirements", ()) or ():
+        if str(getattr(requirement, "kind", "") or "") in {"file_change", "verification"}:
+            return False
+        tool_group = str(getattr(requirement, "tool_group", "") or "")
+        if tool_group in {"workspace_write", "execution", "verification", "scheduling"}:
+            return False
+    return False
 
 
 def _task_contract_planner_status(task_contract: Any) -> str:

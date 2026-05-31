@@ -2885,6 +2885,31 @@ def test_completion_gate_respects_pure_answer_contract_over_code_intent():
     assert result.verification_required is False
 
 
+def test_completion_gate_respects_workspace_read_contract_over_code_words():
+    intent = TaskIntentService().classify("Find where web_research is implemented and answer with the path.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="workspace_read",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
+    )
+    answer = "The implementation is in `src/opensprite/tools/web_research.py`, which orchestrates search and fetch."
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="read_file", ok=True),),
+        ),
+    )
+
+    assert intent.expects_code_change is True
+    assert result.status == "complete"
+
+
 def test_completion_gate_requires_review_for_code_changes_without_review_evidence():
     intent = TaskIntentService().classify("Please implement the final cleanup.")
 
