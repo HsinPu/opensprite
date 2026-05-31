@@ -103,6 +103,10 @@ _MARKET_QUOTE_DOMAINS = (
     "goodinfo.tw",
     "sinotrade.com.tw",
     "macromicro.me",
+    "tradingview.com",
+    "cnbc.com",
+    "stockscan.io",
+    "indmoney.com",
 )
 _MARKET_QUOTE_DISCUSSION_DOMAINS = (
     "ptt.cc",
@@ -117,6 +121,18 @@ _MARKET_QUOTE_FORECAST_MARKERS = (
     "analyst target",
     "預測",
     "目標價",
+)
+_MARKET_QUOTE_PAGE_MARKERS = (
+    "/quote/",
+    "/quotes/",
+    "/stocks/",
+    "stock price",
+    "share price",
+    "live share price",
+    "stock quote",
+    "stock chart",
+    "股市",
+    "報價",
 )
 _MARKET_QUOTE_QUERY_STOPWORDS = {
     "adr",
@@ -937,8 +953,10 @@ def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
         return 3
     if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
         return 0
-    if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
+    if any(marker in text for marker in _MARKET_QUOTE_PAGE_MARKERS):
         return 0
+    if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
+        return 1
     return 1
 
 

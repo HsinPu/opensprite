@@ -432,6 +432,41 @@ def test_web_research_prioritizes_quote_pages_over_forums_and_forecasts():
     assert payload["fetched_sources"][0]["domain"] == "finance.yahoo.com"
 
 
+def test_web_research_prioritizes_quote_pages_over_stock_articles():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "3 Core AI Stocks to Buy With $1,000 and Hold",
+                "url": "https://www.fool.com/investing/2026/05/31/3-core-ai-stocks-to-buy/",
+                "content": "Taiwan Semiconductor Manufacturing is mentioned in this investing article.",
+            },
+            {
+                "title": "TSM Stock Price - Taiwan Semiconductor Chart",
+                "url": "https://www.tradingview.com/symbols/BCBA-TSM/",
+                "content": "TSM stock price chart for Taiwan Semiconductor Manufacturing.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://www.fool.com/investing/2026/05/31/3-core-ai-stocks-to-buy/": _fetch_payload(
+                "https://www.fool.com/investing/2026/05/31/3-core-ai-stocks-to-buy/",
+                title="Investing article",
+            ),
+            "https://www.tradingview.com/symbols/BCBA-TSM/": _fetch_payload(
+                "https://www.tradingview.com/symbols/BCBA-TSM/",
+                title="TSM Stock Price - Taiwan Semiconductor Chart",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("TSMC TSM stock price today 2026", count=2, fetch_count=1)))
+
+    assert fetch.calls[0]["url"] == "https://www.tradingview.com/symbols/BCBA-TSM/"
+    assert payload["fetched_sources"][0]["domain"] == "www.tradingview.com"
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):
