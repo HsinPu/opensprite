@@ -848,6 +848,31 @@ class WebFetcher:
         
         else:
             result['text'], result['truncated'] = truncate_text(text, self.max_chars)
+
+        index_fallback_url = _openrouter_docs_index_fallback_url(url, result.get('finalUrl') or final_url, result.get('text') or '')
+        if index_fallback_url:
+            try:
+                content_type, content, status, final_url = fetch_url(
+                    index_fallback_url,
+                    self.timeout,
+                    self.retry_on_403,
+                    self.max_response_size,
+                )
+            except Exception:
+                pass
+            else:
+                fallback_text = decode_content(content, content_type)
+                result.update(
+                    {
+                        'url': index_fallback_url,
+                        'finalUrl': final_url,
+                        'status': status,
+                        'contentType': content_type,
+                        'title': 'OpenRouter full documentation',
+                        'extractor': 'raw',
+                    }
+                )
+                result['text'], result['truncated'] = truncate_text(fallback_text, self.max_chars)
         
         return result
 
@@ -874,6 +899,28 @@ def _openrouter_docs_alternate_url(url: str, final_url: str, content: str) -> st
 def _looks_like_openrouter_docs_not_found(content: str) -> bool:
     normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
     return normalized in {"# page not found this page does not exist.", "page not found this page does not exist."}
+
+
+def _openrouter_docs_index_fallback_url(url: str, final_url: str, content: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", str(content or "").strip().lower())
+    if len(normalized) >= WEB_FETCH_MIN_CONTENT_CHARS:
+        return None
+    if "no models found" not in normalized and "full documentation content" not in normalized:
+        return None
+    for candidate in (final_url, url):
+        try:
+            parsed = urlparse(str(candidate or ""))
+        except Exception:
+            continue
+        if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "openrouter.ai":
+            continue
+        path = parsed.path
+        if path.endswith(".md"):
+            path = path[:-3]
+        if path.rstrip("/") != "/docs":
+            continue
+        return parsed._replace(path="/docs/llms-full.txt", query="", fragment="").geturl()
+    return None
 
 
 class WebFetchTool(Tool):
