@@ -119,6 +119,18 @@ _NO_WORKSPACE_EVIDENCE_RE = re.compile(
     r"(?:讀檔|讀取檔案|看檔案|查看檔案|檢查檔案|搜尋檔案|看專案|看工作區|讀工作區)",
     re.IGNORECASE,
 )
+_RECENT_CONTEXT_NO_TOOL_RE = re.compile(
+    r"\b(?:previous answer|last answer|previous question|last question|above|just now)\b"
+    r"|(?:\u5ef6\u7e8c|\u4e0a\u4e00\u984c|\u4e0a\u984c|\u4e0a\u4e00\u500b|\u525b\u525b|\u525b\u624d|\u524d\u9762|\u4e0a\u9762)",
+    re.IGNORECASE,
+)
+_NO_NEW_EVIDENCE_RE = re.compile(
+    r"\b(?:do not|don't|dont|without|no)\b[^.?!\n]{0,48}"
+    r"\b(?:web|internet|online|search|research|browse|fetch|look up)\b"
+    r"|(?:\u4e0d\u8981|\u4e0d\u7528|\u5225|\u5148\u4e0d\u8981)[^\n\u3002\uff01\uff1f]{0,24}"
+    r"(?:\u91cd\u65b0\u67e5|\u518d\u67e5|\u4e0a\u7db2|\u641c\u5c0b|\u641c|\u67e5\u8a62|\u6293\u8cc7\u6599)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -597,11 +609,15 @@ def _contract_from_planner_payload(
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
     forced_no_tool = _is_no_tool_command_usage_question(task_intent, current_message)
-    if forced_no_tool:
+    forced_recent_context_no_tool = _is_recent_context_no_tool_follow_up(
+        current_message=current_message,
+        history=history,
+    )
+    if forced_no_tool or forced_recent_context_no_tool:
         raw_task_type = "pure_answer"
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
-    if forced_no_tool:
+    if forced_no_tool or forced_recent_context_no_tool:
         tool_groups = []
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
     if (
@@ -704,6 +720,8 @@ def _contract_from_planner_payload(
     }
     if forced_no_tool:
         metadata["override_reason"] = "command usage question does not require workspace evidence"
+    if forced_recent_context_no_tool:
+        metadata["override_reason"] = "immediate follow-up explicitly asked not to gather new evidence"
     return TaskContract(
         objective=objective,
         task_type=task_type,
@@ -711,7 +729,7 @@ def _contract_from_planner_payload(
         acceptance_criteria=tuple(acceptance_criteria),
         selected_resources=tuple(dict.fromkeys(selected)),
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
-        allow_no_tool_final=(True if forced_no_tool else _coerce_bool(payload.get("allow_no_tool_final", not requirements))) and not requirements,
+        allow_no_tool_final=(True if (forced_no_tool or forced_recent_context_no_tool) else _coerce_bool(payload.get("allow_no_tool_final", not requirements))) and not requirements,
         contract_sources=("llm_planner",),
         planner_metadata=metadata,
     )
@@ -743,6 +761,19 @@ def _is_no_tool_command_usage_question(task_intent: TaskIntent, current_message:
     if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text) and not forbids_workspace_evidence:
         return False
     return forbids_workspace_evidence and bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
+
+
+def _is_recent_context_no_tool_follow_up(
+    *,
+    current_message: str,
+    history: list[dict[str, Any]] | None,
+) -> bool:
+    text = str(current_message or "").strip()
+    if not text:
+        return False
+    if not (_RECENT_CONTEXT_NO_TOOL_RE.search(text) and _NO_NEW_EVIDENCE_RE.search(text)):
+        return False
+    return any(str(item.get("role") or "") == "assistant" and str(item.get("content") or "").strip() for item in (history or [])[-4:])
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:

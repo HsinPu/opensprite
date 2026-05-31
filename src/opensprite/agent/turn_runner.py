@@ -1239,15 +1239,15 @@ def _final_response_after_exhausted_continuation(
     auto_continue_attempts: int,
     execution_result: ExecutionResult | None = None,
 ) -> str:
+    source_fallback = _source_fallback_response(completion_result, execution_result)
+    if source_fallback:
+        return source_fallback
     if not _should_replace_nonfinal_response(
         response=response,
         completion_result=completion_result,
         auto_continue_attempts=auto_continue_attempts,
     ):
         return response
-    source_fallback = _source_fallback_response(completion_result, execution_result)
-    if source_fallback:
-        return source_fallback
     return _completion_blocker_response(completion_result)
 
 
@@ -1261,6 +1261,7 @@ def _source_fallback_response(
         "assistant final answer did not reference gathered sources",
         "assistant final answer was too terse for the task",
         "assistant did not provide the requested itemized result",
+        "tool execution reported an error without a clear blocker handoff",
     }:
         return ""
     sources = _substantive_web_sources(execution_result)

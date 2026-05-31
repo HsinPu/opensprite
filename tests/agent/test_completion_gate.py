@@ -909,6 +909,38 @@ def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
     assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
 
 
+def test_task_contract_does_not_force_search_history_for_immediate_no_research_follow_up():
+    intent = TaskIntentService().classify("延續上一題，請用一句話說明你剛剛用了哪些來源類型，不要重新查。")
+
+    contract = _contract_from_planner_payload(
+        {
+            "task_type": "history_retrieval",
+            "required_tool_groups": ["history_retrieval"],
+            "final_answer_required": True,
+            "allow_no_tool_final": False,
+            "reason": "planner thought prior conversation state needed retrieval",
+        },
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[
+            {"role": "user", "content": "幫我查一下台積電目前股價，請列出來源網址。"},
+            {
+                "role": "assistant",
+                "content": "我使用 Yahoo 股市與台積電投資人網站等來源，來源網址包含 https://tw.stock.yahoo.com/quote/2330.TW",
+            },
+        ],
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert contract.task_type == "pure_answer"
+    assert contract.requirements == ()
+    assert contract.allow_no_tool_final is True
+    assert contract.planner_metadata["override_reason"] == "immediate follow-up explicitly asked not to gather new evidence"
+
+
 def test_completion_gate_requires_history_evidence_for_prior_context_lookup():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
     contract = _history_contract(intent)

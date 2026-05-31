@@ -77,6 +77,43 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
     assert "目前還不能可靠完成這次請求" not in response
 
 
+def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_error():
+    response = _final_response_after_exhausted_continuation(
+        response="Cannot reliably complete this request because one optional fetch failed.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="tool execution reported an error without a clear blocker handoff",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Cannot reliably complete this request.",
+            had_tool_error=True,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://tw.stock.yahoo.com/quote/2330.TW",
+                                "title": "Yahoo Stock 2330.TW",
+                                "snippet": "TSMC stock quote page.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "https://tw.stock.yahoo.com/quote/2330.TW" in response
+    assert "tool execution reported an error without a clear blocker handoff" not in response
+
+
 def test_incomplete_fallback_response_is_replaced_without_continuation_attempts():
     response = _final_response_after_exhausted_continuation(
         response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
