@@ -322,6 +322,37 @@ def test_web_research_normalizes_query_objects_before_validation():
     assert payload["queries"][:2] == ["台積電 2330 目前股價 2026", "台積電 2330 即時報價"]
 
 
+def test_web_research_expands_and_prioritizes_market_quote_queries():
+    search = _FakeSearchToolByQuery(
+        {
+            "台積電 2330 目前股價 2026": [
+                {"title": "General news", "url": "https://news.example.com/tsmc", "content": "台積電新聞"},
+            ],
+            "台積電 2330 目前股價 2026 Yahoo Finance": [
+                {"title": "台積電(2330.TW) 股價 - Yahoo股市", "url": "https://tw.stock.yahoo.com/quote/2330.TW", "content": "台積電 2330 股價 2355"},
+            ],
+            "台積電 2330 目前股價 2026 Yahoo 股市": [],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://news.example.com/tsmc": _fetch_payload("https://news.example.com/tsmc", title="General news"),
+            "https://tw.stock.yahoo.com/quote/2330.TW": _fetch_payload("https://tw.stock.yahoo.com/quote/2330.TW", title="台積電(2330.TW) 股價 - Yahoo股市"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("台積電 2330 目前股價 2026", count=2, fetch_count=1)))
+
+    assert [call["query"] for call in search.calls[:3]] == [
+        "台積電 2330 目前股價 2026",
+        "台積電 2330 目前股價 2026 Yahoo Finance",
+        "台積電 2330 目前股價 2026 Yahoo 股市",
+    ]
+    assert fetch.calls[0]["url"] == "https://tw.stock.yahoo.com/quote/2330.TW"
+    assert payload["fetched_sources"][0]["domain"] == "tw.stock.yahoo.com"
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):

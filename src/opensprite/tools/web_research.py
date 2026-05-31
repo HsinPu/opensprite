@@ -89,6 +89,21 @@ _OFFICIAL_DOMAIN_STOPWORDS = {
     "free",
     "paid",
 }
+_MARKET_QUOTE_QUERY_RE = re.compile(
+    r"\b(?:stock price|share price|quote|quotes|market price|ticker)\b"
+    r"|(?:\u80a1\u50f9|\u5831\u50f9|\u5373\u6642\u884c\u60c5|\u76ee\u524d\u80a1\u50f9|\u4eca\u65e5\u80a1\u50f9)",
+    re.IGNORECASE,
+)
+_MARKET_QUOTE_DOMAINS = (
+    "stock.yahoo.com",
+    "finance.yahoo.com",
+    "google.com",
+    "cnyes.com",
+    "wantgoo.com",
+    "goodinfo.tw",
+    "sinotrade.com.tw",
+    "macromicro.me",
+)
 
 
 class WebResearchTool(Tool):
@@ -564,6 +579,7 @@ def _research_queries(query: str, queries: list[str] | None, *, freshness: str |
         values.extend(_clean_text(value) for value in queries[:5])
     elif queries is not None:
         values.append(_clean_text(queries))
+    values.extend(_market_quote_queries(query))
 
     seen: set[str] = set()
     out: list[str] = []
@@ -834,14 +850,35 @@ def _prioritize_research_candidates(
     return selected
 
 
-def _candidate_priority(item: dict[str, Any], freshness: str, *, official_domains: set[str] | None = None) -> tuple[int, int, int, int, int, int]:
+def _candidate_priority(item: dict[str, Any], freshness: str, *, official_domains: set[str] | None = None) -> tuple[int, int, int, int, int, int, int]:
     fetchable_penalty = 0 if _is_fetchable_url(item.get("url")) else 1
+    quote_penalty = _candidate_market_quote_penalty(item)
     official_penalty = _candidate_official_penalty(item, official_domains or set())
     low_signal_penalty = _candidate_low_signal_penalty(item)
     stale_penalty = _candidate_staleness_penalty(item, freshness)
     recent_bonus = _candidate_recent_score(item) if freshness in _RECENT_FRESHNESS_VALUES else 0
     rank = _coerce_int(item.get("rank"), default=9999)
-    return (fetchable_penalty, official_penalty, low_signal_penalty, stale_penalty, -recent_bonus, rank)
+    return (fetchable_penalty, quote_penalty, official_penalty, low_signal_penalty, stale_penalty, -recent_bonus, rank)
+
+
+def _market_quote_queries(query: str) -> list[str]:
+    text = _clean_text(query)
+    if not text or not _MARKET_QUOTE_QUERY_RE.search(text):
+        return []
+    return [f"{text} Yahoo Finance", f"{text} Yahoo \u80a1\u5e02"]
+
+
+def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
+    query = _candidate_query(item)
+    if not _MARKET_QUOTE_QUERY_RE.search(query):
+        return 0
+    domain = _candidate_domain(item)
+    text = " ".join(_clean_text(item.get(key)).lower() for key in ("title", "content", "url", "domain"))
+    if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
+        return 0
+    if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
+        return 0
+    return 1
 
 
 def _official_domain_hints(query: str, items: list[dict[str, Any]]) -> set[str]:
