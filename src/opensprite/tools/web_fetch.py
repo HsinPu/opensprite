@@ -171,6 +171,8 @@ import ipaddress
 import re
 import socket
 import asyncio
+import gzip
+import zlib
 from urllib.parse import urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 from urllib.error import URLError, HTTPError
@@ -448,6 +450,21 @@ def _read_response_with_limit(response, max_response_size: int) -> bytes:
     return b"".join(chunks)
 
 
+def _decode_response_body(content: bytes, headers: dict[str, str]) -> bytes:
+    encoding = str(headers.get("Content-Encoding") or "").strip().lower()
+    if encoding == "gzip" or content.startswith(b"\x1f\x8b"):
+        try:
+            return gzip.decompress(content)
+        except (OSError, EOFError):
+            return content
+    if encoding == "deflate":
+        try:
+            return zlib.decompress(content)
+        except zlib.error:
+            return content
+    return content
+
+
 class _SafeRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         validate_url(newurl)
@@ -485,10 +502,12 @@ def _do_fetch(url: str, timeout: int, user_agent: str, max_response_size: int) -
         with opener.open(request, timeout=timeout) as response:
             final_url = response.geturl()
             validate_url(final_url)
+            headers = dict(response.headers)
+            content = _read_response_with_limit(response, max_response_size)
             return (
-                _read_response_with_limit(response, max_response_size),
+                _decode_response_body(content, headers),
                 response.status,
-                dict(response.headers),
+                headers,
                 final_url,
             )
     except HTTPError as e:

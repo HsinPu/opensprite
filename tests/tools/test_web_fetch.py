@@ -1,6 +1,7 @@
 import json
 import asyncio
 import socket
+import gzip
 
 import pytest
 
@@ -412,3 +413,42 @@ def test_do_fetch_stops_reading_when_response_exceeds_limit(monkeypatch):
 
     with pytest.raises(Exception, match="exceeds 5 bytes limit"):
         _do_fetch("https://example.com/large", 30, "test-agent", 5)
+
+
+def test_do_fetch_decompresses_gzip_response(monkeypatch):
+    class FakeResponse:
+        status = 200
+        headers = {"Content-Type": "text/html; charset=utf-8", "Content-Encoding": "gzip"}
+
+        def __init__(self):
+            self._content = gzip.compress(b"<html><body>Readable quote page</body></html>")
+            self._read = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def geturl(self):
+            return "https://example.com/quote"
+
+        def read(self, size=-1):
+            if self._read:
+                return b""
+            self._read = True
+            return self._content
+
+    class FakeOpener:
+        def open(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr("opensprite.tools.web_fetch.socket.getaddrinfo", _public_getaddrinfo)
+    monkeypatch.setattr("opensprite.tools.web_fetch.build_opener", lambda *args, **kwargs: FakeOpener())
+
+    content, status, headers, final_url = _do_fetch("https://example.com/quote", 30, "test-agent", 1024)
+
+    assert content == b"<html><body>Readable quote page</body></html>"
+    assert status == 200
+    assert headers["Content-Encoding"] == "gzip"
+    assert final_url == "https://example.com/quote"
