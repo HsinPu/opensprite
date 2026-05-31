@@ -2881,6 +2881,26 @@ def test_completion_gate_does_not_mark_short_answer_as_progress_only():
     assert completion.reason == "one-turn intent received a response"
 
 
+def test_completion_gate_marks_parallel_fetch_progress_response_incomplete():
+    intent = TaskIntentService().classify(
+        "查一下台積電股價或最近可取得的報價，附來源網址。"
+    )
+    response = (
+        "需要同時抓台股和美股報價，先並行 fetch 幾個主要來源。\n\n"
+        "**Fetching in parallel...**\n\n"
+        "等待所有來源回應後整合結果。"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant response did not explicitly complete the task"
+
+
 def test_completion_gate_marks_internal_only_response_incomplete():
     intent = TaskIntentService().classify("幫我抓 Reddit ai 版 20 筆")
 

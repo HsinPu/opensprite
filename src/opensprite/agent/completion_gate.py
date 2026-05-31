@@ -908,6 +908,10 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
     pending_patterns = (
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
+        r"\bfetching\s+in\s+parallel\b",
+        r"等待.{0,20}(?:來源|source).{0,20}(?:回應|response)",
+        r"(?:先|我會|我要|需要).{0,20}(?:並行|parallel).{0,20}(?:fetch|抓取|取得)",
+        r"(?:先|我會|我要|需要).{0,20}(?:fetch|抓取|取得).{0,20}(?:來源|資料|報價)",
         r"^.{0,20}\blet.*先.*(?:搜尋|搜寻|查詢|查询|查一下|查)",
         r"^.{0,16}(?:我先|先|我來|我来|來查|来查|來搜尋|来搜寻|現在.*先|现在.*先).*(?:搜尋|搜寻|查詢|查询|查一下)",
         r"^.{0,20}(?:透過|通过).*(?:網路|网络|web).*(?:搜尋|搜寻|查詢|查询)",
