@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from pathlib import Path
+import re
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
@@ -1267,6 +1268,12 @@ def _source_fallback_response(
     sources = _substantive_web_sources(execution_result)
     if not sources:
         return ""
+    objective = _execution_objective(execution_result)
+    sources = _rank_web_sources_for_objective(sources, objective)
+    if completion_result.reason == "tool execution reported an error without a clear blocker handoff":
+        top_score = _web_source_relevance_score(sources[0], objective) if sources else 0
+        if top_score <= 0:
+            return ""
 
     detail_lines: list[str] = []
     source_lines: list[str] = []
@@ -1311,6 +1318,54 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
                 seen_urls.add(url)
                 sources.append(raw_source)
     return sources
+
+
+def _execution_objective(execution_result: ExecutionResult) -> str:
+    task_contract = getattr(execution_result, "task_contract", None)
+    return str(getattr(task_contract, "objective", "") or "").strip()
+
+
+def _rank_web_sources_for_objective(sources: list[dict[str, Any]], objective: str) -> list[dict[str, Any]]:
+    if not objective:
+        return sources
+    return sorted(
+        sources,
+        key=lambda source: _web_source_relevance_score(source, objective),
+        reverse=True,
+    )
+
+
+def _web_source_relevance_score(source: dict[str, Any], objective: str) -> int:
+    keywords = _objective_keywords(objective)
+    if not keywords:
+        return 0
+    haystack = " ".join(
+        str(source.get(key) or "")
+        for key in ("title", "url", "snippet", "content", "domain")
+    ).lower()
+    return sum(1 for keyword in keywords if keyword in haystack)
+
+
+def _objective_keywords(objective: str) -> set[str]:
+    text = str(objective or "").lower()
+    keywords: set[str] = set()
+    keywords.update(item for item in re.findall(r"[a-z0-9.:-]{3,}", text))
+    for cjk_text in re.findall(r"[\u4e00-\u9fff]{2,}", text):
+        keywords.add(cjk_text)
+        for size in (2, 3, 4):
+            for index in range(0, max(len(cjk_text) - size + 1, 0)):
+                keywords.add(cjk_text[index : index + size])
+    stop_words = {
+        "please",
+        "current",
+        "latest",
+        "\u5e6b\u6211",
+        "\u76ee\u524d",
+        "\u6700\u65b0",
+        "\u8acb\u5217\u51fa",
+        "\u4f86\u6e90\u7db2\u5740",
+    }
+    return {keyword for keyword in keywords if keyword not in stop_words}
 
 
 def _coerce_positive_int(value: Any) -> int:

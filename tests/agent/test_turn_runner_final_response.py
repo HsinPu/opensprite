@@ -1,6 +1,7 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
+from opensprite.agent.task_contract import TaskContract
 from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation
 
 
@@ -88,6 +89,7 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
         execution_result=ExecutionResult(
             content="Cannot reliably complete this request.",
             had_tool_error=True,
+            task_contract=TaskContract(objective="幫我查一下台積電目前股價，請列出來源網址。", task_type="web_research"),
             task_artifacts=(
                 TaskArtifact(
                     kind="web_source",
@@ -97,8 +99,8 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
                             {
                                 "tool_name": "web_fetch",
                                 "url": "https://tw.stock.yahoo.com/quote/2330.TW",
-                                "title": "Yahoo Stock 2330.TW",
-                                "snippet": "TSMC stock quote page.",
+                                "title": "台積電(2330.TW) 股價 - Yahoo股市",
+                                "snippet": "台積電 2330 股價頁面。",
                                 "content_chars": 1200,
                                 "has_main_content": True,
                                 "is_too_short": False,
@@ -112,6 +114,52 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
 
     assert "https://tw.stock.yahoo.com/quote/2330.TW" in response
     assert "tool execution reported an error without a clear blocker handoff" not in response
+
+
+def test_optional_tool_error_source_fallback_ranks_relevant_sources_first():
+    response = _final_response_after_exhausted_continuation(
+        response="Cannot reliably complete this request because one optional fetch failed.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="tool execution reported an error without a clear blocker handoff",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Cannot reliably complete this request.",
+            had_tool_error=True,
+            task_contract=TaskContract(objective="幫我查一下台積電目前股價，請列出來源網址。", task_type="web_research"),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://example.com/general-market-commentary",
+                                "title": "General Market Commentary",
+                                "snippet": "A broad market article without the requested stock quote.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            },
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://tw.stock.yahoo.com/quote/2330.TW",
+                                "title": "台積電(2330.TW) 股價 - Yahoo股市",
+                                "snippet": "台積電 2330 股價 2,355 收盤。",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            },
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert response.index("https://tw.stock.yahoo.com/quote/2330.TW") < response.index("https://example.com/general-market-commentary")
 
 
 def test_incomplete_fallback_response_is_replaced_without_continuation_attempts():
