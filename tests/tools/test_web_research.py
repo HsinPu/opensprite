@@ -285,6 +285,43 @@ def test_web_research_runs_manual_queries_and_dedupes_fetches():
     assert all(attempt["backend"] == "ddgs" for attempt in payload["query_attempts"])
 
 
+def test_web_research_normalizes_query_objects_before_validation():
+    search = _FakeSearchToolByQuery(
+        {
+            "台積電 2330 目前股價 2026": [
+                {"title": "台積電股價", "url": "https://example.com/2330", "content": "台積電 2330 股價"},
+            ],
+            "台積電 2330 即時報價": [],
+        }
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://example.com/2330": _fetch_payload("https://example.com/2330", title="台積電股價"),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool.execute_validated(
+                {
+                    "query": {"query": "台積電 2330 目前股價 2026"},
+                    "queries": [{"q": "台積電 2330 即時報價"}],
+                    "count": 2,
+                    "fetch_count": 1,
+                }
+            )
+        )
+    )
+
+    assert search.calls[:2] == [
+        {"query": "台積電 2330 目前股價 2026", "count": 2, "freshness": "month"},
+        {"query": "台積電 2330 即時報價", "count": 2, "freshness": "month"},
+    ]
+    assert payload["query"] == "台積電 2330 目前股價 2026"
+    assert payload["queries"][:2] == ["台積電 2330 目前股價 2026", "台積電 2330 即時報價"]
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):

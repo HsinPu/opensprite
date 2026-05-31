@@ -163,6 +163,10 @@ class WebResearchTool(Tool):
             "required": ["query"],
         }
 
+    async def execute_validated(self, params: Any) -> str:
+        """Normalize common LLM query-object shapes before schema validation."""
+        return await super().execute_validated(_normalize_research_params(params))
+
     async def _execute(
         self,
         query: str,
@@ -893,6 +897,35 @@ def _dedupe_query_strings(values: list[str]) -> list[str]:
         seen.add(key)
         out.append(text)
     return out
+
+
+def _normalize_research_params(params: Any) -> Any:
+    if not isinstance(params, dict):
+        return params
+    normalized = dict(params)
+    query = _coerce_query_text(normalized.get("query"))
+    raw_queries = normalized.get("queries")
+    queries = [_coerce_query_text(item) for item in raw_queries] if isinstance(raw_queries, list) else []
+    queries = [item for item in queries if item]
+    if query:
+        normalized["query"] = query
+    elif queries:
+        normalized["query"] = queries[0]
+        queries = queries[1:]
+    if isinstance(raw_queries, list):
+        normalized["queries"] = queries
+    return normalized
+
+
+def _coerce_query_text(value: Any) -> str:
+    if isinstance(value, str):
+        return _clean_text(value)
+    if isinstance(value, dict):
+        for key in ("query", "q", "text", "title"):
+            text = _clean_text(value.get(key))
+            if text:
+                return text
+    return ""
 
 
 def _candidate_official_penalty(item: dict[str, Any], official_domains: set[str]) -> int:
