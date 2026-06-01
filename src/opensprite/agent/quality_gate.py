@@ -218,7 +218,8 @@ def _answer_contains_market_quote(normalized_answer: str) -> bool:
     return bool(
         re.search(
             r"(?:\$|usd|twd|nt\$|美元|台幣)\s*\d+(?:[,.]\d+)*(?:\.\d+)?"
-            r"|\d+(?:[,.]\d+)*(?:\.\d+)?\s*(?:usd|twd|美元|台幣)",
+            r"|\d+(?:[,.]\d+)*(?:\.\d+)?\s*(?:usd|twd|美元|台幣)"
+            r"|(?:股價|報價|收盤|quote|price)\D{0,24}\d+(?:[,.]\d+)*(?:\.\d+)?",
             normalized_answer,
             flags=re.IGNORECASE,
         )

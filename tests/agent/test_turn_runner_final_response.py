@@ -119,6 +119,48 @@ def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snipp
     assert "![]" not in response
 
 
+def test_exhausted_continuation_does_not_source_fallback_market_quote_without_price():
+    response = _final_response_after_exhausted_continuation(
+        response="Let me keep checking that.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="assistant final answer was too terse for the task",
+            active_task_detail="State the current or latest available quote directly before listing sources.",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Let me keep checking that.",
+            task_contract=TaskContract(
+                objective="幫我找一下台積電 ADR 目前最新股價或最接近可查到的報價，並附來源。",
+                task_type="web_research",
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://finance.yahoo.com/quote/TSM/",
+                                "title": "TSM Stock Price",
+                                "snippet": "Yahoo Finance quote page for Taiwan Semiconductor Manufacturing Company.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "重點摘要" not in response
+    assert "目前還不能可靠完成這次請求" in response
+    assert "latest available quote" in response
+
+
 def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_error():
     response = _final_response_after_exhausted_continuation(
         response="Cannot reliably complete this request because one optional fetch failed.",
