@@ -3,11 +3,17 @@ import pytest
 from opensprite.agent.completion_judge import (
     CompletionJudgeError,
     CompletionJudgeService,
+    build_completion_judge_facts,
     normalize_completion_judge_payload,
     parse_completion_judge_json,
 )
+from opensprite.agent.execution import ExecutionResult, LlmStepEvent
+from opensprite.agent.task_artifact import TaskArtifact
+from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task_intent import TaskIntent
 from opensprite.config import DocumentLlmConfig
 from opensprite.llms import LLMResponse
+from opensprite.tools.evidence import ToolEvidence
 
 
 def _llm_config() -> DocumentLlmConfig:
@@ -107,3 +113,73 @@ async def test_completion_judge_service_blocks_when_llm_unconfigured():
 
     with pytest.raises(CompletionJudgeError):
         await service.judge(provider=None, model="unconfigured", facts={})
+
+
+def test_build_completion_judge_facts_uses_structured_execution_data():
+    intent = TaskIntent(
+        kind="task",
+        objective="Find current sources",
+        constraints=("cite sources",),
+        done_criteria=("include URLs",),
+        long_running=True,
+    )
+    contract = TaskContract(
+        objective="Find current sources",
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="web_source", min_count=2, description="sources"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="source_grounded_final_answer", min_count=2),),
+    )
+    result = ExecutionResult(
+        content="answer",
+        executed_tool_calls=2,
+        touched_paths=("README.md",),
+        verification_attempted=True,
+        task_contract=contract,
+        tool_evidence=(
+            ToolEvidence(
+                name="web_search",
+                ok=True,
+                result_preview="source preview",
+                metadata={"sources": [{"url": "https://example.com", "title": "Example"}]},
+            ),
+        ),
+        task_artifacts=(
+            TaskArtifact(
+                kind="web_source",
+                source_tool="web_search",
+                content_preview="artifact preview",
+                metadata={"source_count": 1},
+            ),
+        ),
+        llm_step_events=[
+            LlmStepEvent(
+                iteration=1,
+                attempt=1,
+                status="success",
+                provider="openrouter",
+                model="model",
+                duration_ms=50,
+                estimated_input_tokens=10,
+                message_tokens=8,
+                tool_schema_tokens=2,
+                tools_enabled=True,
+                tool_count=3,
+                tool_calls=1,
+            )
+        ],
+    )
+
+    facts = build_completion_judge_facts(
+        task_intent=intent,
+        response_text="final response",
+        execution_result=result,
+    )
+
+    assert facts["task_intent"]["objective"] == "Find current sources"
+    assert facts["task_contract"]["task_type"] == "web_research"
+    assert facts["assistant_response"]["text"] == "final response"
+    assert facts["execution"]["executed_tool_calls"] == 2
+    assert facts["execution"]["verification_attempted"] is True
+    assert facts["tool_evidence"][0]["name"] == "web_search"
+    assert facts["task_artifacts"][0]["kind"] == "web_source"
+    assert facts["llm_steps"][0]["tool_calls"] == 1
