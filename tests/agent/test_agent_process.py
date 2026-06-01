@@ -71,6 +71,153 @@ def _is_planner_call(messages, tools=None) -> bool:
     return "task-contract planner" in first
 
 
+def _is_completion_judge_call(messages, tools=None) -> bool:
+    if tools:
+        return False
+    first = str(getattr(messages[0], "content", "") or "") if messages else ""
+    return "completion judge" in first
+
+
+def _completion_judge_facts(messages) -> dict:
+    latest_user_text = next(
+        (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
+        "",
+    )
+    marker = "Facts:\n"
+    raw = latest_user_text.split(marker, 1)[1] if marker in latest_user_text else "{}"
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _completion_judge_response(messages) -> LLMResponse:
+    facts = _completion_judge_facts(messages)
+    response = str(facts.get("assistant_response", {}).get("text") or "")
+    execution = facts.get("execution", {}) if isinstance(facts.get("execution"), dict) else {}
+    contract = facts.get("task_contract", {}) if isinstance(facts.get("task_contract"), dict) else {}
+    intent = facts.get("task_intent", {}) if isinstance(facts.get("task_intent"), dict) else {}
+    objective = str(contract.get("objective") or intent.get("objective") or "")
+    requirements = contract.get("requirements") if isinstance(contract.get("requirements"), list) else []
+    requirement_kinds = {str(item.get("kind") or "") for item in requirements if isinstance(item, dict)}
+    delegated_tasks = facts.get("delegated_tasks") if isinstance(facts.get("delegated_tasks"), list) else []
+    review_attempted = any(
+        isinstance(item, dict) and item.get("prompt_type") in {"code-reviewer", "security-reviewer", "async-concurrency-reviewer"}
+        for item in delegated_tasks
+    )
+    clean_review = any(
+        isinstance(item, dict)
+        and item.get("prompt_type") == "code-reviewer"
+        and "No major findings" in str(item.get("summary") or item.get("metadata") or "")
+        for item in delegated_tasks
+    )
+    file_changes = int(execution.get("file_change_count") or 0)
+    verification_passed = bool(execution.get("verification_passed"))
+    verification_attempted = bool(execution.get("verification_attempted"))
+    workflow_outcomes = facts.get("workflow_outcomes") if isinstance(facts.get("workflow_outcomes"), list) else []
+    completed_workflow = next(
+        (item for item in reversed(workflow_outcomes) if isinstance(item, dict) and item.get("status") == "completed"),
+        None,
+    )
+    cancelled_workflow = next(
+        (item for item in reversed(workflow_outcomes) if isinstance(item, dict) and item.get("status") == "cancelled"),
+        None,
+    )
+    if "?" in response or "？" in response:
+        payload = {"status": "waiting_user", "reason": "assistant requested missing information", "active_task_status": "waiting_user", "active_task_detail": response}
+    elif verification_attempted and not verification_passed:
+        payload = {
+            "status": "needs_verification",
+            "reason": "verification did not pass",
+            "active_task_status": "in_progress",
+            "verification_required": True,
+            "verification_attempted": True,
+            "verification_passed": False,
+            "verification_action": "pytest",
+            "verification_path": ".",
+        }
+    elif (
+        completed_workflow
+        and completed_workflow.get("review_passed") is True
+        and ("tests" in objective.lower() or "verify" in objective.lower())
+        and not verification_passed
+    ):
+        payload = {
+            "status": "needs_verification",
+            "reason": "required verification was not recorded",
+            "active_task_status": "in_progress",
+            "verification_required": True,
+            "verification_attempted": False,
+            "verification_passed": False,
+            "verification_action": "pytest",
+            "verification_path": ".",
+        }
+    elif completed_workflow and completed_workflow.get("review_passed") is True:
+        workflow_name = str(completed_workflow.get("workflow") or "workflow")
+        payload = {"status": "complete", "reason": f"workflow {workflow_name} completed with clean review evidence", "active_task_status": "done", "review_attempted": True, "review_passed": True}
+    elif completed_workflow and completed_workflow.get("review_passed") is False:
+        payload = {
+            "status": "needs_review",
+            "reason": "review findings require follow-up",
+            "active_task_status": "in_progress",
+            "review_required": True,
+            "review_attempted": True,
+            "review_passed": False,
+            "review_summary": str(completed_workflow.get("review_summary") or ""),
+            "review_finding_count": int(completed_workflow.get("review_finding_count") or 0),
+            "follow_up_workflow": completed_workflow.get("workflow"),
+            "follow_up_step_id": "implement",
+            "follow_up_step_label": "Address review findings",
+            "follow_up_prompt_type": "implementer",
+        }
+    elif execution.get("had_tool_error"):
+        payload = {"status": "blocked", "reason": response or "tool error", "active_task_status": "blocked", "active_task_detail": response}
+    elif "reviewed outcome" in response:
+        payload = {"status": "complete", "reason": "judge accepted reviewed workflow outcome", "active_task_status": "done", "review_attempted": True, "review_passed": True}
+    elif cancelled_workflow:
+        payload = {
+            "status": "needs_review",
+            "reason": "workflow follow-up is required",
+            "active_task_status": "in_progress",
+            "follow_up_workflow": cancelled_workflow.get("workflow"),
+            "follow_up_step_id": cancelled_workflow.get("next_step_id"),
+            "follow_up_step_label": cancelled_workflow.get("next_step_label"),
+            "follow_up_prompt_type": cancelled_workflow.get("next_step_prompt_type"),
+        }
+    elif (("file_change" in requirement_kinds) or "refactor" in objective.lower() or "implement" in objective.lower()) and file_changes <= 0:
+        payload = {"status": "incomplete", "reason": "expected code changes were not recorded", "active_task_status": "in_progress"}
+    elif (("verification" in requirement_kinds) or "tests" in objective.lower() or "verify" in objective.lower()) and not verification_passed:
+        payload = {
+            "status": "needs_verification",
+            "reason": "required verification was not recorded",
+            "active_task_status": "in_progress",
+            "verification_required": True,
+            "verification_attempted": verification_attempted,
+            "verification_passed": False,
+            "verification_action": "pytest",
+            "verification_path": ".",
+        }
+    elif file_changes > 0 and not review_attempted:
+        payload = {"status": "needs_review", "reason": "delegated review was not recorded for code changes", "active_task_status": "in_progress", "review_required": True}
+    elif delegated_tasks and any(isinstance(item, dict) and item.get("selected") for item in delegated_tasks):
+        payload = {"status": "incomplete", "reason": "delegated task is active", "active_task_status": "in_progress"}
+    elif review_attempted and not clean_review:
+        payload = {"status": "needs_review", "reason": "review findings require follow-up", "active_task_status": "in_progress", "review_required": True, "review_attempted": True}
+    else:
+        payload = {
+            "status": "complete",
+            "reason": "judge accepted test response",
+            "active_task_status": "done",
+            "verification_required": "verification" in requirement_kinds,
+            "verification_attempted": verification_attempted,
+            "verification_passed": verification_passed,
+            "review_attempted": review_attempted,
+            "review_passed": clean_review or not review_attempted,
+        }
+    return LLMResponse(content=json.dumps(payload), model="fake-model")
+
+
 def _planner_response(task_type: str = "code_change") -> LLMResponse:
     payload = {
         "task_type": task_type,
@@ -86,6 +233,8 @@ class FakeProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         if _is_planner_call(messages, tools):
             return _planner_response()
+        if _is_completion_judge_call(messages, tools):
+            return _completion_judge_response(messages)
         raise AssertionError("provider.chat should only be called by the planner in this test")
 
     def get_default_model(self) -> str:
@@ -211,6 +360,8 @@ class WorkflowAuthorityProvider:
         self.calls.append({"messages": list(messages), "tools": tools})
         if _is_planner_call(messages, tools):
             return _planner_response()
+        if _is_completion_judge_call(messages, tools):
+            return _completion_judge_response(messages)
         latest_user_text = next(
             (str(getattr(message, "content", "") or "") for message in reversed(messages) if getattr(message, "role", None) == "user"),
             "",

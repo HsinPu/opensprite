@@ -1503,7 +1503,7 @@ def _should_replace_nonfinal_response(
         return True
     if completion_result.status in {"blocked", "waiting_user"}:
         return False
-    return completion_result.status in {"incomplete", "needs_verification", "needs_review"}
+    return completion_result.status in {"incomplete", "needs_verification"}
 
 
 def _completion_blocker_response(completion_result: CompletionGateResult) -> str:
