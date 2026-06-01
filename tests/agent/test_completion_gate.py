@@ -2943,6 +2943,26 @@ def test_completion_gate_marks_shell_style_fetch_control_response_incomplete():
     assert completion.reason == "assistant response did not explicitly complete the task"
 
 
+def test_completion_gate_marks_xml_toolcall_control_response_incomplete():
+    intent = TaskIntentService().classify("幫我查目前 OpenRouter 官方文件中 API base URL 是什麼，附來源網址。")
+    response = (
+        "<toolcall>\n"
+        '<tool name="web_fetch">\n'
+        '<parameter name="url">https://openrouter.ai/docs/api-reference/overview.md</parameter>\n'
+        "</tool>\n"
+        "</toolcall>"
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+    )
+
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant response did not explicitly complete the task"
+
+
 def test_completion_gate_marks_internal_only_response_incomplete():
     intent = TaskIntentService().classify("幫我抓 Reddit ai 版 20 筆")
 

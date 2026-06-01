@@ -927,6 +927,8 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
     ):
         return True
     pending_patterns = (
+        r"^\s*<toolcall\b",
+        r"^\s*<tool\s+name=",
         r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)",
         r"^\s*\$(?:kind|url|instruction)\s*=",
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
@@ -957,7 +959,9 @@ def _looks_like_retry_or_blocker_response(normalized_lowered: str) -> bool:
 
 def _looks_like_internal_control_response(normalized_lowered: str) -> bool:
     return bool(
-        re.search(r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)", normalized_lowered)
+        re.search(r"^\s*<toolcall\b", normalized_lowered)
+        or re.search(r"^\s*<tool\s+name=", normalized_lowered)
+        or re.search(r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)", normalized_lowered)
         or re.search(r"^\s*\$(?:kind|url|instruction)\s*=", normalized_lowered)
         or re.search(r"\bfetching\s+in\s+parallel\b", normalized_lowered)
     )
