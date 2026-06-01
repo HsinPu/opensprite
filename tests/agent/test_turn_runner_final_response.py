@@ -200,9 +200,9 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
                         "sources": [
                             {
                                 "tool_name": "web_fetch",
-                                "url": "https://tw.stock.yahoo.com/quote/2330.TW",
-                                "title": "台積電(2330.TW) 股價 - Yahoo股市",
-                                "snippet": "台積電 2330 股價頁面。",
+                                "url": "https://openrouter.ai/docs/api/reference/overview",
+                                "title": "OpenRouter API Reference",
+                                "snippet": "OpenRouter API requests use the https://openrouter.ai/api/v1 base URL.",
                                 "content_chars": 1200,
                                 "has_main_content": True,
                                 "is_too_short": False,
@@ -214,7 +214,7 @@ def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_er
         ),
     )
 
-    assert "https://tw.stock.yahoo.com/quote/2330.TW" in response
+    assert "https://openrouter.ai/docs/api/reference/overview" in response
     assert "tool execution reported an error without a clear blocker handoff" not in response
 
 
