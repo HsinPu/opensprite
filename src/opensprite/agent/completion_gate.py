@@ -11,6 +11,12 @@ from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
+from .completion_judge import (
+    CompletionJudgeError,
+    CompletionJudgeService,
+    CompletionJudgeVerdict,
+    build_completion_judge_facts,
+)
 from .quality_gate import QualityGateService
 from .task_intent import TaskIntent
 
@@ -184,12 +190,40 @@ class CompletionGateService:
         self,
         *,
         llm_config: DocumentLlmConfig | None = None,
+        judge_service: CompletionJudgeService | None = None,
         evidence_gate: EvidenceGateService | None = None,
         quality_gate: QualityGateService | None = None,
     ):
         self.llm_config = llm_config
+        self.judge_service = judge_service or (CompletionJudgeService(llm_config) if llm_config is not None else None)
         self.evidence_gate = evidence_gate or EvidenceGateService()
         self.quality_gate = quality_gate or QualityGateService()
+
+    async def evaluate_with_judge(
+        self,
+        *,
+        task_intent: TaskIntent,
+        response_text: str,
+        execution_result: ExecutionResult,
+        provider: Any,
+        model: str | None,
+    ) -> CompletionGateResult:
+        """Return the LLM judge verdict for the current turn."""
+        judge = self.judge_service
+        if judge is None:
+            return _completion_judge_blocked_result("completion judge unavailable: missing llm config")
+        facts = build_completion_judge_facts(
+            task_intent=task_intent,
+            response_text=response_text,
+            execution_result=execution_result,
+        )
+        try:
+            verdict = await judge.judge(provider=provider, model=model, facts=facts)
+        except CompletionJudgeError as exc:
+            return _completion_judge_blocked_result(str(exc))
+        except Exception as exc:
+            return _completion_judge_blocked_result(f"completion judge failed: {type(exc).__name__}")
+        return _completion_result_from_judge_verdict(verdict)
 
     def evaluate(
         self,
@@ -749,6 +783,43 @@ class CompletionGateService:
             task_contract=evidence_result.task_contract,
         )
         return quality_result.passed
+
+
+def _completion_result_from_judge_verdict(verdict: CompletionJudgeVerdict) -> CompletionGateResult:
+    return CompletionGateResult(
+        status=verdict.status,
+        reason=verdict.reason,
+        active_task_status=verdict.active_task_status,
+        active_task_detail=verdict.active_task_detail,
+        follow_up_workflow=verdict.follow_up_workflow,
+        follow_up_step_id=verdict.follow_up_step_id,
+        follow_up_step_label=verdict.follow_up_step_label,
+        follow_up_prompt_type=verdict.follow_up_prompt_type,
+        verification_action=verdict.verification_action,
+        verification_path=verdict.verification_path,
+        verification_pytest_args=verdict.verification_pytest_args,
+        should_update_active_task=bool(verdict.active_task_status),
+        verification_required=verdict.verification_required,
+        verification_attempted=verdict.verification_attempted,
+        verification_passed=verdict.verification_passed,
+        review_required=verdict.review_required,
+        review_attempted=verdict.review_attempted,
+        review_passed=verdict.review_passed,
+        review_summary=verdict.review_summary,
+        review_prompt_types=verdict.review_prompt_types,
+        review_finding_count=verdict.review_finding_count,
+        missing_evidence=verdict.missing_evidence,
+    )
+
+
+def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
+    return CompletionGateResult(
+        status="blocked",
+        reason=reason or "completion judge unavailable",
+        active_task_status="blocked",
+        active_task_detail=reason or "completion judge unavailable",
+        should_update_active_task=True,
+    )
 
 
 def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -> bool:

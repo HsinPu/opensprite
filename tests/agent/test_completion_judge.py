@@ -3,10 +3,12 @@ import pytest
 from opensprite.agent.completion_judge import (
     CompletionJudgeError,
     CompletionJudgeService,
+    CompletionJudgeVerdict,
     build_completion_judge_facts,
     normalize_completion_judge_payload,
     parse_completion_judge_json,
 )
+from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
@@ -35,6 +37,19 @@ class FakeProvider:
     async def chat(self, messages, **kwargs):
         self.calls.append((messages, kwargs))
         return LLMResponse(content=self.response, model=str(kwargs.get("model") or "test-model"))
+
+
+class FakeJudgeService:
+    def __init__(self, verdict=None, error=None):
+        self.verdict = verdict
+        self.error = error
+        self.calls = []
+
+    async def judge(self, **kwargs):
+        self.calls.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        return self.verdict
 
 
 def test_parse_completion_judge_json_accepts_fenced_object():
@@ -183,3 +198,51 @@ def test_build_completion_judge_facts_uses_structured_execution_data():
     assert facts["tool_evidence"][0]["name"] == "web_search"
     assert facts["task_artifacts"][0]["kind"] == "web_source"
     assert facts["llm_steps"][0]["tool_calls"] == 1
+
+
+@pytest.mark.anyio
+async def test_completion_gate_evaluate_with_judge_returns_judge_verdict():
+    intent = TaskIntent(kind="task", objective="answer")
+    verdict = CompletionJudgeVerdict(
+        status="complete",
+        reason="judge says done",
+        active_task_status="done",
+        verification_required=True,
+        verification_attempted=True,
+        verification_passed=True,
+    )
+    judge = FakeJudgeService(verdict=verdict)
+    service = CompletionGateService(llm_config=_llm_config(), judge_service=judge)
+
+    result = await service.evaluate_with_judge(
+        task_intent=intent,
+        response_text="answer",
+        execution_result=ExecutionResult(content="answer"),
+        provider=object(),
+        model="model",
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "judge says done"
+    assert result.active_task_status == "done"
+    assert result.verification_passed is True
+    assert judge.calls[0]["facts"]["assistant_response"]["text"] == "answer"
+
+
+@pytest.mark.anyio
+async def test_completion_gate_evaluate_with_judge_blocks_on_judge_error():
+    intent = TaskIntent(kind="task", objective="answer")
+    judge = FakeJudgeService(error=CompletionJudgeError("bad judge"))
+    service = CompletionGateService(llm_config=_llm_config(), judge_service=judge)
+
+    result = await service.evaluate_with_judge(
+        task_intent=intent,
+        response_text="answer",
+        execution_result=ExecutionResult(content="answer"),
+        provider=object(),
+        model="model",
+    )
+
+    assert result.status == "blocked"
+    assert result.reason == "bad judge"
+    assert result.active_task_status == "blocked"
