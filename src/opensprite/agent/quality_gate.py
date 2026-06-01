@@ -53,6 +53,9 @@ class QualityGateService:
         artifact_result = _evaluate_media_artifacts(contract, execution_result)
         if artifact_result is not None:
             return artifact_result
+        command_version_result = _evaluate_command_version_answer(contract, response_text, execution_result)
+        if command_version_result is not None:
+            return command_version_result
         if contract.task_type == "history_retrieval" and _history_retrieval_was_empty(execution_result):
             history_result = _evaluate_history_grounding(contract, response_text, execution_result)
             if history_result is not None:
@@ -378,6 +381,81 @@ def _evaluate_operation_report(
     )
 
 
+def _evaluate_command_version_answer(
+    contract: TaskContract,
+    response_text: str,
+    execution_result: ExecutionResult,
+) -> QualityGateResult | None:
+    if contract.task_type != "operations":
+        return None
+    objective = re.sub(r"\s+", " ", str(contract.objective or "")).strip().lower()
+    if not _asks_for_command_version(objective):
+        return None
+    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
+    if not normalized_response:
+        return None
+    if _response_reports_command_unavailable(normalized_response):
+        return None
+    if _response_contains_version_like_value(normalized_response):
+        return None
+    if _response_confuses_command_version_with_repo_state(normalized_response, execution_result):
+        detail = (
+            "- The user asked for the installed command/program version. "
+            "Run the direct version command, such as `<command> --version`, instead of inspecting `.git`, `HEAD`, or repository commits."
+        )
+    else:
+        detail = "- Include the installed command/program version from the execution result, or clearly state that the command is unavailable."
+    return QualityGateResult(
+        passed=False,
+        status="incomplete",
+        reason="command version answer did not report a version",
+        active_task_detail=detail,
+    )
+
+
+def _asks_for_command_version(normalized_objective: str) -> bool:
+    if not any(marker in normalized_objective for marker in ("version", "版本")):
+        return False
+    return bool(re.search(r"\b(?:git|python|python3|node|npm|pnpm|yarn|docker|uv|pip|poetry)\b", normalized_objective))
+
+
+def _response_contains_version_like_value(normalized_response: str) -> bool:
+    return bool(re.search(r"\b\d+(?:\.\d+){1,}(?:[-+._a-z0-9]*)?\b", normalized_response))
+
+
+def _response_reports_command_unavailable(normalized_response: str) -> bool:
+    return any(
+        marker in normalized_response
+        for marker in (
+            "not installed",
+            "command not found",
+            "not recognized",
+            "找不到命令",
+            "未安裝",
+            "沒有安裝",
+        )
+    )
+
+
+def _response_confuses_command_version_with_repo_state(
+    normalized_response: str,
+    execution_result: ExecutionResult,
+) -> bool:
+    repo_state_markers = (".git", "not a git repository", "head", "rev-parse", "commit")
+    if any(marker in normalized_response for marker in repo_state_markers):
+        return True
+    for evidence in execution_result.tool_evidence:
+        command = ""
+        if isinstance(evidence.metadata, dict):
+            args = evidence.metadata.get("tool_args")
+            if isinstance(args, dict):
+                command = str(args.get("command") or "").lower()
+        preview = str(evidence.result_preview or "").lower()
+        if "git rev-parse" in command or any(marker in preview for marker in repo_state_markers):
+            return True
+    return False
+
+
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
@@ -413,7 +491,16 @@ def _version_token_overlap(expected: str, actual: str) -> bool:
         for token in re.split(r"[^0-9a-zA-Z._-]+", expected)
         if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
     ]
-    return any(token in actual for token in version_tokens)
+    actual_tokens = [
+        token
+        for token in re.split(r"[^0-9a-zA-Z._-]+", actual)
+        if len(token) >= 5 and any(char.isdigit() for char in token) and "." in token
+    ]
+    return any(
+        token in actual
+        or any(token.startswith(actual_token) or actual_token.startswith(token) for actual_token in actual_tokens)
+        for token in version_tokens
+    )
 
 
 def _meaningful_overlap(expected: str, actual: str) -> bool:

@@ -613,12 +613,17 @@ def _contract_from_planner_payload(
         current_message=current_message,
         history=history,
     )
+    forced_command_version = _is_command_version_question(task_intent, current_message)
     if forced_no_tool or forced_recent_context_no_tool:
         raw_task_type = "pure_answer"
+    elif forced_command_version:
+        raw_task_type = "ops"
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
     if forced_no_tool or forced_recent_context_no_tool:
         tool_groups = []
+    elif forced_command_version:
+        tool_groups = ["execution"]
     if task_type == "history_retrieval":
         tool_groups = [tool_group for tool_group in tool_groups if tool_group == "history_retrieval"]
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
@@ -724,6 +729,8 @@ def _contract_from_planner_payload(
         metadata["override_reason"] = "command usage question does not require workspace evidence"
     if forced_recent_context_no_tool:
         metadata["override_reason"] = "immediate follow-up explicitly asked not to gather new evidence"
+    if forced_command_version:
+        metadata["override_reason"] = "command version questions require fresh execution evidence"
     return TaskContract(
         objective=objective,
         task_type=task_type,
@@ -763,6 +770,13 @@ def _is_no_tool_command_usage_question(task_intent: TaskIntent, current_message:
     if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text) and not forbids_workspace_evidence:
         return False
     return forbids_workspace_evidence and bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
+
+
+def _is_command_version_question(task_intent: TaskIntent, current_message: str) -> bool:
+    text = str(current_message or task_intent.objective or "").strip().lower()
+    if not any(marker in text for marker in ("version", "版本")):
+        return False
+    return bool(re.search(r"\b(?:git|python|python3|node|npm|pnpm|yarn|docker|uv|pip|poetry)\b", text))
 
 
 def _is_recent_context_no_tool_follow_up(

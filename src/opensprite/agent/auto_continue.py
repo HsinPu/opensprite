@@ -622,6 +622,12 @@ def _quality_follow_up_instruction(completion_result: CompletionGateResult) -> s
             "Do not reply with only 'done', 'completed', '已完成', or another short acknowledgement. "
             "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
         )
+    if reason == "command version answer did not report a version":
+        return (
+            "\n- Quality follow-up: the user asked for the installed command/program version. "
+            "Run the direct version command, such as `<command> --version`, and answer with the version value. "
+            "Do not inspect `.git`, `HEAD`, repository commits, or package metadata unless the user asks for repository state."
+        )
     if reason == "assistant did not provide the requested itemized result":
         return (
             "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "

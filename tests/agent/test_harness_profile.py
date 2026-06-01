@@ -242,6 +242,33 @@ async def test_task_contract_planner_builds_execution_contract_from_llm_json():
 
 
 @pytest.mark.anyio
+async def test_task_contract_planner_forces_execution_for_command_version_even_if_llm_downgrades():
+    planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
+    intent = TaskIntentService().classify("確認這台目前 git 版本，只回答版本號。")
+    provider = _FakePlannerProvider(
+        {
+            "task_type": "pure_answer",
+            "required_tool_groups": [],
+            "allow_no_tool_final": True,
+            "reason": "The previous response already mentioned a git version.",
+        }
+    )
+
+    contract = await planner.plan(
+        provider=provider,
+        model="planner-model",
+        task_intent=intent,
+        current_message=intent.objective,
+        history=[{"role": "assistant", "content": "`git --version` -> git version 2.47.0.windows.1"}],
+    )
+
+    assert contract.task_type == "operations"
+    assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["override_reason"] == "command version questions require fresh execution evidence"
+
+
+@pytest.mark.anyio
 async def test_task_contract_planner_keeps_current_cli_usage_with_workspace_when_reading_allowed():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     message = "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"

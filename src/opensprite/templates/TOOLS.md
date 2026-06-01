@@ -75,6 +75,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 - `exec`
   - Use for verification, project inspection, builds, tests, and other shell work.
+  - For command or program version questions, run the direct version command such as `<command> --version`; do not inspect repository commits, `.git`, `HEAD`, or package files unless the user asked for repo/version-control state.
   - Default timeout is 60 seconds unless configured otherwise.
   - Use managed background execution with `background=true` or `yield_ms=<milliseconds>` when the command is long-running and you need to inspect it later with `process`.
   - Dangerous commands and obvious destructive patterns are blocked, but you must still judge user intent and risk.

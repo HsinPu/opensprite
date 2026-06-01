@@ -522,6 +522,68 @@ def test_completion_gate_does_not_require_verification_for_operations_report():
     assert result.verification_required is False
 
 
+def test_completion_gate_rejects_repo_state_answer_for_command_version_question():
+    intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Unable to answer because this repo is not a git repository and has no .git directory.",
+        execution_result=ExecutionResult(
+            content="Unable to answer because this repo is not a git repository and has no .git directory.",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(
+                    name="exec",
+                    ok=True,
+                    result_preview="fatal: not a git repository (or any of the parent directories): .git",
+                    metadata={"tool_args": {"command": "git rev-parse HEAD"}},
+                ),
+            ),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "command version answer did not report a version"
+    assert "<command> --version" in (result.active_task_detail or "")
+
+
+def test_completion_gate_accepts_shortened_command_version_from_tool_result():
+    intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="2.47.1",
+        execution_result=ExecutionResult(
+            content="2.47.1",
+            executed_tool_calls=1,
+            tool_evidence=(
+                ToolEvidence(
+                    name="exec",
+                    ok=True,
+                    result_preview="git version 2.47.1.windows.2",
+                    metadata={"tool_args": {"command": "git --version"}},
+                ),
+            ),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
+
+
 def test_completion_gate_treats_max_tool_iterations_as_incomplete():
     intent = TaskIntentService().classify("Please implement the cleanup and run tests.")
 

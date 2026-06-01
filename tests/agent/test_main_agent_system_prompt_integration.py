@@ -278,6 +278,7 @@ def test_main_agent_call_llm_passes_full_file_builder_system_prompt_to_provider(
     assert "Do not end a turn with a promise of future action" in system_text
     assert "When the user says things like \"earlier\", \"before\", \"again\"" in system_text
     assert "When the conversation has been compacted, treat the compacted state as a handoff" in system_text
+    assert "For command or program version questions, run the direct version command" in system_text
     assert "# MCP Configuration" in system_text
     assert "prefer using `configure_mcp` instead of telling the user to edit config files manually" in system_text
     assert "# Available Subagents" in system_text
