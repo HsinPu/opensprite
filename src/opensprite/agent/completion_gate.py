@@ -1013,10 +1013,12 @@ def _looks_like_pending_action_response(normalized_lowered: str) -> bool:
     pending_patterns = (
         r"^\s*<toolcall\b",
         r"^\s*<tool\s+name=",
+        r"^\s*<function_calls\b",
         r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)",
         r"^\s*\$(?:kind|url|instruction)\s*=",
         r"\blet\s*(?:me|us)?\b.*\b(?:search|look up|check|fetch|research)\b",
         r"\bi(?:'ll| will)\b.*\b(?:search|look up|check|fetch|research)\b",
+        r"^.{0,20}(?:我先|先|我來|我来|讓我|让我).{0,40}(?:搜尋|搜寻|查詢|查询|查一下|確認|确认|抓|fetch|官方文件)",
         r"\bfetching\s+in\s+parallel\b",
         r"等待.{0,20}(?:來源|source).{0,20}(?:回應|response)",
         r"(?:先|我會|我要|需要).{0,20}(?:並行|parallel).{0,20}(?:fetch|抓取|取得)",
@@ -1045,6 +1047,7 @@ def _looks_like_internal_control_response(normalized_lowered: str) -> bool:
     return bool(
         re.search(r"^\s*<toolcall\b", normalized_lowered)
         or re.search(r"^\s*<tool\s+name=", normalized_lowered)
+        or re.search(r"^\s*<function_calls\b", normalized_lowered)
         or re.search(r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)", normalized_lowered)
         or re.search(r"^\s*\$(?:kind|url|instruction)\s*=", normalized_lowered)
         or re.search(r"\bfetching\s+in\s+parallel\b", normalized_lowered)

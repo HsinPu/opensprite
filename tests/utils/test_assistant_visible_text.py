@@ -101,6 +101,20 @@ def test_sanitize_assistant_visible_text_strips_empty_tool_calls_block():
     assert sanitize_assistant_visible_text(text) == ""
 
 
+def test_sanitize_assistant_visible_text_strips_function_calls_block():
+    text = (
+        "Visible preface\n"
+        "<function_calls>\n"
+        '<invoke name="web_fetch">\n'
+        '<arg name="url">https://example.com</arg>\n'
+        "</invoke>\n"
+        "</function_calls>\n"
+        "Visible answer"
+    )
+
+    assert sanitize_assistant_visible_text(text) == "Visible preface\n\nVisible answer"
+
+
 def test_sanitize_assistant_visible_text_preserves_generic_tool_call_examples_in_code():
     text = 'Example:\n```xml\n<tool_call name="web_research">literal</tool_call>\n```\nVisible answer'
 

@@ -3232,6 +3232,30 @@ def test_completion_gate_marks_internal_only_response_incomplete():
     assert result.reason == "assistant only emitted internal control text"
 
 
+def test_completion_gate_rejects_short_chinese_fetch_progress_as_incomplete():
+    intent = TaskIntentService().classify("查一下 OpenRouter 官方文件裡 Authentication header 怎麼寫，附來源網址。")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=20),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="讓我直接抓 OpenRouter 的官方 API 文件來確認。",
+        execution_result=ExecutionResult(
+            content="讓我直接抓 OpenRouter 的官方 API 文件來確認。",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="web_research", ok=True),),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "incomplete"
+    assert result.reason == "assistant response did not explicitly complete the task"
+
+
 def test_auto_continue_guides_retry_after_internal_only_response():
     intent = TaskIntentService().classify("幫我抓 Reddit ai 版 20 筆")
     completion = CompletionGateService().evaluate(
