@@ -467,6 +467,36 @@ def test_completion_gate_accepts_run_file_change_listing_as_read_only_evidence()
     assert result.status == "complete"
 
 
+def test_completion_gate_accepts_run_file_change_listing_as_history_evidence():
+    intent = TaskIntent(
+        kind="analysis",
+        objective="Does this session have file changes based on trace data?",
+        expects_code_change=False,
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="history_retrieval",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=40),),
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=(
+            "No. The current session trace shows list_run_file_changes scanned the recent runs "
+            "and reported count 0, so there are no file changes visible in trace."
+        ),
+        execution_result=ExecutionResult(
+            content="No file changes were recorded in trace.",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="list_run_file_changes", ok=True, result_preview='{"count": 0}'),),
+            task_contract=contract,
+        ),
+    )
+
+    assert result.status == "complete"
+
+
 def test_completion_gate_does_not_require_verification_for_operations_report():
     intent = TaskIntentService().classify("Remind me tomorrow to check the test report.")
     contract = TaskContract(

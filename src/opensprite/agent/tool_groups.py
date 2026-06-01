@@ -12,7 +12,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "scheduling": frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
     "web_research": frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"}),
-    "history_retrieval": frozenset({"search_history"}),
+    "history_retrieval": frozenset({"search_history", "list_run_file_changes"}),
     "workspace_read": frozenset(
         {
             "read_file",
