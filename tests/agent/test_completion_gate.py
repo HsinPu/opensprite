@@ -2967,6 +2967,30 @@ def test_quality_gate_accepts_missing_git_metadata_as_blocker():
     assert result.passed is True
 
 
+def test_quality_gate_accepts_operation_blocker_report():
+    intent = TaskIntentService().classify("Check repository status")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="operation_report", description="Report the operation result."),
+        ),
+    )
+
+    result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Blocker: the active workspace is not a git repository, so status cannot be verified.",
+        execution_result=ExecutionResult(
+            content="Blocker: the active workspace is not a git repository, so status cannot be verified.",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview="fatal: not a git repository"),),
+        ),
+        task_contract=contract,
+    )
+
+    assert result.passed is True
+
+
 def test_quality_gate_accepts_version_only_operation_answer():
     intent = TaskIntentService().classify("幫我確認這台環境的 git 版本，回答版本號即可。")
     contract = TaskContract(

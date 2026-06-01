@@ -22,8 +22,8 @@ _VERIFICATION_GAP_RE = re.compile(
     re.IGNORECASE,
 )
 _OPERATION_REPORT_RE = re.compile(
-    r"\b(?:approval|approved|denied|blocked|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
-    r"|(?:核准|拒絕|封鎖|驗證|回滾|風險|稽核|權限|設定|部署|重啟)",
+    r"\b(?:approval|approved|denied|blocked|blocker|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
+    r"|(?:核准|拒絕|封鎖|阻礙|無法確認|無法判定|驗證|回滾|風險|稽核|權限|設定|部署|重啟)",
     re.IGNORECASE,
 )
 
