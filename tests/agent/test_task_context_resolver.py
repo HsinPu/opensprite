@@ -585,6 +585,34 @@ def test_task_context_falls_back_to_recent_history_tool_context_without_llm():
     assert decision.inherited_tool_group == "history_retrieval"
 
 
+def test_task_context_accepts_llm_history_retrieval_task_type():
+    provider = _JsonProvider(
+        '{"continuation_type": "follow_up", "is_follow_up": true, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": "history_retrieval", "inherited_tool_group": "history_retrieval", '
+        '"confidence": 0.88, "reason": "latest turn asks about prior conversation"}'
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="and this one?",
+            history=[
+                {"role": "tool", "tool_name": "search_history", "content": "matched prior discussion"},
+                {"role": "assistant", "content": "I found that earlier discussion."},
+            ],
+            task_intent=TaskIntentService().classify("and this one?"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.inherited_task_type == "history_retrieval"
+    assert decision.inherited_tool_group == "history_retrieval"
+
+
 def test_task_contract_uses_task_context_decision_for_web_follow_up():
     intent = TaskIntentService().classify("那這個呢")
     decision = TaskContextDecision(
