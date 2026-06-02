@@ -3147,7 +3147,7 @@ def test_quality_gate_accepts_version_only_operation_answer():
     assert result.passed is True
 
 
-def test_completion_gate_marks_direct_reply_instruction_complete_without_marker():
+def test_completion_gate_marks_simple_task_response_complete_without_marker():
     intent = TaskIntentService().classify("請只回覆這三個英文詞，且不要加入其他文字：alpha beta gamma")
 
     result = CompletionGateService().evaluate(
@@ -3158,7 +3158,7 @@ def test_completion_gate_marks_direct_reply_instruction_complete_without_marker(
 
     assert intent.kind == "task"
     assert result.status == "complete"
-    assert result.reason == "direct reply instruction received a response"
+    assert result.reason == "generic task returned a response"
 
 
 def test_auto_continue_allows_first_retry_after_missing_web_evidence():

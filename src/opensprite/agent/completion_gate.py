@@ -21,28 +21,6 @@ from .task_intent import TaskIntent
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
-_DIRECT_REPLY_INSTRUCTION_MARKERS = (
-    "only reply",
-    "reply only",
-    "only respond",
-    "respond only",
-    "answer only",
-    "say exactly",
-    "return exactly",
-    "output exactly",
-    "only output",
-    "output only",
-    "只回覆",
-    "只回答",
-    "只要回覆",
-    "只需回覆",
-    "只輸出",
-    "只要輸出",
-    "只需輸出",
-    "不要加入其他文字",
-)
-
-
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -423,24 +401,6 @@ class CompletionGateService:
                 status=quality_result.status,
                 reason=quality_result.reason,
                 active_task_detail=quality_result.active_task_detail,
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
-
-        is_direct_reply = _looks_like_direct_reply_instruction(task_intent.objective)
-        if is_direct_reply and response_text.strip():
-            return CompletionGateResult(
-                status="complete",
-                reason="direct reply instruction received a response",
-                active_task_status="done" if task_intent.should_seed_active_task else None,
-                should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -900,11 +860,6 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:
     return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
-
-
-def _looks_like_direct_reply_instruction(objective: str) -> bool:
-    normalized = re.sub(r"\s+", " ", (objective or "").strip().lower())
-    return any(marker in normalized for marker in _DIRECT_REPLY_INSTRUCTION_MARKERS)
 
 
 def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:
