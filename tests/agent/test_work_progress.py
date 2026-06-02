@@ -47,6 +47,28 @@ def test_work_progress_uses_harness_profile_plan_steps():
     )
 
 
+def test_work_progress_coding_harness_plan_does_not_depend_on_intent_markers():
+    intent = TaskIntentService().classify("請看一下這段目前流程")
+    profile = HarnessProfileService().from_contract(
+        TaskContract(
+            objective=intent.objective,
+            task_type="code_change",
+            requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
+        )
+    )
+
+    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
+
+    assert plan is not None
+    assert plan.harness_profile == "coding"
+    assert plan.steps == (
+        "inspect relevant workspace context",
+        "make the smallest correct change or collect concrete workspace evidence",
+        "run focused verification or state the verification gap",
+        "summarize changes, evidence, and remaining risk",
+    )
+
+
 def test_work_progress_uses_harness_profile_continuation_budget():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")

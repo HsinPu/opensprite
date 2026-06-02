@@ -202,17 +202,17 @@ class WorkProgressService:
 
     def create_plan(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> WorkPlan | None:
         """Return a plan only for actionable tasks, not casual conversation."""
-        if not task_intent.should_seed_active_task:
+        profile_name = harness_profile.name if harness_profile is not None else ""
+        if not task_intent.should_seed_active_task and profile_name in {"", "chat"}:
             return None
 
-        profile_name = harness_profile.name if harness_profile is not None else ""
         steps: list[str]
         if profile_name == "research":
             steps = ["search for relevant sources", "fetch or inspect source details", "answer with cited evidence"]
         elif profile_name == "coding":
             steps = [
                 "inspect relevant workspace context",
-                "make the smallest correct change" if task_intent.expects_code_change else "collect concrete workspace evidence",
+                "make the smallest correct change or collect concrete workspace evidence",
                 "run focused verification or state the verification gap",
                 "summarize changes, evidence, and remaining risk",
             ]
