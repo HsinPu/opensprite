@@ -167,52 +167,6 @@ _TASK_WORK_MARKERS = (
     "實作",
     "修改",
 )
-_WAITING_USER_PATTERNS = (
-    "請問",
-    "請提供",
-    "可以提供",
-    "麻煩提供",
-    "需要你提供",
-    "需要先知道",
-    "要用哪個",
-    "要使用哪個",
-    "which",
-    "what should",
-    "which should",
-    "which one",
-    "can you provide",
-    "could you provide",
-    "please provide",
-    "do you want",
-    "would you like",
-    "what is the target",
-)
-_BLOCKED_PATTERNS = (
-    "目前無法繼續",
-    "現在無法繼續",
-    "卡住",
-    "受阻",
-    "blocker",
-    "blocked",
-    "cannot continue",
-    "can't continue",
-    "unable to continue",
-    "cannot proceed",
-    "unable to proceed",
-    "failed and needs to be fixed",
-)
-_STRONG_BLOCKED_PATTERNS = (
-    "\u6240\u9700\u6a94\u6848\u4e0d\u5b58\u5728",
-    "\u6a94\u6848\u4e0d\u5b58\u5728",
-    "\u7121\u6cd5\u7e7c\u7e8c",
-    "\u7121\u6cd5\u76f4\u63a5\u8b80\u53d6",
-    "\u4e0d\u5728\u5de5\u4f5c\u5340\u7bc4\u570d",
-    "\u4e0d\u5728\u5de5\u4f5c\u5340",
-    "\u963b\u64cb\u539f\u56e0",
-    "\u5df2\u660e\u78ba\u963b\u64cb",
-)
-
-
 class ActiveTaskStore(ConversationDocumentStore):
     """Persist one session's ACTIVE_TASK.md and its update state."""
 
@@ -620,74 +574,6 @@ def should_replace_active_task(current_task_block: str, message_text: str) -> bo
     if current_goal and (candidate == current_goal or current_goal in candidate):
         return False
     return candidate.startswith(_TASK_SWITCH_PREFIXES)
-
-
-def extract_waiting_user_question(response_text: str) -> str | None:
-    """Extract one likely blocking user question from the assistant reply."""
-    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
-    if not normalized:
-        return None
-    if "?" not in normalized and "？" not in normalized:
-        return None
-
-    for chunk in re.split(r"(?<=[\?？])\s+", normalized):
-        candidate = chunk.strip()
-        if not candidate:
-            continue
-        lowered = candidate.lower()
-        if any(pattern in lowered for pattern in _WAITING_USER_PATTERNS):
-            return candidate
-    return None
-
-
-def infer_immediate_task_transition(
-    response_text: str,
-    *,
-    had_tool_error: bool = False,
-    objective_text: str = "",
-) -> tuple[str, str | None] | None:
-    """Infer a conservative immediate task-state transition from one assistant reply."""
-    question = extract_waiting_user_question(response_text)
-    if question is not None:
-        return "waiting_user", question
-
-    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
-    objective = re.sub(r"\s+", " ", (objective_text or "").strip()).lower()
-    if _is_status_definition_request(objective, normalized):
-        return None
-    if _is_preview_only_request(objective, normalized):
-        return None
-    lowered = normalized.lower()
-    has_blocker = any(pattern in lowered for pattern in _BLOCKED_PATTERNS)
-    has_strong_blocker = any(pattern in normalized for pattern in _STRONG_BLOCKED_PATTERNS)
-    if (had_tool_error and (has_blocker or has_strong_blocker)) or has_strong_blocker:
-        return "blocked", normalized[:240] if normalized else "blocked"
-
-    return None
-
-
-def _is_preview_only_request(objective: str, response_text: str) -> bool:
-    if not objective or not response_text:
-        return False
-    objective_requests_preview = any(marker in objective for marker in ("preview", "預覽", "只預覽"))
-    if not objective_requests_preview:
-        return False
-    response = response_text.lower()
-    return any(marker in response for marker in ("preview", "預覽", "唯讀預覽", "尚未執行", "not applied"))
-
-
-def _is_status_definition_request(objective: str, response_text: str) -> bool:
-    if not objective or not response_text:
-        return False
-    objective_mentions_status_terms = (
-        "blocked" in objective
-        and "incomplete" in objective
-        and any(marker in objective for marker in ("差異", "差別", "difference", "explain", "解釋"))
-    )
-    if not objective_mentions_status_terms:
-        return False
-    response = response_text.lower()
-    return "blocked" in response and "incomplete" in response
 
 
 def _extract_task_field(task_block: str, field_name: str) -> str:

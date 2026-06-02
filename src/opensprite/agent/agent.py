@@ -2126,19 +2126,6 @@ class AgentLoop:
         """Check whether this session's ACTIVE_TASK.md should be refreshed."""
         await self.active_task_update.maybe_update(session_id)
 
-    async def _maybe_apply_immediate_task_transition(
-        self,
-        session_id: str,
-        response_text: str,
-        exec_result: ExecutionResult,
-    ) -> None:
-        """Apply conservative immediate task-state transitions before background maintenance runs."""
-        await self.active_task_commands.apply_immediate_transition(
-            session_id,
-            response_text,
-            had_tool_error=exec_result.had_tool_error,
-        )
-
     async def _maybe_apply_completion_gate_result(
         self,
         session_id: str,

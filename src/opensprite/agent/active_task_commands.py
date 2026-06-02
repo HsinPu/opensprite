@@ -12,7 +12,6 @@ from ..documents.active_task import (
     build_task_block_from_intent_fields,
     build_task_block_from_text,
     create_active_task_store,
-    infer_immediate_task_transition,
     should_replace_active_task,
 )
 from ..storage import StorageProvider
@@ -72,38 +71,6 @@ class ActiveTaskCommandService:
     async def _mark_processed(self, session_id: str, store: Any) -> None:
         message_count = await get_storage_message_count(self.storage, session_id)
         store.set_processed_index(session_id, message_count)
-
-    async def apply_immediate_transition(
-        self,
-        session_id: str,
-        response_text: str,
-        *,
-        had_tool_error: bool,
-    ) -> None:
-        """Apply conservative immediate task-state transitions after a response."""
-        store = self.get_store(session_id)
-        if store is None:
-            return
-        if store.read_status() not in {"active", "blocked", "waiting_user"}:
-            return
-
-        transition = infer_immediate_task_transition(
-            response_text,
-            had_tool_error=had_tool_error,
-        )
-        if transition is None:
-            return
-
-        status, detail = transition
-        if status == "waiting_user":
-            store.update_fields(status="waiting_user", open_questions=[detail or "need user input"], force=True)
-        elif status == "blocked":
-            store.update_fields(status="blocked", open_questions=[detail or "blocked"], force=True)
-        else:
-            return
-
-        await self._mark_processed(session_id, store)
-        store.append_event("auto_direct_transition", "immediate", details={"status": status, "reason": detail or ""})
 
     async def apply_completion_gate_result(
         self,
