@@ -25,6 +25,7 @@ from .subagent_session import (
     validate_subagent_task_id,
 )
 from ..tools import ToolRegistry
+from ..tools.result_status import classify_tool_result_status
 from ..utils.log import logger
 from .run_hooks import RunHookService
 from .run_state import RunCancelledError
@@ -35,6 +36,13 @@ from .subagent_policy import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_re
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
 DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
+
+
+def _subagent_preparation_error_detail(message: str) -> str:
+    status = classify_tool_result_status(message)
+    if not status.ok and status.error:
+        return status.error
+    return str(message or "").strip()
 
 
 @dataclass(frozen=True)
@@ -893,7 +901,7 @@ class SubagentRunService:
         """Run one child task and return the structured outcome for workflow orchestration."""
         prepared = await self._prepare_task(task, prompt_type=prompt_type)
         if isinstance(prepared, str):
-            raise ValueError(prepared.removeprefix("Error: ") if prepared.startswith("Error: ") else prepared)
+            raise ValueError(_subagent_preparation_error_detail(prepared))
         return await self._execute_prepared_task(
             prepared,
             should_cancel=should_cancel or (lambda: self._cancel_requested(prepared.parent_session_id, prepared.parent_run_id)),
@@ -957,7 +965,7 @@ class SubagentRunService:
                 group_total=total,
             )
             if isinstance(prepared, str):
-                prefix = prepared.removeprefix("Error: ") if prepared.startswith("Error: ") else prepared
+                prefix = _subagent_preparation_error_detail(prepared)
                 return f"Error: task[{index}] {prefix}"
             prepared_tasks.append(prepared)
 

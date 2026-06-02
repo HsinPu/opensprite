@@ -1,8 +1,10 @@
 import asyncio
+import json
 from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent.subagents import _subagent_preparation_error_detail
 from opensprite.agent.subagent_policy import build_subagent_tool_registry
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
@@ -30,6 +32,11 @@ class FakeContextBuilder:
 
     def add_assistant_message(self, messages, content, tool_calls=None):
         return messages
+
+
+def test_subagent_preparation_error_detail_uses_shared_result_status():
+    assert _subagent_preparation_error_detail("Error: prompt_type is required") == "prompt_type is required"
+    assert _subagent_preparation_error_detail(json.dumps({"ok": False, "error": "bad prompt"})) == "bad prompt"
 
 
 class FakeStorage:
