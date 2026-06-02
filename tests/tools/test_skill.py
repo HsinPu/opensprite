@@ -2,6 +2,7 @@ import asyncio
 from pathlib import Path
 
 from opensprite.skills import SkillsLoader
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.skill import ReadSkillTool
 
 
@@ -26,3 +27,32 @@ def test_read_skill_tool_prefers_personal_skill_dir(tmp_path):
     result = asyncio.run(tool.execute(skill_name="planner"))
 
     assert result == "Personal body"
+
+
+def test_read_skill_tool_rejects_path_like_skill_name(tmp_path):
+    loader = SkillsLoader(default_skills_dir=tmp_path / "skills")
+    tool = ReadSkillTool(loader)
+
+    result = asyncio.run(tool.execute(skill_name="../secret"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "Invalid skill name" in status.error
+
+
+def test_read_skill_tool_reports_missing_skill(tmp_path):
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir()
+    loader = SkillsLoader(default_skills_dir=skills_dir)
+    tool = ReadSkillTool(loader)
+
+    result = asyncio.run(tool.execute(skill_name="missing"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ReadSkillToolError"
+    assert status.category == "skill_not_found"
+    assert "Skill 'missing' not found" in status.error
