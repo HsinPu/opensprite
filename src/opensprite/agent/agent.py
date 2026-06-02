@@ -1118,6 +1118,7 @@ class AgentLoop:
             tools=self.tools,
             tools_config=self.tools_config,
             empty_response_fallback=self.messages.agent.empty_response_fallback,
+            repeated_invalid_tool_call_fallback=self.messages.agent.repeated_invalid_tool_call_fallback,
             save_message=self._save_message,
             format_log_preview=self._format_log_preview,
             summarize_messages=self._summarize_messages,

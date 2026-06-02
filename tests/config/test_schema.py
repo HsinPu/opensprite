@@ -705,6 +705,12 @@ def test_config_load_reads_messages_from_external_file(tmp_path):
     assert config.messages_file == "messages.json"
 
 
+def test_messages_config_includes_repeated_invalid_tool_call_fallback():
+    config = MessagesConfig()
+
+    assert "{result}" in config.agent.repeated_invalid_tool_call_fallback
+
+
 def test_search_embedding_config_requires_model_when_enabled():
     with pytest.raises(ValidationError):
         SearchEmbeddingConfig(enabled=True)

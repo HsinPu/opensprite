@@ -372,6 +372,7 @@ def _make_engine(provider, registry, save_calls, tools_config=None, **engine_kwa
         tools=registry,
         tools_config=tools_config or ToolsConfig(max_tool_iterations=3),
         empty_response_fallback="EMPTY",
+        repeated_invalid_tool_call_fallback="REPEATED INVALID TOOL CALL\n{result}",
         save_message=lambda session_id, role, content, tool_name=None, metadata=None: _save_message_collector(
             save_calls, session_id, role, content, tool_name, metadata
         ),
@@ -1642,7 +1643,7 @@ def test_execution_engine_stops_after_repeated_missing_required_tool_errors():
         engine.execute_messages("chat-1", [ChatMessage(role="user", content="hi")], allow_tools=True)
     )
 
-    assert "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。" in result.content
+    assert "REPEATED INVALID TOOL CALL" in result.content
     assert "Invalid arguments for write_file" in result.content
     assert len(provider.calls) == 2
 

@@ -239,6 +239,7 @@ Output exactly these sections when applicable:
         tools: ToolRegistry,
         tools_config: ToolsConfig | None = None,
         empty_response_fallback: str,
+        repeated_invalid_tool_call_fallback: str,
         save_message: Callable[[str, str, str, str | None], Awaitable[None]],
         format_log_preview: Callable[..., str],
         summarize_messages: Callable[..., str],
@@ -272,6 +273,7 @@ Output exactly these sections when applicable:
         self.tool_result_max_chars = max(200, self.tools_config.tool_result_max_chars)
         self.exec_result_max_chars = max(200, self.tools_config.exec_result_max_chars)
         self.empty_response_fallback = empty_response_fallback
+        self.repeated_invalid_tool_call_fallback = repeated_invalid_tool_call_fallback
         self.format_log_preview = format_log_preview
         self.summarize_messages = summarize_messages
         self.sanitize_response_content = sanitize_response_content
@@ -306,6 +308,15 @@ Output exactly these sections when applicable:
     @staticmethod
     def _tool_result_looks_like_failure(result: str) -> bool:
         return not classify_tool_result_status(result).ok
+
+    def _repeated_invalid_tool_call_content(self, result: str) -> str:
+        template = str(self.repeated_invalid_tool_call_fallback or "").strip()
+        if not template:
+            return str(result or "").strip()
+        try:
+            return template.format(result=result)
+        except (KeyError, IndexError, ValueError):
+            return f"{template}\n\n{result}"
 
     @staticmethod
     def _extract_delegate_task_info(result: str) -> tuple[str | None, str | None]:
@@ -1698,10 +1709,7 @@ Output exactly these sections when applicable:
                             logger.warning(
                                 f"[{log_id}] tool.repeated-error | name={tool_name} count={repeated_tool_error_count} stopping_early=true"
                             )
-                            content = (
-                                "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。"
-                                f"最新錯誤：{result}"
-                            )
+                            content = self._repeated_invalid_tool_call_content(result)
                             await self._emit_response_deltas(
                                 content,
                                 part_id=response_part_id,

@@ -169,6 +169,10 @@ class ChannelsConfig(BaseModel):
 
 
 class AgentMessagesConfig(BaseModel):
+    repeated_invalid_tool_call_fallback: str = (
+        "我重複嘗試呼叫工具，但工具參數仍然無效而無法繼續。\n\n"
+        "最後一次工具錯誤：\n{result}"
+    )
     empty_response_fallback: str = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
     llm_not_configured: str = (
         "尚未設定 LLM，請在 OpenSprite Web UI 的 Settings > Providers / Models 設定後再試。"
