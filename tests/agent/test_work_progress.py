@@ -99,6 +99,32 @@ def test_work_progress_harness_plan_uses_explicit_verification_requirement():
     assert plan.expects_verification is True
 
 
+def test_work_progress_verification_targets_do_not_depend_on_done_criteria_markers():
+    service = WorkProgressService()
+    intent = TaskIntentService().classify("Can you look at this flow?")
+    profile = HarnessProfile(
+        name="coding",
+        task_type="workspace_change",
+        required_tool_groups=("workspace_read", "workspace_write", "verification"),
+        required_evidence=("file_change", "verification"),
+        verification_policy="focused_if_possible",
+    )
+
+    plan = service.create_plan(intent, harness_profile=profile)
+    assert plan is not None
+    assert all(
+        not any(token in item.lower() for token in ("verify", "verification", "test", "build", "check", "pass"))
+        for item in plan.done_criteria[:-1]
+    )
+    state = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
+
+    assert state is not None
+    workboard = service.extract_workboard(state)
+    assert workboard.verification_targets == (
+        "relevant tests or checks pass, or the verification gap is stated",
+    )
+
+
 def test_work_progress_uses_harness_profile_continuation_budget():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
     intent = TaskIntentService().classify("為什麼 Harness 會讓 AI 更穩？")

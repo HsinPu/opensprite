@@ -16,6 +16,7 @@ from .task_intent import TaskIntent
 
 
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
+_DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
 
 
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
@@ -232,7 +233,7 @@ class WorkProgressService:
             expects_code_change = False
             expects_verification = False
         done_criteria = list(task_intent.done_criteria)
-        verification_done = "relevant tests or checks pass, or the verification gap is stated"
+        verification_done = _DEFAULT_VERIFICATION_TARGET
         if expects_verification and verification_done not in done_criteria:
             done_criteria.append(verification_done)
 
@@ -785,21 +786,13 @@ def _apply_structured_follow_up_metadata(metadata: dict[str, Any], completion_re
 
 
 def _derive_verification_targets(
-    done_criteria: tuple[str, ...],
+    _done_criteria: tuple[str, ...],
     *,
     expects_verification: bool,
 ) -> tuple[str, ...]:
     if not expects_verification:
         return ()
-    targets = [
-        str(item).strip()
-        for item in done_criteria
-        if str(item).strip()
-        and any(token in str(item).lower() for token in ("verify", "verification", "test", "build", "check", "pass"))
-    ]
-    if not targets:
-        targets = ["Run the requested verification before treating the task as complete."]
-    return tuple(dict.fromkeys(targets))
+    return (_DEFAULT_VERIFICATION_TARGET,)
 
 
 def _profile_requires_code_change(harness_profile: HarnessProfile) -> bool:
