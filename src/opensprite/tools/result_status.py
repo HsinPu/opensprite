@@ -89,16 +89,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
             )
         return ToolResultStatus(ok=not forced_error)
 
-    invalid_prefix = "Error: Invalid arguments for "
-    if stripped.startswith(invalid_prefix):
-        return _failed_status(
-            stripped.removeprefix("Error:").strip(),
-            error_type="ToolError",
-            fallback=stripped,
-            repeated_error_key=stripped,
-            invalid_arguments=True,
-        )
-
     if stripped.startswith("Error:"):
         return _failed_status(stripped.removeprefix("Error:").strip(), error_type="ToolError", fallback=stripped)
 

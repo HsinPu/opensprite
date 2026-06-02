@@ -86,15 +86,6 @@ def test_tool_result_status_extracts_structured_execution_error_metadata():
     }
 
 
-def test_tool_result_status_exposes_invalid_arguments_repeat_key():
-    result = "Error: Invalid arguments for web_fetch: url is required"
-    status = classify_tool_result_status(result)
-
-    assert status.ok is False
-    assert status.invalid_arguments is True
-    assert status.repeated_error_key == result
-
-
 def test_tool_result_status_exposes_structured_invalid_arguments_repeat_key():
     result = tool_error_result(
         "Invalid arguments for web_fetch: url is required.",
