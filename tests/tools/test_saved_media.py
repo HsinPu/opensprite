@@ -1,6 +1,7 @@
 import base64
 
 from opensprite.tools.saved_media import load_saved_media_data_url, resolve_media_items
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_load_saved_media_data_url_reads_workspace_file(tmp_path):
@@ -68,4 +69,8 @@ def test_resolve_media_items_reports_missing_workspace_resolver():
     )
 
     assert items == []
-    assert error == "Error: saved image lookup is unavailable because no session workspace is active."
+    status = classify_tool_result_status(error)
+    assert status.ok is False
+    assert status.error_type == "SavedMediaError"
+    assert status.category == "session_workspace_unavailable"
+    assert "no session workspace is active" in status.error

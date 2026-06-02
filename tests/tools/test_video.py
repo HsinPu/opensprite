@@ -2,6 +2,7 @@ import asyncio
 import base64
 
 from opensprite.media.router import MediaRouter
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.video import AnalyzeVideoTool
 
 
@@ -56,7 +57,11 @@ def test_analyze_video_tool_rejects_saved_video_outside_workspace(tmp_path):
 
     result = asyncio.run(tool.execute(instruction="describe it", video_path="../outside.mp4"))
 
-    assert result == "Error: saved video '../outside.mp4' was not found or is not a supported video file."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "SavedMediaError"
+    assert status.category == "saved_media_not_found"
+    assert "saved video '../outside.mp4'" in status.error
     assert provider.calls == []
 
 

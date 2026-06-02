@@ -3,6 +3,7 @@ import base64
 
 from opensprite.media.router import MediaRouter
 from opensprite.tools.image import AnalyzeImageTool, OCRImageTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class FakeImageProvider:
@@ -57,7 +58,11 @@ def test_analyze_image_tool_rejects_saved_image_outside_workspace(tmp_path):
 
     result = asyncio.run(tool.execute(instruction="describe it", image_path="../outside.jpg"))
 
-    assert result == "Error: saved image '../outside.jpg' was not found or is not a supported image file."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "SavedMediaError"
+    assert status.category == "saved_media_not_found"
+    assert "saved image '../outside.jpg'" in status.error
     assert provider.calls == []
 
 

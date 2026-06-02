@@ -7,6 +7,8 @@ import mimetypes
 from pathlib import Path
 from typing import Callable
 
+from .result_status import tool_error_result
+
 
 def load_saved_media_data_url(
     workspace: Path,
@@ -37,6 +39,14 @@ def load_saved_media_data_url(
     return f"data:{mime_type};base64,{b64}"
 
 
+def _saved_media_error_result(error: str, *, category: str) -> str:
+    return tool_error_result(
+        error,
+        error_type="SavedMediaError",
+        category=category,
+    )
+
+
 def resolve_media_items(
     *,
     current_items: list[str] | None,
@@ -49,7 +59,10 @@ def resolve_media_items(
     if not media_path.strip():
         return list(current_items or []), None
     if workspace_resolver is None:
-        return [], f"Error: saved {media_label} lookup is unavailable because no session workspace is active."
+        return [], _saved_media_error_result(
+            f"saved {media_label} lookup is unavailable because no session workspace is active.",
+            category="session_workspace_unavailable",
+        )
     try:
         media = load_saved_media_data_url(
             workspace_resolver(),
@@ -57,7 +70,13 @@ def resolve_media_items(
             supported_mime_types=supported_mime_types,
         )
     except OSError as exc:
-        return [], f"Error: failed to read saved {media_label} '{media_path}': {exc}"
+        return [], _saved_media_error_result(
+            f"failed to read saved {media_label} '{media_path}': {exc}",
+            category="saved_media_read_failed",
+        )
     if media is None:
-        return [], f"Error: saved {media_label} '{media_path}' was not found or is not a supported {media_label} file."
+        return [], _saved_media_error_result(
+            f"saved {media_label} '{media_path}' was not found or is not a supported {media_label} file.",
+            category="saved_media_not_found",
+        )
     return [media], None

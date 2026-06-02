@@ -2,6 +2,7 @@ import asyncio
 import base64
 
 from opensprite.media.router import MediaRouter
+from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.tools.audio import TranscribeAudioTool
 
 
@@ -56,7 +57,11 @@ def test_transcribe_audio_tool_rejects_saved_audio_outside_workspace(tmp_path):
 
     result = asyncio.run(tool.execute(audio_path="../outside.ogg"))
 
-    assert result == "Error: saved audio '../outside.ogg' was not found or is not a supported audio file."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "SavedMediaError"
+    assert status.category == "saved_media_not_found"
+    assert "saved audio '../outside.ogg'" in status.error
     assert provider.calls == []
 
 
