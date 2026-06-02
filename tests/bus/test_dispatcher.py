@@ -66,8 +66,8 @@ class ToolReplyProvider:
         if "OpenSprite task-contract planner" in system_text:
             return LLMResponse(
                 content=(
-                    '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
-                    '"allow_no_tool_final":true,"reason":"test planner tool trace contract"}'
+                    '{"task_type":"task","required_tool_groups":[],"final_answer_required":true,'
+                    '"allow_no_tool_final":false,"reason":"test planner tool trace contract"}'
                 ),
                 model="fake-model",
             )
