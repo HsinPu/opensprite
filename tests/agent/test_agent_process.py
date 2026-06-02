@@ -790,7 +790,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
         "run_finished",
     ]
     assert events[0].payload["status"] == "running"
-    assert events[1].payload["kind"] == "conversation"
+    assert events[1].payload["kind"] == "task"
     assert events[1].payload["objective"] == "hello"
     assert events[3].payload["status"] == "complete"
     assert events[4].payload["next_action"] == "finalize"
@@ -1763,8 +1763,8 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert [event.event_type for event in events] == [
         "run_started",
         "task_intent.detected",
-        "work_plan.created",
         "llm_status",
+        "work_plan.created",
         "completion_gate.evaluated",
         "work_progress.updated",
         "harness_checkpoint.recorded",

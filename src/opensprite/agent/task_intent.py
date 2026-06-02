@@ -11,18 +11,6 @@ _TASK_KINDS = {
     "analysis",
     "task",
 }
-_NON_TASK_MESSAGES = {
-    "hi",
-    "hello",
-    "hey",
-    "thanks",
-    "thank you",
-    "ok",
-    "okay",
-    "got it",
-    "cool",
-    "nice",
-}
 _VAGUE_TASK_MESSAGES = {"continue"}
 
 
@@ -94,14 +82,6 @@ class TaskIntentService:
                 long_running=False,
             )
 
-        lowered = compact.lower()
-        if lowered in _NON_TASK_MESSAGES:
-            return TaskIntent(
-                kind="conversation",
-                objective=compact,
-                done_criteria=("respond naturally and briefly",),
-                long_running=False,
-            )
         if compact.startswith("/"):
             return TaskIntent(
                 kind="command",

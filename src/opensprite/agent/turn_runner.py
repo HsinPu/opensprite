@@ -238,15 +238,6 @@ class AgentTurnRunner:
             work_plan=work_plan,
             existing_state=existing_work_state,
         )
-        if work_plan is not None:
-            await self._emit_run_event(
-                turn.session_id,
-                run_id,
-                "work_plan.created",
-                work_plan.to_metadata(),
-                channel=turn.channel,
-                external_chat_id=turn.external_chat_id,
-            )
 
         try:
             if self.is_media_only_message(user_message):
@@ -587,6 +578,7 @@ class AgentTurnRunner:
         last_direct_verify_path: str | None = None
         last_direct_verify_pytest_args: tuple[str, ...] = ()
         same_target_verify_attempts = 0
+        work_plan_recorded = False
         pending_direct_verify: dict[str, Any] | None = self._extract_direct_verify_request(user_message.metadata)
         current_message = _message_with_runtime_context(user_message.text, turn.user_metadata)
         current_allow_tools = True
@@ -651,6 +643,16 @@ class AgentTurnRunner:
                             current_work_state = None
                     else:
                         work_plan = contract_work_plan
+                        if not work_plan_recorded:
+                            await self._emit_run_event(
+                                turn.session_id,
+                                run_id,
+                                "work_plan.created",
+                                work_plan.to_metadata(),
+                                channel=turn.channel,
+                                external_chat_id=turn.external_chat_id,
+                            )
+                            work_plan_recorded = True
                         if not worktree_sandbox_recorded and work_plan.expects_code_change:
                             worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
                                 turn.session_id,

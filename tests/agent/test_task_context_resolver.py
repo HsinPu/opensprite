@@ -255,14 +255,14 @@ def test_task_context_does_not_infer_typo_follow_up_when_llm_fails():
     assert decision.continuation_type == "none"
 
 
-def test_task_context_acknowledgement_skips_llm():
+def test_task_context_empty_message_skips_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
         _resolver().resolve(
-            current_message="thanks",
+            current_message="",
             history=_WEB_RESEARCH_HISTORY,
-            task_intent=TaskIntentService().classify("thanks"),
+            task_intent=TaskIntentService().classify(""),
             provider=provider,
             model=provider.get_default_model(),
         )
