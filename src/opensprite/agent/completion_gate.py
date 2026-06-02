@@ -363,25 +363,21 @@ class CompletionGateService:
             and not _contract_has_completion_criteria(execution_result.task_contract)
             and response_text.strip()
         ):
-            normalized_response = re.sub(r"\s+", " ", response_text.strip().lower())
-            if not _looks_like_internal_control_response(normalized_response) and not _looks_like_retry_or_blocker_response(
-                normalized_response
-            ):
-                return CompletionGateResult(
-                    status="complete",
-                    reason="plain-answer contract received a response",
-                    active_task_status="done" if task_intent.should_seed_active_task else None,
-                    should_update_active_task=task_intent.should_seed_active_task,
-                    verification_required=verification_required,
-                    verification_attempted=verification_attempted,
-                    verification_passed=verification_passed,
-                    review_required=review_required,
-                    review_attempted=review["attempted"],
-                    review_passed=review["passed"],
-                    review_summary=review["summary"],
-                    review_prompt_types=review["prompt_types"],
-                    review_finding_count=review["finding_count"],
-                )
+            return CompletionGateResult(
+                status="complete",
+                reason="plain-answer contract received a response",
+                active_task_status="done" if task_intent.should_seed_active_task else None,
+                should_update_active_task=task_intent.should_seed_active_task,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
 
         if expects_code_change and execution_result.file_change_count <= 0:
             return CompletionGateResult(
@@ -978,30 +974,6 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:
     return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
-
-
-def _looks_like_retry_or_blocker_response(normalized_lowered: str) -> bool:
-    markers = (
-        "try again",
-        "please retry",
-        "cannot reliably complete",
-        "unable to complete",
-        "目前還不能可靠完成",
-        "請再試一次",
-        "無法可靠",
-    )
-    return any(marker in normalized_lowered for marker in markers)
-
-
-def _looks_like_internal_control_response(normalized_lowered: str) -> bool:
-    return bool(
-        re.search(r"^\s*<toolcall\b", normalized_lowered)
-        or re.search(r"^\s*<tool\s+name=", normalized_lowered)
-        or re.search(r"^\s*<function_calls\b", normalized_lowered)
-        or re.search(r"^\s*\$type\s*=\s*[\"']?(?:fetch|web_fetch|search|web_search|web_research)", normalized_lowered)
-        or re.search(r"^\s*\$(?:kind|url|instruction)\s*=", normalized_lowered)
-        or re.search(r"\bfetching\s+in\s+parallel\b", normalized_lowered)
-    )
 
 
 def _looks_like_direct_reply_instruction(objective: str) -> bool:
