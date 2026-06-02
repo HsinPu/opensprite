@@ -8,7 +8,6 @@ def test_task_intent_classifier_keeps_execution_expectations_neutral():
 
     assert intent.kind == "task"
     assert intent.long_running is False
-    assert intent.should_seed_active_task is True
     assert intent.done_criteria == (
         "the user request is addressed directly",
         "the result or blocker is explicit",
@@ -19,12 +18,11 @@ def test_task_intent_classifier_keeps_execution_expectations_neutral():
     assert intent.constraints == ()
 
 
-def test_task_intent_classifier_keeps_question_out_of_active_task_seed():
+def test_task_intent_classifier_keeps_question_kind_for_questions():
     intent = TaskIntentService().classify("幫我解釋一下這是什麼？")
 
     assert intent.kind == "question"
     assert intent.long_running is False
-    assert intent.should_seed_active_task is False
     assert intent.done_criteria == ("the answer is clear and directly addresses the question",)
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
@@ -35,7 +33,6 @@ def test_task_intent_classifier_records_media_upload_without_text():
 
     assert intent.kind == "media_upload"
     assert intent.objective == "Save attached media for later use"
-    assert intent.should_seed_active_task is False
 
 
 def test_task_intent_debug_diagnosis_does_not_require_code_change():
@@ -51,7 +48,6 @@ def test_task_intent_does_not_treat_continue_as_vague_marker():
 
     assert intent.kind == "task"
     assert intent.needs_clarification is False
-    assert intent.should_seed_active_task is True
 
 
 def test_task_intent_respects_no_edit_planning_constraint():
@@ -67,7 +63,6 @@ def test_task_intent_leaves_translation_semantics_to_task_contract():
     intent = TaskIntentService().classify("請把這句翻成英文：今天我想測試 CLI 對話流程。")
 
     assert intent.kind == "task"
-    assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
@@ -78,7 +73,6 @@ def test_task_intent_leaves_chinese_translation_with_test_word_to_task_contract(
     )
 
     assert intent.kind == "task"
-    assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
@@ -114,7 +108,6 @@ def test_task_intent_leaves_calculation_semantics_to_task_contract():
     intent = TaskIntentService().classify("請計算 17 * 23 + 19，最後只輸出答案。")
 
     assert intent.kind == "task"
-    assert intent.should_seed_active_task is True
 
 
 def test_task_intent_classifier_marks_chinese_extract_and_merge_request_as_task():
@@ -123,5 +116,4 @@ def test_task_intent_classifier_marks_chinese_extract_and_merge_request_as_task(
     )
 
     assert intent.kind == "task"
-    assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False

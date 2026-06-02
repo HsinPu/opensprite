@@ -27,11 +27,6 @@ class TaskIntent:
     expects_code_change: bool = False
     expects_verification: bool = False
 
-    @property
-    def should_seed_active_task(self) -> bool:
-        """Return whether this intent is specific enough to start ACTIVE_TASK."""
-        return self.kind in _TASK_KINDS and not self.needs_clarification
-
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe event payload for durable run telemetry."""
         payload: dict[str, Any] = {
