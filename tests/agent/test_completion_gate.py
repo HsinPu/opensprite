@@ -712,7 +712,7 @@ def test_completion_gate_rejects_command_unavailable_claim_without_execution_evi
     assert result.reason == "command version answer did not report a version"
 
 
-def test_completion_gate_accepts_command_unavailable_from_execution_evidence():
+def test_completion_gate_accepts_command_unavailable_from_failed_execution_evidence():
     intent = TaskIntentService().classify("Confirm the current missingtool version. Answer only the version number.")
     contract = TaskContract(
         objective=intent.objective,
@@ -726,7 +726,7 @@ def test_completion_gate_accepts_command_unavailable_from_execution_evidence():
         execution_result=ExecutionResult(
             content="missingtool is not installed.",
             executed_tool_calls=1,
-            tool_evidence=(ToolEvidence(name="exec", ok=False, result_preview="missingtool: command not found"),),
+            tool_evidence=(ToolEvidence(name="exec", ok=False, result_preview="exit code 127"),),
             task_contract=contract,
         ),
     )
