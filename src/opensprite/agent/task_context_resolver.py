@@ -10,7 +10,6 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
-from .follow_up_intent import FollowUpIntentResolver
 from .task_intent import TaskIntent
 
 
@@ -215,7 +214,7 @@ class TaskContextResolver:
         active_task: str | None = None,
         work_state_summary: str | None = None,
     ) -> TaskContextDecision:
-        del task_intent, work_state_summary
+        del history, task_intent, work_state_summary
         current = _compact(current_message)
         has_active_task = _has_active_task(active_task)
         if not current or _ACK_RE.match(current):
@@ -253,16 +252,6 @@ class TaskContextResolver:
             )
 
         if _CONTINUATION_RE.match(current):
-            follow_up = FollowUpIntentResolver.resolve(current_message=current, history=history)
-            if follow_up.inherited_tool_group:
-                return TaskContextDecision(
-                    is_follow_up=True,
-                    inherited_task_type=follow_up.inherited_task_type,
-                    inherited_tool_group=follow_up.inherited_tool_group,
-                    continuation_type="follow_up",
-                    confidence=follow_up.confidence,
-                    reason=follow_up.reason,
-                )
             return TaskContextDecision(
                 is_follow_up=True,
                 continuation_type="continue_last_answer",
@@ -270,25 +259,10 @@ class TaskContextResolver:
                 reason="continuation phrase without an active task",
             )
 
-        follow_up = FollowUpIntentResolver.resolve(current_message=current, history=history)
-        if not follow_up.is_follow_up:
-            return TaskContextDecision(
-                continuation_type="none",
-                confidence=0.65,
-                reason=follow_up.reason,
-            )
-
-        inherited_task_type = follow_up.inherited_task_type
-        inherited_tool_group = follow_up.inherited_tool_group
-        should_inherit_active_task = has_active_task
         return TaskContextDecision(
-            is_follow_up=True,
-            should_inherit_active_task=should_inherit_active_task,
-            inherited_task_type=inherited_task_type,
-            inherited_tool_group=inherited_tool_group,
-            continuation_type="follow_up",
-            confidence=follow_up.confidence,
-            reason=follow_up.reason,
+            continuation_type="none",
+            confidence=0.45,
+            reason="task context requires LLM classification",
         )
 
     async def _resolve_with_llm(

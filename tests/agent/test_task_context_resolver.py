@@ -137,7 +137,7 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     decision = asyncio.run(
         _resolver().resolve(
             current_message="那這個呢",
-            history=[],
+            history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那這個呢"),
             provider=provider,
             model=provider.get_default_model(),
@@ -279,7 +279,7 @@ def test_task_context_stays_neutral_when_llm_json_is_invalid():
     decision = asyncio.run(
         _resolver().resolve(
             current_message="那這個呢",
-            history=[],
+            history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那這個呢"),
             provider=provider,
             model=provider.get_default_model(),
@@ -304,7 +304,7 @@ def test_task_context_stays_neutral_for_low_confidence_llm_decision():
     decision = asyncio.run(
         _resolver().resolve(
             current_message="那這個呢",
-            history=[],
+            history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify("那這個呢"),
             provider=provider,
             model=provider.get_default_model(),
@@ -430,13 +430,13 @@ def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
     assert decision.inherited_tool_group is None
 
 
-def test_task_context_skips_llm_when_provider_is_unconfigured():
+def test_task_context_stays_neutral_when_provider_is_unconfigured():
     message = "那這個呢"
 
     decision = asyncio.run(
         _resolver().resolve(
             current_message=message,
-            history=[],
+            history=_WEB_RESEARCH_HISTORY,
             task_intent=TaskIntentService().classify(message),
             provider=UnconfiguredLLM(),
             model="unconfigured",
