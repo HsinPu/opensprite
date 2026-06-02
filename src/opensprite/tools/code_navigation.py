@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .base import Tool
+from .result_status import tool_error_result
 
 
 WorkspaceResolver = Callable[[], Path]
@@ -15,6 +16,7 @@ WorkspaceResolver = Callable[[], Path]
 _MAX_FILES = 300
 _MAX_RESULTS = 100
 _MAX_FILE_CHARS = 200_000
+_TOOL_NAME = "code_navigation"
 _SYMBOL_RE = re.compile(
     r"^\s*(?:"
     r"(?P<py>class\s+(?P<py_class>[A-Za-z_][\w]*)|def\s+(?P<py_func>[A-Za-z_][\w]*))"
@@ -136,6 +138,23 @@ def _line_matches_symbol(line: str, symbol: str) -> bool:
     return re.search(rf"\b{re.escape(symbol)}\b", line) is not None
 
 
+def _code_navigation_error_result(
+    error: str,
+    *,
+    category: str,
+    error_type: str = "CodeNavigationToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
+
+
 class CodeNavigationTool(Tool):
     """Static code navigation fallback for symbols, definitions, and references."""
 
@@ -144,7 +163,7 @@ class CodeNavigationTool(Tool):
 
     @property
     def name(self) -> str:
-        return "code_navigation"
+        return _TOOL_NAME
 
     @property
     def description(self) -> str:
@@ -169,11 +188,19 @@ class CodeNavigationTool(Tool):
         workspace = self._workspace_resolver()
         target = _resolve_workspace_path(workspace, path or ".")
         if target is None:
-            return "Error: Access denied. Path must stay inside the workspace."
+            return _code_navigation_error_result(
+                "Access denied. Path must stay inside the workspace.",
+                category="access_denied",
+            )
 
         if action == "document_symbols":
             if not target.is_file():
-                return "Error: document_symbols requires a file path."
+                return _code_navigation_error_result(
+                    "document_symbols requires a file path.",
+                    category="invalid_arguments",
+                    error_type="ToolValidationError",
+                    invalid_arguments=True,
+                )
             result = {"action": action, "symbols": _document_symbols(workspace, target)}
             return json.dumps(result, ensure_ascii=False, indent=2)
 
@@ -192,7 +219,12 @@ class CodeNavigationTool(Tool):
             return json.dumps({"action": action, "symbols": symbols}, ensure_ascii=False, indent=2)
 
         if not symbol.strip():
-            return f"Error: {action} requires symbol."
+            return _code_navigation_error_result(
+                f"{action} requires symbol.",
+                category="invalid_arguments",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
 
         if action == "go_to_definition":
             definitions = []
@@ -225,4 +257,9 @@ class CodeNavigationTool(Tool):
                     break
             return json.dumps({"action": action, "references": references}, ensure_ascii=False, indent=2)
 
-        return f"Error: Unsupported code_navigation action: {action}"
+        return _code_navigation_error_result(
+            f"Unsupported code_navigation action: {action}",
+            category="invalid_arguments",
+            error_type="ToolValidationError",
+            invalid_arguments=True,
+        )

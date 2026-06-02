@@ -4,6 +4,7 @@ import json
 from opensprite.tools.code_navigation import CodeNavigationTool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _payload(result: str):
@@ -61,7 +62,37 @@ def test_code_navigation_rejects_external_path(tmp_path):
 
     result = asyncio.run(tool.execute(action="document_symbols", path="../outside.py"))
 
-    assert result.startswith("Error: Access denied.")
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "CodeNavigationToolError"
+    assert status.category == "access_denied"
+    assert "Access denied" in status.error
+
+
+def test_code_navigation_rejects_document_symbols_on_directory(tmp_path):
+    tool = CodeNavigationTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(action="document_symbols", path="."))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "requires a file path" in status.error
+
+
+def test_code_navigation_requires_symbol_for_references(tmp_path):
+    tool = CodeNavigationTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(action="references", path=".", symbol=""))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "requires symbol" in status.error
 
 
 def test_code_navigation_is_read_risk_tool():
