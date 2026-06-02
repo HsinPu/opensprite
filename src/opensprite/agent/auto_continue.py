@@ -458,7 +458,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
         "assistant did not provide the requested itemized result",
-        "required task evidence was not produced",
         "required task artifacts were not produced",
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
@@ -559,7 +558,7 @@ def _quality_follow_up_instruction(
             "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
             "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
         )
-    if reason == "required task evidence was not produced":
+    if completion_result.missing_evidence:
         return (
             "\n- Evidence follow-up: required tool evidence is missing. "
             "Call the appropriate tools for the requested resources or external information before giving the final answer."

@@ -45,7 +45,7 @@ def test_auto_continue_prompt_includes_harness_profile_guidance():
     )
     completion = CompletionGateResult(
         status="incomplete",
-        reason="required task evidence was not produced",
+        reason="judge reported missing evidence",
         missing_evidence=("Use web research tools before answering.",),
     )
 
