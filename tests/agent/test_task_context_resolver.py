@@ -347,6 +347,32 @@ def test_task_context_downgrades_low_confidence_task_switch_to_ambiguous_boundar
     assert "ask for confirmation" in decision.reason
 
 
+def test_task_context_consults_llm_for_active_task_boundary_without_seed_intent():
+    provider = _JsonProvider(
+        '{"continuation_type": "ambiguous_boundary", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.81, "reason": "could be a new README request or a follow-up"}'
+    )
+    message = "what about README?"
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.continuation_type == "ambiguous_boundary"
+
+
 def test_task_context_clears_inherited_context_for_direct_ambiguous_boundary():
     provider = _JsonProvider(
         '{"continuation_type": "ambiguous_boundary", "is_follow_up": true, '

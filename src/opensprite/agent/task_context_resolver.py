@@ -352,7 +352,7 @@ def _should_consult_llm(
         return _has_recent_context(history, work_state_summary) and _is_context_dependent_short_turn(current, task_intent)
     if decision.should_inherit_active_task:
         return True
-    return bool(task_intent and task_intent.should_seed_active_task)
+    return True
 
 
 def _build_llm_prompt(
@@ -471,7 +471,11 @@ def _merge_with_deterministic(
             continuation_type=_AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
             reason=f"task boundary confidence too low ({llm_decision.confidence:.2f}); ask for confirmation",
         )
-    if deterministic.should_inherit_active_task and continuation_type not in _NEW_TASK_CONTINUATION_TYPES:
+    if (
+        deterministic.should_inherit_active_task
+        and continuation_type not in _NEW_TASK_CONTINUATION_TYPES
+        and continuation_type != _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE
+    ):
         continuation_type = "continue_active_task"
     elif inherited_tool_group and continuation_type == "none":
         continuation_type = "follow_up"
