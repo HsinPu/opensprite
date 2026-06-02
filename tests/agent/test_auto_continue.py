@@ -537,14 +537,38 @@ def test_auto_continue_guides_retry_after_missing_web_source_reference():
     intent = TaskIntentService().classify("Please find current Reddit search sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant final answer did not reference gathered sources",
+        reason="judge rejected incomplete final answer",
         active_task_detail="- Reference at least one gathered source by URL, domain, or title",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="web_research",
+        acceptance_criteria=(AcceptanceCriterion(kind="source_reference", min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="I found sources.", executed_tool_calls=1),
+        execution_result=ExecutionResult(
+            content="I found sources.",
+            executed_tool_calls=1,
+            task_contract=contract,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "title": "Reddit API docs",
+                                "url": "https://www.reddit.com/dev/api/",
+                                "snippet": "Official Reddit API reference.",
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
         attempts_used=0,
         previous_response="I found sources.",
     )

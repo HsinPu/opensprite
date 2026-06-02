@@ -455,6 +455,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if _task_contract_has_acceptance_criterion(execution_result, "itemized_output", "substantive_final_answer"):
         return True
+    if _task_contract_has_acceptance_criterion(execution_result, "source_reference") and _existing_web_source_context(execution_result):
+        return True
     if completion_result.missing_evidence:
         return True
     return completion_result.reason in {
@@ -463,7 +465,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
         "required source material was insufficient",
-        "assistant final answer did not reference gathered sources",
         "max tool iterations exhausted before completion",
     }
 
@@ -544,7 +545,11 @@ def _quality_follow_up_instruction(
             "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
             "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
         )
-    if reason == "assistant final answer did not reference gathered sources":
+    if (
+        execution_result is not None
+        and _task_contract_has_acceptance_criterion(execution_result, "source_reference")
+        and _existing_web_source_context(execution_result)
+    ):
         return (
             "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
             "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
