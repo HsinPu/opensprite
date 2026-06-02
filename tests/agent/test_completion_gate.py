@@ -1271,7 +1271,7 @@ def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
     assert any(criterion.kind == "substantive_final_answer" for criterion in contract.acceptance_criteria)
 
 
-def test_task_contract_does_not_force_search_history_for_immediate_no_research_follow_up():
+def test_task_contract_keeps_history_retrieval_when_planner_requires_it_for_follow_up():
     intent = TaskIntentService().classify("延續上一題，請用一句話說明你剛剛用了哪些來源類型，不要重新查。")
 
     contract = _contract_from_planner_payload(
@@ -1297,10 +1297,10 @@ def test_task_contract_does_not_force_search_history_for_immediate_no_research_f
         task_context_decision=None,
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.requirements == ()
-    assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["override_reason"] == "immediate follow-up explicitly asked not to gather new evidence"
+    assert contract.task_type == "history_retrieval"
+    assert any(requirement.tool_group == "history_retrieval" for requirement in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert "override_reason" not in contract.planner_metadata
 
 
 def test_task_contract_history_retrieval_drops_extra_web_research_group():

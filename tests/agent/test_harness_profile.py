@@ -341,7 +341,7 @@ async def test_task_contract_planner_keeps_current_cli_usage_with_workspace_when
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_keeps_command_usage_question_no_tool_when_reading_forbidden():
+async def test_task_contract_planner_keeps_workspace_read_when_planner_requires_it():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     message = "我想了解 trace CLI 怎麼用，不要讀檔，只給我一般測試指令與用途。"
     intent = TaskIntentService().classify(message)
@@ -362,10 +362,10 @@ async def test_task_contract_planner_keeps_command_usage_question_no_tool_when_r
         history=[],
     )
 
-    assert contract.task_type == "pure_answer"
-    assert contract.requirements == ()
-    assert contract.allow_no_tool_final is True
-    assert contract.planner_metadata["override_reason"] == "command usage question does not require workspace evidence"
+    assert contract.task_type == "workspace_read"
+    assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
+    assert contract.allow_no_tool_final is False
+    assert "override_reason" not in contract.planner_metadata
 
 
 @pytest.mark.anyio

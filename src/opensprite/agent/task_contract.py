@@ -466,21 +466,8 @@ def _contract_from_planner_payload(
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
     raw_tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
-    forced_no_tool = _is_no_tool_command_usage_question(
-        current_message=current_message,
-        raw_task_type=raw_task_type,
-        tool_groups=raw_tool_groups,
-    )
-    forced_recent_context_no_tool = _is_recent_context_no_tool_follow_up(
-        current_message=current_message,
-        history=history,
-    )
-    if forced_no_tool or forced_recent_context_no_tool:
-        raw_task_type = "pure_answer"
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = raw_tool_groups
-    if forced_no_tool or forced_recent_context_no_tool:
-        tool_groups = []
     if task_type == "history_retrieval":
         tool_groups = [tool_group for tool_group in tool_groups if tool_group == "history_retrieval"]
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
@@ -582,10 +569,6 @@ def _contract_from_planner_payload(
         "required_tool_groups": list(tool_groups),
         "reason": planner_reason,
     }
-    if forced_no_tool:
-        metadata["override_reason"] = "command usage question does not require workspace evidence"
-    if forced_recent_context_no_tool:
-        metadata["override_reason"] = "immediate follow-up explicitly asked not to gather new evidence"
     return TaskContract(
         objective=objective,
         task_type=task_type,
@@ -593,7 +576,7 @@ def _contract_from_planner_payload(
         acceptance_criteria=tuple(acceptance_criteria),
         selected_resources=tuple(dict.fromkeys(selected)),
         final_answer_required=_coerce_bool(payload.get("final_answer_required", True)),
-        allow_no_tool_final=(True if (forced_no_tool or forced_recent_context_no_tool) else _coerce_bool(payload.get("allow_no_tool_final", not requirements))) and not requirements,
+        allow_no_tool_final=_coerce_bool(payload.get("allow_no_tool_final", not requirements)) and not requirements,
         contract_sources=("llm_planner",),
         planner_metadata=metadata,
     )
@@ -613,35 +596,6 @@ def _normalize_planner_tool_groups(value: Any) -> list[str]:
         if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
             groups.append(text)
     return groups
-
-
-def _is_no_tool_command_usage_question(*, current_message: str, raw_task_type: str, tool_groups: list[str]) -> bool:
-    text = str(current_message or "").strip()
-    planner_requested_read_only_workspace = raw_task_type == "workspace_read" or "workspace_read" in tool_groups
-    planner_requested_workspace_change = (
-        raw_task_type in {"workspace_change", "code_change"}
-        or "workspace_write" in tool_groups
-        or "verification" in tool_groups
-    )
-    if not planner_requested_read_only_workspace or planner_requested_workspace_change:
-        return False
-    forbids_workspace_evidence = bool(_NO_WORKSPACE_EVIDENCE_RE.search(text))
-    if _EXPLICIT_WORKSPACE_EVIDENCE_RE.search(text) and not forbids_workspace_evidence:
-        return False
-    return forbids_workspace_evidence and bool(_COMMAND_USAGE_DISCUSSION_RE.search(text))
-
-
-def _is_recent_context_no_tool_follow_up(
-    *,
-    current_message: str,
-    history: list[dict[str, Any]] | None,
-) -> bool:
-    text = str(current_message or "").strip()
-    if not text:
-        return False
-    if not (_RECENT_CONTEXT_NO_TOOL_RE.search(text) and _NO_NEW_EVIDENCE_RE.search(text)):
-        return False
-    return any(str(item.get("role") or "") == "assistant" and str(item.get("content") or "").strip() for item in (history or [])[-4:])
 
 
 def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> None:
