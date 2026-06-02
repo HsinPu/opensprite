@@ -72,6 +72,7 @@ This section is maintained by OpenSprite.
 _ACTIVE_STATUSES_TO_INCLUDE = {"active", "blocked", "waiting_user"}
 _ALLOWED_ACTIVE_TASK_STATUSES = {"inactive", "active", "blocked", "waiting_user", "done", "cancelled"}
 _INACTIVE_OR_TERMINAL_STATUSES = {"inactive", "done", "cancelled"}
+_DEFAULT_ACTIVE_TASK_DELIVERABLE = "a concrete result aligned with the user's request"
 _AUTO_ALLOWED_STATUS_TRANSITIONS = {
     "inactive": {"inactive", "active", "blocked", "waiting_user", "done"},
     "active": {"active", "blocked", "waiting_user", "done"},
@@ -394,21 +395,6 @@ def _normalize_goal_text(text: str, max_chars: int = 180) -> str:
     return compact[: max_chars - 3].rstrip() + "..."
 
 
-def _infer_deliverable(goal_text: str) -> str:
-    lower = goal_text.lower()
-    if any(token in lower for token in ("fix", "correct", "repair", "solve")):
-        return "a concrete fix and verification"
-    if any(token in lower for token in ("refactor", "cleanup", "clean up")):
-        return "a safe refactor and verification"
-    if any(token in lower for token in ("add", "implement", "build", "create", "write")):
-        return "a concrete implementation result"
-    if any(token in lower for token in ("review", "analyze", "analyse", "check", "investigate", "look into")):
-        return "clear findings and the next recommended action"
-    if any(token in lower for token in ("explain", "why", "how", "summarize", "summary")):
-        return "a clear explanation with the necessary supporting detail"
-    return "a concrete result aligned with the user's request"
-
-
 def build_initial_active_task_block(message_text: str) -> str | None:
     """Create a minimal first-turn task brief from the latest user message."""
     return build_task_block_from_text(message_text)
@@ -426,7 +412,7 @@ def build_task_block_from_intent_fields(
     if not normalized_goal or normalized_goal.lower() in _NON_TASK_MESSAGES:
         return None
 
-    deliverable = _infer_deliverable(normalized_goal)
+    deliverable = _DEFAULT_ACTIVE_TASK_DELIVERABLE
     done_items = _normalize_task_list(
         definition_of_done,
         default=["the user request is addressed directly", "the result or blocker is explicit"],
@@ -480,7 +466,7 @@ def build_task_block_from_text(message_text: str, *, force: bool = False) -> str
     if not force and not is_task_worthy_message(stripped):
         return None
 
-    deliverable = _infer_deliverable(goal)
+    deliverable = _DEFAULT_ACTIVE_TASK_DELIVERABLE
     assumptions = (
         "The initial request is brief and this task brief may be refined after more context."
         if len(goal.split()) <= 12
