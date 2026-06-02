@@ -170,7 +170,6 @@ class TaskContextResolver:
             current_message,
             deterministic,
             active_task,
-            task_intent,
             history=history,
             work_state_summary=work_state_summary,
         ):
@@ -307,7 +306,6 @@ def _should_consult_llm(
     current_message: str,
     decision: TaskContextDecision,
     active_task: str | None,
-    task_intent: TaskIntent | None,
     history: list[dict[str, Any]] | None = None,
     work_state_summary: str | None = None,
 ) -> bool:
