@@ -1643,9 +1643,14 @@ async def test_completion_gate_uses_judge_for_ungrounded_history_answer():
 
 def test_completion_gate_requires_enough_history_items():
     intent = TaskIntentService().classify("你剛剛提到哪三個方案")
-    contract = TaskContractService.build(
-        task_intent=intent,
-        current_message=intent.objective,
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="history_retrieval",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        acceptance_criteria=(
+            AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),
+            AcceptanceCriterion(kind="itemized_output", min_count=3),
+        ),
     )
     answer = (
         "我回頭查過前面的內容了，但目前只整理出兩個方案，還缺少第三個：\n"
@@ -1666,6 +1671,37 @@ def test_completion_gate_requires_enough_history_items():
 
     assert completion.status == "incomplete"
     assert completion.reason == "assistant did not provide enough recalled items"
+
+
+def test_completion_gate_does_not_infer_history_count_from_objective_text():
+    intent = TaskIntentService().classify(
+        "\u8acb\u56de\u60f3\u524d\u9762\u63d0\u904e\u54ea\u4e09\u500b\u65b9\u6848"
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="history_retrieval",
+        requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),),
+    )
+    answer = (
+        "Based on the retrieved prior conversation, I found two concrete items in context and will avoid "
+        "inventing a third item that was not actually retrieved:\n"
+        "1. Consolidate completion decisions around the task contract.\n"
+        "2. Keep trace evidence tied to real tool results."
+    )
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="search_history", ok=True, metadata={"result_count": 2}),),
+        ),
+    )
+
+    assert completion.status == "complete"
 
 
 @pytest.mark.anyio

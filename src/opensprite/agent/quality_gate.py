@@ -473,7 +473,7 @@ def _evaluate_history_grounding(
     if _history_retrieval_was_empty(execution_result):
         return None
 
-    requested_count = _requested_history_item_count(contract.objective)
+    requested_count = _history_itemized_min_count(contract)
     if requested_count > 1 and _response_item_count(response_text) < requested_count:
         return QualityGateResult(
             passed=False,
@@ -714,21 +714,13 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
     return saw_explicit_empty
 
 
-def _requested_history_item_count(objective: str) -> int:
-    text = str(objective or "")
-    digit_counts = [int(match) for match in re.findall(r"(?<!\d)\d{1,2}(?!\d)", text)]
-    word_counts = []
-    for marker, count in (
-        ("一", 1),
-        ("二", 2),
-        ("兩", 2),
-        ("三", 3),
-        ("四", 4),
-        ("五", 5),
-    ):
-        if marker in text:
-            word_counts.append(count)
-    return max([*digit_counts, *word_counts], default=0)
+def _history_itemized_min_count(contract: TaskContract) -> int:
+    counts = [
+        _coerce_int(getattr(criterion, "min_count", 0), default=0)
+        for criterion in contract.acceptance_criteria
+        if criterion.kind == "itemized_output"
+    ]
+    return max(counts, default=0)
 
 
 def _truthy(value: object) -> bool:
