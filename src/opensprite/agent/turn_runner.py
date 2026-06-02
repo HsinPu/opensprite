@@ -1355,12 +1355,7 @@ def _source_fallback_response(
 ) -> str:
     if execution_result is None:
         return ""
-    if completion_result.reason not in {
-        "assistant final answer did not reference gathered sources",
-        "assistant final answer was too terse for the task",
-        "assistant did not provide the requested itemized result",
-        "tool execution reported an error without a clear blocker handoff",
-    }:
+    if not _should_use_source_fallback(completion_result, execution_result):
         return ""
     sources = _substantive_web_sources(execution_result)
     if not sources:
@@ -1391,6 +1386,30 @@ def _source_fallback_response(
             "來源網址：\n" + "\n".join(source_lines),
         ]
     )
+
+
+def _should_use_source_fallback(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
+    if completion_result.reason in {
+        "assistant final answer did not reference gathered sources",
+        "assistant final answer was too terse for the task",
+        "assistant did not provide the requested itemized result",
+        "tool execution reported an error without a clear blocker handoff",
+    }:
+        return True
+    if completion_result.status != "incomplete":
+        return False
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    if str(getattr(contract, "task_type", "") or "") == "web_research":
+        return True
+    for requirement in getattr(contract, "requirements", ()) or ():
+        if (
+            str(getattr(requirement, "kind", "") or "") == "tool_group"
+            and str(getattr(requirement, "tool_group", "") or "") == "web_research"
+        ):
+            return True
+    return False
 
 
 def _clean_source_fallback_snippet(snippet: str) -> str:

@@ -1,7 +1,7 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.task_contract import TaskContract
+from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation, _message_with_runtime_context
 
 
@@ -178,6 +178,48 @@ def test_exhausted_continuation_uses_gathered_source_fallback_for_market_quote()
 
     assert "重點摘要" in response
     assert "https://finance.yahoo.com/quote/TSM/" in response
+    assert "目前還不能可靠完成這次請求" not in response
+
+
+def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete_reason():
+    response = _final_response_after_exhausted_continuation(
+        response="Let me keep checking that.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="assistant response did not explicitly complete the task",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Let me keep checking that.",
+            task_contract=TaskContract(
+                objective="Find the current OpenRouter API base URL and cite sources.",
+                task_type="web_research",
+                requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research"),),
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://openrouter.ai/docs/api-reference/overview",
+                                "title": "OpenRouter API Overview",
+                                "snippet": "OpenRouter requests use the https://openrouter.ai/api/v1 base URL.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "重點摘要" in response
+    assert "https://openrouter.ai/docs/api-reference/overview" in response
     assert "目前還不能可靠完成這次請求" not in response
 
 
