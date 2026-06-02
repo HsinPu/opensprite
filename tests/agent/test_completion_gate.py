@@ -20,6 +20,7 @@ from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.config import DocumentLlmConfig
 from opensprite.storage.base import StoredDelegatedTask
 from opensprite.tools.evidence import ToolEvidence
+from opensprite.tools.result_status import tool_error_result
 from tests.agent.task_contract_test_helpers import TaskContractService
 
 
@@ -2364,6 +2365,12 @@ def test_completion_gate_rejects_failed_web_fetch_source_artifact():
     )
     answer = "台積電市值資料來源是 Yahoo Finance。這個回答故意引用失敗 fetch，應被 gate 擋下。"
 
+    fetch_error = tool_error_result(
+        "HTTP Error: 404 Not Found",
+        error_type="ToolExecutionError",
+        metadata={"tool_name": "web_fetch"},
+    )
+
     completion = CompletionGateService().evaluate(
         task_intent=intent,
         response_text=answer,
@@ -2377,13 +2384,13 @@ def test_completion_gate_rejects_failed_web_fetch_source_artifact():
                     kind="web_source",
                     source_tool="web_fetch",
                     ok=False,
-                    content_preview="Error executing web_fetch: HTTP Error: 404 Not Found",
+                    content_preview=fetch_error,
                     metadata={
                         "sources": [
                             {
                                 "tool_name": "web_fetch",
                                 "url": "https://finance.yahoo.com/quote/2330.TW/",
-                                "snippet": "Error executing web_fetch: HTTP Error: 404 Not Found",
+                                "snippet": fetch_error,
                             }
                         ]
                     },

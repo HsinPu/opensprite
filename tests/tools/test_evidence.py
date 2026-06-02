@@ -1,6 +1,7 @@
 import json
 
 from opensprite.tools.evidence import build_tool_evidence
+from opensprite.tools.result_status import tool_error_result
 
 
 def test_web_fetch_evidence_includes_source_quality_metadata():
@@ -40,7 +41,11 @@ def test_web_fetch_http_error_marks_evidence_failed():
     evidence = build_tool_evidence(
         "web_fetch",
         {"url": "https://finance.yahoo.com/quote/2330.TW/"},
-        "Error executing web_fetch: HTTP Error: 404 Not Found",
+        tool_error_result(
+            "HTTP Error: 404 Not Found",
+            error_type="ToolExecutionError",
+            metadata={"tool_name": "web_fetch"},
+        ),
         ok=True,
     )
 

@@ -5,6 +5,7 @@ from typing import Any
 
 from ..utils.log import logger
 from .evidence import ToolEvidence, build_tool_evidence
+from .result_status import tool_error_result
 from .validation import format_param_preview, validate_tool_params
 
 
@@ -59,7 +60,11 @@ class Tool(ABC):
         try:
             return await self._execute(**params)
         except Exception as e:
-            return f"Error executing {self.name}: {str(e)}"
+            return tool_error_result(
+                str(e),
+                error_type="ToolExecutionError",
+                metadata={"tool_name": self.name},
+            )
 
     def validate_params(self, params: Any) -> str | None:
         """Validate params against the tool schema before execution."""

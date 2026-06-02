@@ -27,6 +27,7 @@ from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.process_runtime import BackgroundSession
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import tool_error_result
 from opensprite.tools.shell_runtime import CapturedOutputChunk
 
 
@@ -1000,7 +1001,15 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
             enabled=True,
         )
 
-        await after("web_fetch", {"url": "https://example.test/missing"}, "Error executing web_fetch: HTTP Error: 404 Not Found")
+        await after(
+            "web_fetch",
+            {"url": "https://example.test/missing"},
+            tool_error_result(
+                "HTTP Error: 404 Not Found",
+                error_type="ToolExecutionError",
+                metadata={"tool_name": "web_fetch"},
+            ),
+        )
 
         return await storage.get_run_events("web:browser-1", "run-1"), await storage.get_run_parts("web:browser-1", "run-1")
 

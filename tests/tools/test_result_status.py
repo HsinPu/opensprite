@@ -54,6 +54,23 @@ def test_tool_result_status_extracts_error_executing_metadata():
     }
 
 
+def test_tool_result_status_extracts_structured_execution_error_metadata():
+    status = classify_tool_result_status(
+        tool_error_result(
+            "HTTP Error: 404 Not Found",
+            error_type="ToolExecutionError",
+            metadata={"tool_name": "web_fetch"},
+        )
+    )
+
+    assert status.ok is False
+    assert status.error_metadata() == {
+        "error": "HTTP Error: 404 Not Found",
+        "error_type": "ToolExecutionError",
+        "status_code": 404,
+    }
+
+
 def test_tool_result_status_exposes_invalid_arguments_repeat_key():
     result = "Error: Invalid arguments for web_fetch: url is required"
     status = classify_tool_result_status(result)
