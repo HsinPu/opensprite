@@ -1,6 +1,7 @@
 """exec policy and lifecycle behavior."""
 
 import asyncio
+import json
 import os
 import shlex
 import subprocess
@@ -74,6 +75,22 @@ def test_exec_tool_runs_echo_when_allowed(tmp_path):
     result = asyncio.run(tool.execute(command="echo opensprite_exec_ok"))
     assert "opensprite_exec_ok" in result
     assert not result.startswith("Error:")
+
+
+def test_exec_tool_returns_structured_error_for_runtime_exception():
+    from opensprite.tools.shell import ExecTool
+
+    def broken_workspace():
+        raise RuntimeError("workspace unavailable")
+
+    tool = ExecTool(workspace_resolver=broken_workspace)
+    result = asyncio.run(tool.execute(command="echo should_not_run"))
+    payload = json.loads(result)
+
+    assert payload["ok"] is False
+    assert payload["error"] == "workspace unavailable"
+    assert payload["error_type"] == "ToolExecutionError"
+    assert payload["metadata"]["tool_name"] == "exec"
 
 
 def test_exec_tool_blocks_dangerous_command(tmp_path):

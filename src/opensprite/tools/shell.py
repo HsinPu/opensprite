@@ -8,6 +8,7 @@ from typing import Any, Callable
 
 from .base import Tool
 from .process_runtime import BackgroundProcessManager, BackgroundSession, SessionExitNotifier
+from .result_status import tool_error_result
 from .shell_runtime import (
     CapturedOutputChunk,
     drain_process_output,
@@ -887,4 +888,8 @@ class ExecTool(Tool):
                 )
             raise
         except Exception as e:
-            return f"Error executing command: {str(e)}"
+            return tool_error_result(
+                str(e),
+                error_type="ToolExecutionError",
+                metadata={"tool_name": self.name},
+            )

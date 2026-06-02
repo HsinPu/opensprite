@@ -69,17 +69,6 @@ def test_tool_result_status_honors_structured_error_metadata():
     assert status.error_metadata()["category"] == "permission_block"
 
 
-def test_tool_result_status_extracts_error_executing_metadata():
-    status = classify_tool_result_status("Error executing web_fetch: HTTP Error: 404 Not Found")
-
-    assert status.ok is False
-    assert status.error_metadata() == {
-        "error": "HTTP Error: 404 Not Found",
-        "error_type": "ToolExecutionError",
-        "status_code": 404,
-    }
-
-
 def test_tool_result_status_extracts_structured_execution_error_metadata():
     status = classify_tool_result_status(
         tool_error_result(

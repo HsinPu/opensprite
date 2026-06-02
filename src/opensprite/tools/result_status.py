@@ -99,10 +99,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
             invalid_arguments=True,
         )
 
-    if stripped.startswith("Error executing "):
-        _, _, detail = stripped.partition(":")
-        return _failed_status(detail, error_type="ToolExecutionError", fallback=stripped)
-
     if stripped.startswith("Error:"):
         return _failed_status(stripped.removeprefix("Error:").strip(), error_type="ToolError", fallback=stripped)
 
