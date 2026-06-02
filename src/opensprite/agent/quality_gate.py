@@ -16,13 +16,6 @@ _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transc
 _SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
-_OPERATION_REPORT_RE = re.compile(
-    r"\b(?:approval|approved|denied|blocked|blocker|validation|validated|verified|rollback|risk|audit|permission|configured|deployed|restarted)\b"
-    r"|(?:核准|拒絕|封鎖|阻礙|無法確認|無法判定|驗證|回滾|風險|稽核|權限|設定|部署|重啟)",
-    re.IGNORECASE,
-)
-
-
 @dataclass(frozen=True)
 class QualityGateResult:
     """Verdict for deterministic response-quality checks."""
@@ -298,7 +291,7 @@ def _evaluate_operation_report(
     response_text: str,
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
-    if _OPERATION_REPORT_RE.search(response_text or ""):
+    if any(evidence.ok for evidence in execution_result.tool_evidence):
         return None
     if _response_reports_tool_result(response_text, execution_result):
         return None

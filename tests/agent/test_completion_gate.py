@@ -3148,16 +3148,27 @@ def test_quality_gate_requires_operation_validation_or_risk_report():
         execution_result=ExecutionResult(content="I changed the setting and finished the task."),
         task_contract=contract,
     )
-    reported_validation = QualityGateService().evaluate(
+    reported_validation_without_evidence = QualityGateService().evaluate(
         task_intent=intent,
         response_text="Configuration validation passed; residual risk is low.",
         execution_result=ExecutionResult(content="Configuration validation passed; residual risk is low."),
         task_contract=contract,
     )
+    reported_tool_result = QualityGateService().evaluate(
+        task_intent=intent,
+        response_text="Configuration validation passed.",
+        execution_result=ExecutionResult(
+            content="Configuration validation passed.",
+            executed_tool_calls=1,
+            tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview="configuration validation passed"),),
+        ),
+        task_contract=contract,
+    )
 
     assert missing_report.passed is False
     assert missing_report.reason == "operation validation or risk was not reported"
-    assert reported_validation.passed is True
+    assert reported_validation_without_evidence.passed is False
+    assert reported_tool_result.passed is True
 
 
 def test_quality_gate_accepts_operation_report_with_successful_tool_result():
