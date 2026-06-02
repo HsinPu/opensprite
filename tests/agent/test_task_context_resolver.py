@@ -490,8 +490,32 @@ def test_task_context_does_not_continue_active_task_from_continue_marker_without
     assert decision.continuation_type == "none"
 
 
-def test_task_context_confirms_pending_boundary_switch_without_llm():
-    provider = _FailingProvider()
+def test_task_context_does_not_confirm_pending_boundary_switch_without_llm():
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="switch",
+            history=[],
+            task_intent=TaskIntentService().classify("switch"),
+            active_task=_BOUNDARY_ACTIVE_TASK_BLOCK,
+            provider=UnconfiguredLLM(),
+            model="unconfigured",
+        )
+    )
+
+    assert decision.method == "llm_unresolved"
+    assert decision.continuation_type == "none"
+    assert decision.should_seed_active_task is False
+    assert decision.should_replace_active_task is False
+
+
+def test_task_context_confirms_pending_boundary_switch_with_llm():
+    provider = _JsonProvider(
+        '{"continuation_type": "task_switch", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": true, "should_replace_active_task": true, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.92, "reason": "user confirmed the pending task-boundary request"}'
+    )
 
     decision = asyncio.run(
         _resolver().resolve(
@@ -504,14 +528,21 @@ def test_task_context_confirms_pending_boundary_switch_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
     assert decision.continuation_type == "task_switch"
     assert decision.should_seed_active_task is True
     assert decision.should_replace_active_task is True
 
 
-def test_task_context_confirms_pending_boundary_continue_without_llm():
-    provider = _FailingProvider()
+def test_task_context_confirms_pending_boundary_continue_with_llm():
+    provider = _JsonProvider(
+        '{"continuation_type": "continue_active_task", "is_follow_up": true, '
+        '"should_inherit_active_task": true, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.9, "reason": "user chose to keep the active task"}'
+    )
 
     decision = asyncio.run(
         _resolver().resolve(
@@ -524,13 +555,20 @@ def test_task_context_confirms_pending_boundary_continue_without_llm():
         )
     )
 
-    assert decision.method == "deterministic"
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
     assert decision.continuation_type == "continue_active_task"
     assert decision.should_inherit_active_task is True
 
 
-def test_task_context_supports_legacy_boundary_question_format():
-    provider = _FailingProvider()
+def test_task_context_supports_legacy_boundary_question_format_with_llm():
+    provider = _JsonProvider(
+        '{"continuation_type": "task_switch", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": true, "should_replace_active_task": true, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.92, "reason": "legacy boundary prompt still asks for a switch decision"}'
+    )
 
     decision = asyncio.run(
         _resolver().resolve(
@@ -543,6 +581,8 @@ def test_task_context_supports_legacy_boundary_question_format():
         )
     )
 
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
     assert decision.continuation_type == "task_switch"
     assert decision.should_replace_active_task is True
 

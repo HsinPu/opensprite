@@ -203,24 +203,6 @@ class TaskContextResolver:
                 reason="current message is an acknowledgement",
             )
 
-        pending_boundary_request = extract_pending_boundary_request(active_task)
-        if pending_boundary_request and _is_boundary_switch_confirmation(current):
-            return TaskContextDecision(
-                should_seed_active_task=True,
-                should_replace_active_task=True,
-                continuation_type="task_switch",
-                confidence=0.9,
-                reason="user confirmed switching to the pending task-boundary request",
-            )
-        if pending_boundary_request and _is_boundary_continue_confirmation(current):
-            return TaskContextDecision(
-                is_follow_up=True,
-                should_inherit_active_task=True,
-                continuation_type="continue_active_task",
-                confidence=0.9,
-                reason="user confirmed continuing the active task after task-boundary prompt",
-            )
-
         return TaskContextDecision(
             continuation_type="none",
             confidence=0.45,
@@ -555,14 +537,6 @@ def extract_pending_boundary_request(active_task: str | None) -> str | None:
         if match:
             return _compact(match.group("request")) or None
     return None
-
-
-def _is_boundary_switch_confirmation(current_message: str) -> bool:
-    return _compact(current_message).lower() == "switch"
-
-
-def _is_boundary_continue_confirmation(current_message: str) -> bool:
-    return _compact(current_message).lower() == "continue"
 
 
 def _compact(value: str | None) -> str:
