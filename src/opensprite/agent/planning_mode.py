@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from .task_contract import TaskContract
     from ..tools import ToolRegistry
 
 
@@ -118,9 +119,10 @@ def resolve_planning_mode(
     text: str | None,
     *,
     base_registry: "ToolRegistry | None" = None,
+    task_contract: "TaskContract | None" = None,
 ) -> PlanningModeState:
     """Resolve the full planning-mode state for one user turn."""
-    if not is_explicit_planning_mode_request(text):
+    if not (_contract_requests_planning_mode(task_contract) or is_explicit_planning_mode_request(text)):
         return PlanningModeState()
     return PlanningModeState(
         enabled=True,
@@ -144,3 +146,9 @@ def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolReg
         metadata_kind="planning_mode",
     )
     return resolution.registry
+
+
+def _contract_requests_planning_mode(task_contract: "TaskContract | None") -> bool:
+    if task_contract is None:
+        return False
+    return str(getattr(task_contract, "task_type", "") or "").strip() == "planning"

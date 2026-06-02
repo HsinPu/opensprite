@@ -26,6 +26,7 @@ _ALLOWED_PLANNER_TASK_TYPES = frozenset(
         "code_change",
         "media_analysis",
         "media_extraction",
+        "planning",
         "history_retrieval",
         "ops",
         "operations",
@@ -42,7 +43,7 @@ _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
     "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, media_analysis, "
-    "history_retrieval, ops, task, analysis. Choose required_tool_groups only from: web_research, "
+    "planning, history_retrieval, ops, task, analysis. Choose required_tool_groups only from: web_research, "
     "workspace_read, workspace_write, media, history_retrieval, scheduling, execution, verification. If no tool evidence is needed, "
     "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
     "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
