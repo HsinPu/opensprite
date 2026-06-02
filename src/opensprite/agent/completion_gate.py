@@ -152,7 +152,7 @@ class CompletionGateService:
             response_text,
             execution_result,
         )
-        verification_follow_up = _verification_follow_up(task_intent, execution_result)
+        verification_follow_up = _verification_follow_up(execution_result)
         review = _review_evidence(execution_result.delegated_tasks)
         review_required = (
             expects_code_change
@@ -1110,10 +1110,9 @@ def _string_or_none(value: Any) -> str | None:
     return text or None
 
 
-def _verification_follow_up(task_intent: TaskIntent, execution_result: ExecutionResult) -> dict[str, Any]:
+def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
     touched_paths = _normalized_touched_paths(execution_result.touched_paths)
     decision_paths = tuple(_strip_repo_snapshot_prefix(path) for path in touched_paths)
-    lowered_objective = str(task_intent.objective or "").lower()
     test_paths = tuple(path for path in decision_paths if path.startswith("tests/") and path.endswith(".py"))
     has_web_touched = any(path.startswith("apps/web/") or path == "apps/web" for path in decision_paths)
     has_python_touched = any(path.endswith(".py") for path in decision_paths)
@@ -1123,17 +1122,11 @@ def _verification_follow_up(task_intent: TaskIntent, execution_result: Execution
             "path": _common_verification_path(touched_paths) or ".",
             "pytest_args": (),
         }
-    if has_web_touched and any(
-        marker in lowered_objective for marker in ("test:smoke", "smoke test", "smoke", "contract check")
-    ):
-        return {"action": "web_smoke", "path": "apps/web", "pytest_args": ()}
-    if has_web_touched or any(
-        marker in lowered_objective for marker in ("web build", "vite build", "frontend build", "frontend", "vite")
-    ):
+    if has_web_touched:
         return {"action": "web_build", "path": "apps/web", "pytest_args": ()}
-    if test_paths or any(marker in lowered_objective for marker in ("pytest", "run tests", "run the tests", "test", "tests", "測試")):
+    if test_paths:
         return {"action": "pytest", "path": ".", "pytest_args": test_paths}
-    if any(path.endswith(".py") for path in touched_paths) or any(marker in lowered_objective for marker in ("compile", "syntax", "編譯")):
+    if has_python_touched:
         return {
             "action": "python_compile",
             "path": _common_verification_path(touched_paths) or ".",
