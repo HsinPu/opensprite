@@ -344,7 +344,7 @@ def _evaluate_command_version_answer(
         return None
     if _response_contains_version_like_value(normalized_response):
         return None
-    if _response_confuses_command_version_with_repo_state(normalized_response, execution_result):
+    if _execution_confuses_command_version_with_repo_state(execution_result):
         detail = (
             "- The user asked for the installed command/program version. "
             "Run the direct version command, such as `<command> --version`, instead of inspecting `.git`, `HEAD`, or repository commits."
@@ -462,13 +462,8 @@ def _evaluate_repository_status_answer(
     return None
 
 
-def _response_confuses_command_version_with_repo_state(
-    normalized_response: str,
-    execution_result: ExecutionResult,
-) -> bool:
+def _execution_confuses_command_version_with_repo_state(execution_result: ExecutionResult) -> bool:
     repo_state_markers = (".git", "not a git repository", "head", "rev-parse", "commit")
-    if any(marker in normalized_response for marker in repo_state_markers):
-        return True
     for evidence in execution_result.tool_evidence:
         command = ""
         if isinstance(evidence.metadata, dict):
