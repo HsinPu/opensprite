@@ -575,11 +575,10 @@ def _has_recent_context(history: list[dict[str, Any]] | None, work_state_summary
 def _is_context_dependent_short_turn(current: str, task_intent: TaskIntent | None) -> bool:
     if _CONTINUATION_RE.match(current):
         return True
-    del task_intent
-    if FollowUpIntentResolver.resolve(current_message=current, history=[]).is_follow_up:
-        return True
     words = re.findall(r"[\w\u4e00-\u9fff]+", current)
-    return current.endswith(("?", "？")) and len(words) <= 4
+    if len(words) <= 4:
+        return True
+    return current.endswith(("?", "\uff1f")) and len(words) <= 8
 
 
 def _coerce_bool(value: Any) -> bool:

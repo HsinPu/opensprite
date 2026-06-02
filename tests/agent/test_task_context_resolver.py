@@ -155,6 +155,31 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     assert decision.continuation_type == "follow_up"
 
 
+def test_task_context_uses_llm_for_short_recent_context_without_follow_up_marker():
+    provider = _JsonProvider(
+        '{"is_follow_up": true, "should_inherit_active_task": false, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+        '"confidence": 0.84, "reason": "short entity query depends on prior web lookup"}'
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="00981T price",
+            history=_WEB_RESEARCH_HISTORY,
+            task_intent=TaskIntentService().classify("00981T price"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.is_follow_up is True
+    assert decision.inherited_task_type == "web_research"
+    assert decision.inherited_tool_group == "web_research"
+
+
 def test_task_context_does_not_backfill_llm_tool_inheritance_from_regex():
     deterministic = TaskContextDecision(
         is_follow_up=True,
@@ -544,8 +569,10 @@ def test_task_context_stays_neutral_for_recent_workspace_tool_context_without_ll
 
 def test_task_context_does_not_inherit_workspace_for_standalone_error_question():
     provider = _JsonProvider(
-        '{"is_follow_up": true, "inherited_task_type": "workspace_read", '
-        '"inherited_tool_group": "workspace_read", "confidence": 0.9}'
+        '{"continuation_type": "none", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.9, "reason": "standalone explanatory question"}'
     )
 
     decision = asyncio.run(
@@ -561,7 +588,8 @@ def test_task_context_does_not_inherit_workspace_for_standalone_error_question()
         )
     )
 
-    assert provider.calls == []
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
     assert decision.is_follow_up is False
     assert decision.inherited_tool_group is None
     assert decision.continuation_type == "none"
