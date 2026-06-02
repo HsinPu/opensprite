@@ -141,7 +141,7 @@ class CompletionGateService:
     ) -> CompletionGateResult:
         """Return the safest completion verdict for the current turn."""
         contract_allows_plain_answer = _contract_allows_plain_answer(execution_result.task_contract)
-        verification_required = False if contract_allows_plain_answer else _requires_verification(task_intent, execution_result.task_contract)
+        verification_required = False if contract_allows_plain_answer else _requires_verification(execution_result.task_contract)
         expects_code_change = (
             False
             if contract_allows_plain_answer or _contract_is_read_only(execution_result.task_contract)
@@ -631,13 +631,13 @@ def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
     )
 
 
-def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -> bool:
+def _requires_verification(task_contract: Any) -> bool:
     if _contract_requires_verification(task_contract):
         return True
     task_type = str(getattr(task_contract, "task_type", "") or "")
     if task_type in {"analysis", "operations", "workspace_read", "history_retrieval", "web_research"}:
         return False
-    return task_intent.expects_verification
+    return False
 
 
 def _verification_skipped_with_reported_gap(execution_result: ExecutionResult) -> bool:

@@ -276,6 +276,16 @@ def _history_contract(intent) -> TaskContract:
     return _tool_group_contract(intent, "history_retrieval", "history_retrieval")
 
 
+def _verification_contract(intent) -> TaskContract:
+    return TaskContract(
+        objective=intent.objective,
+        task_type="task",
+        requirements=(EvidenceRequirement(kind="verification", tool_group="verification"),),
+        allow_no_tool_final=False,
+        contract_sources=("test",),
+    )
+
+
 def _itemized_contract(intent) -> TaskContract:
     return TaskContract(
         objective=intent.objective,
@@ -288,6 +298,7 @@ def _itemized_contract(intent) -> TaskContract:
 
 def test_completion_gate_requires_requested_verification_before_completion():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -296,6 +307,7 @@ def test_completion_gate_requires_requested_verification_before_completion():
             content="Completed the refactor.",
             file_change_count=1,
             touched_paths=("src/agent.py",),
+            task_contract=contract,
         ),
     )
 
@@ -308,6 +320,7 @@ def test_completion_gate_requires_requested_verification_before_completion():
 
 def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
     intent = TaskIntentService().classify("Please add a short test session note.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -316,6 +329,7 @@ def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
             content="Added the note.",
             file_change_count=1,
             touched_paths=("repo/tests/search/SESSION_TOOL_TEST_NOTES.md",),
+            task_contract=contract,
         ),
     )
 
@@ -327,6 +341,7 @@ def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
 
 def test_completion_gate_accepts_reported_skipped_verification_for_note_change():
     intent = TaskIntentService().classify("Please add a short test session note.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -345,6 +360,7 @@ def test_completion_gate_accepts_reported_skipped_verification_for_note_change()
                     ok=True,
                 ),
             ),
+            task_contract=contract,
         ),
     )
 
@@ -433,6 +449,7 @@ def test_completion_gate_accepts_successful_non_code_verification_without_artifa
 
 def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tests():
     intent = TaskIntentService().classify("Please update the test and run tests.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -441,6 +458,7 @@ def test_completion_gate_uses_project_relative_pytest_args_for_repo_snapshot_tes
             content="Updated the test.",
             file_change_count=1,
             touched_paths=("repo/tests/agent/test_sample.py",),
+            task_contract=contract,
         ),
     )
 
@@ -708,6 +726,7 @@ def test_completion_gate_treats_max_tool_iterations_as_incomplete():
 
 def test_completion_gate_prefers_web_build_for_web_changes():
     intent = TaskIntentService().classify("Please update the web UI and verify the change.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -716,6 +735,7 @@ def test_completion_gate_prefers_web_build_for_web_changes():
             content="Updated the web UI.",
             file_change_count=1,
             touched_paths=("apps/web/src/App.vue",),
+            task_contract=contract,
         ),
     )
 
@@ -726,6 +746,7 @@ def test_completion_gate_prefers_web_build_for_web_changes():
 
 def test_completion_gate_keeps_verification_status_when_verify_fails_with_tool_error():
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    contract = _verification_contract(intent)
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -737,6 +758,7 @@ def test_completion_gate_keeps_verification_status_when_verify_fails_with_tool_e
             verification_attempted=True,
             verification_passed=False,
             had_tool_error=True,
+            task_contract=contract,
         ),
     )
 
