@@ -457,6 +457,33 @@ def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     assert decision.reason == "completion_gate_incomplete"
 
 
+def test_auto_continue_uses_command_version_contract_for_retry_guidance():
+    intent = TaskIntentService().classify("Confirm the current git version. Answer only the version number.")
+    completion = CompletionGateResult(status="incomplete", reason="judge rejected incomplete operations answer")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="operations",
+        planner_metadata={"quality_checks": ["command_version"]},
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(
+            content="Unable to answer because this repo has no .git directory.",
+            executed_tool_calls=1,
+            task_contract=contract,
+        ),
+        attempts_used=0,
+        previous_response="Unable to answer because this repo has no .git directory.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "<command> --version" in (decision.prompt or "")
+    assert "Do not inspect `.git`" in (decision.prompt or "")
+
+
 def test_auto_continue_guides_retry_after_missing_task_artifacts():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(

@@ -300,7 +300,7 @@ def _evaluate_operation_report(
     )
 
 
-def _contract_requests_quality_check(contract: TaskContract, check_name: str) -> bool:
+def contract_requests_quality_check(contract: TaskContract, check_name: str) -> bool:
     metadata = contract.planner_metadata or {}
     raw_checks = metadata.get("quality_checks")
     if isinstance(raw_checks, str):
@@ -319,7 +319,7 @@ def _evaluate_command_version_answer(
 ) -> QualityGateResult | None:
     if contract.task_type != "operations":
         return None
-    if not _contract_requests_quality_check(contract, "command_version"):
+    if not contract_requests_quality_check(contract, "command_version"):
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
