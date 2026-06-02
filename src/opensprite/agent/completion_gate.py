@@ -148,10 +148,7 @@ class CompletionGateService:
             else task_intent.expects_code_change
         )
         verification_attempted = execution_result.verification_attempted
-        verification_passed = execution_result.verification_passed or _verification_skipped_with_reported_gap(
-            response_text,
-            execution_result,
-        )
+        verification_passed = execution_result.verification_passed or _verification_skipped_with_reported_gap(execution_result)
         verification_follow_up = _verification_follow_up(execution_result)
         review = _review_evidence(execution_result.delegated_tasks)
         review_required = (
@@ -643,15 +640,14 @@ def _requires_verification(task_intent: TaskIntent, task_contract: Any = None) -
     return task_intent.expects_verification
 
 
-def _verification_skipped_with_reported_gap(response_text: str, execution_result: ExecutionResult) -> bool:
+def _verification_skipped_with_reported_gap(execution_result: ExecutionResult) -> bool:
     if not execution_result.verification_attempted:
         return False
     if not _requires_delegated_review(execution_result.touched_paths) and not execution_result.had_tool_error:
         return True
     if not _has_skipped_verification_artifact(execution_result):
         return False
-    normalized = re.sub(r"\s+", " ", str(response_text or "").strip().lower())
-    return any(marker in normalized for marker in ("verification skipped", "verify skipped", "skipped", "跳過"))
+    return True
 
 
 def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> bool:

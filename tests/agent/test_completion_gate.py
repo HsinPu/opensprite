@@ -383,6 +383,33 @@ def test_completion_gate_accepts_skipped_verification_for_non_code_note_change()
     assert result.review_required is False
 
 
+def test_completion_gate_uses_skipped_verification_artifact_without_response_marker():
+    intent = TaskIntentService().classify("Please update src/app.py and verify the change.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Updated src/app.py.",
+        execution_result=ExecutionResult(
+            content="Updated src/app.py.",
+            file_change_count=1,
+            touched_paths=("src/app.py",),
+            verification_attempted=True,
+            verification_passed=False,
+            task_artifacts=(
+                TaskArtifact(
+                    kind="verification_result",
+                    source_tool="verify",
+                    content_preview="Verification skipped: no supported Python or package.json build checks were detected.",
+                    ok=True,
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.verification_passed is True
+
+
 def test_completion_gate_accepts_successful_non_code_verification_without_artifact():
     intent = TaskIntentService().classify("Please add a short test session note.")
 
