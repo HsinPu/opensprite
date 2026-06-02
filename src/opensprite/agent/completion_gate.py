@@ -409,6 +409,23 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
+        if _contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
+            return CompletionGateResult(
+                status="complete",
+                reason="task contract accepted final response",
+                active_task_status="done",
+                should_update_active_task=True,
+                verification_required=verification_required,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                review_required=review_required,
+                review_attempted=review["attempted"],
+                review_passed=review["passed"],
+                review_summary=review["summary"],
+                review_prompt_types=review["prompt_types"],
+                review_finding_count=review["finding_count"],
+            )
+
         if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
             return CompletionGateResult(
                 status="complete" if response_text.strip() else "incomplete",
@@ -868,6 +885,17 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:
     return bool(getattr(task_contract, "requirements", ()) or getattr(task_contract, "acceptance_criteria", ()))
+
+
+def _contract_accepts_final_response(task_contract: Any) -> bool:
+    if task_contract is None or _contract_has_completion_criteria(task_contract):
+        return False
+    if not bool(getattr(task_contract, "final_answer_required", True)):
+        return False
+    if not bool(getattr(task_contract, "allow_no_tool_final", False)):
+        return False
+    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    return task_type in {"analysis", "planning", "task"}
 
 
 def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:

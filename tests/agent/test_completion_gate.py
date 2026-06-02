@@ -2899,6 +2899,30 @@ def test_completion_gate_completes_planning_answer_without_tools():
     assert result.reason == "planning task returned concrete steps"
 
 
+def test_completion_gate_uses_contract_for_no_tool_final_response():
+    intent = TaskIntentService().classify("幫我規劃明天 30 分鐘學 Python 的安排，不要上網。")
+    response = (
+        "明天 30 分鐘安排：0-5 分鐘確認環境，5-15 分鐘練變數與基本型別，"
+        "15-25 分鐘完成一個小練習，25-30 分鐘回顧並記錄明天要接續的主題。"
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="planning",
+        final_answer_required=True,
+        allow_no_tool_final=True,
+    )
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response, task_contract=contract),
+    )
+
+    assert result.status == "complete"
+    assert result.reason == "task contract accepted final response"
+    assert result.should_update_active_task is True
+
+
 def test_task_contract_does_not_inherit_web_research_when_user_forbids_new_search():
     intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
 
