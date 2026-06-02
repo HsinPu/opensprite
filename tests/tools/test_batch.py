@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from opensprite.tools.base import Tool
 from opensprite.tools.batch import BatchTool
@@ -29,6 +30,27 @@ class EchoTool(Tool):
 
     async def _execute(self, value: str, **kwargs):
         return f"{self.prefix}:{value}"
+
+
+class JsonFailureTool(Tool):
+    @property
+    def name(self) -> str:
+        return "read_file"
+
+    @property
+    def description(self) -> str:
+        return "read"
+
+    @property
+    def parameters(self) -> dict:
+        return {
+            "type": "object",
+            "properties": {"path": {"type": "string"}},
+            "required": ["path"],
+        }
+
+    async def _execute(self, path: str, **kwargs):
+        return json.dumps({"ok": False, "error": f"missing {path}"})
 
 
 class SlowReadTool(Tool):
@@ -119,7 +141,24 @@ def test_batch_child_calls_still_follow_permission_policy():
     )
 
     assert "Batch completed: 1 call(s), 1 failed." in result
-    assert "Tool 'read_file' blocked by permission policy" in result
+    assert "Tool 'read_file' is not available in this turn" in result
+
+
+def test_batch_counts_structured_child_failures():
+    registry = ToolRegistry()
+    registry.register(JsonFailureTool())
+    registry.register(BatchTool(lambda: registry))
+
+    result = asyncio.run(
+        registry.execute(
+            "batch",
+            {"calls": [{"tool": "read_file", "arguments": {"path": "missing.txt"}}]},
+        )
+    )
+
+    assert result.startswith("Batch completed: 1 call(s), 1 failed.")
+    assert '"ok": false' in result
+    assert "missing missing.txt" in result
 
 
 def test_batch_enforces_call_limit():

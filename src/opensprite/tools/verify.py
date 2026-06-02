@@ -226,8 +226,6 @@ class VerifyTool(Tool):
 
         if not results:
             return "Verification skipped: no supported Python or package.json build checks were detected."
-        if any(result.startswith("Error:") for result in results):
-            return "\n\n".join(results)
         return "\n\n".join(results)
 
     def _verify_python_compile(self, workspace: Path, target: Path) -> str:

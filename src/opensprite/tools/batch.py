@@ -6,6 +6,7 @@ import asyncio
 from typing import Any, Callable, TYPE_CHECKING
 
 from .base import Tool
+from .result_status import classify_tool_result_status
 from .validation import NON_EMPTY_STRING_PATTERN
 
 if TYPE_CHECKING:
@@ -109,7 +110,7 @@ class BatchTool(Tool):
         results = await asyncio.gather(*tasks)
         results.sort(key=lambda item: item[0])
 
-        failed = sum(1 for _, _, result in results if result.startswith("Error:"))
+        failed = sum(1 for _, _, result in results if not classify_tool_result_status(result).ok)
         lines = [
             f"Batch completed: {len(results)} call(s), {failed} failed.",
         ]
