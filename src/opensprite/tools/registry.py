@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable
 from .base import Tool
 from .evidence import ToolEvidence, build_tool_evidence
 from .permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
+from .result_status import classify_tool_result_status
 
 
 PermissionRequestHandler = Callable[[str, Any, PermissionDecision], Awaitable[PermissionApprovalResult]]
@@ -174,10 +175,13 @@ class ToolRegistry:
         if tool is None:
             return build_tool_evidence(name, safe_params, result, ok=ok)
         evidence = tool.build_evidence(safe_params, result, ok=ok)
-        if ok or not _looks_like_permission_block(result):
+        if ok:
             return evidence
         exposed = self._permission_policy.is_tool_exposed(name, tool_risk_levels=tool.risk_levels)
         decision = self._permission_policy.check(name, safe_params, tool_risk_levels=tool.risk_levels)
+        result_status = classify_tool_result_status(result)
+        if result_status.category != "permission_block" and exposed and decision.allowed:
+            return evidence
         metadata = dict(evidence.metadata)
         metadata["permission"] = {
             "blocked": True,
@@ -214,11 +218,6 @@ def _decision_label(event_type: str, decision: PermissionDecision) -> str:
     if event_type.endswith(".allowed"):
         return "allowed"
     return "checked"
-
-
-def _looks_like_permission_block(result: str) -> bool:
-    return str(result or "").startswith("Error: Tool ") and " blocked by permission policy:" in str(result or "")
-
 
 def _tool_not_available_result(tool_name: str, available_tools: list[str]) -> str:
     available = ", ".join(available_tools) if available_tools else "none"

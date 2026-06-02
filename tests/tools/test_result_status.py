@@ -42,3 +42,12 @@ def test_tool_result_status_exposes_invalid_arguments_repeat_key():
     assert status.ok is False
     assert status.invalid_arguments is True
     assert status.repeated_error_key == result
+
+
+def test_tool_result_status_classifies_permission_blocks():
+    result = "Error: Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools."
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolPermissionError"
+    assert status.category == "permission_block"

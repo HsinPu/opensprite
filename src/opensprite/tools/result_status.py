@@ -16,6 +16,7 @@ class ToolResultStatus:
     ok: bool
     error: str = ""
     error_type: str = ""
+    category: str = ""
     status_code: int | None = None
     repeated_error_key: str | None = None
     invalid_arguments: bool = False
@@ -65,6 +66,14 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
         _, _, detail = stripped.partition(":")
         return _failed_status(detail, error_type="ToolExecutionError", fallback=stripped)
 
+    if stripped.startswith("Error: Tool ") and " blocked by permission policy:" in stripped:
+        return _failed_status(
+            stripped.removeprefix("Error:").strip(),
+            error_type="ToolPermissionError",
+            category="permission_block",
+            fallback=stripped,
+        )
+
     if stripped.startswith("Error:"):
         return _failed_status(stripped.removeprefix("Error:").strip(), error_type="ToolError", fallback=stripped)
 
@@ -98,6 +107,7 @@ def _failed_status(
     *,
     error_type: str,
     fallback: str,
+    category: str = "",
     repeated_error_key: str | None = None,
     invalid_arguments: bool = False,
 ) -> ToolResultStatus:
@@ -106,6 +116,7 @@ def _failed_status(
         ok=False,
         error=error_text,
         error_type=error_type,
+        category=category,
         status_code=_status_code(error_text),
         repeated_error_key=repeated_error_key,
         invalid_arguments=invalid_arguments,
