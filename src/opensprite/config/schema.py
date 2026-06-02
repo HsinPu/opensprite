@@ -176,6 +176,11 @@ class AgentMessagesConfig(BaseModel):
     source_fallback_intro: str = "我已取得部分來源資料，但最終回答沒有完整整理完成。以下是目前可用的重點資料。"
     source_fallback_details_header: str = "重點摘要："
     source_fallback_sources_header: str = "來源："
+    completion_blocker_intro: str = "目前還不能可靠完成這次請求。"
+    completion_blocker_reason_prefix: str = "原因："
+    completion_blocker_detail_header: str = "仍缺的部分："
+    completion_blocker_missing_evidence_header: str = "缺少的證據："
+    completion_blocker_stop_notice: str = "我已停止自動重試，避免用不足資訊硬回答。"
     empty_response_fallback: str = "抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。"
     llm_not_configured: str = (
         "尚未設定 LLM，請在 OpenSprite Web UI 的 Settings > Providers / Models 設定後再試。"

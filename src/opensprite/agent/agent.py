@@ -101,7 +101,7 @@ from .tool_registration import (
 )
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
-from .turn_runner import AgentTurnRunner, SourceFallbackMessages
+from .turn_runner import AgentTurnRunner, CompletionBlockerMessages, SourceFallbackMessages
 from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -729,6 +729,13 @@ class AgentLoop:
                 intro=self.messages.agent.source_fallback_intro,
                 details_header=self.messages.agent.source_fallback_details_header,
                 sources_header=self.messages.agent.source_fallback_sources_header,
+            ),
+            completion_blocker_messages=lambda: CompletionBlockerMessages(
+                intro=self.messages.agent.completion_blocker_intro,
+                reason_prefix=self.messages.agent.completion_blocker_reason_prefix,
+                detail_header=self.messages.agent.completion_blocker_detail_header,
+                missing_evidence_header=self.messages.agent.completion_blocker_missing_evidence_header,
+                stop_notice=self.messages.agent.completion_blocker_stop_notice,
             ),
             format_log_preview=self._format_log_preview,
             set_session_overlay_id=lambda session_id, metadata, channel, sender_id: self._set_session_overlay_id(

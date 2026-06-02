@@ -712,6 +712,11 @@ def test_messages_config_includes_repeated_invalid_tool_call_fallback():
     assert config.agent.source_fallback_intro
     assert config.agent.source_fallback_details_header
     assert config.agent.source_fallback_sources_header
+    assert config.agent.completion_blocker_intro
+    assert config.agent.completion_blocker_reason_prefix
+    assert config.agent.completion_blocker_detail_header
+    assert config.agent.completion_blocker_missing_evidence_header
+    assert config.agent.completion_blocker_stop_notice
 
 
 def test_search_embedding_config_requires_model_when_enabled():

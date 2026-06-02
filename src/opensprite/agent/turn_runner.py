@@ -50,6 +50,15 @@ class SourceFallbackMessages:
     sources_header: str
 
 
+@dataclass(frozen=True)
+class CompletionBlockerMessages:
+    intro: str
+    reason_prefix: str
+    detail_header: str
+    missing_evidence_header: str
+    stop_notice: str
+
+
 class AgentTurnRunner:
     """Runs user-turn branches after inbound turn input is prepared."""
 
@@ -78,6 +87,7 @@ class AgentTurnRunner:
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
         source_fallback_messages: Callable[[], SourceFallbackMessages],
+        completion_blocker_messages: Callable[[], CompletionBlockerMessages],
         format_log_preview: Callable[..., str],
         set_session_overlay_id: Callable[[str, dict[str, Any] | None, str | None, str | None], None],
         read_active_task_snapshot: Callable[[str], str],
@@ -116,6 +126,7 @@ class AgentTurnRunner:
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
         self._source_fallback_messages = source_fallback_messages
+        self._completion_blocker_messages = completion_blocker_messages
         self._format_log_preview = format_log_preview
         self._set_session_overlay_id = set_session_overlay_id
         self._read_active_task_snapshot = read_active_task_snapshot
@@ -848,6 +859,7 @@ class AgentTurnRunner:
             auto_continue_attempts=auto_continue_attempts,
             execution_result=aggregate_result,
             source_fallback_messages=self._source_fallback_messages(),
+            completion_blocker_messages=self._completion_blocker_messages(),
         )
         if response != aggregate_result.content:
             aggregate_result.content = response
@@ -1353,6 +1365,7 @@ def _final_response_after_exhausted_continuation(
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
     source_fallback_messages: SourceFallbackMessages,
+    completion_blocker_messages: CompletionBlockerMessages,
     execution_result: ExecutionResult | None = None,
 ) -> str:
     source_fallback = _source_fallback_response(completion_result, execution_result, source_fallback_messages)
@@ -1364,7 +1377,7 @@ def _final_response_after_exhausted_continuation(
         auto_continue_attempts=auto_continue_attempts,
     ):
         return response
-    return _completion_blocker_response(completion_result)
+    return _completion_blocker_response(completion_result, completion_blocker_messages)
 
 
 def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None) -> str:
@@ -1584,21 +1597,24 @@ def _should_replace_nonfinal_response(
     return completion_result.status in {"incomplete", "needs_verification"}
 
 
-def _completion_blocker_response(completion_result: CompletionGateResult) -> str:
+def _completion_blocker_response(
+    completion_result: CompletionGateResult,
+    messages: CompletionBlockerMessages,
+) -> str:
     reason = (completion_result.reason or completion_result.status or "completion gate did not pass").strip()
     detail = (completion_result.active_task_detail or "").strip()
     missing = [item.strip() for item in completion_result.missing_evidence if str(item).strip()]
     sections = [
-        "目前還不能可靠完成這次請求。",
-        f"原因：{reason}",
+        messages.intro,
+        f"{messages.reason_prefix}{reason}",
     ]
     if detail:
         detail_lines = [line.strip("- ").strip() for line in detail.splitlines() if line.strip()]
         if detail_lines:
-            sections.append("仍缺的部分：\n" + "\n".join(f"- {line}" for line in detail_lines))
+            sections.append(f"{messages.detail_header}\n" + "\n".join(f"- {line}" for line in detail_lines))
     if missing:
-        sections.append("缺少的證據：\n" + "\n".join(f"- {item}" for item in missing))
-    sections.append("我已停止自動重試，避免用不足資訊硬回答。")
+        sections.append(f"{messages.missing_evidence_header}\n" + "\n".join(f"- {item}" for item in missing))
+    sections.append(messages.stop_notice)
     return "\n\n".join(sections)
 
 

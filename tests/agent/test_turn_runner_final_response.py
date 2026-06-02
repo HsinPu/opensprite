@@ -3,6 +3,7 @@ from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import (
+    CompletionBlockerMessages,
     SourceFallbackMessages,
     _final_response_after_exhausted_continuation as _raw_final_response_after_exhausted_continuation,
     _message_with_runtime_context,
@@ -14,10 +15,18 @@ SOURCE_FALLBACK_MESSAGES = SourceFallbackMessages(
     details_header="TEST DETAILS",
     sources_header="TEST SOURCES",
 )
+COMPLETION_BLOCKER_MESSAGES = CompletionBlockerMessages(
+    intro="TEST COMPLETION BLOCKER INTRO",
+    reason_prefix="TEST REASON: ",
+    detail_header="TEST DETAIL",
+    missing_evidence_header="TEST MISSING",
+    stop_notice="TEST STOP NOTICE",
+)
 
 
 def _final_response_after_exhausted_continuation(**kwargs):
     kwargs.setdefault("source_fallback_messages", SOURCE_FALLBACK_MESSAGES)
+    kwargs.setdefault("completion_blocker_messages", COMPLETION_BLOCKER_MESSAGES)
     return _raw_final_response_after_exhausted_continuation(**kwargs)
 
 
@@ -54,7 +63,9 @@ def test_exhausted_continuation_replaces_progress_only_response():
         auto_continue_attempts=3,
     )
 
-    assert "目前還不能可靠完成這次請求" in response
+    assert "TEST COMPLETION BLOCKER INTRO" in response
+    assert "TEST REASON: required source material was insufficient" in response
+    assert "TEST DETAIL" in response
     assert "required source material was insufficient" in response
     assert "Target fetch count not met: need 2, fetched 1." in response
     assert "讓我進一步" not in response
@@ -73,6 +84,7 @@ def test_exhausted_continuation_uses_structured_blocker_status():
     )
 
     assert response != original
+    assert "TEST COMPLETION BLOCKER INTRO" in response
     assert "required source material was insufficient" in response
 
 
@@ -116,7 +128,7 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
     assert "TEST DETAILS" in response
     assert "TEST SOURCES" in response
     assert "https://openrouter.ai/docs/api/reference/parameters" in response
-    assert "目前還不能可靠完成這次請求" not in response
+    assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
 def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snippets():
@@ -204,7 +216,7 @@ def test_exhausted_continuation_uses_gathered_source_fallback_for_market_quote()
     assert "TEST DETAILS" in response
     assert "TEST SOURCES" in response
     assert "https://finance.yahoo.com/quote/TSM/" in response
-    assert "目前還不能可靠完成這次請求" not in response
+    assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
 def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete_reason():
@@ -247,7 +259,7 @@ def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete
     assert "TEST DETAILS" in response
     assert "TEST SOURCES" in response
     assert "https://openrouter.ai/docs/api-reference/overview" in response
-    assert "目前還不能可靠完成這次請求" not in response
+    assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
 def test_exhausted_continuation_does_not_use_source_fallback_from_reason_only():
