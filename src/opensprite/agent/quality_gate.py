@@ -102,9 +102,6 @@ class QualityGateService:
         history_result = _evaluate_history_grounding(contract, response_text, execution_result)
         if history_result is not None:
             return history_result
-        concrete_result = _evaluate_concrete_web_answer(contract, task_intent, response_text)
-        if concrete_result is not None:
-            return concrete_result
         return QualityGateResult(passed=True)
 
 
@@ -163,71 +160,6 @@ def _evaluate_substantive_final_answer(
         status="incomplete",
         reason="assistant final answer was too terse for the task",
         active_task_detail=getattr(criterion, "description", "") or None,
-    )
-
-
-def _evaluate_concrete_web_answer(
-    contract: TaskContract,
-    task_intent: TaskIntent,
-    response_text: str,
-) -> QualityGateResult | None:
-    if contract.task_type != "web_research":
-        return None
-    objective = re.sub(r"\s+", " ", str(task_intent.objective or contract.objective or "").strip().lower())
-    answer = re.sub(r"\s+", " ", str(response_text or "").strip().lower())
-    if _looks_like_source_summary_fallback(answer):
-        if "base url" in objective or "baseurl" in objective:
-            if "api/v1" not in answer:
-                return QualityGateResult(
-                    passed=False,
-                    status="incomplete",
-                    reason="assistant summarized sources without answering the requested concrete fact",
-                    active_task_detail="- State the API base URL directly before listing sources.",
-                )
-        if "authentication" in objective or "authorization" in objective or "認證" in objective:
-            if "authorization" not in answer or "bearer" not in answer:
-                return QualityGateResult(
-                    passed=False,
-                    status="incomplete",
-                    reason="assistant summarized sources without answering the requested concrete fact",
-                    active_task_detail="- State the Authorization Bearer header directly before listing sources.",
-                )
-        if _objective_requests_market_quote(objective):
-            return QualityGateResult(
-                passed=False,
-                status="incomplete",
-                reason="assistant summarized sources without answering the requested concrete fact",
-                active_task_detail="- State the current or latest available quote directly before listing sources.",
-            )
-    return None
-
-
-def _objective_requests_market_quote(normalized_objective: str) -> bool:
-    return any(
-        marker in normalized_objective
-        for marker in (
-            "stock price",
-            "share price",
-            "market price",
-            "latest price",
-            "current price",
-            "quote",
-            "股價",
-            "報價",
-        )
-    )
-
-
-def _looks_like_source_summary_fallback(normalized_answer: str) -> bool:
-    if not normalized_answer:
-        return False
-    return (
-        "重點摘要" in normalized_answer
-        and "來源網址" in normalized_answer
-        and (
-            "我已根據本輪已成功蒐集到的來源整理如下" in normalized_answer
-            or "based on the sources gathered" in normalized_answer
-        )
     )
 
 

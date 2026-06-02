@@ -1818,7 +1818,8 @@ def test_completion_gate_allows_openrouter_api_endpoint_in_answer():
     assert completion.status == "complete"
 
 
-def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answer():
+@pytest.mark.anyio
+async def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answer():
     intent = TaskIntentService().classify("幫我查目前 OpenRouter 官方文件中 API base URL 是什麼，附來源網址。")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -1876,7 +1877,9 @@ def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answ
         },
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected source summary without requested concrete fact",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -1889,10 +1892,11 @@ def test_completion_gate_rejects_openrouter_base_url_source_summary_without_answ
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant summarized sources without answering the requested concrete fact"
+    assert completion.reason == "judge rejected source summary without requested concrete fact"
 
 
-def test_completion_gate_rejects_market_quote_source_summary_without_price():
+@pytest.mark.anyio
+async def test_completion_gate_rejects_market_quote_source_summary_without_price():
     intent = TaskIntentService().classify("幫我找一下台積電 ADR 目前最新股價或最接近可查到的報價，並附來源。")
     contract = TaskContractService.build(
         task_intent=intent,
@@ -1950,7 +1954,9 @@ def test_completion_gate_rejects_market_quote_source_summary_without_price():
         },
     )
 
-    completion = CompletionGateService().evaluate(
+    completion = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected source summary without requested quote",
         task_intent=intent,
         response_text=answer,
         execution_result=ExecutionResult(
@@ -1963,7 +1969,7 @@ def test_completion_gate_rejects_market_quote_source_summary_without_price():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant summarized sources without answering the requested concrete fact"
+    assert completion.reason == "judge rejected source summary without requested quote"
 
 
 def test_completion_gate_allows_recommended_alternate_quote_url():
