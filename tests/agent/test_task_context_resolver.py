@@ -795,6 +795,29 @@ def test_active_task_seed_respects_llm_decision_not_to_seed_new_task(tmp_path):
     assert not any(event["event_type"] == "seed" for event in store.read_events())
 
 
+def test_active_task_seed_requires_structured_intent_not_text_markers(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            "Refactor the agent in small safe steps.",
+            enabled=True,
+        )
+    )
+
+    assert store.read_status() == "inactive"
+    assert not any(event["event_type"] == "seed" for event in store.read_events())
+
+
 def test_active_task_work_progress_uses_configured_fallback_steps(tmp_path):
     session_id = "telegram:room-1"
     app_home = tmp_path / "home"

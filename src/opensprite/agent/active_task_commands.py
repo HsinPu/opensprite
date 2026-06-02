@@ -9,7 +9,6 @@ from typing import Any, Callable
 from ..config import TaskMessagesConfig
 from ..documents.active_task import (
     _extract_task_field,
-    build_initial_active_task_block,
     build_task_block_from_intent_fields,
     build_task_block_from_text,
     create_active_task_store,
@@ -239,10 +238,7 @@ class ActiveTaskCommandService:
                     assumptions=assumptions,
                 )
         else:
-            initial_message = current_message
-            if task_objective_decision and task_objective_decision.should_use_resolved_objective:
-                initial_message = task_objective_decision.resolved_objective
-            initial_task = build_initial_active_task_block(initial_message)
+            return
         if not initial_task:
             return
 
