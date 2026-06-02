@@ -475,9 +475,7 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if completion_result.missing_evidence:
         return True
-    return completion_result.reason in {
-        "assistant only reported progress without performing requested work",
-    }
+    return completion_result.progress_only_response
 
 
 def _task_contract_requires_evidence(execution_result: ExecutionResult) -> bool:

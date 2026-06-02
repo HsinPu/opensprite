@@ -440,6 +440,26 @@ def test_auto_continue_does_not_use_pending_lookup_phrases():
     assert decision.reason == "no_tool_progress_after_incomplete_response"
 
 
+def test_auto_continue_uses_progress_only_flag_without_reason_marker():
+    intent = TaskIntentService().classify("Find the latest market quote.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="judge rejected incomplete answer",
+        progress_only_response=True,
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="Let me check that."),
+        attempts_used=0,
+        previous_response="Let me check that.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+
+
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     intent = TaskIntentService().classify("Please implement the cleanup.")
     completion = CompletionGateResult(status="incomplete", reason="judge rejected incomplete implementation")

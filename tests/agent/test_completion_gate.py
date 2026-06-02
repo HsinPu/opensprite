@@ -40,8 +40,15 @@ async def _evaluate_with_static_judge(
     task_intent: TaskIntent,
     response_text: str,
     execution_result: ExecutionResult,
+    progress_only_response: bool = False,
 ):
-    judge = StaticCompletionJudge(CompletionJudgeVerdict(status=status, reason=reason))
+    judge = StaticCompletionJudge(
+        CompletionJudgeVerdict(
+            status=status,
+            reason=reason,
+            progress_only_response=progress_only_response,
+        )
+    )
     service = CompletionGateService(
         llm_config=DocumentLlmConfig(
             pass_decoding_params=False,
@@ -2980,10 +2987,12 @@ async def test_completion_gate_marks_pending_search_response_incomplete():
         task_intent=intent,
         response_text=response,
         execution_result=ExecutionResult(content=response, executed_tool_calls=1),
+        progress_only_response=True,
     )
 
     assert result.status == "incomplete"
     assert result.reason == "judge rejected progress-only search response"
+    assert result.progress_only_response is True
 
 
 @pytest.mark.anyio

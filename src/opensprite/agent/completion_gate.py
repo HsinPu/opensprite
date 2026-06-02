@@ -49,6 +49,7 @@ class CompletionGateResult:
     review_finding_count: int = 0
     file_change_required: bool = False
     missing_evidence: tuple[str, ...] = ()
+    progress_only_response: bool = False
     judge_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_metadata(self) -> dict[str, Any]:
@@ -69,6 +70,7 @@ class CompletionGateResult:
             "review_finding_count": self.review_finding_count,
             "file_change_required": self.file_change_required,
             "missing_evidence": list(self.missing_evidence),
+            "progress_only_response": self.progress_only_response,
         }
         if self.active_task_status:
             payload["active_task_status"] = self.active_task_status
@@ -601,6 +603,7 @@ def _completion_result_from_judge_verdict(
         review_finding_count=verdict.review_finding_count,
         file_change_required=file_change_required,
         missing_evidence=verdict.missing_evidence,
+        progress_only_response=verdict.progress_only_response,
         judge_metadata={
             **dict(verdict.metadata),
             "raw_response_preview": verdict.raw_response_preview,

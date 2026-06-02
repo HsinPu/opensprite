@@ -59,6 +59,7 @@ class CompletionJudgeVerdict:
     review_prompt_types: tuple[str, ...] = ()
     review_finding_count: int = 0
     missing_evidence: tuple[str, ...] = ()
+    progress_only_response: bool = False
     raw_response_preview: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -198,6 +199,7 @@ def normalize_completion_judge_payload(
         review_prompt_types=tuple(_string_list(payload.get("review_prompt_types"), max_items=10, max_chars=80)),
         review_finding_count=_coerce_non_negative_int(payload.get("review_finding_count")),
         missing_evidence=tuple(_string_list(payload.get("missing_evidence"), max_items=20, max_chars=240)),
+        progress_only_response=_coerce_bool(payload.get("progress_only_response")),
         raw_response_preview=_truncate(raw_response, max_chars=600),
         metadata={"method": "llm"},
     )
@@ -210,6 +212,7 @@ def _build_judge_prompt(facts: dict[str, Any]) -> str:
         "active_task_status": "done|in_progress|blocked|null",
         "active_task_detail": "optional detail",
         "missing_evidence": ["optional missing items"],
+        "progress_only_response": False,
         "verification_required": False,
         "verification_attempted": False,
         "verification_passed": False,
@@ -224,6 +227,8 @@ def _build_judge_prompt(facts: dict[str, Any]) -> str:
         "Judge this agent turn using only the structured facts below. "
         "Return only JSON matching this schema:\n"
         f"{json.dumps(schema, ensure_ascii=False, indent=2)}\n\n"
+        "Set progress_only_response to true when the assistant response only says it will search, fetch, "
+        "analyze, continue, or use tools, but does not provide user-visible task results.\n\n"
         "Facts:\n"
         f"{json.dumps(facts, ensure_ascii=False, indent=2, default=str)}"
     )
