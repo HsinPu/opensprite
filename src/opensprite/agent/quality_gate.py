@@ -386,6 +386,29 @@ def _execution_reports_command_unavailable(execution_result: ExecutionResult) ->
     return False
 
 
+def _execution_reports_missing_git_metadata(execution_result: ExecutionResult) -> bool:
+    for evidence in execution_result.tool_evidence:
+        if evidence.name not in {"exec", "process"}:
+            continue
+        text_parts = [str(evidence.result_preview or "")]
+        if isinstance(evidence.metadata, dict):
+            text_parts.extend(str(value or "") for value in evidence.metadata.values())
+        normalized = re.sub(r"\s+", " ", " ".join(text_parts)).strip().lower()
+        if any(
+            marker in normalized
+            for marker in (
+                "no_git",
+                "not a git repository",
+                "not git repository",
+                "不是 git repository",
+                "不是 git repo",
+                "沒有 .git",
+            )
+        ):
+            return True
+    return False
+
+
 def _evaluate_repository_status_answer(
     contract: TaskContract,
     response_text: str,
@@ -398,10 +421,7 @@ def _evaluate_repository_status_answer(
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
         return None
-    saw_no_git = any(
-        marker in normalized_response
-        for marker in ("no_git", "not a git repository", "not git repository", "不是 git repository", "不是 git repo", "沒有 .git")
-    )
+    saw_no_git = _execution_reports_missing_git_metadata(execution_result)
     if not saw_no_git:
         return None
     reports_clean = any(

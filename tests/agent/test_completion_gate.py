@@ -3179,9 +3179,9 @@ def test_quality_gate_rejects_missing_git_metadata_as_clean_working_tree():
 
     result = QualityGateService().evaluate(
         task_intent=intent,
-        response_text="沒有未提交的 source 改動，exec 確認 repo 底下 NO_GIT，不是 git repository。",
+        response_text="No uncommitted source changes; exec confirmed the workspace is clean.",
         execution_result=ExecutionResult(
-            content="沒有未提交的 source 改動，exec 確認 repo 底下 NO_GIT，不是 git repository。",
+            content="No uncommitted source changes; exec confirmed the workspace is clean.",
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview='"NO_GIT"'),),
         ),
