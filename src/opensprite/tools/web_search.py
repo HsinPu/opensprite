@@ -6,7 +6,6 @@ import asyncio
 import json
 import os
 import re
-from datetime import datetime
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -25,83 +24,7 @@ USER_AGENT = (
 )
 FRESHNESS_VALUES = WEB_SEARCH_FRESHNESS_OPTIONS
 DUCKDUCKGO_FRESHNESS = {"day": "d", "week": "w", "month": "m", "year": "y"}
-_FRESHNESS_RANK = {"day": 1, "week": 2, "month": 3, "year": 4, "none": 5}
-_DAY_RECENCY_MARKERS = (
-    "today",
-    "today's",
-    "past 24 hours",
-    "last 24 hours",
-    "今天",
-    "今日",
-)
-_WEEK_RECENCY_MARKERS = (
-    "this week",
-    "past week",
-    "last week",
-    "本週",
-    "本周",
-    "這週",
-    "这周",
-    "這星期",
-    "这星期",
-)
-_MONTH_RECENCY_MARKERS = (
-    "latest",
-    "newest",
-    "recent",
-    "current",
-    "currently",
-    "new release",
-    "new releases",
-    "released",
-    "release notes",
-    "announcement",
-    "announced",
-    "updated",
-    "update",
-    "最新",
-    "最近",
-    "近期",
-    "目前",
-    "現在",
-    "现在",
-    "新模型",
-    "新版本",
-    "發布",
-    "发布",
-    "發佈",
-    "推出",
-    "公告",
-)
-
-
-_DAY_RECENCY_MARKERS = (*_DAY_RECENCY_MARKERS, "今日", "今天")
-_WEEK_RECENCY_MARKERS = (
-    *_WEEK_RECENCY_MARKERS,
-    "本週",
-    "本周",
-    "這週",
-    "這周",
-    "最近一週",
-    "最近一周",
-)
-_MONTH_RECENCY_MARKERS = (
-    *_MONTH_RECENCY_MARKERS,
-    "now",
-    "as of",
-    "目前",
-    "現在",
-    "當前",
-    "最新",
-    "最近",
-    "近況",
-    "今年",
-    "新版",
-    "發布",
-    "發表",
-    "推出",
-    "更新",
-)
+AUTO_FRESHNESS = "month"
 
 
 def _strip_tags(text: str) -> str:
@@ -154,37 +77,15 @@ def _normalize_freshness(value: Any, default: str = "year") -> str:
     return normalized if normalized in FRESHNESS_VALUES else default
 
 
-def _infer_freshness_from_query(query: Any) -> str | None:
-    """Infer a recency filter from query text when the caller omitted a useful one."""
-    text = str(query or "").strip().lower()
-    if not text:
-        return None
-    if any(marker in text for marker in _DAY_RECENCY_MARKERS):
-        return "day"
-    if any(marker in text for marker in _WEEK_RECENCY_MARKERS):
-        return "week"
-    if any(marker in text for marker in _MONTH_RECENCY_MARKERS):
-        return "month"
-    current_year = datetime.now().year
-    if re.search(rf"(?<!\d){current_year}(?!\d)", text):
-        return "year"
-    return None
-
-
 def _effective_freshness(value: Any, default: str = "year", *, query: Any = None) -> str:
-    """Resolve auto freshness while respecting fixed user settings."""
+    """Resolve auto freshness while respecting explicit tool/config settings."""
     normalized = _normalize_freshness(value, default)
     default_normalized = _normalize_freshness(default, "year")
+    if value is not None and normalized != "auto":
+        return normalized
     if default_normalized != "auto":
         return normalized
-    inferred = _infer_freshness_from_query(query)
-    if inferred is None and normalized != "auto":
-        return normalized
-    auto_freshness = inferred or "month"
-    if normalized in {"day", "week", "month", "year", "none"}:
-        if _FRESHNESS_RANK[normalized] < _FRESHNESS_RANK[auto_freshness]:
-            return normalized
-    return auto_freshness
+    return AUTO_FRESHNESS
 
 
 def _freshness_params(provider: str, freshness: str) -> dict[str, str]:
@@ -284,7 +185,7 @@ class WebSearchTool(Tool):
     """Search the web using configured provider."""
 
     name = "web_search"
-    description = "Search the web for external sources. The freshness setting controls recency: auto infers a tighter filter for latest/current/recent queries, none searches all time, and fixed windows are respected. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, SearXNG, Jina."
+    description = "Search the web for external sources. The freshness setting controls recency: auto uses the configured default recent window, none searches all time, and fixed windows are respected. Returns structured JSON with titles, URLs, and snippets. Supports DuckDuckGo, SearXNG, Jina."
 
     def __init__(self, config: WebSearchToolConfig | None = None, proxy: str | None = None):
         self.config = config or WebSearchToolConfig()
@@ -307,7 +208,7 @@ class WebSearchTool(Tool):
                 "freshness": {
                     "type": "string",
                     "enum": list(FRESHNESS_VALUES),
-                    "description": "Recency filter. auto infers from latest/current/recent queries; none searches all time; fixed windows are respected.",
+                    "description": "Recency filter. auto uses the configured default recent window; none searches all time; fixed windows are respected.",
                     "default": self.config.freshness,
                 }
             },

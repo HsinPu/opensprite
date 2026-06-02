@@ -204,9 +204,10 @@ def test_web_research_prefers_current_year_variant_for_current_stale_query():
         )
     )
 
-    assert search.calls[0] == {"query": current_query, "count": 2, "freshness": "day"}
-    assert search.calls[1] == {"query": stale_query, "count": 2, "freshness": "day"}
-    assert payload["queries"][:2] == [current_query, stale_query]
+    assert search.calls[0] == {"query": current_query, "count": 2, "freshness": "month"}
+    assert all(call["freshness"] == "month" for call in search.calls)
+    assert payload["queries"][0] == current_query
+    assert stale_query in payload["queries"]
     assert payload["fetched_sources"][0]["url"].startswith("https://example.com/current")
 
 

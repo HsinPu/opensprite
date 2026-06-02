@@ -203,7 +203,7 @@ def test_web_search_execute_allows_freshness_override(monkeypatch):
     assert requested_freshness == ["none"]
 
 
-def test_web_search_execute_infers_freshness_for_latest_query(monkeypatch):
+def test_web_search_execute_uses_auto_freshness_default_for_latest_query(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
     requested_freshness = []
 
@@ -218,7 +218,7 @@ def test_web_search_execute_infers_freshness_for_latest_query(monkeypatch):
     assert requested_freshness == ["month"]
 
 
-def test_web_search_execute_infers_freshness_for_chinese_current_query(monkeypatch):
+def test_web_search_execute_uses_auto_freshness_default_for_chinese_query(monkeypatch):
     tool = WebSearchTool(config=WebSearchToolConfig(provider="duckduckgo", freshness="auto"))
     requested_freshness = []
 
@@ -254,9 +254,9 @@ def test_web_search_freshness_aliases_and_provider_params():
     assert _effective_freshness(None, "auto", query="latest Qwen models") == "month"
     assert _effective_freshness(None, "auto", query="現在寫 code 最好的語言模型") == "month"
     assert _effective_freshness(None, "auto", query="sqlite docs") == "month"
-    assert _effective_freshness("year", "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness("year", "auto", query="latest Qwen models") == "year"
     assert _effective_freshness("day", "auto", query="latest Qwen models") == "day"
-    assert _effective_freshness("none", "auto", query="latest Qwen models") == "month"
+    assert _effective_freshness("none", "auto", query="latest Qwen models") == "none"
     assert _effective_freshness("none", "auto", query="sqlite docs") == "none"
     assert _effective_freshness("none", "year", query="sqlite docs") == "none"
     assert _freshness_params("duckduckgo", "week") == {"df": "w"}
