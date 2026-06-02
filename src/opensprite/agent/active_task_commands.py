@@ -212,12 +212,16 @@ class ActiveTaskCommandService:
 
         initial_task = None
         if task_intent is not None:
-            should_seed = task_intent.should_seed_active_task or bool(
-                task_context_decision
-                and (task_context_decision.should_seed_active_task or task_context_decision.should_replace_active_task)
-            ) or bool(
-                task_objective_decision and task_objective_decision.should_use_resolved_objective
-            )
+            if _decision_controls_task_seed(task_context_decision):
+                should_seed = (
+                    bool(task_context_decision and task_context_decision.should_seed_active_task)
+                    or bool(task_context_decision and task_context_decision.should_replace_active_task)
+                    or bool(task_objective_decision and task_objective_decision.should_use_resolved_objective)
+                )
+            else:
+                should_seed = task_intent.should_seed_active_task or bool(
+                    task_objective_decision and task_objective_decision.should_use_resolved_objective
+                )
             inheriting_current_task = bool(has_current_task and task_context_decision and task_context_decision.should_inherit_active_task)
             if should_seed and not inheriting_current_task:
                 goal = task_intent.objective
@@ -448,6 +452,10 @@ def _decision_replaces_current_task(decision: TaskContextDecision | None) -> boo
 
 def _decision_needs_boundary_confirmation(decision: TaskContextDecision | None) -> bool:
     return bool(decision and decision.continuation_type == _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE)
+
+
+def _decision_controls_task_seed(decision: TaskContextDecision | None) -> bool:
+    return bool(decision and decision.method == "llm")
 
 
 def _boundary_confirmation_question(current_task: str, current_message: str) -> str:

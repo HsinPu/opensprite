@@ -702,6 +702,40 @@ def test_active_task_seed_allows_llm_decision_to_replace_current_task(tmp_path):
     assert seed_event["details"]["replace"] is True
 
 
+def test_active_task_seed_respects_llm_decision_not_to_seed_new_task(tmp_path):
+    session_id = "telegram:room-1"
+    app_home = tmp_path / "home"
+    workspace = tmp_path / "workspace"
+    service = ActiveTaskCommandService(
+        storage=_Storage(),
+        app_home_getter=lambda: app_home,
+        workspace_root_getter=lambda: workspace,
+    )
+    store = create_active_task_store(app_home, session_id, workspace_root=workspace)
+    message = "好，現在請直接修掉 tests/test_app.py 的問題"
+
+    asyncio.run(
+        service.maybe_seed(
+            session_id,
+            message,
+            enabled=True,
+            task_intent=TaskIntentService().classify(message),
+            task_context_decision=TaskContextDecision(
+                is_follow_up=False,
+                should_seed_active_task=False,
+                should_replace_active_task=False,
+                continuation_type="none",
+                confidence=0.91,
+                method="llm",
+                reason="planner classified this as a simple no-task answer",
+            ),
+        )
+    )
+
+    assert store.read_status() == "inactive"
+    assert not any(event["event_type"] == "seed" for event in store.read_events())
+
+
 def test_active_task_seed_uses_enriched_objective_for_short_follow_up(tmp_path):
     session_id = "telegram:room-1"
     app_home = tmp_path / "home"
