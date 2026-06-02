@@ -2923,7 +2923,7 @@ def test_completion_gate_uses_contract_for_no_tool_final_response():
     assert result.should_update_active_task is True
 
 
-def test_task_contract_does_not_inherit_web_research_when_user_forbids_new_search():
+def test_task_contract_trusts_task_context_inherited_tool_group_without_message_override():
     intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
 
     contract = _contract_from_planner_payload(
@@ -2950,7 +2950,7 @@ def test_task_contract_does_not_inherit_web_research_when_user_forbids_new_searc
     )
 
     assert contract.task_type == "pure_answer"
-    assert not contract.requirements
+    assert any(requirement.tool_group == "web_research" for requirement in contract.requirements)
 
 
 def test_quality_gate_reports_missing_requested_items():
