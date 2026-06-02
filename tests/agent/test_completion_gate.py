@@ -3675,11 +3675,16 @@ def test_completion_gate_marks_explicit_task_completion_done():
 
 def test_completion_gate_requires_recorded_code_changes_for_implementation():
     intent = TaskIntentService().classify("Please implement the final cleanup.")
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="code_change",
+        requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
+    )
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
         response_text="Implemented the final cleanup successfully.",
-        execution_result=ExecutionResult(content="Implemented the final cleanup successfully."),
+        execution_result=ExecutionResult(content="Implemented the final cleanup successfully.", task_contract=contract),
     )
 
     assert result.status == "incomplete"

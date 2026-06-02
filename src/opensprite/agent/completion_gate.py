@@ -145,7 +145,7 @@ class CompletionGateService:
         expects_code_change = (
             False
             if contract_allows_plain_answer or _contract_is_read_only(execution_result.task_contract)
-            else task_intent.expects_code_change
+            else _contract_expects_file_change(execution_result.task_contract) or execution_result.file_change_count > 0
         )
         verification_attempted = execution_result.verification_attempted
         verification_passed = execution_result.verification_passed or _verification_skipped_with_reported_gap(execution_result)
@@ -727,6 +727,18 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
+
+
+def _contract_expects_file_change(task_contract: Any) -> bool:
+    task_type = str(getattr(task_contract, "task_type", "") or "")
+    if task_type in {"code_change", "implementation", "refactor"}:
+        return True
+    for requirement in getattr(task_contract, "requirements", ()) or ():
+        if str(getattr(requirement, "kind", "") or "") == "file_change":
+            return True
+        if str(getattr(requirement, "tool_group", "") or "") == "workspace_write":
+            return True
+    return False
 
 
 def _contract_is_read_only(task_contract: Any) -> bool:
