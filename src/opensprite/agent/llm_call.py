@@ -16,7 +16,7 @@ from .harness_policy import HarnessPolicy
 from .harness_profile import HarnessProfile
 from .task_contract import TaskContract
 from .task_context_resolver import TaskContextDecision
-from .task_intent import TaskIntent, TaskIntentService
+from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 
 
@@ -603,7 +603,7 @@ def _effective_task_intent(
     resolved_objective = str(task_objective_decision.resolved_objective or "").strip()
     if not resolved_objective:
         return task_intent
-    return TaskIntentService().classify(resolved_objective)
+    return replace(task_intent, objective=resolved_objective)
 
 
 def _message_with_resolved_objective(

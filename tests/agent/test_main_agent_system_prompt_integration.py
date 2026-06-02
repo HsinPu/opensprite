@@ -21,6 +21,9 @@ from opensprite.config.schema import (
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.documents.active_task import create_active_task_store
+from opensprite.agent.llm_call import _effective_task_intent
+from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.llms.base import LLMResponse
 from opensprite.search.base import SearchHit
 from opensprite.storage.base import StoredMessage
@@ -917,3 +920,21 @@ def test_main_agent_call_llm_uses_task_context_decision_for_proactive_retrieval(
     )
     assert "## Retrieved History" in proactive_context
     assert "src/cleanup.py" in proactive_context
+
+
+def test_effective_task_intent_keeps_existing_structure_for_resolved_objective() -> None:
+    intent = TaskIntentService().classify("那這個呢")
+    decision = TaskObjectiveDecision(
+        original_message="那這個呢",
+        resolved_objective="Research 00981T ETF price and cite current sources.",
+        should_use_resolved_objective=True,
+        confidence=0.89,
+        method="llm",
+        reason="follow-up objective was resolved from task context",
+    )
+
+    effective = _effective_task_intent(intent, decision)
+
+    assert effective is not None
+    assert effective.objective == "Research 00981T ETF price and cite current sources."
+    assert effective.kind == intent.kind
