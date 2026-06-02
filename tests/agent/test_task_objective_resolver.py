@@ -193,7 +193,7 @@ def test_task_objective_resolver_uses_llm_context_for_short_new_task_even_when_i
     assert decision.effective_objective == "Fix the failing README task and summarize the change."
 
 
-def test_task_objective_resolver_falls_back_when_provider_is_unconfigured():
+def test_task_objective_resolver_stays_neutral_when_provider_is_unconfigured():
     decision = asyncio.run(
         _resolver().resolve(
             current_message="那00981t呢",
@@ -205,12 +205,12 @@ def test_task_objective_resolver_falls_back_when_provider_is_unconfigured():
         )
     )
 
-    assert decision.method == "fallback"
+    assert decision.method == "llm_unresolved"
     assert decision.should_use_resolved_objective is False
     assert decision.reason.startswith("llm unavailable")
 
 
-def test_task_objective_resolver_ignores_low_confidence_objective():
+def test_task_objective_resolver_stays_neutral_for_low_confidence_objective():
     provider = _JsonProvider(
         '{"resolved_objective": "Research 00981T ETF price using web sources.", '
         '"should_use_resolved_objective": true, "confidence": 0.40, "reason": "uncertain"}'
@@ -228,11 +228,11 @@ def test_task_objective_resolver_ignores_low_confidence_objective():
     )
 
     assert len(provider.calls) == 1
-    assert decision.method == "fallback"
+    assert decision.method == "llm_unresolved"
     assert decision.should_use_resolved_objective is False
 
 
-def test_task_objective_resolver_falls_back_on_invalid_json():
+def test_task_objective_resolver_stays_neutral_on_invalid_json():
     provider = _JsonProvider("not json")
 
     decision = asyncio.run(
@@ -247,5 +247,5 @@ def test_task_objective_resolver_falls_back_on_invalid_json():
     )
 
     assert len(provider.calls) == 1
-    assert decision.method == "fallback"
+    assert decision.method == "llm_unresolved"
     assert decision.should_use_resolved_objective is False

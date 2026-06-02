@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from ..config.schema import DocumentLlmConfig
@@ -92,7 +92,7 @@ class TaskObjectiveResolver:
         ):
             return deterministic
         if provider is None or str(model or "").strip().lower() == "unconfigured":
-            return replace(deterministic, method="fallback", reason="llm unavailable; objective was not enriched")
+            return _unresolved_llm_objective(original, "llm unavailable; objective was not enriched")
 
         try:
             llm_decision = await self._resolve_with_llm(
@@ -107,19 +107,18 @@ class TaskObjectiveResolver:
             )
         except Exception as exc:
             logger.warning("Task objective LLM resolution failed: {}", exc)
-            return replace(deterministic, method="fallback", reason="llm failed; objective was not enriched")
+            return _unresolved_llm_objective(original, "llm failed; objective was not enriched")
 
         if llm_decision.confidence < _MIN_CONFIDENCE:
-            return replace(
-                deterministic,
-                method="fallback",
-                reason=f"llm confidence too low ({llm_decision.confidence:.2f}); objective was not enriched",
+            return _unresolved_llm_objective(
+                original,
+                f"llm confidence too low ({llm_decision.confidence:.2f}); objective was not enriched",
             )
         if llm_decision.should_use_resolved_objective and not _is_useful_objective(
             llm_decision.resolved_objective,
             original,
         ):
-            return replace(deterministic, method="fallback", reason="llm objective was not more specific")
+            return _unresolved_llm_objective(original, "llm objective was not more specific")
         return llm_decision
 
     async def _resolve_with_llm(
@@ -234,6 +233,17 @@ def _decision_from_payload(payload: dict[str, Any], *, current_message: str) -> 
         confidence=_coerce_confidence(payload.get("confidence")),
         method="llm",
         reason=_truncate(str(payload.get("reason") or "llm resolved task objective"), 240),
+    )
+
+
+def _unresolved_llm_objective(original_message: str, reason: str) -> TaskObjectiveDecision:
+    return TaskObjectiveDecision(
+        original_message=original_message,
+        resolved_objective=original_message,
+        should_use_resolved_objective=False,
+        confidence=0.0,
+        method="llm_unresolved",
+        reason=reason,
     )
 
 
