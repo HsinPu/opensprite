@@ -445,8 +445,8 @@ def _merge_with_deterministic(
     if deterministic.continuation_type == "ack":
         return replace(llm_decision, continuation_type="ack", is_follow_up=False, should_inherit_active_task=False)
 
-    inherited_tool_group = llm_decision.inherited_tool_group or deterministic.inherited_tool_group
-    inherited_task_type = llm_decision.inherited_task_type or deterministic.inherited_task_type
+    inherited_tool_group = llm_decision.inherited_tool_group
+    inherited_task_type = llm_decision.inherited_task_type
     if inherited_tool_group and inherited_task_type is None:
         inherited_task_type = _TASK_TYPE_BY_TOOL_GROUP.get(inherited_tool_group)
 

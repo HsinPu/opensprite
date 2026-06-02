@@ -4,7 +4,7 @@ from opensprite.agent.active_task_commands import ActiveTaskCommandService
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver
+from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver, _merge_with_deterministic
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.config import Config
@@ -152,6 +152,32 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"
     assert decision.inherited_tool_group == "web_research"
+    assert decision.continuation_type == "follow_up"
+
+
+def test_task_context_does_not_backfill_llm_tool_inheritance_from_regex():
+    deterministic = TaskContextDecision(
+        is_follow_up=True,
+        inherited_task_type="web_research",
+        inherited_tool_group="web_research",
+        continuation_type="follow_up",
+        confidence=0.62,
+        reason="regex guessed prior web context",
+    )
+    llm_decision = TaskContextDecision(
+        is_follow_up=True,
+        continuation_type="follow_up",
+        confidence=0.86,
+        method="llm",
+        reason="follow-up is conversational, not another lookup",
+    )
+
+    decision = _merge_with_deterministic(deterministic, llm_decision)
+
+    assert decision.method == "llm"
+    assert decision.is_follow_up is True
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
     assert decision.continuation_type == "follow_up"
 
 
