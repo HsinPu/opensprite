@@ -1209,7 +1209,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
                     "provider": "duckduckgo",
                     "backend": "ddgs",
                     "items": [],
-                    "error": "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
+                    "error": "DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
                 }
             )
         return _format_results(
@@ -1239,7 +1239,7 @@ def test_web_research_falls_back_to_next_search_provider(monkeypatch):
             "ok": False,
             "result_count": 0,
             "fetchable_count": 0,
-            "error": "Error: DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
+            "error": "DuckDuckGo blocked the search for 'sqlite' with a bot challenge.",
         },
         {
             "provider": "searxng",

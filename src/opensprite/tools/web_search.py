@@ -175,7 +175,9 @@ def _format_error(query: str, provider: str, error: str, **metadata: Any) -> str
         "truncated": False,
         "content_type": "application/json",
         "items": [],
-        "error": f"Error: {error}" if not str(error or "").startswith("Error:") else str(error),
+        "error": str(error or "").removeprefix("Error:").strip(),
+        "error_type": "WebSearchError",
+        "category": "web_search_error",
     }
     payload.update({key: value for key, value in metadata.items() if value is not None})
     return json.dumps(payload, ensure_ascii=False)

@@ -157,7 +157,9 @@ def test_format_error_returns_structured_json_payload():
     assert parsed["query"] == "sqlite fts"
     assert parsed["provider"] == "duckduckgo"
     assert parsed["items"] == []
-    assert parsed["error"] == "Error: DuckDuckGo returned no results"
+    assert parsed["error"] == "DuckDuckGo returned no results"
+    assert parsed["error_type"] == "WebSearchError"
+    assert parsed["category"] == "web_search_error"
 
 
 def test_web_search_count_limit_comes_from_config():
@@ -377,7 +379,7 @@ def test_duckduckgo_search_reports_ddgs_no_results(monkeypatch):
     assert payload["backend"] == "ddgs"
     assert payload["freshness"] == "none"
     assert payload["items"] == []
-    assert payload["error"] == "Error: DDGS returned no results for 'sqlite'."
+    assert payload["error"] == "DDGS returned no results for 'sqlite'."
     assert fake.calls == [("sqlite", {"max_results": 1})]
 
 

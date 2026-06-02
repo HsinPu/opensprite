@@ -78,14 +78,14 @@ def test_structured_web_search_error_marks_evidence_failed():
             "provider": "duckduckgo",
             "backend": "ddgs",
             "items": [],
-            "error": "Error: DuckDuckGo returned no results for 'sqlite fts'.",
+            "error": "DuckDuckGo returned no results for 'sqlite fts'.",
         }
     )
 
     evidence = build_tool_evidence("web_search", {"query": "sqlite fts"}, result, ok=True)
 
     assert evidence.ok is False
-    assert evidence.metadata["error"] == "Error: DuckDuckGo returned no results for 'sqlite fts'."
+    assert evidence.metadata["error"] == "DuckDuckGo returned no results for 'sqlite fts'."
 
 
 def test_structured_web_search_error_without_text_prefix_marks_evidence_failed():
