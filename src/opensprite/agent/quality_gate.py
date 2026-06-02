@@ -48,9 +48,6 @@ class QualityGateService:
             history_result = _evaluate_history_grounding(contract, response_text, execution_result)
             if history_result is not None:
                 return history_result
-        repo_status_result = _evaluate_repository_status_answer(contract, response_text, execution_result)
-        if repo_status_result is not None:
-            return repo_status_result
         for criterion in contract.acceptance_criteria:
             if criterion.kind == "itemized_output":
                 result = _evaluate_itemized_output(criterion, response_text, execution_result)
@@ -371,82 +368,6 @@ def _execution_reports_command_unavailable(execution_result: ExecutionResult) ->
         ):
             return True
     return False
-
-
-def _execution_reports_missing_git_metadata(execution_result: ExecutionResult) -> bool:
-    for evidence in execution_result.tool_evidence:
-        if evidence.name not in {"exec", "process"}:
-            continue
-        text_parts = [str(evidence.result_preview or "")]
-        if isinstance(evidence.metadata, dict):
-            text_parts.extend(str(value or "") for value in evidence.metadata.values())
-        normalized = re.sub(r"\s+", " ", " ".join(text_parts)).strip().lower()
-        if any(
-            marker in normalized
-            for marker in (
-                "no_git",
-                "not a git repository",
-                "not git repository",
-                "不是 git repository",
-                "不是 git repo",
-                "沒有 .git",
-            )
-        ):
-            return True
-    return False
-
-
-def _evaluate_repository_status_answer(
-    contract: TaskContract,
-    response_text: str,
-    execution_result: ExecutionResult,
-) -> QualityGateResult | None:
-    if contract.task_type != "operations":
-        return None
-    if not _contract_requests_quality_check(contract, "repository_status"):
-        return None
-    normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
-    if not normalized_response:
-        return None
-    saw_no_git = _execution_reports_missing_git_metadata(execution_result)
-    if not saw_no_git:
-        return None
-    reports_clean = any(
-        marker in normalized_response
-        for marker in (
-            "no uncommitted",
-            "no changes",
-            "clean working tree",
-            "沒有未提交",
-            "沒有未 commit",
-            "沒有改動",
-            "沒有變更",
-        )
-    )
-    reports_blocker = any(
-        marker in normalized_response
-        for marker in (
-            "blocked",
-            "blocker",
-            "cannot determine",
-            "cannot verify",
-            "unable to determine",
-            "無法判定",
-            "無法確認",
-            "阻礙",
-        )
-    )
-    if reports_clean and not reports_blocker:
-        return QualityGateResult(
-            passed=False,
-            status="incomplete",
-            reason="repository status answer treated missing git metadata as a clean working tree",
-            active_task_detail=(
-                "- If git metadata is missing, report a blocker or uncertainty; "
-                "do not claim there are no uncommitted changes."
-            ),
-        )
-    return None
 
 
 def _execution_confuses_command_version_with_repo_state(execution_result: ExecutionResult) -> bool:

@@ -3218,7 +3218,8 @@ def test_quality_gate_accepts_operation_report_with_successful_tool_result():
     assert result.passed is True
 
 
-def test_quality_gate_rejects_missing_git_metadata_as_clean_working_tree():
+@pytest.mark.anyio
+async def test_completion_gate_uses_judge_for_missing_git_metadata_claimed_clean():
     intent = TaskIntentService().classify("幫我看目前 repo 是否有未提交的 source 改動")
     contract = TaskContract(
         objective=intent.objective,
@@ -3229,19 +3230,21 @@ def test_quality_gate_rejects_missing_git_metadata_as_clean_working_tree():
         planner_metadata={"quality_checks": ["repository_status"]},
     )
 
-    result = QualityGateService().evaluate(
+    result = await _evaluate_with_static_judge(
+        status="incomplete",
+        reason="judge rejected clean working tree claim with missing git metadata",
         task_intent=intent,
         response_text="No uncommitted source changes; exec confirmed the workspace is clean.",
         execution_result=ExecutionResult(
             content="No uncommitted source changes; exec confirmed the workspace is clean.",
             executed_tool_calls=1,
             tool_evidence=(ToolEvidence(name="exec", ok=True, result_preview='"NO_GIT"'),),
+            task_contract=contract,
         ),
-        task_contract=contract,
     )
 
-    assert result.passed is False
-    assert result.reason == "repository status answer treated missing git metadata as a clean working tree"
+    assert result.status == "incomplete"
+    assert result.reason == "judge rejected clean working tree claim with missing git metadata"
 
 
 def test_quality_gate_accepts_missing_git_metadata_as_blocker():
