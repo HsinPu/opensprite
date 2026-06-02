@@ -464,9 +464,6 @@ def _fallback_contract_from_intent(
     if current_image_files or current_audio_files or current_video_files:
         task_type = "media_analysis"
         tool_groups = ["media"]
-    elif task_intent.expects_code_change:
-        task_type = "workspace_change"
-        tool_groups = ["workspace_read", "workspace_write"]
 
     contract = _contract_from_planner_payload(
         {
