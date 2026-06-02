@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 from .base import Tool
 from .evidence import ToolEvidence, build_tool_evidence
 from .permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
-from .result_status import classify_tool_result_status
+from .result_status import classify_tool_result_status, tool_error_result
 
 
 PermissionRequestHandler = Callable[[str, Any, PermissionDecision], Awaitable[PermissionApprovalResult]]
@@ -128,9 +128,17 @@ class ToolRegistry:
                         await on_before_execute(name, display_params if isinstance(display_params, dict) else {})
                     return await tool.execute_validated(params)
                 reason = approval.reason or decision.reason or "user denied approval"
-                return f"Error: Tool '{name}' blocked by permission policy: {reason}."
+                return tool_error_result(
+                    f"Tool '{name}' blocked by permission policy: {reason}.",
+                    error_type="ToolPermissionError",
+                    category="permission_block",
+                )
             await self._emit_permission_decision("tool_permission.denied", name, decision, display_params, exposed=exposed)
-            return f"Error: Tool '{name}' blocked by permission policy: {decision.reason}."
+            return tool_error_result(
+                f"Tool '{name}' blocked by permission policy: {decision.reason}.",
+                error_type="ToolPermissionError",
+                category="permission_block",
+            )
 
         await self._emit_permission_decision("tool_permission.allowed", name, decision, display_params, exposed=exposed)
         if on_before_execute is not None:

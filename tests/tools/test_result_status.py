@@ -1,6 +1,6 @@
 import json
 
-from opensprite.tools.result_status import classify_tool_result_status
+from opensprite.tools.result_status import classify_tool_result_status, tool_error_result
 
 
 def test_tool_result_status_allows_successful_batch_summary():
@@ -24,6 +24,24 @@ def test_tool_result_status_honors_structured_error_payload():
     assert status.error_metadata() == {"error": "Search failed", "error_type": "ToolError"}
 
 
+def test_tool_result_status_honors_structured_error_metadata():
+    status = classify_tool_result_status(
+        tool_error_result(
+            "Tool 'exec' blocked by permission policy.",
+            error_type="ToolPermissionError",
+            category="permission_block",
+            repeated_error_key="permission:exec",
+            invalid_arguments=True,
+        )
+    )
+
+    assert status.ok is False
+    assert status.error_type == "ToolPermissionError"
+    assert status.category == "permission_block"
+    assert status.repeated_error_key == "permission:exec"
+    assert status.invalid_arguments is True
+
+
 def test_tool_result_status_extracts_error_executing_metadata():
     status = classify_tool_result_status("Error executing web_fetch: HTTP Error: 404 Not Found")
 
@@ -45,7 +63,11 @@ def test_tool_result_status_exposes_invalid_arguments_repeat_key():
 
 
 def test_tool_result_status_classifies_permission_blocks():
-    result = "Error: Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools."
+    result = tool_error_result(
+        "Tool 'exec' blocked by permission policy: tool 'exec' is listed in denied_tools.",
+        error_type="ToolPermissionError",
+        category="permission_block",
+    )
     status = classify_tool_result_status(result)
 
     assert status.ok is False

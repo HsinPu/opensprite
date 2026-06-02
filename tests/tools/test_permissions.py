@@ -4,6 +4,7 @@ from opensprite.tools.approval import PermissionRequestManager, classify_permiss
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class EchoTool(Tool):
@@ -38,6 +39,14 @@ async def _wait_for_pending(manager: PermissionRequestManager):
             return pending[0]
         await asyncio.sleep(0.001)
     raise AssertionError("permission request was not created")
+
+
+def _assert_permission_block(result: str, reason: str) -> None:
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolPermissionError"
+    assert status.category == "permission_block"
+    assert reason in status.error
 
 
 def test_registry_hides_and_blocks_denied_tools():
@@ -215,7 +224,7 @@ def test_approval_required_policy_exposes_but_blocks_execution_in_ask_mode():
     result = asyncio.run(registry.execute("apply_patch", {}))
 
     assert registry.tool_names == ["apply_patch"]
-    assert result == "Error: Tool 'apply_patch' blocked by permission policy: tool 'apply_patch' requires user approval."
+    _assert_permission_block(result, "tool 'apply_patch' requires user approval")
 
 
 def test_approval_required_policy_waits_for_approval_in_ask_mode():
@@ -355,7 +364,7 @@ def test_approval_required_policy_denies_pending_request_in_ask_mode():
 
     result, pending = asyncio.run(scenario())
 
-    assert result == "Error: Tool 'apply_patch' blocked by permission policy: user denied approval."
+    _assert_permission_block(result, "user denied approval")
     assert pending == []
 
 
@@ -384,7 +393,7 @@ def test_approval_required_policy_times_out_pending_request_in_ask_mode():
 
     result, events, pending = asyncio.run(scenario())
 
-    assert result == "Error: Tool 'apply_patch' blocked by permission policy: permission request timed out."
+    _assert_permission_block(result, "permission request timed out")
     assert events == [
         ("permission_requested", "pending", False),
         ("permission_denied", "denied", True),

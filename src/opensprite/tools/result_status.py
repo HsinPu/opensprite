@@ -33,6 +33,29 @@ class ToolResultStatus:
         return metadata
 
 
+def tool_error_result(
+    error: str,
+    *,
+    error_type: str = "ToolError",
+    category: str = "",
+    repeated_error_key: str | None = None,
+    invalid_arguments: bool = False,
+) -> str:
+    """Return a structured OpenSprite-owned tool error payload."""
+    payload: dict[str, Any] = {
+        "ok": False,
+        "error": str(error or "").strip(),
+        "error_type": error_type or "ToolError",
+    }
+    if category:
+        payload["category"] = category
+    if repeated_error_key:
+        payload["repeated_error_key"] = repeated_error_key
+    if invalid_arguments:
+        payload["invalid_arguments"] = True
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def classify_tool_result_status(result_text: str, *, state: str | None = None) -> ToolResultStatus:
     """Return normalized status for a structured or OpenSprite-owned tool result."""
     text = str(result_text or "")
@@ -49,10 +72,22 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
     payload = _json_object(stripped)
     if payload is not None:
         if payload.get("ok") is False:
-            return _failed_status(payload.get("error"), error_type="ToolError", fallback=stripped)
+            return _failed_status(
+                payload.get("error"),
+                error_type=str(payload.get("error_type") or "ToolError"),
+                category=str(payload.get("category") or ""),
+                fallback=stripped,
+                repeated_error_key=_optional_text(payload.get("repeated_error_key")),
+                invalid_arguments=bool(payload.get("invalid_arguments")),
+            )
         error = payload.get("error")
         if error is not None and str(error).strip():
-            return _failed_status(error, error_type="ToolError", fallback=stripped)
+            return _failed_status(
+                error,
+                error_type=str(payload.get("error_type") or "ToolError"),
+                category=str(payload.get("category") or ""),
+                fallback=stripped,
+            )
         return ToolResultStatus(ok=not forced_error)
 
     invalid_prefix = "Error: Invalid arguments for "
@@ -68,14 +103,6 @@ def classify_tool_result_status(result_text: str, *, state: str | None = None) -
     if stripped.startswith("Error executing "):
         _, _, detail = stripped.partition(":")
         return _failed_status(detail, error_type="ToolExecutionError", fallback=stripped)
-
-    if stripped.startswith("Error: Tool ") and " blocked by permission policy:" in stripped:
-        return _failed_status(
-            stripped.removeprefix("Error:").strip(),
-            error_type="ToolPermissionError",
-            category="permission_block",
-            fallback=stripped,
-        )
 
     if stripped.startswith("Error:"):
         return _failed_status(stripped.removeprefix("Error:").strip(), error_type="ToolError", fallback=stripped)
@@ -93,6 +120,11 @@ def _json_object(value: str) -> dict[str, Any] | None:
     except (TypeError, ValueError, json.JSONDecodeError):
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _optional_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
 
 
 def _batch_result_failure(text: str) -> int | None:
