@@ -2,6 +2,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.resource_index import ResourceRef
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
@@ -459,14 +460,19 @@ def test_auto_continue_guides_retry_after_missing_task_artifacts():
     intent = TaskIntentService().classify("Please inspect all attached images and summarize them.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="required task artifacts were not produced",
-        active_task_detail="- Missing artifact for image:images/a.jpg",
+        reason="judge rejected incomplete final answer",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="media_extraction",
+        selected_resources=(ResourceRef(id="image:images/a.jpg", kind="image", path="images/a.jpg"),),
+        acceptance_criteria=(AcceptanceCriterion(kind="media_artifact", min_count=1),),
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="I checked the image.", executed_tool_calls=1),
+        execution_result=ExecutionResult(content="I checked the image.", task_contract=contract),
         attempts_used=0,
         previous_response="I checked the image.",
     )

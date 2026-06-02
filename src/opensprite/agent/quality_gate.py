@@ -513,6 +513,20 @@ def source_material_gap_detail(execution_result: ExecutionResult) -> str | None:
     return _web_research_coverage_gap_detail(execution_result)
 
 
+def media_artifact_gap_detail(contract: TaskContract, execution_result: ExecutionResult) -> str | None:
+    """Return the missing media artifact detail for a contract, when available."""
+    result = _evaluate_media_artifacts(contract, execution_result)
+    if result is not None:
+        return result.active_task_detail or result.reason
+    for criterion in contract.acceptance_criteria:
+        if criterion.kind != "media_artifact":
+            continue
+        result = _evaluate_media_artifact_criterion(criterion, contract, execution_result)
+        if result is not None:
+            return result.active_task_detail or result.reason
+    return None
+
+
 def _web_research_coverage_gap_detail(execution_result: ExecutionResult) -> str | None:
     for artifact in execution_result.task_artifacts:
         if not artifact.ok or artifact.source_tool != "web_research":

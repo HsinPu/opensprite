@@ -8,7 +8,7 @@ from typing import Any
 from .completion_gate import CompletionGateResult
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
-from .quality_gate import source_material_gap_detail, source_material_satisfies_contract
+from .quality_gate import media_artifact_gap_detail, source_material_gap_detail, source_material_satisfies_contract
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
@@ -453,6 +453,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if execution_result.stop_reason == "max_tool_iterations":
         return True
+    if _media_artifacts_require_more_work(execution_result):
+        return True
     if _task_contract_requires_evidence(execution_result):
         return True
     if _task_contract_has_acceptance_criterion(execution_result, "itemized_output", "substantive_final_answer"):
@@ -465,7 +467,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
-        "required task artifacts were not produced",
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
     }
@@ -493,6 +494,13 @@ def _source_material_requires_more_detail(execution_result: ExecutionResult) -> 
     if not _task_contract_has_acceptance_criterion(execution_result, "source_artifact", "source_detail"):
         return False
     return not source_material_satisfies_contract(contract, execution_result)
+
+
+def _media_artifacts_require_more_work(execution_result: ExecutionResult) -> bool:
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    return media_artifact_gap_detail(contract, execution_result) is not None
 
 
 def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:
@@ -531,12 +539,19 @@ def _quality_follow_up_instruction(
     execution_result: ExecutionResult | None = None,
 ) -> str:
     reason = str(completion_result.reason or "").strip()
-    if reason == "required task artifacts were not produced":
-        return (
-            "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
-            "Use the relevant media/source tools for each missing resource before finalizing. "
-            "Do not claim completion until each required resource has a concrete tool-derived result."
+    if execution_result is not None:
+        media_gap = (
+            media_artifact_gap_detail(execution_result.task_contract, execution_result)
+            if execution_result.task_contract is not None
+            else None
         )
+        if media_gap:
+            return (
+                "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
+                "Use the relevant media/source tools for each missing resource before finalizing. "
+                "Do not claim completion until each required resource has a concrete tool-derived result.\n"
+                f"{media_gap}"
+            )
     if reason == "required task artifacts were not traceable":
         return (
             "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
