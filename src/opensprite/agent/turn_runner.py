@@ -155,17 +155,25 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
 
-    async def _maybe_record_worktree_sandbox(self, session_id: str, run_id: str, task_intent: TaskIntent) -> None:
+    async def _maybe_record_worktree_sandbox(
+        self,
+        session_id: str,
+        run_id: str,
+        *,
+        task_kind: str,
+        expects_code_change: bool,
+    ) -> bool:
         enabled = self._worktree_sandbox_enabled()
-        if not enabled and not task_intent.expects_code_change:
-            return
+        if not enabled and not expects_code_change:
+            return False
         metadata = WorktreeSandboxInspector(
             enabled=enabled,
             workspace_root=self._workspace_root(),
         ).create(session_id=session_id, run_id=run_id).to_payload()
-        metadata["task_kind"] = task_intent.kind
-        metadata["expects_code_change"] = task_intent.expects_code_change
+        metadata["task_kind"] = task_kind
+        metadata["expects_code_change"] = expects_code_change
         await self.run_trace.record_worktree_sandbox_part(session_id, run_id, metadata)
+        return True
 
     async def run_user_turn(
         self,
@@ -209,7 +217,12 @@ class AgentTurnRunner:
         self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
         existing_work_state = await self._get_work_state(turn.session_id)
         task_intent = self.work_progress.resolve_intent(task_intent, existing_work_state)
-        await self._maybe_record_worktree_sandbox(turn.session_id, run_id, task_intent)
+        worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
+            turn.session_id,
+            run_id,
+            task_kind=task_intent.kind,
+            expects_code_change=False,
+        )
         await self._emit_run_event(
             turn.session_id,
             run_id,
@@ -269,6 +282,7 @@ class AgentTurnRunner:
                         harness_profile=None,
                         work_plan=work_plan,
                         current_work_state=current_work_state,
+                        worktree_sandbox_recorded=worktree_sandbox_recorded,
                     )
                 except asyncio.CancelledError:
                     await self.run_trace.fail_run(
@@ -546,6 +560,7 @@ class AgentTurnRunner:
         harness_profile: HarnessProfile | None,
         work_plan: WorkPlan | None,
         current_work_state: StoredWorkState | None,
+        worktree_sandbox_recorded: bool,
     ) -> AssistantMessage:
         """Execute the normal turn path after special-case early exits are ruled out."""
         await self._connect_mcp()
@@ -633,6 +648,13 @@ class AgentTurnRunner:
                     contract_work_plan = self.work_progress.create_plan(task_intent, harness_profile=harness_profile)
                     if contract_work_plan is not None:
                         work_plan = contract_work_plan
+                        if not worktree_sandbox_recorded and work_plan.expects_code_change:
+                            worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
+                                turn.session_id,
+                                run_id,
+                                task_kind=work_plan.kind,
+                                expects_code_change=True,
+                            )
                         if _can_replace_initial_work_state(current_work_state):
                             current_work_state = self.work_progress.build_initial_state(
                                 session_id=turn.session_id,
