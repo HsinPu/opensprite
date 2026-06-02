@@ -6,10 +6,13 @@ def test_task_intent_classifier_keeps_execution_expectations_neutral():
         "Please refactor the agent and run tests. Keep the public API stable."
     )
 
-    assert intent.kind == "refactor"
-    assert intent.long_running is True
+    assert intent.kind == "task"
+    assert intent.long_running is False
     assert intent.should_seed_active_task is True
-    assert "relevant tests or checks pass, or the verification gap is stated" in intent.done_criteria
+    assert intent.done_criteria == (
+        "the user request is addressed directly",
+        "the result or blocker is explicit",
+    )
     assert intent.verification_hint is None
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
@@ -38,7 +41,7 @@ def test_task_intent_classifier_records_media_upload_without_text():
 def test_task_intent_debug_diagnosis_does_not_require_code_change():
     intent = TaskIntentService().classify("Please investigate why the build is failing.")
 
-    assert intent.kind == "debug"
+    assert intent.kind == "task"
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
@@ -48,7 +51,7 @@ def test_task_intent_respects_no_edit_planning_constraint():
         "Plan a refactor for src/opensprite/tools/web_research.py, but do not edit files."
     )
 
-    assert intent.kind == "refactor"
+    assert intent.kind == "task"
     assert intent.expects_code_change is False
 
 
@@ -86,7 +89,7 @@ def test_task_intent_treats_testing_commands_as_discussion_not_verification():
         "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"
     )
 
-    assert intent.kind == "question"
+    assert intent.kind == "task"
     assert intent.expects_verification is False
     assert intent.verification_hint is None
 
@@ -111,6 +114,6 @@ def test_task_intent_classifier_marks_chinese_extract_and_merge_request_as_task(
         "你把全部的prompt 都先抓出來 後 整合成一份 給我 有重疊部分 你看著處理"
     )
 
-    assert intent.kind == "analysis"
+    assert intent.kind == "task"
     assert intent.should_seed_active_task is True
     assert intent.expects_code_change is False

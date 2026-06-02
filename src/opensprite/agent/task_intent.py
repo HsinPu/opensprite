@@ -52,13 +52,6 @@ _QUESTION_MARKERS = (
     "where",
     "when",
     "who",
-    "什麼",
-    "為什麼",
-    "如何",
-    "怎麼",
-    "哪個",
-    "是否",
-    "可以嗎",
 )
 _VAGUE_TASK_MESSAGES = {
     "continue",
@@ -73,15 +66,6 @@ _VAGUE_TASK_MESSAGES = {
     "修一下",
     "搞定",
 }
-_KIND_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("refactor", ("refactor", "cleanup", "clean up", "重構", "整理程式", "整理代碼")),
-    ("debug", ("debug", "bug", "error", "exception", "traceback", "failed", "failure", "fix", "修正", "修復", "除錯", "錯誤", "失敗")),
-    ("review", ("review", "audit", "code review", "檢視", "審查")),
-    ("analysis", ("analyze", "analyse", "investigate", "inspect", "check", "look into", "extract", "分析", "調查", "檢查", "看一下", "抓出", "取出", "提取", "擷取", "讀取")),
-    ("implementation", ("implement", "add", "build", "create", "update", "change", "write code", "實作", "新增", "建立", "更新", "修改")),
-    ("writing", ("write", "draft", "summarize", "summary", "rewrite", "撰寫", "草擬", "摘要", "總結", "重寫", "整理", "整合")),
-    ("planning", ("plan", "organize", "design", "規劃", "設計")),
-)
 _PURE_ANSWER_RE = re.compile(
     r"\b(?:translate|translation|calculate|compute)\b|(?:翻譯|翻成|計算|算出)",
     re.IGNORECASE,
@@ -218,33 +202,23 @@ def _has_marker(text: str, markers: tuple[str, ...]) -> bool:
 
 def _looks_like_question(text: str) -> bool:
     lowered = text.lower()
-    return text.endswith(("?", "？")) or any(marker in lowered for marker in _QUESTION_MARKERS)
+    return text.endswith(("?", "？")) or any(
+        lowered == marker or lowered.startswith(f"{marker} ")
+        for marker in _QUESTION_MARKERS
+    )
 
 
 def _classify_kind(text: str, *, media_count: int) -> str:
-    lowered = text.lower()
     has_request_marker = _has_marker(text, _REQUEST_MARKERS)
     if media_count == 0 and _is_pure_answer_request(text):
         return "question"
-    matched_kind = "conversation"
-    for kind, markers in _KIND_MARKERS:
-        if any(marker in lowered for marker in markers):
-            matched_kind = kind
-            break
-
-    if matched_kind == "analysis" and any(
-        marker in lowered for marker in ("bug", "error", "exception", "failed", "failure", "failing", "fix", "錯誤", "失敗")
-    ):
-        return "debug"
-    if matched_kind != "conversation":
-        return matched_kind
     if media_count and (_looks_like_question(text) or has_request_marker):
         return "analysis"
     if _looks_like_question(text):
         return "question"
     if has_request_marker:
         return "task"
-    return "conversation"
+    return "task"
 
 
 def _needs_clarification(text: str, kind: str) -> bool:
@@ -252,9 +226,6 @@ def _needs_clarification(text: str, kind: str) -> bool:
     if kind not in _TASK_KINDS:
         return False
     if lowered in _VAGUE_TASK_MESSAGES:
-        return True
-    words = re.findall(r"[\w\u4e00-\u9fff]+", lowered)
-    if len(words) <= 2 and any(marker in lowered for _, markers in _KIND_MARKERS for marker in markers):
         return True
     return False
 
@@ -272,7 +243,7 @@ def _is_long_running(text: str, kind: str) -> bool:
         return True
     if len(re.findall(r"(?:^|\s)(?:\d+\.|[-*])\s+", text)) >= 2:
         return True
-    return kind in {"debug", "implementation", "refactor"}
+    return False
 
 
 def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[str, ...]:

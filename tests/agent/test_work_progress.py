@@ -13,15 +13,15 @@ def test_work_progress_keeps_intent_only_plan_generic_before_contract():
     plan = WorkProgressService().create_plan(intent)
 
     assert plan is not None
-    assert plan.coding_task is True
-    assert plan.long_running is True
+    assert plan.coding_task is False
+    assert plan.long_running is False
     assert plan.expects_code_change is False
     assert plan.expects_verification is False
-    assert plan.steps == (
-        "make measurable progress",
-        "verify or summarize remaining work",
+    assert plan.steps == ("complete the requested task",)
+    assert plan.done_criteria == (
+        "the user request is addressed directly",
+        "the result or blocker is explicit",
     )
-    assert "relevant tests or checks pass" in plan.done_criteria[2]
 
 
 def test_work_progress_uses_harness_profile_plan_steps():
@@ -130,10 +130,17 @@ def test_work_progress_tracks_verification_and_next_action():
 
 def test_work_progress_uses_configured_continuation_budgets():
     service = WorkProgressService(default_continuation_budget=2, long_running_continuation_budget=5)
-    coding_intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    task_intent = TaskIntentService().classify("Please refactor the agent and run tests.")
     question_intent = TaskIntentService().classify("What does this command do?")
+    coding_profile = HarnessProfile(
+        name="coding",
+        task_type="workspace_change",
+        required_tool_groups=("workspace_read", "workspace_write", "verification"),
+        required_evidence=("file_change", "verification"),
+    )
 
-    assert service.continuation_budget(coding_intent) == 5
+    assert service.continuation_budget(task_intent, harness_profile=coding_profile) == 5
+    assert service.continuation_budget(task_intent) == 2
     assert service.continuation_budget(question_intent) == 2
 
 

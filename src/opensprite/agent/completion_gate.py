@@ -441,49 +441,10 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind in {"analysis", "review", "writing"} and response_text.strip():
-            completion_reason = (
-                "writing-style task returned a substantive response"
-                if task_intent.kind == "writing"
-                else "analysis-style task returned a substantive response"
-            )
+        if task_intent.kind == "analysis" and response_text.strip():
             return CompletionGateResult(
                 status="complete",
-                reason=completion_reason,
-                active_task_status="done",
-                should_update_active_task=task_intent.should_seed_active_task,
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
-
-        if task_intent.kind == "planning" and response_text.strip():
-            return CompletionGateResult(
-                status="complete",
-                reason="planning task returned concrete steps",
-                active_task_status="done",
-                should_update_active_task=task_intent.should_seed_active_task,
-                verification_required=verification_required,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
-            )
-
-        if task_intent.kind == "debug" and not expects_code_change and response_text.strip():
-            return CompletionGateResult(
-                status="complete",
-                reason="debug diagnosis was provided without requiring code changes",
+                reason="analysis-style task returned a substantive response",
                 active_task_status="done",
                 should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
@@ -501,7 +462,7 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="complete",
                 reason="generic task returned a response",
-                active_task_status="done",
+                active_task_status="done" if task_intent.should_seed_active_task else None,
                 should_update_active_task=task_intent.should_seed_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,

@@ -14,7 +14,6 @@ from .harness_profile import HarnessProfile
 from .task_intent import TaskIntent
 
 
-_CODING_KINDS = {"debug", "implementation", "refactor", "review"}
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
 _FOLLOW_UP_OBJECTIVES = {
     "continue",
@@ -220,9 +219,7 @@ class WorkProgressService:
             steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
         elif profile_name == "ops":
             steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
-        elif task_intent.kind == "debug":
-            steps = ["inspect the relevant context", "identify the root cause", "state the diagnosis or blocker"]
-        elif task_intent.kind in {"analysis", "review"}:
+        elif task_intent.kind == "analysis":
             steps = ["inspect the relevant context", "collect concrete evidence", "deliver the findings clearly"]
         elif task_intent.long_running:
             steps = ["make measurable progress", "verify or summarize remaining work"]
@@ -235,15 +232,19 @@ class WorkProgressService:
         else:
             expects_code_change = False
             expects_verification = False
+        done_criteria = list(task_intent.done_criteria)
+        verification_done = "relevant tests or checks pass, or the verification gap is stated"
+        if expects_verification and verification_done not in done_criteria:
+            done_criteria.append(verification_done)
 
         return WorkPlan(
             objective=task_intent.objective,
             kind=task_intent.kind,
             steps=tuple(steps),
             constraints=tuple(task_intent.constraints),
-            done_criteria=tuple(task_intent.done_criteria),
-            long_running=task_intent.long_running,
-            coding_task=task_intent.kind in _CODING_KINDS,
+            done_criteria=tuple(done_criteria),
+            long_running=task_intent.long_running or profile_name in {"coding", "research"},
+            coding_task=profile_name == "coding" or task_intent.expects_code_change or task_intent.expects_verification,
             expects_code_change=expects_code_change,
             expects_verification=expects_verification,
             harness_profile=profile_name,
@@ -544,6 +545,12 @@ class WorkProgressService:
         """Summarize the current pass and choose the next high-level action."""
         signals = self._progress_signals(execution_result)
         continuation_budget = self.continuation_budget(task_intent, harness_profile=harness_profile)
+        if (
+            completion_result.status in {"needs_verification", "needs_review"}
+            or completion_result.verification_required
+            or completion_result.review_required
+        ):
+            continuation_budget = max(continuation_budget, self.long_running_continuation_budget)
         status = self._status(completion_result)
         return WorkProgressUpdate(
             status=status,
@@ -570,7 +577,7 @@ class WorkProgressService:
             return self.long_running_continuation_budget
         if profile_name in {"media", "ops"}:
             return self.default_continuation_budget
-        if task_intent.long_running or task_intent.kind in _CODING_KINDS:
+        if task_intent.long_running or task_intent.expects_code_change or task_intent.expects_verification:
             return self.long_running_continuation_budget
         return self.default_continuation_budget
 

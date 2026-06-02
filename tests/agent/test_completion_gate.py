@@ -950,8 +950,8 @@ def test_completion_gate_does_not_infer_strong_chinese_blocker_without_tool_erro
         execution_result=ExecutionResult(content=response),
     )
 
-    assert result.status == "incomplete"
-    assert result.active_task_status is None
+    assert result.status == "complete"
+    assert result.active_task_status == "done"
 
 
 def test_completion_gate_does_not_mark_status_definition_as_blocked():
@@ -1027,7 +1027,7 @@ async def test_completion_gate_uses_judge_for_waiting_user_status():
 
 
 def test_completion_gate_does_not_infer_waiting_from_response_question():
-    intent = TaskIntentService().classify("繼續做")
+    intent = TaskIntentService().classify("continue")
 
     result = CompletionGateService().evaluate(
         task_intent=intent,
@@ -1065,7 +1065,7 @@ def test_completion_gate_completes_debug_answer_even_when_it_contains_questions(
     )
 
     assert result.status == "complete"
-    assert result.reason == "debug diagnosis was provided without requiring code changes"
+    assert result.reason == "generic task returned a response"
 
 
 def test_completion_gate_requires_web_evidence_for_external_search_task():
@@ -3034,7 +3034,7 @@ def test_completion_gate_completes_planning_answer_without_tools():
     )
 
     assert result.status == "complete"
-    assert result.reason == "planning task returned concrete steps"
+    assert result.reason == "generic task returned a response"
 
 
 def test_completion_gate_uses_contract_for_no_tool_final_response():
@@ -4278,7 +4278,7 @@ def test_completion_gate_allows_review_without_code_changes():
     )
 
     assert result.status == "complete"
-    assert result.reason == "analysis-style task returned a substantive response"
+    assert result.reason == "generic task returned a response"
 
 
 def test_completion_gate_allows_debug_diagnosis_without_code_changes():
@@ -4291,4 +4291,4 @@ def test_completion_gate_allows_debug_diagnosis_without_code_changes():
     )
 
     assert result.status == "complete"
-    assert result.reason == "debug diagnosis was provided without requiring code changes"
+    assert result.reason == "generic task returned a response"
