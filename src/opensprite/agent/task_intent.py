@@ -23,15 +23,6 @@ _NON_TASK_MESSAGES = {
     "cool",
     "nice",
 }
-_QUESTION_MARKERS = (
-    "what",
-    "why",
-    "how",
-    "which",
-    "where",
-    "when",
-    "who",
-)
 _VAGUE_TASK_MESSAGES = {
     "continue",
     "keep going",
@@ -164,11 +155,7 @@ def _truncate(text: str, max_chars: int = 220) -> str:
 
 
 def _looks_like_question(text: str) -> bool:
-    lowered = text.lower()
-    return text.endswith(("?", "\uff1f")) or any(
-        lowered == marker or lowered.startswith(f"{marker} ")
-        for marker in _QUESTION_MARKERS
-    )
+    return text.endswith(("?", "\uff1f"))
 
 
 def _classify_kind(text: str, *, media_count: int) -> str:
