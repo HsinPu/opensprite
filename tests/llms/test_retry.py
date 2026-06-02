@@ -1,4 +1,4 @@
-from opensprite.llms.retry import retry_delay_from_error
+from opensprite.llms.retry import looks_like_transient_transport_error, retry_delay_from_error
 
 
 class ProviderError(RuntimeError):
@@ -74,3 +74,7 @@ def test_retry_delay_treats_transient_transport_errors_as_retryable(monkeypatch)
     assert delay.retryable is True
     assert delay.retry_after_ms == 1000
     assert delay.next_retry_at == 101.0
+
+
+def test_transient_transport_classifier_recognizes_provider_overload_text():
+    assert looks_like_transient_transport_error(ProviderError("high traffic detected")) is True

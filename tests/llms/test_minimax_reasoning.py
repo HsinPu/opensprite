@@ -3,7 +3,8 @@ from types import SimpleNamespace
 
 from opensprite.agent.message_history import MessageHistoryService
 from opensprite.llms import ChatMessage
-from opensprite.llms.minimax import MiniMaxLLM
+from opensprite.llms import minimax as minimax_module
+from opensprite.llms.minimax import MiniMaxLLM, _is_minimax_overloaded_error
 from opensprite.storage import MemoryStorage, StoredMessage
 
 
@@ -63,6 +64,20 @@ def test_minimax_uses_configured_base_url():
 
     assert provider.base_url == "https://api.minimaxi.com/v1"
     assert provider._client_kwargs["base_url"] == "https://api.minimaxi.com/v1"
+
+
+def test_minimax_overload_detection_uses_shared_transient_classifier(monkeypatch):
+    calls = []
+
+    def fake_classifier(exc):
+        calls.append(exc)
+        return True
+
+    error = RuntimeError("provider-specific transient signal")
+    monkeypatch.setattr(minimax_module, "looks_like_transient_transport_error", fake_classifier)
+
+    assert _is_minimax_overloaded_error(error) is True
+    assert calls == [error]
 
 
 def test_message_history_restores_reasoning_details_from_metadata():

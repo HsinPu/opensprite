@@ -9,6 +9,7 @@ import random
 from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage, ToolCall
+from .retry import looks_like_transient_transport_error
 from .tool_args import parse_tool_arguments
 from ..utils.log_redaction import redact_log_preview
 from ..utils.log import logger
@@ -72,8 +73,7 @@ def _is_minimax_overloaded_error(exc: BaseException) -> bool:
     code = getattr(exc, "status_code", None)
     if code == 529:
         return True
-    lowered = str(exc).lower()
-    if "overloaded_error" in lowered or "high traffic detected" in lowered:
+    if looks_like_transient_transport_error(exc):
         return True
     body = getattr(exc, "body", None)
     if isinstance(body, dict):

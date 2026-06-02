@@ -118,7 +118,8 @@ def _parse_text_delay_ms(text: str) -> int | None:
     return None
 
 
-def _looks_like_transient_transport(error: BaseException) -> bool:
+def looks_like_transient_transport_error(error: BaseException) -> bool:
+    """Return True when an exception resembles a transient transport/provider failure."""
     if type(error).__name__ in _TRANSIENT_ERROR_TYPE_NAMES:
         return True
     lowered = str(error or "").lower()
@@ -156,7 +157,7 @@ def retry_delay_from_error(error: BaseException, *, now: float | None = None, at
         retry_after_ms is not None
         or status_code == 429
         or (status_code is not None and 500 <= status_code <= 599)
-        or _looks_like_transient_transport(error)
+        or looks_like_transient_transport_error(error)
     )
     if retry_after_ms is None and retryable:
         retry_after_ms = _jittered_default_delay_ms(attempt)
