@@ -784,8 +784,6 @@ def _ungrounded_response_urls(response_text: str, sources: list[dict[str, object
         normalized = _normalize_source_url(url)
         if not normalized or normalized in source_urls:
             continue
-        if _response_url_is_recommendation(text, match.start()):
-            continue
         if not _response_url_looks_like_source_reference(normalized):
             continue
         if normalized in seen:
@@ -803,22 +801,6 @@ def _response_url_looks_like_source_reference(normalized_url: str) -> bool:
     if parsed.netloc == "openrouter.ai" and parsed.path.startswith("/api/"):
         return False
     return True
-
-
-def _response_url_is_recommendation(response_text: str, url_start: int) -> bool:
-    prefix = response_text[max(0, url_start - 40) : url_start].lower()
-    return any(
-        marker in prefix
-        for marker in (
-            "建議",
-            "可至",
-            "請至",
-            "參考",
-            "see ",
-            "check ",
-            "visit ",
-        )
-    )
 
 
 def _normalize_source_url(url: str) -> str:

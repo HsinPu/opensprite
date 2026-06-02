@@ -2159,11 +2159,16 @@ async def test_completion_gate_rejects_market_quote_source_summary_without_price
     assert completion.reason == "judge rejected source summary without requested quote"
 
 
-def test_completion_gate_allows_recommended_alternate_quote_url():
+def test_completion_gate_rejects_recommended_ungathered_quote_url():
     intent = TaskIntentService().classify("Find the latest available TSMC quote and cite sources.")
     contract = TaskContractService.build(
         task_intent=intent,
         current_message=intent.objective,
+    )
+    contract = replace(
+        contract,
+        acceptance_criteria=contract.acceptance_criteria
+        + (AcceptanceCriterion(kind="source_reference", min_count=1, description="Cite source URLs."),),
     )
     answer = (
         "I found the latest available ADR quote from Yahoo Finance at "
@@ -2209,7 +2214,9 @@ def test_completion_gate_allows_recommended_alternate_quote_url():
         ),
     )
 
-    assert completion.status == "complete"
+    assert completion.status == "incomplete"
+    assert completion.reason == "assistant final answer referenced ungathered sources"
+    assert "https://finance.yahoo.com/quote/2330.TW/" in (completion.active_task_detail or "")
 
 
 def test_completion_gate_rejects_too_short_web_fetch_source_detail():
