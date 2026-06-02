@@ -14,6 +14,7 @@ from .quality_gate import (
     source_material_gap_detail,
     source_material_satisfies_contract,
 )
+from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
 
@@ -169,7 +170,7 @@ class AutoContinueService:
             completion_result.status == "incomplete"
             and execution_result.executed_tool_calls == 0
             and not direct_action_available
-            and not _can_continue_incomplete_without_prior_tool_progress(completion_result, execution_result)
+            and not _can_continue_incomplete_without_prior_tool_progress(task_intent, completion_result, execution_result)
         ):
             return self._skip(
                 "no_tool_progress_after_incomplete_response",
@@ -451,6 +452,7 @@ def _should_answer_from_existing_web_sources(
 
 
 def _can_continue_incomplete_without_prior_tool_progress(
+    task_intent: TaskIntent,
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult,
 ) -> bool:
@@ -459,6 +461,8 @@ def _can_continue_incomplete_without_prior_tool_progress(
     if execution_result.stop_reason == "max_tool_iterations":
         return True
     if _media_artifacts_require_more_work(execution_result):
+        return True
+    if _file_changes_are_required_but_missing(task_intent, completion_result, execution_result):
         return True
     if _task_contract_requires_evidence(execution_result):
         return True
@@ -472,7 +476,6 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
-        "expected code changes were not recorded",
     }
 
 
@@ -505,6 +508,19 @@ def _media_artifacts_require_more_work(execution_result: ExecutionResult) -> boo
     if contract is None:
         return False
     return media_artifact_gap_detail(contract, execution_result) is not None
+
+
+def _file_changes_are_required_but_missing(
+    task_intent: TaskIntent,
+    completion_result: CompletionGateResult,
+    execution_result: ExecutionResult,
+) -> bool:
+    expects_file_change = (
+        contract_expects_file_change(execution_result.task_contract)
+        or bool(getattr(completion_result, "file_change_required", False))
+        or bool(getattr(task_intent, "expects_code_change", False))
+    )
+    return expects_file_change and execution_result.file_change_count <= 0
 
 
 def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:

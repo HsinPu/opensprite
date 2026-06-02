@@ -442,12 +442,13 @@ def test_auto_continue_does_not_use_pending_lookup_phrases():
 
 def test_auto_continue_allows_one_coding_retry_when_code_changes_are_missing():
     intent = TaskIntentService().classify("Please implement the cleanup.")
-    completion = CompletionGateResult(status="incomplete", reason="expected code changes were not recorded")
+    completion = CompletionGateResult(status="incomplete", reason="judge rejected incomplete implementation")
+    contract = TaskContract(objective=intent.objective, task_type="code_change")
 
     decision = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="Implemented the cleanup."),
+        execution_result=ExecutionResult(content="Implemented the cleanup.", task_contract=contract),
         attempts_used=0,
         previous_response="Implemented the cleanup.",
     )

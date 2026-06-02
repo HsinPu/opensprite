@@ -301,6 +301,17 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     return tuple(missing)
 
 
+def contract_expects_file_change(task_contract: Any) -> bool:
+    """Return whether a task contract requires workspace file changes."""
+    task_type = str(getattr(task_contract, "task_type", "") or "")
+    if task_type in {"code_change", "implementation", "refactor"}:
+        return True
+    for requirement in getattr(task_contract, "requirements", ()) or ():
+        if str(getattr(requirement, "kind", "") or "") == "file_change":
+            return True
+        if str(getattr(requirement, "tool_group", "") or "") == "workspace_write":
+            return True
+    return False
 
 
 def _tool_group_requirement(tool_group: str) -> EvidenceRequirement:

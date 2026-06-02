@@ -2039,7 +2039,11 @@ def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp
 
         async def fake_call_llm(session_id, current_message, **kwargs):
             calls.append(current_message)
-            return ExecutionResult(content="Completed the refactor.", executed_tool_calls=0)
+            return ExecutionResult(
+                content="Completed the refactor.",
+                executed_tool_calls=0,
+                task_contract=TaskContract(objective="Please refactor the agent and run tests.", task_type="code_change"),
+            )
 
         agent.call_llm = fake_call_llm
         agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None

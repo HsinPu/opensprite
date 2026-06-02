@@ -17,6 +17,7 @@ from .completion_judge import (
     build_completion_judge_facts,
 )
 from .quality_gate import QualityGateService
+from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
@@ -46,6 +47,7 @@ class CompletionGateResult:
     review_summary: str = ""
     review_prompt_types: tuple[str, ...] = ()
     review_finding_count: int = 0
+    file_change_required: bool = False
     missing_evidence: tuple[str, ...] = ()
     judge_metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -65,6 +67,7 @@ class CompletionGateResult:
             "review_summary": self.review_summary,
             "review_prompt_types": list(self.review_prompt_types),
             "review_finding_count": self.review_finding_count,
+            "file_change_required": self.file_change_required,
             "missing_evidence": list(self.missing_evidence),
         }
         if self.active_task_status:
@@ -130,7 +133,7 @@ class CompletionGateService:
             return _completion_judge_blocked_result(str(exc))
         except Exception as exc:
             return _completion_judge_blocked_result(f"completion judge failed: {type(exc).__name__}")
-        return _completion_result_from_judge_verdict(verdict)
+        return _completion_result_from_judge_verdict(verdict, execution_result=execution_result)
 
     def evaluate(
         self,
@@ -145,7 +148,7 @@ class CompletionGateService:
         expects_code_change = (
             False
             if contract_allows_plain_answer or _contract_is_read_only(execution_result.task_contract)
-            else _contract_expects_file_change(execution_result.task_contract) or execution_result.file_change_count > 0
+            else contract_expects_file_change(execution_result.task_contract) or execution_result.file_change_count > 0
         )
         verification_attempted = execution_result.verification_attempted
         verification_passed = execution_result.verification_passed or _verification_skipped_with_reported_gap(execution_result)
@@ -177,6 +180,7 @@ class CompletionGateService:
                 review_summary=review["summary"],
                 review_prompt_types=review["prompt_types"],
                 review_finding_count=review["finding_count"],
+                file_change_required=True,
             )
 
         planner_status = _task_contract_planner_status(execution_result.task_contract)
@@ -564,7 +568,15 @@ class CompletionGateService:
         return quality_result.passed
 
 
-def _completion_result_from_judge_verdict(verdict: CompletionJudgeVerdict) -> CompletionGateResult:
+def _completion_result_from_judge_verdict(
+    verdict: CompletionJudgeVerdict,
+    *,
+    execution_result: ExecutionResult,
+) -> CompletionGateResult:
+    file_change_required = (
+        contract_expects_file_change(execution_result.task_contract)
+        and execution_result.file_change_count <= 0
+    )
     return CompletionGateResult(
         status=verdict.status,
         reason=verdict.reason,
@@ -587,6 +599,7 @@ def _completion_result_from_judge_verdict(verdict: CompletionJudgeVerdict) -> Co
         review_summary=verdict.review_summary,
         review_prompt_types=verdict.review_prompt_types,
         review_finding_count=verdict.review_finding_count,
+        file_change_required=file_change_required,
         missing_evidence=verdict.missing_evidence,
         judge_metadata={
             **dict(verdict.metadata),
@@ -705,18 +718,6 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
         and getattr(task_contract, "allow_no_tool_final", False)
         and not tuple(getattr(task_contract, "requirements", ()) or ())
     )
-
-
-def _contract_expects_file_change(task_contract: Any) -> bool:
-    task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {"code_change", "implementation", "refactor"}:
-        return True
-    for requirement in getattr(task_contract, "requirements", ()) or ():
-        if str(getattr(requirement, "kind", "") or "") == "file_change":
-            return True
-        if str(getattr(requirement, "tool_group", "") or "") == "workspace_write":
-            return True
-    return False
 
 
 def _contract_is_read_only(task_contract: Any) -> bool:
