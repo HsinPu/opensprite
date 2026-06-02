@@ -452,9 +452,6 @@ class SubagentWorkflowService:
             if str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0:
                 passed = True
                 continue
-            lowered = (outcome.summary or outcome.content or "").lower()
-            if "no major findings" in lowered or "沒有重大發現" in lowered:
-                passed = True
         return {
             "attempted": attempted,
             "passed": attempted and passed and finding_count == 0,

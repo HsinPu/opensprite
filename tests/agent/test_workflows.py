@@ -1,7 +1,10 @@
 import asyncio
+import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent.subagents import SubagentTaskOutcome
+from opensprite.agent.workflows import SubagentWorkflowService
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
 from opensprite.storage import MemoryStorage
@@ -26,6 +29,21 @@ class FakeContextBuilder:
         return messages
 
 
+def _clean_review_response() -> str:
+    payload = {
+        "schema_version": 1,
+        "contract": "readonly_subagent_result",
+        "prompt_type": "code-reviewer",
+        "status": "ok",
+        "summary": "No major findings.",
+        "sections": [],
+        "questions": [],
+        "residual_risks": [],
+        "sources": [],
+    }
+    return "Review Findings\n- No major findings.\n\n```json\n" + json.dumps(payload) + "\n```"
+
+
 class WorkflowProvider:
     def __init__(self):
         self.calls = []
@@ -38,7 +56,7 @@ class WorkflowProvider:
             if getattr(message, "role", None) == "user"
         )
         if "Review the current workspace changes" in task_text or "Resume the code review step" in task_text:
-            return LLMResponse(content="Review Findings\n- No major findings.", model="fake-model")
+            return LLMResponse(content=_clean_review_response(), model="fake-model")
         if "Create a clear outline" in task_text or "Resume the outline step" in task_text:
             return LLMResponse(content="建議標題：Workflow Outline\n\n## 大綱\n1. Step one", model="fake-model")
         if "Add the minimal effective tests" in task_text or "Resume the tests step" in task_text:
@@ -75,6 +93,24 @@ def _make_agent(tmp_path: Path, provider) -> AgentLoop:
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         **Config.packaged_agent_llm_chat_kwargs(),
     )
+
+
+def test_workflow_review_outcome_requires_structured_clean_review():
+    review = SubagentTaskOutcome(
+        task_id="task_review",
+        child_session_id="session_review",
+        child_run_id="run_review",
+        prompt_type="code-reviewer",
+        status="completed",
+        content="Review Findings\n- No major findings.",
+        summary="No major findings.",
+    )
+
+    result = SubagentWorkflowService._review_outcome([review])
+
+    assert result["attempted"] is True
+    assert result["passed"] is False
+    assert result["finding_count"] == 0
 
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):

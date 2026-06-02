@@ -3918,6 +3918,32 @@ def test_completion_gate_marks_explicit_task_completion_done():
     assert result.should_update_active_task is True
 
 
+def test_completion_gate_requires_structured_clean_review_evidence():
+    intent = TaskIntentService().classify("Please implement the final cleanup.")
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Implemented the final cleanup successfully.",
+        execution_result=ExecutionResult(
+            content="Implemented the final cleanup successfully.",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            delegated_tasks=(
+                StoredDelegatedTask(
+                    task_id="task_review",
+                    prompt_type="code-reviewer",
+                    status="completed",
+                    summary="No major findings.",
+                ),
+            ),
+        ),
+    )
+
+    assert result.status == "needs_review"
+    assert result.review_attempted is True
+    assert result.review_passed is False
+
+
 def test_completion_gate_requires_recorded_code_changes_for_implementation():
     intent = TaskIntentService().classify("Please implement the final cleanup.")
     contract = TaskContract(

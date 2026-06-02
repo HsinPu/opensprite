@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -893,10 +892,6 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         if not first_finding:
             first_finding = _first_review_finding(structured)
         if structured_status == "ok" and task_findings == 0:
-            clean_review_recorded = True
-            continue
-        lowered_summary = re.sub(r"\s+", " ", task_summary.lower())
-        if task_findings == 0 and ("no major findings" in lowered_summary or "沒有重大發現" in lowered_summary):
             clean_review_recorded = True
             continue
         problematic_review_recorded = True
