@@ -709,6 +709,9 @@ def test_messages_config_includes_repeated_invalid_tool_call_fallback():
     config = MessagesConfig()
 
     assert "{result}" in config.agent.repeated_invalid_tool_call_fallback
+    assert config.agent.source_fallback_intro
+    assert config.agent.source_fallback_details_header
+    assert config.agent.source_fallback_sources_header
 
 
 def test_search_embedding_config_requires_model_when_enabled():

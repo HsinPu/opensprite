@@ -43,6 +43,13 @@ class TurnPassEvaluation:
     collected_workflow_outcomes: tuple[dict[str, Any], ...]
 
 
+@dataclass(frozen=True)
+class SourceFallbackMessages:
+    intro: str
+    details_header: str
+    sources_header: str
+
+
 class AgentTurnRunner:
     """Runs user-turn branches after inbound turn input is prepared."""
 
@@ -70,6 +77,7 @@ class AgentTurnRunner:
         get_queued_outbound_media: Callable[[], dict[str, list[str]]],
         media_saved_ack: Callable[[], str],
         llm_not_configured_message: Callable[[], str],
+        source_fallback_messages: Callable[[], SourceFallbackMessages],
         format_log_preview: Callable[..., str],
         set_session_overlay_id: Callable[[str, dict[str, Any] | None, str | None, str | None], None],
         read_active_task_snapshot: Callable[[str], str],
@@ -107,6 +115,7 @@ class AgentTurnRunner:
         self._get_queued_outbound_media = get_queued_outbound_media
         self._media_saved_ack = media_saved_ack
         self._llm_not_configured_message = llm_not_configured_message
+        self._source_fallback_messages = source_fallback_messages
         self._format_log_preview = format_log_preview
         self._set_session_overlay_id = set_session_overlay_id
         self._read_active_task_snapshot = read_active_task_snapshot
@@ -838,6 +847,7 @@ class AgentTurnRunner:
             completion_result=completion_result,
             auto_continue_attempts=auto_continue_attempts,
             execution_result=aggregate_result,
+            source_fallback_messages=self._source_fallback_messages(),
         )
         if response != aggregate_result.content:
             aggregate_result.content = response
@@ -1342,9 +1352,10 @@ def _final_response_after_exhausted_continuation(
     response: str,
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
+    source_fallback_messages: SourceFallbackMessages,
     execution_result: ExecutionResult | None = None,
 ) -> str:
-    source_fallback = _source_fallback_response(completion_result, execution_result)
+    source_fallback = _source_fallback_response(completion_result, execution_result, source_fallback_messages)
     if source_fallback:
         return source_fallback
     if not _should_replace_nonfinal_response(
@@ -1386,6 +1397,7 @@ def _message_with_runtime_context(message: str, metadata: dict[str, Any] | None)
 def _source_fallback_response(
     completion_result: CompletionGateResult,
     execution_result: ExecutionResult | None,
+    messages: SourceFallbackMessages,
 ) -> str:
     if execution_result is None:
         return ""
@@ -1415,9 +1427,9 @@ def _source_fallback_response(
 
     return "\n\n".join(
         [
-            "我已根據本輪已成功蒐集到的來源整理如下，避免停在只有進度句的狀態。",
-            "重點摘要：\n" + "\n".join(detail_lines),
-            "來源網址：\n" + "\n".join(source_lines),
+            messages.intro,
+            f"{messages.details_header}\n" + "\n".join(detail_lines),
+            f"{messages.sources_header}\n" + "\n".join(source_lines),
         ]
     )
 

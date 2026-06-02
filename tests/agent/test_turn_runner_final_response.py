@@ -2,7 +2,23 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
-from opensprite.agent.turn_runner import _final_response_after_exhausted_continuation, _message_with_runtime_context
+from opensprite.agent.turn_runner import (
+    SourceFallbackMessages,
+    _final_response_after_exhausted_continuation as _raw_final_response_after_exhausted_continuation,
+    _message_with_runtime_context,
+)
+
+
+SOURCE_FALLBACK_MESSAGES = SourceFallbackMessages(
+    intro="TEST SOURCE FALLBACK INTRO",
+    details_header="TEST DETAILS",
+    sources_header="TEST SOURCES",
+)
+
+
+def _final_response_after_exhausted_continuation(**kwargs):
+    kwargs.setdefault("source_fallback_messages", SOURCE_FALLBACK_MESSAGES)
+    return _raw_final_response_after_exhausted_continuation(**kwargs)
 
 
 def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
@@ -97,7 +113,8 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
         ),
     )
 
-    assert "重點摘要" in response
+    assert "TEST DETAILS" in response
+    assert "TEST SOURCES" in response
     assert "https://openrouter.ai/docs/api/reference/parameters" in response
     assert "目前還不能可靠完成這次請求" not in response
 
@@ -184,7 +201,8 @@ def test_exhausted_continuation_uses_gathered_source_fallback_for_market_quote()
         ),
     )
 
-    assert "重點摘要" in response
+    assert "TEST DETAILS" in response
+    assert "TEST SOURCES" in response
     assert "https://finance.yahoo.com/quote/TSM/" in response
     assert "目前還不能可靠完成這次請求" not in response
 
@@ -226,7 +244,8 @@ def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete
         ),
     )
 
-    assert "重點摘要" in response
+    assert "TEST DETAILS" in response
+    assert "TEST SOURCES" in response
     assert "https://openrouter.ai/docs/api-reference/overview" in response
     assert "目前還不能可靠完成這次請求" not in response
 

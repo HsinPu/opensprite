@@ -101,7 +101,7 @@ from .tool_registration import (
 )
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
-from .turn_runner import AgentTurnRunner
+from .turn_runner import AgentTurnRunner, SourceFallbackMessages
 from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate
@@ -725,6 +725,11 @@ class AgentLoop:
             get_queued_outbound_media=self._get_queued_outbound_media,
             media_saved_ack=lambda: self.messages.agent.media_saved_ack,
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
+            source_fallback_messages=lambda: SourceFallbackMessages(
+                intro=self.messages.agent.source_fallback_intro,
+                details_header=self.messages.agent.source_fallback_details_header,
+                sources_header=self.messages.agent.source_fallback_sources_header,
+            ),
             format_log_preview=self._format_log_preview,
             set_session_overlay_id=lambda session_id, metadata, channel, sender_id: self._set_session_overlay_id(
                 session_id,
