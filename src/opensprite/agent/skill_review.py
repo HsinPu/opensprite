@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable, Sequence
 from ..llms import ChatMessage
 from ..storage import StorageProvider
 from ..tools import ToolRegistry
+from ..tools.result_status import classify_tool_result_status
 from ..utils.log import logger
 
 SKILL_REVIEW_SYSTEM = """You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
@@ -110,7 +111,7 @@ class SkillReviewService:
             action = str((tool_args or {}).get("action") or "").strip()
             if action not in {"add", "upsert"}:
                 return
-            if str(result or "").lstrip().startswith("Error:"):
+            if not classify_tool_result_status(result).ok:
                 return
             skill_name = str((tool_args or {}).get("skill_name") or "").strip()
             if not skill_name:

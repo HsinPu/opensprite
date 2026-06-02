@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from agent_test_helpers import make_agent_loop
 from opensprite.agent.execution import ExecutionResult
@@ -65,6 +66,41 @@ def test_skill_review_collects_configured_skill_metadata():
             "description": "Reusable pytest workflow.",
         }
     ]
+
+
+def test_skill_review_ignores_structured_configure_skill_failure():
+    class Storage:
+        async def get_messages(self, session_id, limit=None):
+            return [
+                StoredMessage(role="user", content="Please remember this workflow and make a skill.", timestamp=1.0),
+                StoredMessage(role="assistant", content="Sure, I will save it.", timestamp=2.0),
+            ]
+
+    async def execute_messages(log_id, messages, **kwargs):
+        await kwargs["on_tool_after_execute"](
+            "configure_skill",
+            {
+                "action": "upsert",
+                "skill_name": "pytest-helper",
+                "description": "Reusable pytest workflow.",
+            },
+            json.dumps({"ok": False, "error": "skill body was invalid"}),
+        )
+
+    from opensprite.agent.skill_review import SkillReviewService
+
+    service = SkillReviewService(
+        storage=Storage(),
+        tools=None,
+        transcript_message_limit_getter=lambda: 10,
+        max_tool_iterations_getter=lambda: 2,
+        build_system_prompt=lambda session_id: "system",
+        execute_messages=execute_messages,
+    )
+
+    touched = asyncio.run(service.run("chat-a", tool_registry=object()))
+
+    assert touched == []
 
 
 def test_skill_review_scheduler_coalesces_same_session_into_rerun(tmp_path):

@@ -54,6 +54,7 @@ from ..tools import ToolRegistry
 from ..tools.approval import PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
+from ..tools.result_status import classify_tool_result_status
 from ..tools.verify import classify_verification_result
 from ..tools.web_research import WebResearchTool
 from ..tools.web_search import WebSearchTool
@@ -254,7 +255,7 @@ class AgentLoop:
             if tool_name != "read_skill":
                 return
             skill_name = str((tool_args or {}).get("skill_name") or "").strip()
-            if not skill_name or str(result or "").lstrip().startswith("Error:"):
+            if not skill_name or not classify_tool_result_status(result).ok:
                 return
             self._run_skill_reads.setdefault(run_id, set()).add(skill_name)
 
