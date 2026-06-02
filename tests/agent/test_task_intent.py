@@ -13,7 +13,7 @@ def test_task_intent_classifier_keeps_execution_expectations_neutral():
     assert intent.verification_hint is None
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
-    assert intent.constraints == ("Keep the public API stable.",)
+    assert intent.constraints == ()
 
 
 def test_task_intent_classifier_keeps_question_out_of_active_task_seed():

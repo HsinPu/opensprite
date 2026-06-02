@@ -73,20 +73,6 @@ _VAGUE_TASK_MESSAGES = {
     "修一下",
     "搞定",
 }
-_CONSTRAINT_MARKERS = (
-    "do not",
-    "don't",
-    "without",
-    "only",
-    "keep",
-    "must",
-    "不要",
-    "別",
-    "只能",
-    "只要",
-    "必須",
-    "保持",
-)
 _KIND_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("refactor", ("refactor", "cleanup", "clean up", "重構", "整理程式", "整理代碼")),
     ("debug", ("debug", "bug", "error", "exception", "traceback", "failed", "failure", "fix", "修正", "修復", "除錯", "錯誤", "失敗")),
@@ -196,7 +182,7 @@ class TaskIntentService:
         kind = _classify_kind(compact, media_count=media_count)
         needs_clarification = _needs_clarification(compact, kind)
         long_running = _is_long_running(compact, kind)
-        constraints = _extract_constraints(compact)
+        constraints = ()
         done_criteria = _done_criteria(kind, long_running=long_running, has_media=media_count > 0)
         verification_hint = None
         expects_code_change = False
@@ -287,18 +273,6 @@ def _is_long_running(text: str, kind: str) -> bool:
     if len(re.findall(r"(?:^|\s)(?:\d+\.|[-*])\s+", text)) >= 2:
         return True
     return kind in {"debug", "implementation", "refactor"}
-
-
-def _extract_constraints(text: str) -> tuple[str, ...]:
-    chunks = re.split(r"(?<=[.!?。！？])\s+", text)
-    constraints: list[str] = []
-    for chunk in chunks:
-        compact = _compact_text(chunk)
-        if not compact:
-            continue
-        if any(marker in compact.lower() for marker in _CONSTRAINT_MARKERS):
-            constraints.append(_truncate(compact, max_chars=160))
-    return tuple(dict.fromkeys(constraints[:4]))
 
 
 def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[str, ...]:
