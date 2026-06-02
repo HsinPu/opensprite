@@ -92,6 +92,36 @@ def _completion_judge_facts(messages) -> dict:
     return parsed if isinstance(parsed, dict) else {}
 
 
+def _delegated_task_structured_output(item: dict) -> dict:
+    structured = item.get("structured_output")
+    metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+    if not isinstance(structured, dict):
+        structured = metadata.get("structured_output")
+    return structured if isinstance(structured, dict) else {}
+
+
+def _is_clean_code_review_task(item: dict) -> bool:
+    if item.get("prompt_type") != "code-reviewer":
+        return False
+    structured = _delegated_task_structured_output(item)
+    return str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0
+
+
+def _fake_clean_review_response() -> str:
+    payload = {
+        "schema_version": 1,
+        "contract": "readonly_subagent_result",
+        "prompt_type": "code-reviewer",
+        "status": "ok",
+        "summary": "No major findings.",
+        "sections": [],
+        "questions": [],
+        "residual_risks": [],
+        "sources": [],
+    }
+    return "Review completed without findings.\n\n```json\n" + json.dumps(payload) + "\n```"
+
+
 def _completion_judge_response(messages) -> LLMResponse:
     facts = _completion_judge_facts(messages)
     response = str(facts.get("assistant_response", {}).get("text") or "")
@@ -107,10 +137,7 @@ def _completion_judge_response(messages) -> LLMResponse:
         for item in delegated_tasks
     )
     clean_review = any(
-        isinstance(item, dict)
-        and item.get("prompt_type") == "code-reviewer"
-        and "No major findings" in str(item.get("summary") or item.get("metadata") or "")
-        for item in delegated_tasks
+        isinstance(item, dict) and _is_clean_code_review_task(item) for item in delegated_tasks
     )
     file_changes = int(execution.get("file_change_count") or 0)
     verification_passed = bool(execution.get("verification_passed"))
@@ -381,7 +408,7 @@ class WorkflowAuthorityProvider:
         if "run_workflow" in tool_names:
             return LLMResponse(content="Here is the reviewed outcome.", model="fake-model")
         if "Review the current workspace changes" in latest_user_text:
-            return LLMResponse(content="Review Findings\n- No major findings.", model="fake-model")
+            return LLMResponse(content=_fake_clean_review_response(), model="fake-model")
         return LLMResponse(content="Implemented the requested change.", model="fake-model")
 
     def get_default_model(self) -> str:
