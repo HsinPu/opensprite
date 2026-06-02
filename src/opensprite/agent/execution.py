@@ -603,10 +603,6 @@ Output exactly these sections when applicable:
         summary = ExecutionEngine._extract_structured_preview_from_detail(detail)
         if summary:
             return f"{tool_name}: {summary[:180]}"
-        if detail.startswith("Error executing "):
-            parts = detail.split(": ", 1)
-            if len(parts) == 2:
-                return f"{tool_name}: {parts[1][:180]}"
         if len(detail) > 180:
             detail = detail[:177].rstrip() + "..."
         return f"{tool_name}: {detail}"
