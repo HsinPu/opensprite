@@ -448,24 +448,22 @@ def test_task_context_stays_neutral_when_provider_is_unconfigured():
     assert decision.reason.startswith("llm unavailable")
 
 
-def test_task_context_continues_active_task_without_llm():
-    provider = _FailingProvider()
-
+def test_task_context_does_not_continue_active_task_from_continue_marker_without_llm():
     decision = asyncio.run(
         _resolver().resolve(
             current_message="continue",
             history=[],
             task_intent=TaskIntentService().classify("continue"),
             active_task=_ACTIVE_TASK_BLOCK,
-            provider=provider,
-            model=provider.get_default_model(),
+            provider=UnconfiguredLLM(),
+            model="unconfigured",
         )
     )
 
-    assert decision.method == "deterministic"
-    assert decision.is_follow_up is True
-    assert decision.should_inherit_active_task is True
-    assert decision.continuation_type == "continue_active_task"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.should_inherit_active_task is False
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_confirms_pending_boundary_switch_without_llm():

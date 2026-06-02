@@ -196,7 +196,6 @@ class TaskContextResolver:
     ) -> TaskContextDecision:
         del history
         current = _compact(current_message)
-        has_active_task = _has_active_task(active_task) or _has_active_task(work_state_summary)
         if not current or (task_intent is not None and task_intent.kind == "conversation"):
             return TaskContextDecision(
                 continuation_type="ack",
@@ -220,15 +219,6 @@ class TaskContextResolver:
                 continuation_type="continue_active_task",
                 confidence=0.9,
                 reason="user confirmed continuing the active task after task-boundary prompt",
-            )
-
-        if has_active_task and _is_boundary_continue_confirmation(current):
-            return TaskContextDecision(
-                is_follow_up=True,
-                should_inherit_active_task=True,
-                continuation_type="continue_active_task",
-                confidence=0.75,
-                reason="current message is a continuation of the active task",
             )
 
         return TaskContextDecision(
