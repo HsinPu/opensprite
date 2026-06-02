@@ -453,11 +453,12 @@ def _can_continue_incomplete_without_prior_tool_progress(
         return True
     if _task_contract_requires_evidence(execution_result):
         return True
+    if _task_contract_has_acceptance_criterion(execution_result, "itemized_output"):
+        return True
     if completion_result.missing_evidence:
         return True
     return completion_result.reason in {
         "assistant only reported progress without performing requested work",
-        "assistant did not provide the requested itemized result",
         "required task artifacts were not produced",
         "required task artifacts were not traceable",
         "expected code changes were not recorded",
@@ -473,6 +474,14 @@ def _task_contract_requires_evidence(execution_result: ExecutionResult) -> bool:
     if contract is None:
         return False
     return bool(getattr(contract, "requirements", ()) or ())
+
+
+def _task_contract_has_acceptance_criterion(execution_result: ExecutionResult, *kinds: str) -> bool:
+    contract = execution_result.task_contract
+    if contract is None:
+        return False
+    expected = {kind for kind in kinds if kind}
+    return any(getattr(criterion, "kind", "") in expected for criterion in contract.acceptance_criteria)
 
 
 def _existing_web_source_context(execution_result: ExecutionResult | None) -> str:
@@ -553,7 +562,7 @@ def _quality_follow_up_instruction(
             "Run the direct version command, such as `<command> --version`, and answer with the version value. "
             "Do not inspect `.git`, `HEAD`, repository commits, or package metadata unless the user asks for repository state."
         )
-    if reason == "assistant did not provide the requested itemized result":
+    if execution_result is not None and _task_contract_has_acceptance_criterion(execution_result, "itemized_output"):
         return (
             "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
             "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."

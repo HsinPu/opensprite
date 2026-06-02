@@ -373,6 +373,31 @@ def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_gene
     assert "required tool evidence is missing" in (decision.prompt or "")
 
 
+def test_auto_continue_uses_itemized_contract_when_incomplete_reason_is_generic():
+    intent = TaskIntentService().classify("List three practical deployment risks.")
+    completion = CompletionGateResult(
+        status="incomplete",
+        reason="assistant response did not explicitly complete the task",
+    )
+    contract = TaskContract(
+        objective=intent.objective,
+        task_type="task",
+        acceptance_criteria=(AcceptanceCriterion(kind="itemized_output", min_count=3),),
+    )
+
+    decision = AutoContinueService(max_auto_continues=1).decide(
+        task_intent=intent,
+        completion_result=completion,
+        execution_result=ExecutionResult(content="There are several risks.", task_contract=contract),
+        attempts_used=0,
+        previous_response="There are several risks.",
+    )
+
+    assert decision.should_continue is True
+    assert decision.reason == "completion_gate_incomplete"
+    assert "provide the requested itemized result" in (decision.prompt or "")
+
+
 def test_auto_continue_does_not_use_pending_lookup_phrases():
     intent = TaskIntentService().classify("幫我找 2330市值")
     completion = CompletionGateResult(
