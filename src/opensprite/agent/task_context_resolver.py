@@ -177,7 +177,7 @@ class TaskContextResolver:
         ):
             return deterministic
         if provider is None or str(model or "").strip().lower() == "unconfigured":
-            return replace(deterministic, method="fallback", reason=f"llm unavailable; {deterministic.reason}")
+            return _unresolved_llm_decision("llm unavailable; task context was not inferred")
 
         try:
             llm_decision = await self._resolve_with_llm(
@@ -192,7 +192,7 @@ class TaskContextResolver:
             )
         except Exception as exc:
             logger.warning("Task context LLM resolution failed: {}", exc)
-            return replace(deterministic, method="fallback", reason=f"llm failed; {deterministic.reason}")
+            return _unresolved_llm_decision("llm failed; task context was not inferred")
 
         llm_decision = _merge_with_deterministic(
             deterministic,
@@ -200,10 +200,8 @@ class TaskContextResolver:
             has_active_task=_has_active_task(active_task),
         )
         if llm_decision.confidence < 0.55:
-            return replace(
-                deterministic,
-                method="fallback",
-                reason=f"llm confidence too low ({llm_decision.confidence:.2f}); {deterministic.reason}",
+            return _unresolved_llm_decision(
+                f"llm confidence too low ({llm_decision.confidence:.2f}); task context was not inferred"
             )
         return llm_decision
 
@@ -501,6 +499,15 @@ def _merge_with_deterministic(
         inherited_task_type=inherited_task_type,
         inherited_tool_group=inherited_tool_group,
         continuation_type=continuation_type,
+    )
+
+
+def _unresolved_llm_decision(reason: str) -> TaskContextDecision:
+    return TaskContextDecision(
+        continuation_type="none",
+        confidence=0.0,
+        method="llm_unresolved",
+        reason=reason,
     )
 
 

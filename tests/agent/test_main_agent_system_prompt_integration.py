@@ -100,13 +100,24 @@ class AmbiguousBoundaryDecisionProvider(CapturingProvider):
 
 
 class TaskObjectiveDecisionProvider(CapturingProvider):
-    """Returns an objective JSON decision before the main assistant response."""
+    """Returns task-context and objective JSON decisions before the main response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         if _is_task_contract_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
+        if "You classify whether the latest user turn inherits task context" in system_text:
+            return LLMResponse(
+                content=(
+                    '{"continuation_type": "follow_up", "is_follow_up": true, '
+                    '"should_inherit_active_task": false, '
+                    '"should_seed_active_task": false, "should_replace_active_task": false, '
+                    '"inherited_task_type": "web_research", "inherited_tool_group": "web_research", '
+                    '"confidence": 0.88, "reason": "The short turn refers to the prior ETF lookup."}'
+                ),
+                model="fake-model",
+            )
         if "You resolve a concise task objective for ACTIVE_TASK" in system_text:
             return LLMResponse(
                 content=(

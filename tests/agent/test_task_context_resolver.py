@@ -104,7 +104,7 @@ _WEB_RESEARCH_HISTORY = [
 ]
 
 
-def test_task_context_falls_back_to_deterministic_follow_up_without_llm():
+def test_task_context_does_not_infer_follow_up_when_llm_fails():
     provider = _FailingProvider()
 
     llm_config = Config.load_agent_template_config().task_context_llm.model_copy(
@@ -120,10 +120,10 @@ def test_task_context_falls_back_to_deterministic_follow_up_without_llm():
         )
     )
 
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
-    assert decision.inherited_tool_group == "web_research"
-    assert decision.continuation_type == "follow_up"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_uses_llm_for_ambiguous_follow_up():
@@ -211,7 +211,7 @@ def test_task_context_uses_llm_for_multilingual_and_typo_follow_ups():
         assert decision.continuation_type == "follow_up"
 
 
-def test_task_context_handles_chinese_typo_follow_up_with_fallback():
+def test_task_context_does_not_infer_typo_follow_up_when_llm_fails():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -224,10 +224,10 @@ def test_task_context_handles_chinese_typo_follow_up_with_fallback():
         )
     )
 
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
-    assert decision.inherited_tool_group == "web_research"
-    assert decision.continuation_type == "follow_up"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_acknowledgement_skips_llm():
@@ -248,7 +248,7 @@ def test_task_context_acknowledgement_skips_llm():
     assert decision.continuation_type == "ack"
 
 
-def test_task_context_falls_back_when_llm_json_is_invalid():
+def test_task_context_stays_neutral_when_llm_json_is_invalid():
     provider = _JsonProvider("not json")
 
     decision = asyncio.run(
@@ -262,12 +262,13 @@ def test_task_context_falls_back_when_llm_json_is_invalid():
     )
 
     assert len(provider.calls) == 1
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
     assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
-def test_task_context_ignores_low_confidence_llm_decision():
+def test_task_context_stays_neutral_for_low_confidence_llm_decision():
     provider = _JsonProvider(
         '{"is_follow_up": true, "should_inherit_active_task": false, '
         '"should_seed_active_task": false, "should_replace_active_task": false, '
@@ -286,8 +287,9 @@ def test_task_context_ignores_low_confidence_llm_decision():
     )
 
     assert len(provider.calls) == 1
-    assert decision.method == "fallback"
+    assert decision.method == "llm_unresolved"
     assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
@@ -416,7 +418,7 @@ def test_task_context_skips_llm_when_provider_is_unconfigured():
         )
     )
 
-    assert decision.method == "fallback"
+    assert decision.method == "llm_unresolved"
     assert decision.reason.startswith("llm unavailable")
 
 
@@ -497,7 +499,7 @@ def test_task_context_supports_legacy_boundary_question_format():
     assert decision.should_replace_active_task is True
 
 
-def test_task_context_continue_without_active_task_falls_back_to_recent_web_context():
+def test_task_context_continue_without_active_task_stays_neutral_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -510,14 +512,14 @@ def test_task_context_continue_without_active_task_falls_back_to_recent_web_cont
         )
     )
 
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
-    assert decision.inherited_task_type == "web_research"
-    assert decision.inherited_tool_group == "web_research"
-    assert decision.continuation_type == "follow_up"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
-def test_task_context_falls_back_to_recent_workspace_tool_context_without_llm():
+def test_task_context_stays_neutral_for_recent_workspace_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -533,10 +535,11 @@ def test_task_context_falls_back_to_recent_workspace_tool_context_without_llm():
         )
     )
 
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
-    assert decision.inherited_task_type == "workspace_read"
-    assert decision.inherited_tool_group == "workspace_read"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_does_not_inherit_workspace_for_standalone_error_question():
@@ -589,7 +592,7 @@ def test_task_context_does_not_inherit_workspace_for_unpasted_program_request():
     assert decision.continuation_type == "none"
 
 
-def test_task_context_falls_back_to_recent_history_tool_context_without_llm():
+def test_task_context_stays_neutral_for_recent_history_tool_context_without_llm():
     provider = _FailingProvider()
 
     decision = asyncio.run(
@@ -605,10 +608,11 @@ def test_task_context_falls_back_to_recent_history_tool_context_without_llm():
         )
     )
 
-    assert decision.method == "fallback"
-    assert decision.is_follow_up is True
-    assert decision.inherited_task_type == "history_retrieval"
-    assert decision.inherited_tool_group == "history_retrieval"
+    assert decision.method == "llm_unresolved"
+    assert decision.is_follow_up is False
+    assert decision.inherited_task_type is None
+    assert decision.inherited_tool_group is None
+    assert decision.continuation_type == "none"
 
 
 def test_task_context_accepts_llm_history_retrieval_task_type():
