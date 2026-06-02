@@ -15,7 +15,7 @@ from ..llms.retry import retry_delay_from_error
 from ..storage.base import StoredDelegatedTask
 from ..tools import ToolRegistry
 from ..tools.evidence import ToolEvidence
-from ..tools.result_status import classify_tool_result_status
+from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
@@ -1604,12 +1604,18 @@ Output exactly these sections when applicable:
                     async def _notify_tool_cancelled() -> None:
                         if not tool_started or on_tool_after_execute is None:
                             return
+                        aborted_result = tool_error_result(
+                            "Tool execution aborted",
+                            error_type="ToolGuardrailError",
+                            category="tool_guardrail",
+                            metadata={"tool_name": tool_name},
+                        )
                         try:
                             try:
                                 await on_tool_after_execute(
                                     tool_name,
                                     display_tool_args,
-                                    "Error: Tool execution aborted",
+                                    aborted_result,
                                     tc.id,
                                     iteration + 1,
                                     None,
@@ -1621,7 +1627,7 @@ Output exactly these sections when applicable:
                                 await on_tool_after_execute(
                                     tool_name,
                                     display_tool_args,
-                                    "Error: Tool execution aborted",
+                                    aborted_result,
                                     tc.id,
                                     iteration + 1,
                                 )

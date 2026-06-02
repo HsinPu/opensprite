@@ -729,8 +729,11 @@ def test_execution_engine_blocks_repeated_identical_tool_failures():
     assert result.executed_tool_calls == 3
     assert result.had_tool_error is True
     assert tool.calls == 3
-    assert "repeated_failure_block" in messages[-1].content
-    assert "Blocked failing_tool" in messages[-1].content
+    blocked_payload = json.loads(messages[-1].content)
+    assert blocked_payload["error_type"] == "ToolGuardrailError"
+    assert blocked_payload["category"] == "tool_guardrail"
+    assert blocked_payload["guardrail"]["code"] == "repeated_failure_block"
+    assert "Blocked failing_tool" in blocked_payload["error"]
 
 
 def test_execution_engine_records_unavailable_tool_call_as_tool_error():
@@ -866,8 +869,11 @@ def test_execution_engine_warns_then_blocks_repeated_read_only_results():
     assert tool.calls == 3
     tool_messages = [message.content for message in messages if message.role == "tool"]
     assert any("same_result_warning" in content for content in tool_messages)
-    assert "same_result_block" in tool_messages[-1]
-    assert "Blocked read_file" in tool_messages[-1]
+    blocked_payload = json.loads(tool_messages[-1])
+    assert blocked_payload["error_type"] == "ToolGuardrailError"
+    assert blocked_payload["category"] == "tool_guardrail"
+    assert blocked_payload["guardrail"]["code"] == "same_result_block"
+    assert "Blocked read_file" in blocked_payload["error"]
 
 
 def test_execution_engine_records_llm_step_usage_metadata():
@@ -1613,13 +1619,13 @@ def test_execution_engine_records_aborted_tool_result_when_cancelled_after_tool_
         raise AssertionError("CancelledError was not raised")
 
     assert len(after_calls) == 1
-    assert after_calls[0][:5] == (
-        "cancel_tool",
-        {},
-        "Error: Tool execution aborted",
-        "tc1",
-        1,
-    )
+    assert after_calls[0][0] == "cancel_tool"
+    assert after_calls[0][1] == {}
+    aborted_payload = json.loads(after_calls[0][2])
+    assert aborted_payload["error"] == "Tool execution aborted"
+    assert aborted_payload["error_type"] == "ToolGuardrailError"
+    assert aborted_payload["category"] == "tool_guardrail"
+    assert after_calls[0][3:5] == ("tc1", 1)
     assert after_calls[0][-2:] == ("error", True)
 
 

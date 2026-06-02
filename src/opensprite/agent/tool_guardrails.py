@@ -202,7 +202,16 @@ class ToolLoopGuardrail:
 def build_toolguard_synthetic_result(decision: ToolLoopGuardrailDecision) -> str:
     """Build a synthetic tool result for a blocked call."""
 
-    return json.dumps({"error": decision.message, "guardrail": decision.to_metadata()}, ensure_ascii=False)
+    return json.dumps(
+        {
+            "ok": False,
+            "error": decision.message,
+            "error_type": "ToolGuardrailError",
+            "category": "tool_guardrail",
+            "guardrail": decision.to_metadata(),
+        },
+        ensure_ascii=False,
+    )
 
 
 def append_toolguard_guidance(result: str, decision: ToolLoopGuardrailDecision) -> str:
