@@ -3762,7 +3762,7 @@ def test_completion_gate_requires_recorded_code_changes_for_implementation():
     assert result.reason == "expected code changes were not recorded"
 
 
-def test_completion_gate_respects_pure_answer_contract_over_code_intent():
+def test_completion_gate_respects_pure_answer_contract_over_code_words():
     intent = TaskIntentService().classify(
         "請幫我規劃一個安全的三階段修正流程，要包含每階段驗證方式；不要呼叫工具。"
     )
@@ -3783,7 +3783,7 @@ def test_completion_gate_respects_pure_answer_contract_over_code_intent():
         ),
     )
 
-    assert intent.expects_code_change is True
+    assert intent.expects_code_change is False
     assert intent.expects_verification is False
     assert result.status == "complete"
     assert result.verification_required is False
@@ -3810,7 +3810,7 @@ def test_completion_gate_respects_workspace_read_contract_over_code_words():
         ),
     )
 
-    assert intent.expects_code_change is True
+    assert intent.expects_code_change is False
     assert result.status == "complete"
 
 

@@ -100,36 +100,6 @@ _LONG_RUNNING_MARKERS = (
     "除錯",
     "調查",
 )
-_DEBUG_FIX_MARKERS = (
-    "fix",
-    "repair",
-    "resolve",
-    "patch",
-    "change",
-    "modify",
-    "update",
-    "修正",
-    "修復",
-    "修改",
-    "更新",
-    "補上",
-)
-_DEBUG_DIAGNOSIS_MARKERS = (
-    "analyze",
-    "analyse",
-    "investigate",
-    "inspect",
-    "check",
-    "look into",
-    "why",
-    "root cause",
-    "explain",
-    "分析",
-    "調查",
-    "檢查",
-    "原因",
-    "看一下",
-)
 _CONSTRAINT_MARKERS = (
     "do not",
     "don't",
@@ -165,31 +135,6 @@ _PURE_ANSWER_LITERAL_PHRASES = (
     "\u7ffb\u6210\u4e2d\u6587",
     "\u8a08\u7b97",
 )
-_VERIFICATION_DISCUSSION_PHRASES = (
-    "\u6e2c\u8a66\u91cd\u9ede",
-    "\u6e2c\u8a66\u7d00\u9304",
-    "\u6e2c\u8a66\u6458\u8981",
-    "\u6e2c\u8a66\u6d41\u7a0b",
-    "\u6e2c\u8a66\u6307\u4ee4",
-    "\u6e2c\u8a66\u547d\u4ee4",
-    "\u6d41\u7a0b\u98a8\u96aa",
-    "\u9a57\u8b49\u65b9\u5f0f",
-)
-_NO_CODE_CHANGE_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:edit|modify|change|write|patch|implement)\b"
-    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:edit|modify|change|write|patch|implement)\s+(?:files?|code)?\b"
-    r"|\b(?:plan only|analysis only|read[- ]only|no code changes?)\b"
-    r"|(?:不要|不用|別)[^。！？\n]{0,40}(?:修改|改檔|改動|編輯|寫入|實作)[^。！？\n]{0,20}(?:檔案|文件|程式碼|code)?"
-    r"|(?:不改|不修改|不編輯|不寫入)(?:檔案|文件|程式碼|code)?",
-    re.IGNORECASE,
-)
-_NO_VERIFICATION_RE = re.compile(
-    r"\b(?:do not|don't|dont|without|no)\s+(?:run|execute)?\s*(?:tests?|pytest|verification|build|compile)\b"
-    r"|\b(?:do not|don't|dont)\b[^.?!\n]{0,80}\b(?:run|execute)\s+(?:tests?|pytest|build|compile)\b"
-    r"|(?:不要|不用|別)[^。！？\n]{0,40}(?:執行|跑|驗證)[^。！？\n]{0,20}(?:測試|pytest|build|編譯)?",
-    re.IGNORECASE,
-)
-
 
 @dataclass(frozen=True)
 class TaskIntent:
@@ -280,9 +225,9 @@ class TaskIntentService:
         long_running = _is_long_running(compact, kind)
         constraints = _extract_constraints(compact)
         done_criteria = _done_criteria(kind, long_running=long_running, has_media=media_count > 0)
-        verification_hint = _verification_hint(kind, compact)
-        expects_code_change = _expects_code_change(kind, compact)
-        expects_verification = _expects_verification(kind, compact)
+        verification_hint = None
+        expects_code_change = False
+        expects_verification = False
 
         return TaskIntent(
             kind=kind,
@@ -408,47 +353,3 @@ def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[s
     if has_media:
         criteria.append("attached media is considered only when relevant to the request")
     return tuple(dict.fromkeys(criteria))
-
-
-def _verification_hint(kind: str, text: str) -> str | None:
-    if _NO_VERIFICATION_RE.search(text or ""):
-        return None
-    if _expects_verification(kind, text):
-        return "Run the requested verification and report pass or fail."
-    if kind in {"debug", "implementation", "refactor"}:
-        return "Run relevant tests or checks before marking the task complete."
-    if kind in {"analysis", "review"}:
-        return "Validate findings against the referenced files, data, or conversation evidence."
-    return None
-
-
-def _expects_code_change(kind: str, text: str) -> bool:
-    lowered = text.lower()
-    if _NO_CODE_CHANGE_RE.search(text):
-        return False
-    if kind in {"implementation", "refactor"}:
-        return True
-    if kind != "debug":
-        return False
-    if any(marker in lowered for marker in _DEBUG_FIX_MARKERS):
-        return True
-    if any(marker in lowered for marker in _DEBUG_DIAGNOSIS_MARKERS):
-        return False
-    return False
-
-
-def _expects_verification(kind: str, text: str) -> bool:
-    lowered = text.lower()
-    if _NO_VERIFICATION_RE.search(text):
-        return False
-    if _is_pure_answer_request(text):
-        return False
-    if any(phrase in text for phrase in _VERIFICATION_DISCUSSION_PHRASES):
-        return False
-    if any(marker in lowered for marker in ("pytest", "verify", "verification", "測試", "驗證", "建置", "編譯")):
-        return True
-    if any(marker in lowered for marker in ("run tests", "run the tests", "run build", "run the build", "run compile")):
-        return True
-    if kind in {"implementation", "refactor"} and any(marker in lowered for marker in ("test", "tests", "build", "compile")):
-        return True
-    return False

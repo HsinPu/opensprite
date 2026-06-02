@@ -1,7 +1,7 @@
 from opensprite.agent.task_intent import TaskIntentService
 
 
-def test_task_intent_classifier_marks_refactor_as_verifiable_long_task():
+def test_task_intent_classifier_keeps_execution_expectations_neutral():
     intent = TaskIntentService().classify(
         "Please refactor the agent and run tests. Keep the public API stable."
     )
@@ -10,9 +10,9 @@ def test_task_intent_classifier_marks_refactor_as_verifiable_long_task():
     assert intent.long_running is True
     assert intent.should_seed_active_task is True
     assert "relevant tests or checks pass, or the verification gap is stated" in intent.done_criteria
-    assert intent.verification_hint == "Run the requested verification and report pass or fail."
-    assert intent.expects_code_change is True
-    assert intent.expects_verification is True
+    assert intent.verification_hint is None
+    assert intent.expects_code_change is False
+    assert intent.expects_verification is False
     assert intent.constraints == ("Keep the public API stable.",)
 
 
