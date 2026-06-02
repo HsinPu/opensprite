@@ -725,7 +725,7 @@ def test_main_agent_call_llm_uses_enriched_objective_for_short_follow_up(tmp_pat
     result = asyncio.run(_run())
 
     assert result.content == "done"
-    assert len(provider.calls) == 2
+    assert any("You resolve a concise task objective for ACTIVE_TASK" in call[0].content for call in provider.calls)
     system_text = provider.calls[-1][0].content
     assert "Goal: Research 00981T ETF price and basic public information using web sources." in system_text
     assert "Original user message: 那00981t呢" in system_text

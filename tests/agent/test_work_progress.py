@@ -7,7 +7,7 @@ from opensprite.agent.work_progress import WorkProgressService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 
-def test_work_progress_creates_coding_plan_from_intent():
+def test_work_progress_keeps_intent_only_plan_generic_before_contract():
     intent = TaskIntentService().classify("Please implement the feature and run tests.")
 
     plan = WorkProgressService().create_plan(intent)
@@ -15,12 +15,11 @@ def test_work_progress_creates_coding_plan_from_intent():
     assert plan is not None
     assert plan.coding_task is True
     assert plan.long_running is True
-    assert plan.expects_code_change is True
-    assert plan.expects_verification is True
+    assert plan.expects_code_change is False
+    assert plan.expects_verification is False
     assert plan.steps == (
-        "inspect relevant code",
-        "make the smallest correct change",
-        "verify the result",
+        "make measurable progress",
+        "verify or summarize remaining work",
     )
     assert "relevant tests or checks pass" in plan.done_criteria[2]
 
@@ -374,7 +373,14 @@ def test_work_progress_extract_workboard_falls_back_to_legacy_metadata():
 def test_work_progress_updates_state_and_renders_summary():
     service = WorkProgressService()
     intent = TaskIntentService().classify("Please refactor the agent and run tests.")
-    plan = service.create_plan(intent)
+    profile = HarnessProfile(
+        name="coding",
+        task_type="workspace_change",
+        required_tool_groups=("workspace_read", "workspace_write", "verification"),
+        required_evidence=("file_change", "verification"),
+        verification_policy="focused_if_possible",
+    )
+    plan = service.create_plan(intent, harness_profile=profile)
     initial = service.build_initial_state(session_id="web:browser-1", task_intent=intent, work_plan=plan)
     assert initial is not None
     progress = service.evaluate(
@@ -418,15 +424,15 @@ def test_work_progress_updates_state_and_renders_summary():
 
     assert updated is not None
     assert updated.file_change_count == 2
-    assert updated.current_step == "3. verify the result"
+    assert updated.current_step == "3. run focused verification or state the verification gap"
     assert updated.active_delegate_task_id == "task_abc12345"
     workboard = WorkProgressService.extract_workboard(updated)
-    assert workboard.pending_steps == ("3. verify the result",)
+    assert workboard.pending_steps == ("3. run focused verification or state the verification gap", "4. summarize changes, evidence, and remaining risk")
     assert workboard.verification_targets == (
         "relevant tests or checks pass, or the verification gap is stated",
     )
     assert workboard.resume_hint == "Resume by running or fixing the required verification."
-    assert updated.pending_steps == ("3. verify the result",)
+    assert updated.pending_steps == ("3. run focused verification or state the verification gap", "4. summarize changes, evidence, and remaining risk")
     assert updated.resume_hint == "Resume by running or fixing the required verification."
     summary = service.render_state_summary(updated)
     assert "Structured Work State" in summary

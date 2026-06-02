@@ -220,12 +220,6 @@ class WorkProgressService:
             steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
         elif profile_name == "ops":
             steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
-        elif task_intent.expects_code_change:
-            steps = [
-                "inspect relevant code",
-                "make the smallest correct change",
-                "verify the result" if task_intent.expects_verification else "review the result and finalize",
-            ]
         elif task_intent.kind == "debug":
             steps = ["inspect the relevant context", "identify the root cause", "state the diagnosis or blocker"]
         elif task_intent.kind in {"analysis", "review"}:
@@ -239,8 +233,8 @@ class WorkProgressService:
             expects_code_change = _profile_requires_code_change(harness_profile)
             expects_verification = _profile_requires_verification(harness_profile)
         else:
-            expects_code_change = task_intent.expects_code_change
-            expects_verification = task_intent.expects_verification
+            expects_code_change = False
+            expects_verification = False
 
         return WorkPlan(
             objective=task_intent.objective,
