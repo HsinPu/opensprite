@@ -8,7 +8,7 @@ import shlex
 import subprocess
 import sys
 
-from opensprite.agent.agent import AgentLoop
+from opensprite.agent.agent import AgentLoop, _verification_result_is_tool_error
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
@@ -474,6 +474,15 @@ class LargeSchemaTool(Tool):
 
     async def _execute(self, **kwargs):
         return "ok"
+
+
+def test_verification_tool_error_uses_structured_status():
+    assert _verification_result_is_tool_error({"status": "failed"}) is True
+    assert _verification_result_is_tool_error({"status": "timed_out"}) is True
+    assert _verification_result_is_tool_error({"status": "error"}) is True
+    assert _verification_result_is_tool_error({"status": "skipped"}) is False
+    assert _verification_result_is_tool_error({"status": "unknown"}) is False
+    assert _verification_result_is_tool_error({"status": "passed"}) is False
 
 
 def _image_data_url(payload: bytes, mime_type: str = "image/png") -> str:

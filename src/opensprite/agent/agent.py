@@ -2081,7 +2081,7 @@ class AgentLoop:
         return ExecutionResult(
             content=result,
             executed_tool_calls=1,
-            had_tool_error=str(result or "").lstrip().startswith("Error:"),
+            had_tool_error=_verification_result_is_tool_error(verification),
             verification_attempted=bool(verification["attempted"]),
             verification_passed=bool(verification["ok"]),
         )
@@ -2457,3 +2457,11 @@ class AgentLoop:
             session_id: Internal session ID. If None, clears all sessions.
         """
         await self.history_reset.reset(session_id)
+
+
+def _verification_result_is_tool_error(verification: dict[str, Any]) -> bool:
+    return str(verification.get("status") or "").strip().lower() in {
+        "error",
+        "failed",
+        "timed_out",
+    }
