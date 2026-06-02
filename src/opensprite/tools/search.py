@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from ..search.base import SearchHit, SearchStore
 from .base import Tool
+from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -33,7 +34,15 @@ class SearchHistoryTool(Tool):
         return self.get_session_id()
 
     def _missing_chat_response(self) -> str:
-        return "Error: current session_id is unavailable. Search tools require a session-scoped conversation."
+        error = "current session_id is unavailable. Search tools require a session-scoped conversation."
+        return tool_error_result(
+            error,
+            error_type="ToolValidationError",
+            category="session_unavailable",
+            repeated_error_key=error,
+            invalid_arguments=True,
+            metadata={"tool_name": self.name},
+        )
 
     @property
     def name(self) -> str:
