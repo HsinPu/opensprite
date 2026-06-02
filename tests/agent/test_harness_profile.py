@@ -242,7 +242,7 @@ async def test_task_contract_planner_builds_execution_contract_from_llm_json():
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_forces_execution_for_command_version_even_if_llm_downgrades():
+async def test_task_contract_planner_honors_pure_answer_for_command_version_payload():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     intent = TaskIntentService().classify("確認這台目前 git 版本，只回答版本號。")
     provider = _FakePlannerProvider(
@@ -262,14 +262,14 @@ async def test_task_contract_planner_forces_execution_for_command_version_even_i
         history=[{"role": "assistant", "content": "`git --version` -> git version 2.47.0.windows.1"}],
     )
 
-    assert contract.task_type == "operations"
-    assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
-    assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["override_reason"] == "command version questions require fresh execution evidence"
+    assert contract.task_type == "pure_answer"
+    assert contract.requirements == ()
+    assert contract.allow_no_tool_final is True
+    assert "override_reason" not in contract.planner_metadata
 
 
 @pytest.mark.anyio
-async def test_task_contract_planner_forces_execution_for_repository_status_even_if_llm_downgrades():
+async def test_task_contract_planner_honors_workspace_read_for_repository_status_payload():
     planner = TaskContractPlanner(Config.load_agent_template_config().task_contract_llm)
     message = "幫我看目前 repo 是否有未提交的 source 改動，忽略 .tmp 這類測試暫存。"
     intent = TaskIntentService().classify(message)
@@ -290,10 +290,10 @@ async def test_task_contract_planner_forces_execution_for_repository_status_even
         history=[],
     )
 
-    assert contract.task_type == "operations"
-    assert any(item.kind == "tool_group" and item.tool_group == "execution" for item in contract.requirements)
+    assert contract.task_type == "workspace_read"
+    assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
     assert contract.allow_no_tool_final is False
-    assert contract.planner_metadata["override_reason"] == "repository status questions require fresh execution evidence"
+    assert "override_reason" not in contract.planner_metadata
 
 
 @pytest.mark.anyio
