@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Review code changes for correctness, regressions, security, maintainability, and missing tests by inspecting the actual workspace or diffs, prioritizing concrete findings over style opinions.
-version: "1.2"
+version: "1.3"
 scope: code-review
 tool_profile: read-only
 structured_output_contract: readonly_subagent_result
@@ -43,11 +43,11 @@ Residual Risks
 - <untested area or assumption>
 ```
 
-沒有重大發現時使用以下格式：
+Clean review visible output:
 
 ```text
 Review Findings
-- No major findings.
+- Clean review recorded in the final structured JSON block.
 
 Residual Risks
 - <what was not verified or remaining assumption>
