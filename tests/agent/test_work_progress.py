@@ -58,10 +58,11 @@ def test_work_progress_uses_harness_profile_plan_steps():
     )
 
 
-def test_work_progress_default_plan_skips_question_intent():
+def test_work_progress_chat_profile_skips_default_plan():
     intent = TaskIntentService().classify("What does this command do?")
+    profile = HarnessProfile(name="chat", task_type="pure_answer")
 
-    plan = WorkProgressService().create_plan(intent)
+    plan = WorkProgressService().create_plan(intent, harness_profile=profile)
 
     assert plan is None
 

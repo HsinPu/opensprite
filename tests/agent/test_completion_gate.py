@@ -961,7 +961,8 @@ def test_completion_gate_does_not_infer_strong_chinese_blocker_without_tool_erro
     )
 
     assert result.status == "complete"
-    assert result.active_task_status == "done"
+    assert result.active_task_status is None
+    assert result.should_update_active_task is False
 
 
 def test_completion_gate_does_not_mark_status_definition_as_blocked():
@@ -3720,7 +3721,7 @@ def test_completion_gate_does_not_mark_short_answer_as_progress_only():
     )
 
     assert completion.status == "complete"
-    assert completion.reason == "one-turn intent received a response"
+    assert completion.reason == "generic task returned a response"
 
 
 def test_completion_gate_accepts_plain_answer_that_mentions_follow_up_handling():

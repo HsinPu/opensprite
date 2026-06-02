@@ -1,4 +1,4 @@
-"""Deterministic user intent classification for agent turns."""
+"""Deterministic turn-shape classification for agent turns."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class TaskIntent:
 
 
 class TaskIntentService:
-    """Classify a user turn without calling the LLM."""
+    """Classify stable turn shape without inferring semantic task type."""
 
     def classify(
         self,
@@ -110,15 +110,9 @@ def _truncate(text: str, max_chars: int = 220) -> str:
     return text[: max_chars - 3].rstrip() + "..."
 
 
-def _looks_like_question(text: str) -> bool:
-    return text.endswith(("?", "\uff1f"))
-
-
 def _classify_kind(text: str, *, media_count: int) -> str:
     if media_count:
         return "analysis"
-    if _looks_like_question(text):
-        return "question"
     return "task"
 
 
@@ -133,8 +127,6 @@ def _is_long_running(text: str, kind: str) -> bool:
 
 
 def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[str, ...]:
-    if kind == "question":
-        return ("the answer is clear and directly addresses the question",)
     if kind == "conversation":
         return ("respond naturally and match the user's tone",)
     if kind == "command":

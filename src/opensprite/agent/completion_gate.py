@@ -193,7 +193,10 @@ class CompletionGateService:
                 reason=reason,
                 active_task_status="blocked",
                 active_task_detail=detail,
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                should_update_active_task=_intent_supports_fallback_active_task_update(
+                    task_intent,
+                    execution_result.task_contract,
+                ),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -276,7 +279,7 @@ class CompletionGateService:
                 follow_up_step_label=_string_or_none(workflow_gate.get("next_step_label")),
                 follow_up_prompt_type=_string_or_none(workflow_gate.get("next_step_prompt_type")),
                 should_update_active_task=workflow_gate["status"] == "complete"
-                and _intent_supports_fallback_active_task_update(task_intent),
+                and _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
                 verification_attempted=workflow_verification_attempted,
                 verification_passed=workflow_verification_passed,
@@ -299,8 +302,15 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="complete",
                 reason="plain-answer contract received a response",
-                active_task_status="done" if _intent_supports_fallback_active_task_update(task_intent) else None,
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                active_task_status=(
+                    "done"
+                    if _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract)
+                    else None
+                ),
+                should_update_active_task=_intent_supports_fallback_active_task_update(
+                    task_intent,
+                    execution_result.task_contract,
+                ),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -452,7 +462,10 @@ class CompletionGateService:
                 status="complete",
                 reason="analysis-style task returned a substantive response",
                 active_task_status="done",
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                should_update_active_task=_intent_supports_fallback_active_task_update(
+                    task_intent,
+                    evidence_result.task_contract,
+                ),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -468,8 +481,15 @@ class CompletionGateService:
             return CompletionGateResult(
                 status="complete",
                 reason="generic task returned a response",
-                active_task_status="done" if _intent_supports_fallback_active_task_update(task_intent) else None,
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                active_task_status=(
+                    "done"
+                    if _intent_supports_fallback_active_task_update(task_intent, evidence_result.task_contract)
+                    else None
+                ),
+                should_update_active_task=_intent_supports_fallback_active_task_update(
+                    task_intent,
+                    evidence_result.task_contract,
+                ),
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -482,11 +502,15 @@ class CompletionGateService:
             )
 
         if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
+            should_update_active_task = _intent_supports_fallback_active_task_update(
+                task_intent,
+                evidence_result.task_contract,
+            )
             return CompletionGateResult(
                 status="complete",
                 reason="task contract was satisfied",
-                active_task_status="done",
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                active_task_status="done" if should_update_active_task else None,
+                should_update_active_task=should_update_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -505,11 +529,12 @@ class CompletionGateService:
             and (not verification_required or verification_passed)
             and (not review_required or review["passed"])
         ):
+            should_update_active_task = not task_intent.needs_clarification
             return CompletionGateResult(
                 status="complete",
                 reason="required file changes and evidence were recorded",
-                active_task_status="done",
-                should_update_active_task=_intent_supports_fallback_active_task_update(task_intent),
+                active_task_status="done" if should_update_active_task else None,
+                should_update_active_task=should_update_active_task,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
@@ -625,8 +650,13 @@ def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
     )
 
 
-def _intent_supports_fallback_active_task_update(task_intent: TaskIntent) -> bool:
-    return task_intent.kind in {"analysis", "task"} and not task_intent.needs_clarification
+def _intent_supports_fallback_active_task_update(task_intent: TaskIntent, task_contract: Any) -> bool:
+    if task_intent.needs_clarification:
+        return False
+    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
+    if not task_type:
+        return False
+    return task_type not in {"pure_answer", "planning_error"}
 
 
 def _requires_verification(task_contract: Any) -> bool:

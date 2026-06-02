@@ -18,12 +18,15 @@ def test_task_intent_classifier_keeps_execution_expectations_neutral():
     assert intent.constraints == ()
 
 
-def test_task_intent_classifier_keeps_question_kind_for_questions():
+def test_task_intent_classifier_keeps_questions_as_task_shape():
     intent = TaskIntentService().classify("幫我解釋一下這是什麼？")
 
-    assert intent.kind == "question"
+    assert intent.kind == "task"
     assert intent.long_running is False
-    assert intent.done_criteria == ("the answer is clear and directly addresses the question",)
+    assert intent.done_criteria == (
+        "the user request is addressed directly",
+        "the result or blocker is explicit",
+    )
     assert intent.expects_code_change is False
     assert intent.expects_verification is False
 
