@@ -10,6 +10,7 @@ from ..documents.active_task import (
     build_task_block_from_text,
 )
 from .base import Tool
+from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
 
 
@@ -18,12 +19,30 @@ MessageCountGetter = Callable[[str], Awaitable[int]]
 
 _ALLOWED_STATUSES = ("inactive", "active", "blocked", "waiting_user", "done", "cancelled")
 _ACTION_VALUES = ("set", "update", "advance", "complete_step", "reset", "show")
+_TOOL_NAME = "task_update"
+
+
+def _task_update_error_result(
+    error: str,
+    *,
+    category: str,
+    error_type: str = "TaskUpdateToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
 
 
 class TaskUpdateTool(Tool):
     """Update the current session's ACTIVE_TASK.md managed block."""
 
-    name = "task_update"
+    name = _TOOL_NAME
 
     description = (
         "Update the current session's ACTIVE_TASK.md so long-running work stays explicit. "
@@ -90,12 +109,23 @@ class TaskUpdateTool(Tool):
     def _resolve_store(self) -> tuple[str, ActiveTaskStore] | str:
         session_id = self._get_session_id()
         if not session_id:
-            return "Error: current session_id is unavailable. task_update requires an active session context."
+            return _task_update_error_result(
+                "current session_id is unavailable. task_update requires an active session context.",
+                category="session_unavailable",
+                error_type="ToolValidationError",
+                invalid_arguments=True,
+            )
         if self._active_task_store_factory is None:
-            return "Error: ACTIVE_TASK.md store is unavailable in this runtime."
+            return _task_update_error_result(
+                "ACTIVE_TASK.md store is unavailable in this runtime.",
+                category="active_task_store_unavailable",
+            )
         store = self._active_task_store_factory(session_id)
         if store is None:
-            return "Error: ACTIVE_TASK.md store is unavailable in this runtime."
+            return _task_update_error_result(
+                "ACTIVE_TASK.md store is unavailable in this runtime.",
+                category="active_task_store_unavailable",
+            )
         return session_id, store
 
     async def _mark_processed(self, session_id: str, store: ActiveTaskStore) -> None:
@@ -130,10 +160,18 @@ class TaskUpdateTool(Tool):
         if action == "set":
             task = str(kwargs.get("task") or "").strip()
             if not task:
-                return "Error: action='set' requires a non-empty task."
+                return _task_update_error_result(
+                    "action='set' requires a non-empty task.",
+                    category="invalid_arguments",
+                    error_type="ToolValidationError",
+                    invalid_arguments=True,
+                )
             task_block = build_task_block_from_text(task, force=True)
             if not task_block:
-                return "Error: action='set' could not create an active task from the provided task text."
+                return _task_update_error_result(
+                    "action='set' could not create an active task from the provided task text.",
+                    category="active_task_build_failed",
+                )
             store.write_managed_block(task_block)
             await self._mark_processed(session_id, store)
             details = {"task": task}
@@ -143,14 +181,20 @@ class TaskUpdateTool(Tool):
             return self._render_result("Task set.", store)
 
         if store.read_status() == "inactive":
-            return "Error: no active task to update. Use action='set' first."
+            return _task_update_error_result(
+                "no active task to update. Use action='set' first.",
+                category="active_task_missing",
+            )
 
         if action == "advance":
             current_block = store.read_managed_block()
             current_step = _extract_task_field(current_block, "Current step")
             next_step = _extract_task_field(current_block, "Next step")
             if next_step == "not set":
-                return "Error: cannot advance because Next step is not set."
+                return _task_update_error_result(
+                    "cannot advance because Next step is not set.",
+                    category="active_task_next_step_missing",
+                )
             store.update_fields(
                 status="active",
                 current_step=next_step,
@@ -173,7 +217,10 @@ class TaskUpdateTool(Tool):
                 next_step_override=str(next_step_override).strip() if next_step_override is not None else None
             )
             if rendered is None:
-                return "Error: cannot complete step because Current step is not set."
+                return _task_update_error_result(
+                    "cannot complete step because Current step is not set.",
+                    category="active_task_current_step_missing",
+                )
             await self._mark_processed(session_id, store)
             details = {"completed_step": current_step}
             if next_step_override:
@@ -193,7 +240,12 @@ class TaskUpdateTool(Tool):
                 value is not None
                 for value in (status, current_step, next_step, completed_step, open_questions)
             ):
-                return "Error: action='update' requires at least one field to update."
+                return _task_update_error_result(
+                    "action='update' requires at least one field to update.",
+                    category="invalid_arguments",
+                    error_type="ToolValidationError",
+                    invalid_arguments=True,
+                )
 
             cleaned_questions = None
             if open_questions is not None:
@@ -221,4 +273,9 @@ class TaskUpdateTool(Tool):
             store.append_event("update", "tool", details=details)
             return f"Task updated.\n\n# Active Task\n\n{rendered}"
 
-        return f"Error: unsupported task_update action: {action}"
+        return _task_update_error_result(
+            f"unsupported task_update action: {action}",
+            category="invalid_arguments",
+            error_type="ToolValidationError",
+            invalid_arguments=True,
+        )

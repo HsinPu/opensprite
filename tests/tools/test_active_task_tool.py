@@ -2,6 +2,7 @@ import asyncio
 
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.tools.active_task import TaskUpdateTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _make_tool(tmp_path, session_id="telegram:user-a", message_count=7):
@@ -87,7 +88,11 @@ def test_task_update_advance_requires_next_step(tmp_path):
 
     result = asyncio.run(tool.execute(action="advance"))
 
-    assert result == "Error: cannot advance because Next step is not set."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "TaskUpdateToolError"
+    assert status.category == "active_task_next_step_missing"
+    assert "Next step is not set" in status.error
 
 
 def test_task_update_reset_clears_active_task(tmp_path):
@@ -107,7 +112,12 @@ def test_task_update_requires_active_session_context():
 
     result = asyncio.run(tool.execute(action="show"))
 
-    assert result == "Error: current session_id is unavailable. task_update requires an active session context."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "session_unavailable"
+    assert status.invalid_arguments is True
+    assert "requires an active session context" in status.error
 
 
 def test_task_update_rejects_update_without_active_task(tmp_path):
@@ -115,4 +125,22 @@ def test_task_update_rejects_update_without_active_task(tmp_path):
 
     result = asyncio.run(tool.execute(action="update", status="active"))
 
-    assert result == "Error: no active task to update. Use action='set' first."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "TaskUpdateToolError"
+    assert status.category == "active_task_missing"
+    assert "Use action='set' first" in status.error
+
+
+def test_task_update_rejects_update_without_fields(tmp_path):
+    tool, _store = _make_tool(tmp_path)
+    asyncio.run(tool.execute(action="set", task="Keep the task explicit"))
+
+    result = asyncio.run(tool.execute(action="update"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "requires at least one field" in status.error
