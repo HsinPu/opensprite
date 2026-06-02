@@ -14,7 +14,7 @@ from .task_context_resolver import TaskContextDecision, extract_pending_boundary
 from .task_intent import TaskIntent
 
 
-_SKIP_CONTINUATION_TYPES = frozenset({"ack", "continue_active_task"})
+_SKIP_CONTINUATION_TYPES = frozenset({"ack", "ambiguous_boundary", "continue_active_task"})
 _NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
 _ENRICHABLE_CONTINUATION_TYPES = frozenset({"follow_up", "continue_last_answer", "continue_tool_work"})
 _MIN_CONFIDENCE = 0.65
@@ -180,11 +180,6 @@ def _should_resolve_objective(
         return False
     if task_context_decision and task_context_decision.continuation_type in _NEW_TASK_CONTINUATION_TYPES:
         return _is_short_objective(current)
-    if task_intent and task_intent.should_seed_active_task and not bool(
-        task_context_decision
-        and (task_context_decision.is_follow_up or task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES)
-    ):
-        return False
     if not _has_recent_context(history, active_task, work_state_summary):
         return False
     if task_context_decision and task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES:

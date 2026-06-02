@@ -127,6 +127,32 @@ def test_task_objective_resolver_skips_continue_active_task():
     assert decision.effective_objective == "繼續"
 
 
+def test_task_objective_resolver_skips_ambiguous_boundary_until_user_confirms():
+    provider = _FailingProvider()
+    context = TaskContextDecision(
+        continuation_type="ambiguous_boundary",
+        confidence=0.72,
+        method="llm",
+        reason="task boundary confidence too low; ask for confirmation",
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="please update README",
+            history=[],
+            task_intent=TaskIntentService().classify("please update README"),
+            task_context_decision=context,
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert decision.method == "deterministic"
+    assert decision.should_use_resolved_objective is False
+    assert decision.effective_objective == "please update README"
+
+
 def test_task_objective_resolver_uses_pending_boundary_request_without_llm():
     provider = _FailingProvider()
     context = TaskContextDecision(
@@ -191,6 +217,32 @@ def test_task_objective_resolver_uses_llm_context_for_short_new_task_even_when_i
     assert decision.method == "llm"
     assert decision.should_use_resolved_objective is True
     assert decision.effective_objective == "Fix the failing README task and summarize the change."
+
+
+def test_task_objective_resolver_uses_recent_context_for_short_actionable_turn_without_context_decision():
+    provider = _JsonProvider(
+        '{"resolved_objective": "Fix the README install section using the recently discussed issue.", '
+        '"should_use_resolved_objective": true, "confidence": 0.84, '
+        '"reason": "recent history gives the short actionable turn enough context"}'
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message="fix it",
+            history=[
+                {"role": "user", "content": "The README install section points at the wrong service command."},
+                {"role": "assistant", "content": "I found the incorrect install command in README.md."},
+            ],
+            task_intent=TaskIntentService().classify("fix it"),
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.should_use_resolved_objective is True
+    assert decision.effective_objective == "Fix the README install section using the recently discussed issue."
 
 
 def test_task_objective_resolver_stays_neutral_when_provider_is_unconfigured():
