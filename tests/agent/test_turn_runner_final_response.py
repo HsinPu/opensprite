@@ -71,6 +71,10 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
         auto_continue_attempts=3,
         execution_result=ExecutionResult(
             content="找到了正確網址，讓我抓取主要文件頁面的內容。",
+            task_contract=TaskContract(
+                objective="Find the current OpenRouter API parameter details and cite sources.",
+                task_type="web_research",
+            ),
             task_artifacts=(
                 TaskArtifact(
                     kind="web_source",
@@ -109,6 +113,10 @@ def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snipp
         auto_continue_attempts=3,
         execution_result=ExecutionResult(
             content="Let me keep checking that.",
+            task_contract=TaskContract(
+                objective="Find the current TSM quote and cite sources.",
+                task_type="web_research",
+            ),
             task_artifacts=(
                 TaskArtifact(
                     kind="web_source",
@@ -221,6 +229,46 @@ def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete
     assert "重點摘要" in response
     assert "https://openrouter.ai/docs/api-reference/overview" in response
     assert "目前還不能可靠完成這次請求" not in response
+
+
+def test_exhausted_continuation_does_not_use_source_fallback_from_reason_only():
+    response = _final_response_after_exhausted_continuation(
+        response="Let me keep checking that.",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="assistant final answer was too terse for the task",
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="Let me keep checking that.",
+            task_contract=TaskContract(
+                objective="Answer a plain question without web research.",
+                task_type="pure_answer",
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://example.com/source",
+                                "title": "Example Source",
+                                "snippet": "A source that should not be used without a web-source contract.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "https://example.com/source" not in response
+    assert "assistant final answer was too terse for the task" in response
 
 
 def test_exhausted_continuation_uses_gathered_web_sources_after_optional_tool_error():

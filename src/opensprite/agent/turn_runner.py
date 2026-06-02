@@ -1367,7 +1367,7 @@ def _source_fallback_response(
         return ""
     objective = _execution_objective(execution_result)
     sources = _rank_web_sources_for_objective(sources, objective)
-    if completion_result.reason == "tool execution reported an error without a clear blocker handoff":
+    if execution_result.had_tool_error:
         top_score = _web_source_relevance_score(sources[0], objective) if sources else 0
         if top_score <= 0:
             return ""
@@ -1394,15 +1394,12 @@ def _source_fallback_response(
 
 
 def _should_use_source_fallback(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
-    if completion_result.reason in {
-        "assistant final answer did not reference gathered sources",
-        "assistant final answer was too terse for the task",
-        "assistant did not provide the requested itemized result",
-        "tool execution reported an error without a clear blocker handoff",
-    }:
-        return True
     if completion_result.status != "incomplete":
         return False
+    return _task_contract_requires_web_sources(execution_result)
+
+
+def _task_contract_requires_web_sources(execution_result: ExecutionResult) -> bool:
     contract = execution_result.task_contract
     if contract is None:
         return False
@@ -1413,6 +1410,9 @@ def _should_use_source_fallback(completion_result: CompletionGateResult, executi
             str(getattr(requirement, "kind", "") or "") == "tool_group"
             and str(getattr(requirement, "tool_group", "") or "") == "web_research"
         ):
+            return True
+    for criterion in getattr(contract, "acceptance_criteria", ()) or ():
+        if str(getattr(criterion, "kind", "") or "") in {"source_artifact", "source_detail", "source_reference"}:
             return True
     return False
 
