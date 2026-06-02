@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
@@ -22,12 +21,7 @@ from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
-
-
-def _batch_result_succeeded(text: str) -> bool:
-    first_line = (text or "").splitlines()[0] if text else ""
-    match = re.match(r"Batch completed: \d+ call\(s\), (\d+) failed\.", first_line)
-    return bool(match and int(match.group(1)) == 0)
+from .tool_result_status import classify_tool_result_status
 
 
 @dataclass
@@ -302,43 +296,16 @@ Output exactly these sections when applicable:
 
     @staticmethod
     def _tool_result_ok_for_system_refresh(result: str) -> bool:
-        return not str(result).lstrip().startswith("Error:")
+        return classify_tool_result_status(result).ok
 
     @staticmethod
     def _classify_tool_result(result: str) -> str | None:
         """Classify tool-result errors that should trigger early stopping."""
-        if result.startswith("Error: Invalid arguments for "):
-            return result
-        return None
+        return classify_tool_result_status(result).repeated_error_key
 
     @staticmethod
     def _tool_result_looks_like_failure(result: str) -> bool:
-        text = str(result or "")
-        stripped = text.lstrip()
-        if _batch_result_succeeded(stripped):
-            return False
-        if stripped.startswith("{"):
-            try:
-                payload = json.loads(stripped)
-            except Exception:
-                payload = None
-            if isinstance(payload, dict):
-                if payload.get("ok") is False:
-                    return True
-                error = payload.get("error")
-                if error is not None and str(error).strip():
-                    return True
-                return False
-
-        lowered = text.lower()
-        return (
-            text.startswith("Error:")
-            or text.startswith("Error executing ")
-            or "timed out" in lowered
-            or " failed" in lowered
-            or lowered.startswith("(mcp tool call failed")
-            or lowered.startswith("(mcp tool call timed out")
-        )
+        return not classify_tool_result_status(result).ok
 
     @staticmethod
     def _extract_delegate_task_info(result: str) -> tuple[str | None, str | None]:

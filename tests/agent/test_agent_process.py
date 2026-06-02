@@ -992,6 +992,48 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
     assert stored_parts[-1].metadata["status_code"] == 404
 
 
+def test_agent_tool_result_hook_marks_structured_json_error_failed(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        await storage.create_run("web:browser-1", "run-1")
+        after = agent._make_tool_result_hook(
+            channel="web",
+            external_chat_id="browser-1",
+            session_id="web:browser-1",
+            run_id="run-1",
+            enabled=True,
+        )
+        result = json.dumps({"type": "web_search", "ok": False, "error": "Search failed"})
+
+        await after("web_search", {"query": "Qwen"}, result)
+
+        return await storage.get_run_events("web:browser-1", "run-1"), await storage.get_run_parts("web:browser-1", "run-1")
+
+    stored_events, stored_parts = asyncio.run(scenario())
+
+    assert stored_events[-1].payload["ok"] is False
+    assert stored_events[-1].payload["state"] == "error"
+    assert stored_events[-1].payload["error"] == "Search failed"
+    assert stored_events[-1].payload["error_type"] == "ToolError"
+    assert stored_parts[-1].metadata["ok"] is False
+    assert stored_parts[-1].metadata["state"] == "error"
+    assert stored_parts[-1].metadata["error"] == "Search failed"
+
+
 def test_agent_tool_result_hook_records_search_trace_metadata(tmp_path):
     async def scenario():
         storage = MemoryStorage()

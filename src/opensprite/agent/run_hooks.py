@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 from typing import Any, Awaitable, Callable
 
 from ..tools.verify import classify_verification_result
 from ..bus.events import OutboundMessage
 from ..utils import json_safe_payload
+from .tool_result_status import classify_tool_result_status
 
 
 _TRACE_TEXT_FIELDS = {
@@ -126,34 +126,7 @@ def _tool_result_trace_metadata(result_text: str) -> dict[str, Any]:
 
 def _tool_error_trace_metadata(result_text: str) -> dict[str, Any]:
     """Extract structured error fields from failed plain-text tool results."""
-    text = str(result_text or "").strip()
-    if not text:
-        return {}
-    error = ""
-    error_type = ""
-    if text.startswith("Error executing "):
-        _, _, detail = text.partition(":")
-        error = detail.strip() or text
-        error_type = "ToolExecutionError"
-    elif text.startswith("Error:"):
-        error = text.removeprefix("Error:").strip() or text
-        error_type = "ToolError"
-    else:
-        lowered = text.lower()
-        if lowered.startswith("(mcp tool call failed") or lowered.startswith("(mcp tool call timed out"):
-            error = text
-            error_type = "McpToolError"
-    if not error:
-        return {}
-
-    metadata: dict[str, Any] = {
-        "error": error,
-        "error_type": error_type,
-    }
-    status_match = re.search(r"\b(?:HTTP(?:\s+Error)?|status(?:\s+code)?)[:\s]+(\d{3})\b", error, re.IGNORECASE)
-    if status_match:
-        metadata["status_code"] = int(status_match.group(1))
-    return metadata
+    return classify_tool_result_status(result_text).error_metadata()
 
 
 class RunHookService:
@@ -330,16 +303,9 @@ class RunHookService:
             safe_args = json_safe_payload(tool_args or {})
             result_text = str(result or "")
             result_preview = self._format_log_preview(result_text, max_chars=240)
-            normalized_result = result_text.lstrip()
-            lowered_result = normalized_result.lower()
             state_text = str(state or "").strip().lower()
-            looks_error = (
-                normalized_result.startswith("Error:")
-                or normalized_result.startswith("Error executing ")
-                or lowered_result.startswith("(mcp tool call failed")
-                or lowered_result.startswith("(mcp tool call timed out")
-            )
-            ok = state_text not in {"error", "failed", "cancelled"} and not looks_error
+            result_status = classify_tool_result_status(result_text, state=state_text)
+            ok = result_status.ok
             finished_at = time.time()
             started_at = self._tool_started_at.pop(
                 self._tool_lifecycle_key(session_id, rid, tool_call_id, tool_name, iteration),
@@ -357,7 +323,7 @@ class RunHookService:
             trace_metadata = _tool_result_trace_metadata(result_text)
             metadata.update(trace_metadata)
             if not ok:
-                metadata.update(_tool_error_trace_metadata(result_text))
+                metadata.update(result_status.error_metadata())
             if started_at is not None:
                 metadata["started_at"] = started_at
                 metadata["duration_ms"] = duration_ms
