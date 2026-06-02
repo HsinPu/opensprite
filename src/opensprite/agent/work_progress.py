@@ -15,19 +15,6 @@ from .task_intent import TaskIntent
 
 
 _TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
-_FOLLOW_UP_OBJECTIVES = {
-    "continue",
-    "keep going",
-    "do it",
-    "fix it",
-    "handle it",
-    "make it better",
-    "處理一下",
-    "幫我處理",
-    "繼續",
-    "修一下",
-    "搞定",
-}
 
 
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
@@ -257,11 +244,7 @@ class WorkProgressService:
         if (
             state is None
             or state.status not in {"active", "blocked", "waiting_user"}
-            or (
-                not task_intent.needs_clarification
-                and task_intent.objective.strip().lower() not in _FOLLOW_UP_OBJECTIVES
-            )
-            or not (task_intent.long_running or task_intent.objective.strip().lower() in _FOLLOW_UP_OBJECTIVES)
+            or not task_intent.needs_clarification
         ):
             return task_intent
         return TaskIntent(
@@ -593,7 +576,7 @@ class WorkProgressService:
             return False
         if not existing_state.objective.strip():
             return False
-        if task_intent.objective.strip().lower() in _FOLLOW_UP_OBJECTIVES:
+        if task_intent.needs_clarification:
             return True
         return (
             existing_state.objective.strip().lower() == work_plan.objective.strip().lower()
