@@ -6,21 +6,22 @@ from typing import Any, Awaitable, Callable, Sequence
 
 from ..llms import ChatMessage
 from ..storage import StorageProvider
+from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, READ_SKILL_TOOL_NAME, SKILL_REVIEW_TOOL_NAMES
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils.log import logger
 
-SKILL_REVIEW_SYSTEM = """You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
+SKILL_REVIEW_SYSTEM = f"""You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
 
-You may ONLY use these tools: `read_skill`, `configure_skill`.
+You may ONLY use these tools: `{READ_SKILL_TOOL_NAME}`, `{CONFIGURE_SKILL_TOOL_NAME}`.
 
 Goal: decide whether the recent conversation contains a reusable procedural workflow worth saving as a skill (SKILL.md), or an update to an existing skill.
 
 Rules:
-- Prefer `action=upsert` on an existing skill when refining; use `action=add` only for a genuinely new skill id. Use `read_skill` with `skill-creator-design` before authoring a new skill.
+- Prefer `action=upsert` on an existing skill when refining; use `action=add` only for a genuinely new skill id. Use `{READ_SKILL_TOOL_NAME}` with `skill-creator-design` before authoring a new skill.
 - If nothing is worth persisting, reply with exactly this single line and stop (no tools): Nothing to save.
 - Do not narrate, apologize, or mention this background pass.
-- Use `configure_skill` for the session workspace `skills/` folder only. Bundled skills live read-only under `~/.opensprite/skills/<id>/`.
+- Use `{CONFIGURE_SKILL_TOOL_NAME}` for the session workspace `skills/` folder only. Bundled skills live read-only under `~/.opensprite/skills/<id>/`.
 """
 
 
@@ -83,7 +84,7 @@ class SkillReviewService:
 
     def tool_registry(self) -> ToolRegistry | None:
         """Return the restricted tool registry allowed during background skill review."""
-        allowed = frozenset({"read_skill", "configure_skill"})
+        allowed = SKILL_REVIEW_TOOL_NAMES
         available = set(self.tools.tool_names)
         if not allowed.issubset(available):
             return None
@@ -106,7 +107,7 @@ class SkillReviewService:
         touched_skills: list[dict[str, str]] = []
 
         async def on_tool_after_execute(tool_name: str, tool_args: dict[str, Any], result: str, *args: Any) -> None:
-            if tool_name != "configure_skill":
+            if tool_name != CONFIGURE_SKILL_TOOL_NAME:
                 return
             action = str((tool_args or {}).get("action") or "").strip()
             if action not in {"add", "upsert"}:
