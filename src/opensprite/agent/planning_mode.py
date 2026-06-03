@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from .harness_profile import PLANNING_TASK_TYPE
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
+from ..tool_names import BATCH_TOOL_NAME
 
 if TYPE_CHECKING:
     from .task_contract import TaskContract
@@ -20,7 +21,7 @@ PLANNING_ALLOWED_TOOLS = frozenset(
         "list_dir",
         "glob_files",
         "grep_files",
-        "batch",
+        BATCH_TOOL_NAME,
         "read_skill",
         HISTORY_SEARCH_TOOL_NAME,
         "list_run_file_changes",

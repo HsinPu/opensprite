@@ -7,7 +7,7 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
-from ..tools.batch import BATCH_TOOL_NAME
+from ..tool_names import BATCH_TOOL_NAME
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (

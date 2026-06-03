@@ -6,6 +6,7 @@ import asyncio
 import json
 from typing import Any, Callable, TYPE_CHECKING
 
+from ..tool_names import BATCH_TOOL_NAME
 from .base import Tool
 from .result_status import classify_tool_result_status, tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
@@ -24,7 +25,6 @@ READ_ONLY_BATCH_TOOLS = frozenset(
         "search_history",
     }
 )
-BATCH_TOOL_NAME = "batch"
 _MAX_BATCH_CALLS = 8
 _MAX_BATCH_RESULT_CHARS = 2_000
 _MAX_BATCH_OUTPUT_CHARS = 16_000
