@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .harness_profile import PLANNING_TASK_TYPE
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 
@@ -95,4 +96,4 @@ def build_planning_mode_tool_registry(base_registry: "ToolRegistry") -> "ToolReg
 def _contract_requests_planning_mode(task_contract: "TaskContract | None") -> bool:
     if task_contract is None:
         return False
-    return str(getattr(task_contract, "task_type", "") or "").strip() == "planning"
+    return str(getattr(task_contract, "task_type", "") or "").strip() == PLANNING_TASK_TYPE
