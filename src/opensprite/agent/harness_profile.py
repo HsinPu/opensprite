@@ -5,20 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_REQUIRED_EVIDENCE
+
 OPS_PROFILE_NAME = "ops"
 MEDIA_PROFILE_NAME = "media"
 CODING_PROFILE_NAME = "coding"
 RESEARCH_PROFILE_NAME = "research"
 CHAT_PROFILE_NAME = "chat"
 OPERATIONS_TASK_TYPE = "operations"
-WEB_RESEARCH_TASK_TYPE = "web_research"
 MEDIA_EXTRACTION_TASK_TYPE = "media_extraction"
 CODE_CHANGE_TASK_TYPE = "code_change"
 WORKSPACE_READ_TASK_TYPE = "workspace_read"
 WORKSPACE_CHANGE_TASK_TYPE = "workspace_change"
 WORKSPACE_ANALYSIS_TASK_TYPE = "workspace_analysis"
 PURE_ANSWER_TASK_TYPE = "pure_answer"
-WEB_RESEARCH_TOOL_GROUP = "web_research"
 MEDIA_TOOL_GROUP = "media"
 WORKSPACE_WRITE_TOOL_GROUP = "workspace_write"
 WORKSPACE_READ_TOOL_GROUP = "workspace_read"
@@ -90,7 +90,7 @@ class HarnessProfileService:
                 name=RESEARCH_PROFILE_NAME,
                 task_type=WEB_RESEARCH_TASK_TYPE,
                 required_tool_groups=(WEB_RESEARCH_TOOL_GROUP,),
-                required_evidence=("web_source", "source_reference"),
+                required_evidence=WEB_SOURCE_REQUIRED_EVIDENCE,
                 verification_policy="source_grounded",
                 continuation_policy="bounded_with_source_fetch",
                 approval_required_risk_levels=("external_side_effect",),
@@ -181,7 +181,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             name=RESEARCH_PROFILE_NAME,
             task_type=WEB_RESEARCH_TASK_TYPE,
             required_tool_groups=(WEB_RESEARCH_TOOL_GROUP,),
-            required_evidence=("web_source", "source_reference"),
+            required_evidence=WEB_SOURCE_REQUIRED_EVIDENCE,
             verification_policy="source_grounded",
             continuation_policy="bounded_with_source_fetch",
             approval_required_risk_levels=("external_side_effect",),
