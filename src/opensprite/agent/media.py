@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..context.paths import get_session_workspace
+from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 
 
@@ -19,6 +20,23 @@ OUTBOUND_MEDIA_KEYS = {
     "audio": "audios",
     "video": "videos",
 }
+
+
+def outbound_media_error_result(
+    message: str,
+    *,
+    category: str,
+    invalid_arguments: bool = False,
+) -> str:
+    error = str(message or "").removeprefix("Error:").strip()
+    return tool_error_result(
+        error,
+        error_type="SendMediaToolError",
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": "send_media"},
+    )
 
 INBOUND_IMAGE_EXTENSIONS = {
     "image/jpeg": "jpg",
@@ -241,15 +259,26 @@ class AgentMediaService:
     ) -> str | None:
         """Queue one media payload into the active turn's outbound media bucket."""
         if media is None:
-            return "Error: outbound media can only be queued while processing a user message."
+            return outbound_media_error_result(
+                "outbound media can only be queued while processing a user message.",
+                category="missing_turn_context",
+            )
 
         key = OUTBOUND_MEDIA_KEYS.get(kind)
         if key is None:
-            return f"Error: unsupported outbound media kind: {kind}"
+            return outbound_media_error_result(
+                f"unsupported outbound media kind: {kind}",
+                category="invalid_arguments",
+                invalid_arguments=True,
+            )
 
         value = str(payload or "").strip()
         if not value:
-            return "Error: outbound media payload cannot be empty."
+            return outbound_media_error_result(
+                "outbound media payload cannot be empty.",
+                category="invalid_arguments",
+                invalid_arguments=True,
+            )
 
         media.setdefault(key, []).append(value)
         return None

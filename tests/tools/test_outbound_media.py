@@ -1,5 +1,6 @@
 import asyncio
 
+from opensprite.agent.media import AgentMediaService
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.result_status import classify_tool_result_status
 
@@ -67,3 +68,40 @@ def test_send_media_tool_reports_media_index_out_of_range():
     assert status.category == "invalid_arguments"
     assert status.invalid_arguments is True
     assert "media_index 2 is out of range" in status.error
+
+
+def test_send_media_tool_preserves_structured_queue_errors():
+    tool = SendMediaTool(
+        queue_media=lambda kind, payload: AgentMediaService.queue_outbound_media(None, kind, payload),
+        get_current_images=lambda: None,
+        get_current_audios=lambda: None,
+        get_current_videos=lambda: None,
+    )
+
+    result = asyncio.run(tool.execute(kind="image", payload="image-out"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "SendMediaToolError"
+    assert status.category == "missing_turn_context"
+    assert "processing a user message" in status.error
+
+
+def test_outbound_media_queue_reports_invalid_arguments():
+    result = AgentMediaService.queue_outbound_media({}, "sticker", "payload")
+    status = classify_tool_result_status(result or "")
+
+    assert status.ok is False
+    assert status.error_type == "SendMediaToolError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "unsupported outbound media kind" in status.error
+
+    empty_result = AgentMediaService.queue_outbound_media({}, "image", " ")
+    empty_status = classify_tool_result_status(empty_result or "")
+
+    assert empty_status.ok is False
+    assert empty_status.error_type == "SendMediaToolError"
+    assert empty_status.category == "invalid_arguments"
+    assert empty_status.invalid_arguments is True
+    assert "payload cannot be empty" in empty_status.error

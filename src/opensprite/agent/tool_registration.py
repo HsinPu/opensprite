@@ -12,6 +12,7 @@ from ..documents.safety import DurableMemorySafetyError
 from ..cron import CronManager
 from ..media import MediaRouter
 from ..search.base import SearchStore
+from .media import outbound_media_error_result
 from ..tools import (
     Tool,
     ToolRegistry,
@@ -376,7 +377,13 @@ def register_media_tools(
     )
     registry.register(
         SendMediaTool(
-            queue_media=queue_outbound_media or (lambda kind, payload: "Error: outbound media is unavailable."),
+            queue_media=queue_outbound_media
+            or (
+                lambda kind, payload: outbound_media_error_result(
+                    "outbound media is unavailable.",
+                    category="missing_turn_context",
+                )
+            ),
             get_current_images=get_current_images,
             get_current_audios=get_current_audios,
             get_current_videos=get_current_videos,
