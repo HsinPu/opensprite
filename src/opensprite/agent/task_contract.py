@@ -485,11 +485,12 @@ def _append_acceptance_criteria(
     existing: list[AcceptanceCriterion],
     additions: tuple[AcceptanceCriterion, ...],
 ) -> list[AcceptanceCriterion]:
-    seen = {item.kind for item in existing}
+    seen = {_criterion_kind(item) for item in existing}
     for criterion in additions:
-        if criterion.kind not in seen:
+        criterion_kind = _criterion_kind(criterion)
+        if criterion_kind not in seen:
             existing.append(criterion)
-            seen.add(criterion.kind)
+            seen.add(criterion_kind)
     return existing
 
 
