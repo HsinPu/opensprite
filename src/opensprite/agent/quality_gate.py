@@ -10,10 +10,10 @@ from .execution import ExecutionResult
 from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
 from .task_intent import TaskIntent
+from .web_source_policy import is_web_source_artifact_kind
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
-_SOURCE_ARTIFACT_KINDS = frozenset({"web_source"})
 _SOURCE_DETAIL_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
 @dataclass(frozen=True)
@@ -156,7 +156,7 @@ def _evaluate_source_artifact(
     artifact_count = sum(
         1
         for artifact in execution_result.task_artifacts
-        if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
+        if artifact.ok and is_web_source_artifact_kind(artifact.kind)
     )
     traceable_count = len(_execution_web_sources(execution_result))
     if traceable_count >= min_count:
@@ -483,7 +483,7 @@ def _evaluate_history_grounding(
 def _execution_web_sources(execution_result: ExecutionResult) -> list[dict[str, object]]:
     sources: list[dict[str, object]] = []
     for artifact in execution_result.task_artifacts:
-        if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS:
+        if artifact.ok and is_web_source_artifact_kind(artifact.kind):
             sources.extend(_artifact_web_sources(artifact.metadata, source_tool=artifact.source_tool))
     return sources
 
@@ -518,7 +518,7 @@ def source_artifact_traceability_gap_detail(contract: TaskContract, execution_re
         artifact_count = sum(
             1
             for artifact in execution_result.task_artifacts
-            if artifact.ok and artifact.kind in _SOURCE_ARTIFACT_KINDS
+            if artifact.ok and is_web_source_artifact_kind(artifact.kind)
         )
         traceable_count = len(_execution_web_sources(execution_result))
         if artifact_count > 0 and traceable_count < min_count:
