@@ -3,10 +3,24 @@ import asyncio
 from agent_test_helpers import DummyTool, make_agent_loop
 from opensprite.bus.message import UserMessage
 from opensprite.config.schema import ToolsConfig
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _make_agent(tmp_path, tools_config: ToolsConfig | None = None):
     return make_agent_loop(tmp_path, tools_config=tools_config)
+
+
+def test_reload_mcp_from_config_reports_missing_config_path(tmp_path):
+    agent = _make_agent(tmp_path)
+    agent.config_path = None
+
+    result = asyncio.run(agent.reload_mcp_from_config())
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ConfigureMCPToolError"
+    assert status.category == "missing_config_path"
+    assert "MCP config path is unavailable" in status.error
 
 
 def test_connect_mcp_registers_tools_once(tmp_path, monkeypatch):

@@ -10,7 +10,17 @@ from typing import Any, Awaitable, Callable
 
 from ..config import Config, ToolsConfig
 from ..tools import ToolRegistry
+from ..tools.result_status import tool_error_result
 from ..utils.log import logger
+
+
+def _mcp_lifecycle_error_result(message: str, *, category: str) -> str:
+    return tool_error_result(
+        str(message or "").removeprefix("Error:").strip(),
+        error_type="ConfigureMCPToolError",
+        category=category,
+        metadata={"tool_name": "configure_mcp"},
+    )
 
 
 class McpLifecycleService:
@@ -178,7 +188,10 @@ class McpLifecycleService:
         """Reload MCP settings from disk and reconnect MCP tools."""
         config_path = self._config_path_getter()
         if config_path is None:
-            return "Error: MCP config path is unavailable."
+            return _mcp_lifecycle_error_result(
+                "MCP config path is unavailable.",
+                category="missing_config_path",
+            )
 
         loaded = Config.load(config_path)
         self.tools_config.mcp_servers_file = loaded.tools.mcp_servers_file
