@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
+
 
 TOOL_GROUPS: dict[str, frozenset[str]] = {
     "image_text": frozenset({"ocr_image", "analyze_image"}),
@@ -11,7 +13,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "media": frozenset({"analyze_image", "ocr_image", "transcribe_audio", "analyze_video"}),
     "scheduling": frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
-    "web_research": frozenset({"web_search", "web_fetch", "web_research", "browser_navigate", "browser_snapshot"}),
+    WEB_RESEARCH_TOOL_GROUP: WEB_SOURCE_ARTIFACT_TOOLS,
     "history_retrieval": frozenset({"search_history", "list_run_file_changes"}),
     "workspace_read": frozenset(
         {
@@ -43,7 +45,7 @@ TASK_TYPE_BY_TOOL_GROUP: dict[str, str] = {
     "scheduling": "operations",
     "verification": "task",
     "video_understanding": "media_extraction",
-    "web_research": "web_research",
+    WEB_RESEARCH_TOOL_GROUP: WEB_RESEARCH_TASK_TYPE,
     "workspace_read": "workspace_read",
     "workspace_write": "code_change",
 }
