@@ -5,6 +5,7 @@ import gzip
 
 import pytest
 
+from opensprite.tools.web_blocking import looks_blocked_or_challenge
 from opensprite.tools.web_fetch import WebFetcher, WebFetchTool, _do_fetch, validate_url
 
 
@@ -111,6 +112,26 @@ def test_web_fetch_does_not_treat_rate_limit_topic_as_blocked(monkeypatch):
 
     assert payload["blocked_or_challenge"] is False
     assert payload["has_main_content"] is True
+
+
+def test_web_blocking_rule_combines_status_and_challenge_text():
+    assert looks_blocked_or_challenge(title="Anything", content="Regular page", status=403) is True
+    assert (
+        looks_blocked_or_challenge(
+            title="Security Check",
+            content="Please verify you are human before continuing.",
+            status=200,
+        )
+        is True
+    )
+    assert (
+        looks_blocked_or_challenge(
+            title="API Rate Limits",
+            content="This documentation explains rate limits and quotas.",
+            status=200,
+        )
+        is False
+    )
 
 
 def test_web_fetch_parameter_default_uses_configured_max_chars():
