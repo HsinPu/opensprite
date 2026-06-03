@@ -56,6 +56,19 @@ _REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
 )
 
 
+def is_verification_work_progress(progress: Any) -> bool:
+    """Return whether a structured progress update is in the verification phase."""
+    return (
+        str(getattr(progress, "next_action", "") or "").strip() == _NEXT_ACTION_CONTINUE_VERIFICATION
+        or str(getattr(progress, "status", "") or "").strip() == _WORK_PROGRESS_VERIFYING_STATUS
+    )
+
+
+def is_continue_work_progress(progress: Any) -> bool:
+    """Return whether a structured progress update should resume regular work."""
+    return str(getattr(progress, "next_action", "") or "").strip() == _NEXT_ACTION_CONTINUE_WORK
+
+
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
     if state is None:
         return ()
@@ -370,14 +383,14 @@ class WorkProgressService:
                 current_step=numbered_steps[0] if numbered_steps else "not set",
                 next_step=numbered_steps[1] if len(numbered_steps) > 1 else "not set",
                 blockers=(),
-                next_action="continue_work",
+                next_action=_NEXT_ACTION_CONTINUE_WORK,
             ),
             last_progress_signals=(),
             file_change_count=0,
             touched_paths=(),
             verification_attempted=False,
             verification_passed=False,
-            last_next_action="continue_work",
+            last_next_action=_NEXT_ACTION_CONTINUE_WORK,
             metadata={
                 "source": "work_progress",
                 "schema_version": 1,
@@ -694,7 +707,7 @@ class WorkProgressService:
             touched_paths=tuple(existing_state.touched_paths),
             verification_attempted=bool(existing_state.verification_attempted),
             verification_passed=bool(existing_state.verification_passed),
-            last_next_action=existing_state.last_next_action or "continue_work",
+            last_next_action=existing_state.last_next_action or _NEXT_ACTION_CONTINUE_WORK,
             delegated_tasks=delegated_tasks,
             active_delegate_task_id=selected_task.task_id if selected_task is not None else None,
             active_delegate_prompt_type=selected_task.prompt_type if selected_task is not None else None,

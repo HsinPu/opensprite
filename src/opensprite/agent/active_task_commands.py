@@ -23,7 +23,12 @@ from .completion_status import is_blocking_completion_status
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
-from .work_progress import WorkProgressService, WorkProgressUpdate
+from .work_progress import (
+    WorkProgressService,
+    WorkProgressUpdate,
+    is_continue_work_progress,
+    is_verification_work_progress,
+)
 
 
 _CURRENT_TASK_CONTINUATION_TYPES = frozenset(
@@ -123,10 +128,10 @@ class ActiveTaskCommandService:
         current_step = state.current_step if state is not None else None
         next_step = state.next_step if state is not None else None
         if not current_step and not next_step:
-            if progress.next_action == "continue_verification" or progress.status == "verifying":
+            if is_verification_work_progress(progress):
                 current_step = self.messages.progress_verify_current_step
                 next_step = "not set"
-            elif progress.next_action == "continue_work":
+            elif is_continue_work_progress(progress):
                 current_step = self.messages.progress_continue_current_step
                 next_step = self.messages.progress_verify_current_step if progress.verification_required else "not set"
             else:
