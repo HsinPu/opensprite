@@ -1,5 +1,6 @@
 from opensprite.agent.completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
+    EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
@@ -37,3 +38,7 @@ def test_generic_task_complete_reason_is_stable():
 
 def test_analysis_task_complete_reason_is_stable():
     assert ANALYSIS_TASK_COMPLETE_REASON == "analysis-style task returned a substantive response"
+
+
+def test_expected_code_changes_missing_reason_is_stable():
+    assert EXPECTED_CODE_CHANGES_MISSING_REASON == "expected code changes were not recorded"

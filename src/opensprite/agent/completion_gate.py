@@ -9,6 +9,7 @@ from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
+    EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
@@ -417,7 +418,7 @@ class CompletionGateService:
         if expects_code_change and execution_result.file_change_count <= 0:
             return CompletionGateResult(
                 status=INCOMPLETE_COMPLETION_STATUS,
-                reason="expected code changes were not recorded",
+                reason=EXPECTED_CODE_CHANGES_MISSING_REASON,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
