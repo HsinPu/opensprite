@@ -94,9 +94,10 @@ def _tool_result_is_error(tool_name: str, result: str) -> bool:
     text = str(result or "").strip()
     if not text:
         return False
-    if not classify_tool_result_status(text).ok:
+    status = classify_tool_result_status(text)
+    if not status.ok:
         return True
-    return tool_name == "web_fetch" and "http error:" in text.lower()
+    return tool_name == "web_fetch" and status.status_code is not None
 
 
 def _web_search_has_no_sources(tool_name: str, args: dict[str, Any], result: str) -> bool:
