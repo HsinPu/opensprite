@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
+from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
@@ -29,6 +30,33 @@ class WorkflowSpec:
     workflow_id: str
     description: str
     steps: tuple[WorkflowStepSpec, ...]
+
+
+def _workflow_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "RunWorkflowToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    error = str(message or "").removeprefix("Error:").strip()
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": "run_workflow"},
+    )
+
+
+def _workflow_validation_error(message: str, *, category: str = "invalid_arguments") -> str:
+    return _workflow_error_result(
+        message,
+        category=category,
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+    )
 
 
 def _result_summary(outcome: SubagentTaskOutcome) -> str:
@@ -115,7 +143,10 @@ def _resolve_start_index(spec: WorkflowSpec, start_step: str | None) -> tuple[in
         if step.step_id == normalized:
             return index, step, None
     available = ", ".join(step.step_id for step in spec.steps)
-    return 0, None, f"Error: unknown start_step '{normalized}' for workflow '{spec.workflow_id}'. Available: {available}"
+    return 0, None, _workflow_validation_error(
+        f"unknown start_step '{normalized}' for workflow '{spec.workflow_id}'. Available: {available}",
+        category="unknown_start_step",
+    )
 
 
 def _build_step_task(
@@ -520,11 +551,14 @@ class SubagentWorkflowService:
         spec = WORKFLOW_SPECS.get(workflow_key)
         if spec is None:
             available = ", ".join(sorted(WORKFLOW_SPECS))
-            return f"Error: unknown workflow '{workflow_key}'. Available: {available}"
+            return _workflow_error_result(
+                f"unknown workflow '{workflow_key}'. Available: {available}",
+                category="unknown_workflow",
+            )
 
         task_text = str(task or "").strip()
         if not task_text:
-            return "Error: workflow task must be a non-empty string."
+            return _workflow_validation_error("workflow task must be a non-empty string.")
 
         return await self.run_from_step(workflow_key, task_text)
 
@@ -533,11 +567,14 @@ class SubagentWorkflowService:
         spec = WORKFLOW_SPECS.get(workflow_key)
         if spec is None:
             available = ", ".join(sorted(WORKFLOW_SPECS))
-            return f"Error: unknown workflow '{workflow_key}'. Available: {available}"
+            return _workflow_error_result(
+                f"unknown workflow '{workflow_key}'. Available: {available}",
+                category="unknown_workflow",
+            )
 
         task_text = str(task or "").strip()
         if not task_text:
-            return "Error: workflow task must be a non-empty string."
+            return _workflow_validation_error("workflow task must be a non-empty string.")
 
         start_index, start_spec, start_error = _resolve_start_index(spec, start_step)
         if start_error:
@@ -661,7 +698,11 @@ class SubagentWorkflowService:
                         error=error_preview,
                     ),
                 )
-                return f"Error: workflow step '{step.step_id}' failed: {error_preview}"
+                return _workflow_error_result(
+                    f"workflow step '{step.step_id}' failed: {error_preview}",
+                    category="workflow_step_failed",
+                    error_type="WorkflowExecutionError",
+                )
 
             outcomes.append(outcome)
             await self._emit_event(

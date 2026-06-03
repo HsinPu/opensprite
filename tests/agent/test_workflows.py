@@ -9,6 +9,7 @@ from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConf
 from opensprite.llms.base import LLMResponse
 from opensprite.storage import MemoryStorage
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class FakeContextBuilder:
@@ -151,7 +152,10 @@ def test_run_workflow_returns_error_for_unknown_workflow(tmp_path):
 
     result = asyncio.run(agent.run_workflow("unknown_flow", "Do work"))
 
-    assert "unknown workflow 'unknown_flow'" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "RunWorkflowToolError"
+    assert status.category == "unknown_workflow"
+    assert "unknown workflow 'unknown_flow'" in status.error
 
 
 def test_run_workflow_can_resume_from_specific_step(tmp_path):
@@ -190,7 +194,25 @@ def test_run_workflow_returns_error_for_unknown_start_step(tmp_path):
 
     result = asyncio.run(agent.run_workflow("implement_then_review", "Do work", start_step="nope"))
 
-    assert "unknown start_step 'nope'" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "unknown_start_step"
+    assert status.invalid_arguments is True
+    assert "unknown start_step 'nope'" in status.error
+
+
+def test_run_workflow_returns_validation_error_for_empty_task(tmp_path):
+    agent = _make_agent(tmp_path, WorkflowProvider())
+    agent._current_session_id.set("telegram:user-a")
+    agent.app_home = tmp_path / "opensprite-home"
+
+    result = asyncio.run(agent.run_workflow("implement_then_review", " "))
+    status = classify_tool_result_status(result)
+
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "workflow task must be a non-empty string" in status.error
 
 
 def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
@@ -211,7 +233,10 @@ def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
 
     result, trace = asyncio.run(scenario())
 
-    assert "workflow step 'review' failed" in result
+    status = classify_tool_result_status(result)
+    assert status.error_type == "WorkflowExecutionError"
+    assert status.category == "workflow_step_failed"
+    assert "workflow step 'review' failed" in status.error
     assert trace is not None
     event_types = [event.event_type for event in trace.events]
     assert "workflow.step.failed" in event_types
