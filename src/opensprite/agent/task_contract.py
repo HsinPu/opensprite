@@ -53,6 +53,10 @@ RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
 ALL_RESOURCE_COVERAGE = "all"
 ITEMIZED_OUTPUT_CRITERION_KIND = "itemized_output"
 SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND = "substantive_final_answer"
+WORKSPACE_LOCATION_CRITERION_KIND = "workspace_location"
+MEDIA_ARTIFACT_CRITERION_KIND = "media_artifact"
+VERIFICATION_OR_GAP_CRITERION_KIND = "verification_or_gap"
+OPERATION_REPORT_CRITERION_KIND = "operation_report"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
@@ -366,6 +370,22 @@ def is_source_detail_criterion(criterion: Any) -> bool:
 
 def is_source_reference_criterion(criterion: Any) -> bool:
     return _criterion_kind(criterion) == SOURCE_REFERENCE_CRITERION_KIND
+
+
+def is_workspace_location_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == WORKSPACE_LOCATION_CRITERION_KIND
+
+
+def is_media_artifact_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == MEDIA_ARTIFACT_CRITERION_KIND
+
+
+def is_verification_or_gap_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == VERIFICATION_OR_GAP_CRITERION_KIND
+
+
+def is_operation_report_criterion(criterion: Any) -> bool:
+    return _criterion_kind(criterion) == OPERATION_REPORT_CRITERION_KIND
 
 
 def _criterion_kind(criterion: Any) -> str:

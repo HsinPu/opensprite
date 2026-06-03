@@ -9,10 +9,14 @@ from opensprite.agent.task_contract import (
     contract_requests_source_reference,
     contract_requests_substantive_final_answer,
     is_itemized_output_criterion,
+    is_media_artifact_criterion,
+    is_operation_report_criterion,
     is_source_artifact_criterion,
     is_source_detail_criterion,
     is_source_reference_criterion,
     is_substantive_final_answer_criterion,
+    is_verification_or_gap_criterion,
+    is_workspace_location_criterion,
     missing_evidence,
 )
 from opensprite.tools.evidence import ToolEvidence
@@ -92,3 +96,7 @@ def test_acceptance_criterion_policy_helpers():
     assert is_itemized_output_criterion(contract.acceptance_criteria[2]) is True
     assert is_substantive_final_answer_criterion(contract.acceptance_criteria[3]) is True
     assert is_source_artifact_criterion(AcceptanceCriterion(kind="source_artifact")) is True
+    assert is_workspace_location_criterion(AcceptanceCriterion(kind="workspace_location")) is True
+    assert is_media_artifact_criterion(AcceptanceCriterion(kind="media_artifact")) is True
+    assert is_verification_or_gap_criterion(AcceptanceCriterion(kind="verification_or_gap")) is True
+    assert is_operation_report_criterion(AcceptanceCriterion(kind="operation_report")) is True

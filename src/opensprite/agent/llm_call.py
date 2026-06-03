@@ -18,7 +18,19 @@ from .harness_profile import (
     HISTORY_RETRIEVAL_TOOL_GROUP,
     HarnessProfile,
 )
-from .task_contract import PLANNER_VALIDATED_STATUS, TaskContract
+from .task_contract import (
+    PLANNER_VALIDATED_STATUS,
+    TaskContract,
+    is_itemized_output_criterion,
+    is_media_artifact_criterion,
+    is_operation_report_criterion,
+    is_source_artifact_criterion,
+    is_source_detail_criterion,
+    is_source_reference_criterion,
+    is_substantive_final_answer_criterion,
+    is_verification_or_gap_criterion,
+    is_workspace_location_criterion,
+)
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
@@ -683,24 +695,24 @@ def _should_answer_contract_without_tools(contract: TaskContract) -> bool:
 
 
 def _format_acceptance_criterion(criterion: Any) -> str:
-    if criterion.kind == "itemized_output":
+    if is_itemized_output_criterion(criterion):
         return f"Provide at least {max(1, int(criterion.min_count or 1))} itemized result entries; do not answer with only a plan or acknowledgement."
-    if criterion.kind == "substantive_final_answer":
+    if is_substantive_final_answer_criterion(criterion):
         min_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
         return f"Write a substantive final answer using the inspected media/tool results (minimum {min_chars} visible characters)."
-    if criterion.kind == "source_artifact":
+    if is_source_artifact_criterion(criterion):
         return f"Produce at least {max(1, int(criterion.min_count or 1))} traceable source(s) from web/source tools before finalizing."
-    if criterion.kind == "source_detail":
+    if is_source_detail_criterion(criterion):
         return "Fetch or inspect at least one source page before finalizing; search result snippets alone are not sufficient."
-    if criterion.kind == "source_reference":
+    if is_source_reference_criterion(criterion):
         return "Reference at least one gathered source by URL, domain, or title in the final answer."
-    if criterion.kind == "workspace_location":
+    if is_workspace_location_criterion(criterion):
         return "Identify the relevant workspace file path, symbol, or configuration location in the final answer."
-    if criterion.kind == "media_artifact":
+    if is_media_artifact_criterion(criterion):
         return "Produce the required media artifact before finalizing."
-    if criterion.kind == "verification_or_gap":
+    if is_verification_or_gap_criterion(criterion):
         return "After code changes, run focused verification when possible; if not possible, state the verification gap explicitly."
-    if criterion.kind == "operation_report":
+    if is_operation_report_criterion(criterion):
         return "Report approval, validation, rollback, blocker, or residual risk for the operation."
     return criterion.description or criterion.kind
 
