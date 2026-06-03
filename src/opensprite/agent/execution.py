@@ -1115,7 +1115,7 @@ Output exactly these sections when applicable:
             max_chars=cls.COMPACTED_TRANSCRIPT_MAX_CHARS,
         )
         summary_sections = [
-            "# Compacted Conversation State",
+            COMPACTED_CONVERSATION_STATE_HEADING,
             reason
             or "The previous in-turn context was compacted automatically after the LLM reported a context-window error.",
             "This is a handoff from a previous context window. Continue the same task from this state; do not restart it.",
