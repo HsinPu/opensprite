@@ -13,6 +13,14 @@ from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
 from .tool_groups import TOOL_GROUPS
+from .web_source_policy import (
+    SOURCE_ARTIFACT_CRITERION_KIND,
+    SOURCE_DETAIL_CRITERION_KIND,
+    SOURCE_REFERENCE_CRITERION_KIND,
+    WEB_RESEARCH_TASK_TYPE,
+    WEB_RESEARCH_TOOL_GROUP,
+    is_web_research_tool_group,
+)
 from ..tools.evidence import ToolEvidence
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
@@ -52,7 +60,7 @@ _PLANNER_TOOL_GROUP_ALIASES = {
     "ops": "verification",
 }
 _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
-    "web_research": ("web_research",),
+    WEB_RESEARCH_TASK_TYPE: (WEB_RESEARCH_TOOL_GROUP,),
     "workspace_read": ("workspace_read",),
     "code_change": ("workspace_read", "workspace_write"),
     "media_extraction": ("media",),
@@ -327,10 +335,10 @@ def contract_expects_file_change(task_contract: Any) -> bool:
 
 
 def _tool_group_requirement(tool_group: str) -> EvidenceRequirement:
-    if tool_group == "web_research":
+    if is_web_research_tool_group(tool_group):
         return EvidenceRequirement(
             kind="tool_group",
-            tool_group="web_research",
+            tool_group=WEB_RESEARCH_TOOL_GROUP,
             coverage="any",
             min_count=1,
             description="Use web research tools before answering this external information request.",
@@ -553,7 +561,7 @@ def _append_tool_group_contract(
     resource_index: ResourceIndex,
     selected: list[ResourceRef],
 ) -> list[AcceptanceCriterion]:
-    if tool_group == "web_research":
+    if is_web_research_tool_group(tool_group):
         _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
         return acceptance_criteria
     if tool_group == "workspace_read":
@@ -653,11 +661,11 @@ def _append_web_contract(
     *,
     min_source_count: int,
 ) -> None:
-    if not _has_requirement(requirements, kind="tool_group", tool_group="web_research"):
+    if not _has_requirement(requirements, kind="tool_group", tool_group=WEB_RESEARCH_TOOL_GROUP):
         requirements.append(
             EvidenceRequirement(
                 kind="tool_group",
-                tool_group="web_research",
+                tool_group=WEB_RESEARCH_TOOL_GROUP,
                 coverage="any",
                 min_count=1,
                 description="Use web research tools before answering this external information request.",
@@ -667,12 +675,12 @@ def _append_web_contract(
         acceptance_criteria,
         (
             AcceptanceCriterion(
-                kind="source_artifact",
+                kind=SOURCE_ARTIFACT_CRITERION_KIND,
                 min_count=min_source_count,
                 description="Produce enough traceable web sources before finalizing the answer.",
             ),
             AcceptanceCriterion(
-                kind="source_detail",
+                kind=SOURCE_DETAIL_CRITERION_KIND,
                 min_count=1,
                 description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
             ),
@@ -781,7 +789,7 @@ def _web_final_answer_criterion() -> AcceptanceCriterion:
 
 def _web_source_reference_criterion() -> AcceptanceCriterion:
     return AcceptanceCriterion(
-        kind="source_reference",
+        kind=SOURCE_REFERENCE_CRITERION_KIND,
         min_count=1,
         description="Reference at least one gathered web source by URL, domain, or title.",
     )

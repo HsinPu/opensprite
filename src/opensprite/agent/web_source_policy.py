@@ -18,7 +18,16 @@ WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
 WEB_RESEARCH_TASK_TYPE = "web_research"
 WEB_RESEARCH_TOOL_GROUP = "web_research"
 WEB_SOURCE_ARTIFACT_KIND = "web_source"
-SOURCE_ACCEPTANCE_CRITERION_KINDS = frozenset({"source_artifact", "source_detail", "source_reference"})
+SOURCE_ARTIFACT_CRITERION_KIND = "source_artifact"
+SOURCE_DETAIL_CRITERION_KIND = "source_detail"
+SOURCE_REFERENCE_CRITERION_KIND = "source_reference"
+SOURCE_ACCEPTANCE_CRITERION_KINDS = frozenset(
+    {
+        SOURCE_ARTIFACT_CRITERION_KIND,
+        SOURCE_DETAIL_CRITERION_KIND,
+        SOURCE_REFERENCE_CRITERION_KIND,
+    }
+)
 
 
 def is_web_source_artifact_kind(kind: str | None) -> bool:
