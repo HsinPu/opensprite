@@ -230,7 +230,11 @@ def test_apply_patch_validates_all_changes_before_writing(tmp_path):
         )
     )
 
-    assert result == "Error: Change 2: file not found: missing.txt"
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "FilesystemToolError"
+    assert status.category == "not_found"
+    assert status.error == "Change 2: file not found: missing.txt"
     assert not (tmp_path / "created.txt").exists()
 
 
@@ -253,7 +257,12 @@ def test_apply_patch_rejects_ambiguous_update(tmp_path):
         )
     )
 
-    assert result == "Error: Change 1: old_text appears 2 times in notes.txt. Provide more context."
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "ambiguous_old_text"
+    assert status.invalid_arguments is True
+    assert status.error == "Change 1: old_text appears 2 times in notes.txt. Provide more context."
     assert target.read_text(encoding="utf-8") == "same\nsame\n"
 
 

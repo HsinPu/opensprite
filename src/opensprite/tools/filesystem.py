@@ -1192,16 +1192,35 @@ class ApplyPatchTool(Tool):
 
                 if action == "add":
                     if existing is not None:
-                        return f"Error: Change {index}: file already exists: {path}"
+                        return _filesystem_error_result(
+                            f"Change {index}: file already exists: {path}",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="file_exists",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index},
+                        )
                     content = change.get("content")
                     if not isinstance(content, str):
-                        return f"Error: Change {index}: add requires string content."
+                        return _filesystem_error_result(
+                            f"Change {index}: add requires string content.",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="invalid_arguments",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index},
+                        )
                     current[file_path] = content
                     continue
 
                 if action == "update":
                     if existing is None:
-                        return f"Error: Change {index}: file not found: {path}"
+                        return _filesystem_error_result(
+                            f"Change {index}: file not found: {path}",
+                            tool_name=self.name,
+                            category="not_found",
+                            metadata={"path": path, "change_index": index},
+                        )
                     if original[file_path] is not None:
                         stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
                         if stale_error:
@@ -1209,20 +1228,53 @@ class ApplyPatchTool(Tool):
                     old_text = change.get("old_text")
                     new_text = change.get("new_text")
                     if not isinstance(old_text, str) or not old_text:
-                        return f"Error: Change {index}: update requires non-empty string old_text."
+                        return _filesystem_error_result(
+                            f"Change {index}: update requires non-empty string old_text.",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="invalid_arguments",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index},
+                        )
                     if not isinstance(new_text, str):
-                        return f"Error: Change {index}: update requires string new_text."
+                        return _filesystem_error_result(
+                            f"Change {index}: update requires string new_text.",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="invalid_arguments",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index},
+                        )
                     count = existing.count(old_text)
                     if count == 0:
-                        return f"Error: Change {index}: old_text not found in {path}."
+                        return _filesystem_error_result(
+                            f"Change {index}: old_text not found in {path}.",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="old_text_not_found",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index},
+                        )
                     if count > 1:
-                        return f"Error: Change {index}: old_text appears {count} times in {path}. Provide more context."
+                        return _filesystem_error_result(
+                            f"Change {index}: old_text appears {count} times in {path}. Provide more context.",
+                            tool_name=self.name,
+                            error_type="ToolValidationError",
+                            category="ambiguous_old_text",
+                            invalid_arguments=True,
+                            metadata={"path": path, "change_index": index, "matches": count},
+                        )
                     current[file_path] = existing.replace(old_text, new_text, 1)
                     continue
 
                 if action == "delete":
                     if existing is None:
-                        return f"Error: Change {index}: file not found: {path}"
+                        return _filesystem_error_result(
+                            f"Change {index}: file not found: {path}",
+                            tool_name=self.name,
+                            category="not_found",
+                            metadata={"path": path, "change_index": index},
+                        )
                     if original[file_path] is not None:
                         stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
                         if stale_error:
