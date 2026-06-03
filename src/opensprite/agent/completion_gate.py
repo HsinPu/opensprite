@@ -15,6 +15,13 @@ from .completion_judge import (
     CompletionJudgeVerdict,
     build_completion_judge_facts,
 )
+from .completion_status import (
+    BLOCKED_COMPLETION_STATUS,
+    COMPLETE_COMPLETION_STATUS,
+    INCOMPLETE_COMPLETION_STATUS,
+    NEEDS_REVIEW_COMPLETION_STATUS,
+    NEEDS_VERIFICATION_COMPLETION_STATUS,
+)
 from .harness_profile import (
     FILE_CHANGE_REQUIREMENT_KIND,
     VERIFICATION_REQUIREMENT_KIND,
@@ -37,7 +44,7 @@ from .web_source_policy import (
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
-_BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
+_BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _PLAIN_ANSWER_TASK_TYPE = "pure_answer"
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
@@ -97,8 +104,8 @@ _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_the
 _RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
 _FAILED_WORKFLOW_STATUS = "failed"
 _CANCELLED_WORKFLOW_STATUS = "cancelled"
-_WORKFLOW_GATE_COMPLETE_STATUS = "complete"
-_WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = "needs_verification"
+_WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
+_WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = NEEDS_VERIFICATION_COMPLETION_STATUS
 _DELEGATED_REVIEW_COMPLETED_STATUS = "completed"
 _STRUCTURED_REVIEW_CLEAN_STATUS = "ok"
 _WORKFLOW_FIX_STEPS = {
@@ -262,7 +269,7 @@ class CompletionGateService:
 
         if execution_result.assistant_internal_only_response:
             return CompletionGateResult(
-                status="incomplete",
+                status=INCOMPLETE_COMPLETION_STATUS,
                 reason="assistant only emitted internal control text",
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -281,7 +288,7 @@ class CompletionGateService:
             reason = "task contract planner did not produce a validated contract"
             detail = _task_contract_planner_reason(execution_result.task_contract) or reason
             return CompletionGateResult(
-                status="blocked",
+                status=BLOCKED_COMPLETION_STATUS,
                 reason=reason,
                 active_task_status="blocked",
                 active_task_detail=detail,
@@ -302,7 +309,7 @@ class CompletionGateService:
 
         if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
             return CompletionGateResult(
-                status="incomplete",
+                status=INCOMPLETE_COMPLETION_STATUS,
                 reason="max tool iterations exhausted before completion",
                 active_task_detail="The execution loop hit the configured max_tool_iterations limit and needs another bounded continuation pass.",
                 verification_required=verification_required,
@@ -319,7 +326,7 @@ class CompletionGateService:
         if execution_result.had_tool_error:
             if verification_required and verification_attempted and not verification_passed:
                 return CompletionGateResult(
-                    status="needs_verification",
+                    status=NEEDS_VERIFICATION_COMPLETION_STATUS,
                     reason="required verification did not pass",
                     verification_required=True,
                     verification_attempted=True,
@@ -341,7 +348,7 @@ class CompletionGateService:
                 verification_passed=verification_passed,
             ):
                 return CompletionGateResult(
-                    status="incomplete",
+                    status=INCOMPLETE_COMPLETION_STATUS,
                     reason="tool execution reported an error without a clear blocker handoff",
                     verification_required=verification_required,
                     verification_attempted=verification_attempted,
@@ -398,7 +405,7 @@ class CompletionGateService:
             and response_text.strip()
         ):
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="plain-answer contract received a response",
                 active_task_status=(
                     "done"
@@ -422,7 +429,7 @@ class CompletionGateService:
 
         if expects_code_change and execution_result.file_change_count <= 0:
             return CompletionGateResult(
-                status="incomplete",
+                status=INCOMPLETE_COMPLETION_STATUS,
                 reason="expected code changes were not recorded",
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -442,7 +449,7 @@ class CompletionGateService:
                 else "required verification was not recorded"
             )
             return CompletionGateResult(
-                status="needs_verification",
+                status=NEEDS_VERIFICATION_COMPLETION_STATUS,
                 reason=reason,
                 verification_required=True,
                 verification_attempted=verification_attempted,
@@ -465,7 +472,7 @@ class CompletionGateService:
                 else "delegated review was not recorded for code changes"
             )
             return CompletionGateResult(
-                status="needs_review",
+                status=NEEDS_REVIEW_COMPLETION_STATUS,
                 reason=reason,
                 active_task_detail=_review_follow_up_detail(review),
                 verification_required=verification_required,
@@ -486,7 +493,7 @@ class CompletionGateService:
         )
         if not evidence_result.passed:
             return CompletionGateResult(
-                status="incomplete",
+                status=INCOMPLETE_COMPLETION_STATUS,
                 reason=evidence_result.reason,
                 active_task_detail=evidence_result.active_task_detail,
                 verification_required=verification_required,
@@ -525,7 +532,7 @@ class CompletionGateService:
 
         if _contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="task contract accepted final response",
                 active_task_status="done",
                 should_update_active_task=True,
@@ -542,7 +549,7 @@ class CompletionGateService:
 
         if _is_one_turn_intent_kind(task_intent.kind):
             return CompletionGateResult(
-                status="complete" if response_text.strip() else "incomplete",
+                status=COMPLETE_COMPLETION_STATUS if response_text.strip() else INCOMPLETE_COMPLETION_STATUS,
                 reason="one-turn intent received a response" if response_text.strip() else "assistant response was empty",
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
@@ -557,7 +564,7 @@ class CompletionGateService:
 
         if _is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="analysis-style task returned a substantive response",
                 active_task_status="done",
                 should_update_active_task=_intent_supports_fallback_active_task_update(
@@ -577,7 +584,7 @@ class CompletionGateService:
 
         if _is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="generic task returned a response",
                 active_task_status=(
                     "done"
@@ -605,7 +612,7 @@ class CompletionGateService:
                 evidence_result.task_contract,
             )
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="task contract was satisfied",
                 active_task_status="done" if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
@@ -629,7 +636,7 @@ class CompletionGateService:
         ):
             should_update_active_task = not task_intent.needs_clarification
             return CompletionGateResult(
-                status="complete",
+                status=COMPLETE_COMPLETION_STATUS,
                 reason="required file changes and evidence were recorded",
                 active_task_status="done" if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
@@ -645,7 +652,7 @@ class CompletionGateService:
             )
 
         return CompletionGateResult(
-            status="incomplete",
+            status=INCOMPLETE_COMPLETION_STATUS,
             reason="assistant response did not explicitly complete the task",
             verification_required=verification_required,
             verification_attempted=verification_attempted,
@@ -736,7 +743,7 @@ def _completion_result_from_judge_verdict(
 
 def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
     return CompletionGateResult(
-        status="blocked",
+        status=BLOCKED_COMPLETION_STATUS,
         reason=reason or "completion judge unavailable",
         active_task_status="blocked",
         active_task_detail=reason or "completion judge unavailable",
