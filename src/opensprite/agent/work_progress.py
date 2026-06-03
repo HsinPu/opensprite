@@ -20,7 +20,15 @@ from .completion_status import (
     requires_evidence_follow_up,
 )
 from .execution import ExecutionResult
-from .harness_profile import HarnessProfile
+from .harness_profile import (
+    HarnessProfile,
+    is_chat_profile_name,
+    is_coding_profile_name,
+    is_media_profile_name,
+    is_ops_profile_name,
+    is_research_profile_name,
+    normalize_profile_name,
+)
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
@@ -209,25 +217,25 @@ class WorkProgressService:
 
     def create_plan(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> WorkPlan | None:
         """Return a plan only for actionable tasks, not casual conversation."""
-        profile_name = harness_profile.name if harness_profile is not None else ""
-        if profile_name == "chat":
+        profile_name = normalize_profile_name(harness_profile.name if harness_profile is not None else "")
+        if is_chat_profile_name(profile_name):
             return None
         if not _intent_supports_default_work_plan(task_intent) and profile_name == "":
             return None
 
         steps: list[str]
-        if profile_name == "research":
+        if is_research_profile_name(profile_name):
             steps = ["search for relevant sources", "fetch or inspect source details", "answer with cited evidence"]
-        elif profile_name == "coding":
+        elif is_coding_profile_name(profile_name):
             steps = [
                 "inspect relevant workspace context",
                 "make the smallest correct change or collect concrete workspace evidence",
                 "run focused verification or state the verification gap",
                 "summarize changes, evidence, and remaining risk",
             ]
-        elif profile_name == "media":
+        elif is_media_profile_name(profile_name):
             steps = ["inspect the referenced media", "produce the required media artifact", "answer using the artifact result"]
-        elif profile_name == "ops":
+        elif is_ops_profile_name(profile_name):
             steps = ["inspect the requested operation", "obtain or honor required approval", "execute and validate", "report outcome and risk"]
         elif task_intent.kind == "analysis":
             steps = ["inspect the relevant context", "collect concrete evidence", "deliver the findings clearly"]
@@ -253,8 +261,10 @@ class WorkProgressService:
             steps=tuple(steps),
             constraints=tuple(task_intent.constraints),
             done_criteria=tuple(done_criteria),
-            long_running=task_intent.long_running or profile_name in {"coding", "research"},
-            coding_task=profile_name == "coding" or task_intent.expects_code_change or task_intent.expects_verification,
+            long_running=task_intent.long_running
+            or is_coding_profile_name(profile_name)
+            or is_research_profile_name(profile_name),
+            coding_task=is_coding_profile_name(profile_name) or task_intent.expects_code_change or task_intent.expects_verification,
             expects_code_change=expects_code_change,
             expects_verification=expects_verification,
             harness_profile=profile_name,
@@ -581,12 +591,12 @@ class WorkProgressService:
         )
 
     def continuation_budget(self, task_intent: TaskIntent, harness_profile: HarnessProfile | None = None) -> int:
-        profile_name = harness_profile.name if harness_profile is not None else ""
-        if profile_name == "chat":
+        profile_name = normalize_profile_name(harness_profile.name if harness_profile is not None else "")
+        if is_chat_profile_name(profile_name):
             return 0
-        if profile_name in {"coding", "research"}:
+        if is_coding_profile_name(profile_name) or is_research_profile_name(profile_name):
             return self.long_running_continuation_budget
-        if profile_name in {"media", "ops"}:
+        if is_media_profile_name(profile_name) or is_ops_profile_name(profile_name):
             return self.default_continuation_budget
         if task_intent.long_running or task_intent.expects_code_change or task_intent.expects_verification:
             return self.long_running_continuation_budget

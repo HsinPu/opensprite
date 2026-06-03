@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-_PROFILE_PRIORITY_ORDER = ("ops", "media", "coding", "research", "chat")
+OPS_PROFILE_NAME = "ops"
+MEDIA_PROFILE_NAME = "media"
+CODING_PROFILE_NAME = "coding"
+RESEARCH_PROFILE_NAME = "research"
+CHAT_PROFILE_NAME = "chat"
+_PROFILE_PRIORITY_ORDER = (OPS_PROFILE_NAME, MEDIA_PROFILE_NAME, CODING_PROFILE_NAME, RESEARCH_PROFILE_NAME, CHAT_PROFILE_NAME)
 
 
 @dataclass(frozen=True)
@@ -55,7 +60,7 @@ class HarnessProfileService:
         if task_type == "operations":
             required_tool_groups = tuple(sorted(tool_groups))
             return HarnessProfile(
-                name="ops",
+                name=OPS_PROFILE_NAME,
                 task_type="operations",
                 required_tool_groups=required_tool_groups,
                 required_evidence=("audit_trace",),
@@ -67,7 +72,7 @@ class HarnessProfileService:
             )
         if "web_research" in tool_groups or task_type == "web_research":
             return HarnessProfile(
-                name="research",
+                name=RESEARCH_PROFILE_NAME,
                 task_type="web_research",
                 required_tool_groups=("web_research",),
                 required_evidence=("web_source", "source_reference"),
@@ -79,7 +84,7 @@ class HarnessProfileService:
             )
         if task_type == "media_extraction" or "media" in tool_groups:
             return HarnessProfile(
-                name="media",
+                name=MEDIA_PROFILE_NAME,
                 task_type="media_extraction",
                 required_tool_groups=("media",),
                 required_evidence=("media_artifact",),
@@ -95,7 +100,7 @@ class HarnessProfileService:
                 required_tool_groups = (*required_tool_groups, "verification")
                 required_evidence = (*required_evidence, "verification")
             return HarnessProfile(
-                name="coding",
+                name=CODING_PROFILE_NAME,
                 task_type="workspace_change",
                 required_tool_groups=required_tool_groups,
                 required_evidence=required_evidence,
@@ -112,7 +117,7 @@ class HarnessProfileService:
                 required_tool_groups = (*required_tool_groups, "verification")
                 required_evidence = (*required_evidence, "verification")
             return HarnessProfile(
-                name="coding",
+                name=CODING_PROFILE_NAME,
                 task_type="workspace_analysis",
                 required_tool_groups=required_tool_groups,
                 required_evidence=required_evidence,
@@ -123,7 +128,7 @@ class HarnessProfileService:
                 selection_signals=("contract:workspace_read",),
             )
         return HarnessProfile(
-            name="chat",
+            name=CHAT_PROFILE_NAME,
             task_type=task_type or "pure_answer",
             verification_policy="none",
             continuation_policy="minimal",
@@ -134,7 +139,7 @@ class HarnessProfileService:
     def default_chat_profile(self) -> HarnessProfile:
         """Return the neutral chat profile when no task contract is available."""
         return HarnessProfile(
-            name="chat",
+            name=CHAT_PROFILE_NAME,
             task_type="pure_answer",
             verification_policy="none",
             continuation_policy="minimal",
@@ -147,14 +152,14 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
     """Return representative profiles for settings policy previews."""
     return (
         HarnessProfile(
-            name="chat",
+            name=CHAT_PROFILE_NAME,
             task_type="conversation",
             verification_policy="none",
             continuation_policy="minimal",
             reason="preview profile for low-risk chat turns",
         ),
         HarnessProfile(
-            name="research",
+            name=RESEARCH_PROFILE_NAME,
             task_type="web_research",
             required_tool_groups=("web_research",),
             required_evidence=("web_source", "source_reference"),
@@ -164,7 +169,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             reason="preview profile for source-grounded web research turns",
         ),
         HarnessProfile(
-            name="coding",
+            name=CODING_PROFILE_NAME,
             task_type="workspace_analysis",
             required_tool_groups=("workspace_read",),
             required_evidence=("workspace_evidence",),
@@ -174,7 +179,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             reason="preview profile for workspace analysis turns",
         ),
         HarnessProfile(
-            name="coding",
+            name=CODING_PROFILE_NAME,
             task_type="workspace_change",
             required_tool_groups=("workspace_read", "workspace_write"),
             required_evidence=("file_change",),
@@ -184,7 +189,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             reason="preview profile for workspace change turns",
         ),
         HarnessProfile(
-            name="media",
+            name=MEDIA_PROFILE_NAME,
             task_type="media_extraction",
             required_tool_groups=("media",),
             required_evidence=("media_artifact",),
@@ -193,7 +198,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             reason="preview profile for media extraction turns",
         ),
         HarnessProfile(
-            name="ops",
+            name=OPS_PROFILE_NAME,
             task_type="operations",
             required_tool_groups=("scheduling",),
             required_evidence=("audit_trace",),
@@ -219,3 +224,27 @@ def _contract_requirement_kinds(task_contract: Any) -> set[str]:
         for requirement in getattr(task_contract, "requirements", ()) or ()
         if str(getattr(requirement, "kind", "") or "")
     }
+
+
+def normalize_profile_name(profile_name: str | None) -> str:
+    return str(profile_name or "").strip()
+
+
+def is_chat_profile_name(profile_name: str | None) -> bool:
+    return normalize_profile_name(profile_name) == CHAT_PROFILE_NAME
+
+
+def is_research_profile_name(profile_name: str | None) -> bool:
+    return normalize_profile_name(profile_name) == RESEARCH_PROFILE_NAME
+
+
+def is_coding_profile_name(profile_name: str | None) -> bool:
+    return normalize_profile_name(profile_name) == CODING_PROFILE_NAME
+
+
+def is_media_profile_name(profile_name: str | None) -> bool:
+    return normalize_profile_name(profile_name) == MEDIA_PROFILE_NAME
+
+
+def is_ops_profile_name(profile_name: str | None) -> bool:
+    return normalize_profile_name(profile_name) == OPS_PROFILE_NAME

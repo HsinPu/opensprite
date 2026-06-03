@@ -2,7 +2,15 @@ import json
 
 import pytest
 
-from opensprite.agent.harness_profile import HarnessProfileService
+from opensprite.agent.harness_profile import (
+    HarnessProfileService,
+    is_chat_profile_name,
+    is_coding_profile_name,
+    is_media_profile_name,
+    is_ops_profile_name,
+    is_research_profile_name,
+    normalize_profile_name,
+)
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, TaskContractPlanner
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config import Config
@@ -120,6 +128,20 @@ def test_default_chat_profile_no_longer_routes_by_user_text_markers():
 
     assert profile.name == "chat"
     assert profile.selection_signals == ("default:chat",)
+
+
+def test_harness_profile_name_helpers_are_centralized():
+    assert normalize_profile_name(" research ") == "research"
+    assert is_chat_profile_name("chat") is True
+    assert is_chat_profile_name("research") is False
+    assert is_research_profile_name("research") is True
+    assert is_research_profile_name("coding") is False
+    assert is_coding_profile_name("coding") is True
+    assert is_coding_profile_name("media") is False
+    assert is_media_profile_name("media") is True
+    assert is_media_profile_name("ops") is False
+    assert is_ops_profile_name("ops") is True
+    assert is_ops_profile_name("chat") is False
 
 
 class _FakeResponse:
