@@ -30,7 +30,13 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
-from .web_source_policy import is_web_fetch_source_record_tool, is_web_source_artifact_kind
+from .web_source_policy import (
+    is_source_acceptance_criterion_kind,
+    is_web_fetch_source_record_tool,
+    is_web_research_task_type,
+    is_web_research_tool_group,
+    is_web_source_artifact_kind,
+)
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate
 from .worktree import WorktreeSandboxInspector
 
@@ -1468,16 +1474,16 @@ def _task_contract_requires_web_sources(execution_result: ExecutionResult) -> bo
     contract = execution_result.task_contract
     if contract is None:
         return False
-    if str(getattr(contract, "task_type", "") or "") == "web_research":
+    if is_web_research_task_type(getattr(contract, "task_type", None)):
         return True
     for requirement in getattr(contract, "requirements", ()) or ():
         if (
             str(getattr(requirement, "kind", "") or "") == "tool_group"
-            and str(getattr(requirement, "tool_group", "") or "") == "web_research"
+            and is_web_research_tool_group(getattr(requirement, "tool_group", None))
         ):
             return True
     for criterion in getattr(contract, "acceptance_criteria", ()) or ():
-        if str(getattr(criterion, "kind", "") or "") in {"source_artifact", "source_detail", "source_reference"}:
+        if is_source_acceptance_criterion_kind(getattr(criterion, "kind", None)):
             return True
     return False
 

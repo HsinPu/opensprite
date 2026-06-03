@@ -23,6 +23,8 @@ from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
     is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
+    is_web_research_task_type,
+    is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
 
@@ -46,8 +48,6 @@ _VERIFICATION_TOOL = "verify"
 _VERIFICATION_REQUIREMENT_KIND = "verification"
 _VERIFICATION_TOOL_GROUP = "verification"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
-_WEB_RESEARCH_TASK_TYPE = "web_research"
-_WEB_RESEARCH_TOOL_GROUP = "web_research"
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
 _PYTHON_FILE_SUFFIX = ".py"
@@ -932,10 +932,10 @@ def _has_only_optional_history_retrieval_failures(execution_result: ExecutionRes
 
 
 def _requires_web_research_evidence(task_contract: Any) -> bool:
-    if _is_web_research_task_type(getattr(task_contract, "task_type", None)):
+    if is_web_research_task_type(getattr(task_contract, "task_type", None)):
         return True
     return any(
-        _is_web_research_tool_group(getattr(requirement, "tool_group", None))
+        is_web_research_tool_group(getattr(requirement, "tool_group", None))
         for requirement in getattr(task_contract, "requirements", ())
     )
 
@@ -994,14 +994,6 @@ def _is_verification_requirement_kind(kind: str | None) -> bool:
 
 def _is_verification_tool_group(tool_group: str | None) -> bool:
     return str(tool_group or "").strip() == _VERIFICATION_TOOL_GROUP
-
-
-def _is_web_research_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == _WEB_RESEARCH_TASK_TYPE
-
-
-def _is_web_research_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() == _WEB_RESEARCH_TOOL_GROUP
 
 
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
