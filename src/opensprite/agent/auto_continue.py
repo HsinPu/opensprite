@@ -32,6 +32,7 @@ from .harness_profile import (
     is_ops_profile_name,
     is_research_profile_name,
 )
+from .media_artifact_policy import media_artifact_gap_follow_up_instruction
 from .quality_gate import (
     contract_requests_quality_check,
     media_artifact_gap_detail,
@@ -578,12 +579,7 @@ def _quality_follow_up_instruction(
             else None
         )
         if media_gap:
-            return (
-                "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
-                "Use the relevant media/source tools for each missing resource before finalizing. "
-                "Do not claim completion until each required resource has a concrete tool-derived result.\n"
-                f"{media_gap}"
-            )
+            return media_artifact_gap_follow_up_instruction(media_gap)
         source_traceability_gap = (
             source_artifact_traceability_gap_detail(execution_result.task_contract, execution_result)
             if execution_result.task_contract is not None

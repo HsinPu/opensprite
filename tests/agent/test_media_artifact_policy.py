@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
-from opensprite.agent.media_artifact_policy import count_media_artifacts, is_media_artifact_kind
+from opensprite.agent.media_artifact_policy import (
+    count_media_artifacts,
+    is_media_artifact_kind,
+    media_artifact_gap_follow_up_instruction,
+)
 
 
 @dataclass(frozen=True)
@@ -26,3 +30,11 @@ def test_media_artifact_policy_counts_only_ok_media_artifacts():
     ]
 
     assert count_media_artifacts(artifacts) == 2
+
+
+def test_media_artifact_gap_follow_up_instruction_includes_gap_detail():
+    instruction = media_artifact_gap_follow_up_instruction("- Missing artifact for image:example.png")
+
+    assert "typed artifacts for every required resource" in instruction
+    assert "Use the relevant media/source tools" in instruction
+    assert "- Missing artifact for image:example.png" in instruction
