@@ -11,6 +11,12 @@ from opensprite.agent.harness_profile import (
     CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON,
     DEFAULT_CHAT_PROFILE_REASON,
     HarnessProfileService,
+    PREVIEW_CHAT_PROFILE_REASON,
+    PREVIEW_MEDIA_PROFILE_REASON,
+    PREVIEW_OPERATIONS_PROFILE_REASON,
+    PREVIEW_WEB_RESEARCH_PROFILE_REASON,
+    PREVIEW_WORKSPACE_ANALYSIS_PROFILE_REASON,
+    PREVIEW_WORKSPACE_CHANGE_PROFILE_REASON,
     harness_profile_follow_up_instruction,
     is_chat_profile_name,
     is_coding_profile_name,
@@ -55,6 +61,15 @@ def test_harness_profile_contract_selection_reasons_are_stable():
     assert CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON == "task contract requires workspace evidence"
     assert CONTRACT_PURE_ANSWER_PROFILE_REASON == "task contract does not require tool-backed evidence"
     assert DEFAULT_CHAT_PROFILE_REASON == "no task contract available; defaulting to neutral chat profile"
+
+
+def test_harness_profile_preview_reasons_are_stable():
+    assert PREVIEW_CHAT_PROFILE_REASON == "preview profile for low-risk chat turns"
+    assert PREVIEW_WEB_RESEARCH_PROFILE_REASON == "preview profile for source-grounded web research turns"
+    assert PREVIEW_WORKSPACE_ANALYSIS_PROFILE_REASON == "preview profile for workspace analysis turns"
+    assert PREVIEW_WORKSPACE_CHANGE_PROFILE_REASON == "preview profile for workspace change turns"
+    assert PREVIEW_MEDIA_PROFILE_REASON == "preview profile for media extraction turns"
+    assert PREVIEW_OPERATIONS_PROFILE_REASON == "preview profile for operations turns"
 
 
 def test_harness_profile_derives_workspace_analysis_from_contract():

@@ -38,6 +38,12 @@ CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON = "task contract requires workspace cha
 CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON = "task contract requires workspace evidence"
 CONTRACT_PURE_ANSWER_PROFILE_REASON = "task contract does not require tool-backed evidence"
 DEFAULT_CHAT_PROFILE_REASON = "no task contract available; defaulting to neutral chat profile"
+PREVIEW_CHAT_PROFILE_REASON = "preview profile for low-risk chat turns"
+PREVIEW_WEB_RESEARCH_PROFILE_REASON = "preview profile for source-grounded web research turns"
+PREVIEW_WORKSPACE_ANALYSIS_PROFILE_REASON = "preview profile for workspace analysis turns"
+PREVIEW_WORKSPACE_CHANGE_PROFILE_REASON = "preview profile for workspace change turns"
+PREVIEW_MEDIA_PROFILE_REASON = "preview profile for media extraction turns"
+PREVIEW_OPERATIONS_PROFILE_REASON = "preview profile for operations turns"
 
 
 @dataclass(frozen=True)
@@ -187,7 +193,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             task_type="conversation",
             verification_policy="none",
             continuation_policy="minimal",
-            reason="preview profile for low-risk chat turns",
+            reason=PREVIEW_CHAT_PROFILE_REASON,
         ),
         HarnessProfile(
             name=RESEARCH_PROFILE_NAME,
@@ -197,7 +203,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             verification_policy="source_grounded",
             continuation_policy="bounded_with_source_fetch",
             approval_required_risk_levels=("external_side_effect",),
-            reason="preview profile for source-grounded web research turns",
+            reason=PREVIEW_WEB_RESEARCH_PROFILE_REASON,
         ),
         HarnessProfile(
             name=CODING_PROFILE_NAME,
@@ -207,7 +213,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             verification_policy="focused_if_possible",
             continuation_policy="bounded_with_verification",
             approval_required_risk_levels=("external_side_effect", "configuration"),
-            reason="preview profile for workspace analysis turns",
+            reason=PREVIEW_WORKSPACE_ANALYSIS_PROFILE_REASON,
         ),
         HarnessProfile(
             name=CODING_PROFILE_NAME,
@@ -217,7 +223,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             verification_policy="focused_if_possible",
             continuation_policy="bounded_with_verification",
             approval_required_risk_levels=("external_side_effect", "configuration"),
-            reason="preview profile for workspace change turns",
+            reason=PREVIEW_WORKSPACE_CHANGE_PROFILE_REASON,
         ),
         HarnessProfile(
             name=MEDIA_PROFILE_NAME,
@@ -226,7 +232,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             required_evidence=("media_artifact",),
             verification_policy="artifact_required",
             continuation_policy="bounded",
-            reason="preview profile for media extraction turns",
+            reason=PREVIEW_MEDIA_PROFILE_REASON,
         ),
         HarnessProfile(
             name=OPS_PROFILE_NAME,
@@ -236,7 +242,7 @@ def preview_harness_profiles() -> tuple[HarnessProfile, ...]:
             verification_policy="validate_or_report",
             continuation_policy="approval_bounded",
             approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
-            reason="preview profile for operations turns",
+            reason=PREVIEW_OPERATIONS_PROFILE_REASON,
         ),
     )
 
