@@ -9,6 +9,7 @@ from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
+    ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
@@ -645,7 +646,7 @@ class CompletionGateService:
 
         return CompletionGateResult(
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="assistant response did not explicitly complete the task",
+            reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
             verification_required=verification_required,
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,

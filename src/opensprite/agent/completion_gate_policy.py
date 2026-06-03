@@ -12,6 +12,7 @@ TOOL_ERROR_WITHOUT_BLOCKER_REASON = "tool execution reported an error without a 
 PLAIN_ANSWER_CONTRACT_COMPLETE_REASON = "plain-answer contract received a response"
 TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON = "task contract accepted final response"
 REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON = "required file changes and evidence were recorded"
+ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON = "assistant response did not explicitly complete the task"
 GENERIC_TASK_COMPLETE_REASON = "generic task returned a response"
 ANALYSIS_TASK_COMPLETE_REASON = "analysis-style task returned a substantive response"
 EXPECTED_CODE_CHANGES_MISSING_REASON = "expected code changes were not recorded"

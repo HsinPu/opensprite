@@ -1,5 +1,6 @@
 from opensprite.agent.completion_gate_policy import (
     ANALYSIS_TASK_COMPLETE_REASON,
+    ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     EMPTY_ASSISTANT_RESPONSE_REASON,
     EXPECTED_CODE_CHANGES_MISSING_REASON,
     GENERIC_TASK_COMPLETE_REASON,
@@ -39,6 +40,10 @@ def test_task_contract_accepted_final_response_reason_is_stable():
 
 def test_required_file_changes_and_evidence_recorded_reason_is_stable():
     assert REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON == "required file changes and evidence were recorded"
+
+
+def test_assistant_response_did_not_complete_reason_is_stable():
+    assert ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON == "assistant response did not explicitly complete the task"
 
 
 def test_generic_task_complete_reason_is_stable():

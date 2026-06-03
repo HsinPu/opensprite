@@ -1,5 +1,6 @@
 from opensprite.agent.completion_blocker_policy import CompletionBlockerMessages
 from opensprite.agent.completion_gate import CompletionGateResult
+from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
@@ -224,7 +225,7 @@ def test_exhausted_continuation_uses_web_contract_sources_for_generic_incomplete
         response="Let me keep checking that.",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="assistant response did not explicitly complete the task",
+            reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
         ),
         auto_continue_attempts=3,
         execution_result=ExecutionResult(

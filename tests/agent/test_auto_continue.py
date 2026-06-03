@@ -1,5 +1,6 @@
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.completion_gate import CompletionGateResult
+from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.resource_index import ResourceRef
@@ -334,7 +335,7 @@ def test_auto_continue_skips_incomplete_without_tool_progress():
     intent = TaskIntentService().classify("Please analyze the incident timeline.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant response did not explicitly complete the task",
+        reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
@@ -376,7 +377,7 @@ def test_auto_continue_uses_contract_requirements_when_incomplete_reason_is_gene
     intent = TaskIntentService().classify("Find today's TSMC stock price and cite sources.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant response did not explicitly complete the task",
+        reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -402,7 +403,7 @@ def test_auto_continue_uses_itemized_contract_when_incomplete_reason_is_generic(
     intent = TaskIntentService().classify("List three practical deployment risks.")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant response did not explicitly complete the task",
+        reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     )
     contract = TaskContract(
         objective=intent.objective,
@@ -427,7 +428,7 @@ def test_auto_continue_does_not_use_pending_lookup_phrases():
     intent = TaskIntentService().classify("幫我找 2330市值")
     completion = CompletionGateResult(
         status="incomplete",
-        reason="assistant response did not explicitly complete the task",
+        reason=ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(
