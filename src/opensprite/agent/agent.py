@@ -59,6 +59,7 @@ from ..tools.verify import classify_verification_result
 from ..tools.web_research import WebResearchTool
 from ..tools.web_search import WebSearchTool
 from ..documents.user_overlay_identity import resolve_user_overlay_id
+from ..tool_names import PROCESS_TOOL_NAME, READ_SKILL_TOOL_NAME
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
@@ -255,7 +256,7 @@ class AgentLoop:
                     state,
                     interrupted,
                 )
-            if tool_name != "read_skill":
+            if tool_name != READ_SKILL_TOOL_NAME:
                 return
             skill_name = str((tool_args or {}).get("skill_name") or "").strip()
             if not skill_name or not classify_tool_result_status(result).ok:
@@ -1338,7 +1339,7 @@ class AgentLoop:
 
     async def close_background_processes(self) -> None:
         """Terminate managed background exec sessions before the event loop closes."""
-        process_tool = self.tools.get("process")
+        process_tool = self.tools.get(PROCESS_TOOL_NAME)
         manager = getattr(process_tool, "manager", None)
         close = getattr(manager, "close", None)
         if close is not None:
@@ -2011,7 +2012,7 @@ class AgentLoop:
         for skill_name in skill_names:
             description = self._skill_description(skill_name, session_id)
             summary = description or f"Skill '{skill_name}' was reused by the agent."
-            metadata = {"source": "read_skill", "skill_name": skill_name}
+            metadata = {"source": READ_SKILL_TOOL_NAME, "skill_name": skill_name}
             if description:
                 metadata["description"] = description
             self.learning_ledger.mark_used(
