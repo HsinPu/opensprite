@@ -25,6 +25,10 @@ _BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
 _READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval", "web_research"})
+_ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
+_FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
+_READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
+_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
@@ -459,7 +463,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind in {"conversation", "question", "command", "media_upload"}:
+        if _is_one_turn_intent_kind(task_intent.kind):
             return CompletionGateResult(
                 status="complete" if response_text.strip() else "incomplete",
                 reason="one-turn intent received a response" if response_text.strip() else "assistant response was empty",
@@ -783,16 +787,28 @@ def _contract_is_read_only(task_contract: Any) -> bool:
     if _is_read_only_task_type(task_type):
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
-        if str(getattr(requirement, "kind", "") or "") in {"file_change", "verification"}:
+        if _is_read_only_blocking_requirement_kind(str(getattr(requirement, "kind", "") or "")):
             return False
         tool_group = str(getattr(requirement, "tool_group", "") or "")
-        if tool_group in {"workspace_write", "execution", "verification", "scheduling"}:
+        if _is_read_only_blocking_tool_group(tool_group):
             return False
     return False
 
 
 def _is_read_only_task_type(task_type: str | None) -> bool:
     return str(task_type or "").strip() in _READ_ONLY_TASK_TYPES
+
+
+def _is_one_turn_intent_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() in _ONE_TURN_INTENT_KINDS
+
+
+def _is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() in _READ_ONLY_BLOCKING_REQUIREMENT_KINDS
+
+
+def _is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
+    return str(tool_group or "").strip() in _READ_ONLY_BLOCKING_TOOL_GROUPS
 
 
 def _task_contract_planner_status(task_contract: Any) -> str:
@@ -923,7 +939,11 @@ def _contract_accepts_final_response(task_contract: Any) -> bool:
     if not bool(getattr(task_contract, "allow_no_tool_final", False)):
         return False
     task_type = str(getattr(task_contract, "task_type", "") or "").strip()
-    return task_type in {"analysis", "planning", "task"}
+    return _accepts_final_response_task_type(task_type)
+
+
+def _accepts_final_response_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() in _FINAL_RESPONSE_ACCEPTED_TASK_TYPES
 
 
 def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:

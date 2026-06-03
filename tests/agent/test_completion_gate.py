@@ -6,8 +6,12 @@ import pytest
 from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import (
     CompletionGateService,
+    _accepts_final_response_task_type,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
+    _is_one_turn_intent_kind,
+    _is_read_only_blocking_requirement_kind,
+    _is_read_only_blocking_tool_group,
     _is_read_only_task_type,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
@@ -177,6 +181,14 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert _is_read_only_task_type("code_change") is False
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
+    assert _is_one_turn_intent_kind("command") is True
+    assert _is_one_turn_intent_kind("task") is False
+    assert _accepts_final_response_task_type("planning") is True
+    assert _accepts_final_response_task_type("web_research") is False
+    assert _is_read_only_blocking_requirement_kind("file_change") is True
+    assert _is_read_only_blocking_requirement_kind("tool_group") is False
+    assert _is_read_only_blocking_tool_group("execution") is True
+    assert _is_read_only_blocking_tool_group("workspace_read") is False
 
 
 def test_completion_gate_workflow_policy_helpers_are_centralized():
