@@ -1,6 +1,7 @@
 from opensprite.agent.auto_continue_prompt_policy import (
     existing_web_source_section,
     missing_tool_evidence_follow_up_instruction,
+    source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
 )
 
@@ -38,3 +39,11 @@ def test_missing_tool_evidence_follow_up_instruction_requests_tools():
 
     assert "required tool evidence is missing" in instruction
     assert "Call the appropriate tools" in instruction
+
+
+def test_source_traceability_follow_up_instruction_includes_gap_detail():
+    instruction = source_traceability_follow_up_instruction("- Missing traceable source metadata")
+
+    assert "source artifact without traceable source metadata" in instruction
+    assert "web_research" in instruction
+    assert "- Missing traceable source metadata" in instruction

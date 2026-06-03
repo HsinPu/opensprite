@@ -8,6 +8,7 @@ from typing import Any
 from .auto_continue_prompt_policy import (
     existing_web_source_section,
     missing_tool_evidence_follow_up_instruction,
+    source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
 )
 from .command_version_policy import command_version_follow_up_instruction
@@ -586,12 +587,7 @@ def _quality_follow_up_instruction(
             else None
         )
         if source_traceability_gap:
-            return (
-                "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
-                "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
-                "Do not finalize from an untraceable source artifact.\n"
-                f"{source_traceability_gap}"
-            )
+            return source_traceability_follow_up_instruction(source_traceability_gap)
     if execution_result is not None:
         coverage_gap = source_material_gap_detail(execution_result)
         if coverage_gap:

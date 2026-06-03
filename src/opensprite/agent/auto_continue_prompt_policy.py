@@ -35,3 +35,12 @@ def missing_tool_evidence_follow_up_instruction() -> str:
         "\n- Evidence follow-up: required tool evidence is missing. "
         "Call the appropriate tools for the requested resources or external information before giving the final answer."
     )
+
+
+def source_traceability_follow_up_instruction(traceability_gap: str) -> str:
+    return (
+        "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
+        "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
+        "Do not finalize from an untraceable source artifact.\n"
+        f"{traceability_gap}"
+    )
