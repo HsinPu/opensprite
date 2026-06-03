@@ -21,6 +21,7 @@ from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
+    is_web_discovery_tool,
     is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
     is_web_research_task_type,
@@ -39,8 +40,6 @@ _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "medi
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
-_OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
-_OPTIONAL_WEB_FETCH_FAILURE_TOOL = "web_fetch"
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _HISTORY_RETRIEVAL_TOOL = "search_history"
 _VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
@@ -966,11 +965,11 @@ def _is_non_exposed_permission_block(evidence: ToolEvidence) -> bool:
 
 
 def _is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() in _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS
+    return is_web_discovery_tool(tool_name)
 
 
 def _is_optional_web_fetch_failure_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() == _OPTIONAL_WEB_FETCH_FAILURE_TOOL
+    return is_web_fetch_source_record_tool(tool_name)
 
 
 def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:

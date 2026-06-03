@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+WEB_DISCOVERY_TOOLS = frozenset({"web_search", "web_research"})
 WEB_SOURCE_ARTIFACT_TOOLS = frozenset(
     {
         "web_search",
@@ -40,6 +41,10 @@ def is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
 
 def is_web_source_evidence_tool(tool_name: str | None) -> bool:
     return str(tool_name or "").strip() in WEB_SOURCE_EVIDENCE_TOOLS
+
+
+def is_web_discovery_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() in WEB_DISCOVERY_TOOLS
 
 
 def is_web_research_source_artifact_tool(source_tool: str | None) -> bool:

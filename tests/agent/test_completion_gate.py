@@ -43,6 +43,7 @@ from opensprite.agent.completion_gate import (
 )
 from opensprite.agent.web_source_policy import (
     is_fetched_web_source_artifact_tool,
+    is_web_discovery_tool,
     is_web_fetch_source_record_tool,
     is_web_research_source_artifact_tool,
     is_web_research_task_type,
@@ -288,6 +289,8 @@ def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert _is_optional_web_discovery_failure_tool("web_fetch") is False
     assert _is_optional_web_fetch_failure_tool("web_fetch") is True
     assert _is_optional_web_fetch_failure_tool("web_search") is False
+    assert is_web_discovery_tool("web_research") is True
+    assert is_web_discovery_tool("web_fetch") is False
     assert is_fetched_web_source_artifact_tool("browser_snapshot") is True
     assert is_fetched_web_source_artifact_tool("web_research") is False
     assert is_web_research_source_artifact_tool("web_research") is True
