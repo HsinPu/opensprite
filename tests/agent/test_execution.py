@@ -8,6 +8,7 @@ from opensprite.agent.context_compaction_policy import LLM_COMPACTION_EMPTY_REAS
 from opensprite.agent.execution import ExecutionEngine
 from opensprite.agent.prompt_logging import PromptLoggingService
 from opensprite.agent.task_artifact import TaskArtifact
+from opensprite.agent.web_source_policy import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
@@ -658,7 +659,7 @@ def test_execution_engine_builds_traceable_web_search_artifact(monkeypatch):
         execution_result=replace(result, task_contract=task_contract),
     )
     assert completion.status == "incomplete"
-    assert completion.reason == "required source material was insufficient"
+    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
 
 
 def test_execution_engine_builds_traceable_web_fetch_artifact(monkeypatch):

@@ -42,6 +42,7 @@ from opensprite.agent.completion_gate import (
     _workflow_gate_needs_verification,
 )
 from opensprite.agent.web_source_policy import (
+    SOURCE_MATERIAL_INSUFFICIENT_REASON,
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,
     is_web_fetch_source_record_tool,
@@ -2173,7 +2174,7 @@ def test_completion_gate_rejects_search_only_web_source_artifacts():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required source material was insufficient"
+    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
 
 
 def test_completion_gate_rejects_ungathered_source_urls():
@@ -2585,7 +2586,7 @@ def test_completion_gate_rejects_too_short_web_fetch_source_detail():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required source material was insufficient"
+    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
 
 
 def test_completion_gate_rejects_failed_web_fetch_source_artifact():
@@ -2658,7 +2659,7 @@ def test_completion_gate_rejects_blocked_web_fetch_source_detail():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required source material was insufficient"
+    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
 
 
 def test_completion_gate_rejects_web_research_coverage_gaps():
@@ -2685,7 +2686,7 @@ def test_completion_gate_rejects_web_research_coverage_gaps():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "required source material was insufficient"
+    assert completion.reason == SOURCE_MATERIAL_INSUFFICIENT_REASON
     assert "Web research coverage gap" in (completion.active_task_detail or "")
     assert "Target fetch count not met: need 2, fetched 1" in (completion.active_task_detail or "")
     assert "ai browser pricing" in (completion.active_task_detail or "")

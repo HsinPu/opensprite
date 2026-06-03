@@ -3,6 +3,7 @@ from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.response_shape_policy import TERSE_FINAL_ANSWER_REASON
+from opensprite.agent.web_source_policy import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.turn_runner import (
@@ -56,7 +57,7 @@ def test_exhausted_continuation_replaces_progress_only_response():
         response="有搜尋結果了，讓我進一步抓取實質內容來源的股價數據。",
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="required source material was insufficient",
+            reason=SOURCE_MATERIAL_INSUFFICIENT_REASON,
             active_task_detail=(
                 "- Web research coverage gap: fetched source coverage did not satisfy the research pass.\n"
                 "- Target fetch count not met: need 2, fetched 1."
@@ -66,9 +67,9 @@ def test_exhausted_continuation_replaces_progress_only_response():
     )
 
     assert "TEST COMPLETION BLOCKER INTRO" in response
-    assert "TEST REASON: required source material was insufficient" in response
+    assert f"TEST REASON: {SOURCE_MATERIAL_INSUFFICIENT_REASON}" in response
     assert "TEST DETAIL" in response
-    assert "required source material was insufficient" in response
+    assert SOURCE_MATERIAL_INSUFFICIENT_REASON in response
     assert "Target fetch count not met: need 2, fetched 1." in response
     assert "讓我進一步" not in response
 
@@ -80,14 +81,14 @@ def test_exhausted_continuation_uses_structured_blocker_status():
         response=original,
         completion_result=CompletionGateResult(
             status="incomplete",
-            reason="required source material was insufficient",
+            reason=SOURCE_MATERIAL_INSUFFICIENT_REASON,
         ),
         auto_continue_attempts=2,
     )
 
     assert response != original
     assert "TEST COMPLETION BLOCKER INTRO" in response
-    assert "required source material was insufficient" in response
+    assert SOURCE_MATERIAL_INSUFFICIENT_REASON in response
 
 
 def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_response():

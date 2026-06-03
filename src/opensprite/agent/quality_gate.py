@@ -49,6 +49,7 @@ from .response_shape_policy import (
 )
 from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
+    SOURCE_MATERIAL_INSUFFICIENT_REASON,
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
     ungrounded_response_source_urls,
@@ -239,13 +240,13 @@ def _evaluate_source_detail(
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="required source material was insufficient",
+            reason=SOURCE_MATERIAL_INSUFFICIENT_REASON,
             active_task_detail=coverage_detail,
         )
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="required source material was insufficient",
+        reason=SOURCE_MATERIAL_INSUFFICIENT_REASON,
         active_task_detail=(
             "- Fetch or inspect at least one source page before finalizing; "
             "search snippets and too-short fetches do not count "

@@ -1,9 +1,14 @@
 from opensprite.agent.web_source_policy import (
+    SOURCE_MATERIAL_INSUFFICIENT_REASON,
     normalize_source_url,
     ungrounded_response_source_urls,
     web_source_has_substantive_detail,
     web_source_is_referenced,
 )
+
+
+def test_source_material_insufficient_reason_is_stable():
+    assert SOURCE_MATERIAL_INSUFFICIENT_REASON == "required source material was insufficient"
 
 
 def test_web_source_has_substantive_detail_accepts_good_fetch_source():

@@ -38,6 +38,7 @@ SOURCE_ACCEPTANCE_CRITERION_KINDS = frozenset(
 )
 WEB_SOURCE_REQUIRED_EVIDENCE = (WEB_SOURCE_ARTIFACT_KIND, SOURCE_REFERENCE_CRITERION_KIND)
 SOURCE_URL_RE = re.compile(r"https?://[^\s<>()\]\}\"']+", re.IGNORECASE)
+SOURCE_MATERIAL_INSUFFICIENT_REASON = "required source material was insufficient"
 
 
 def is_web_source_artifact_kind(kind: str | None) -> bool:
