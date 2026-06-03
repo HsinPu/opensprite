@@ -368,6 +368,37 @@ def test_task_context_uses_llm_for_ambiguous_active_task_replacement():
     assert decision.should_replace_active_task is True
 
 
+def test_task_context_uses_llm_for_long_active_task_boundary():
+    provider = _JsonProvider(
+        '{"continuation_type": "ambiguous_boundary", "is_follow_up": false, '
+        '"should_inherit_active_task": false, '
+        '"should_seed_active_task": false, "should_replace_active_task": false, '
+        '"inherited_task_type": null, "inherited_tool_group": null, '
+        '"confidence": 0.86, "reason": "long message may switch away from the active task"}'
+    )
+    message = (
+        "Before we continue, I want to change direction and look at the browser trace export behavior, "
+        "especially whether debug artifacts include enough information for the next troubleshooting step."
+    )
+
+    decision = asyncio.run(
+        _resolver().resolve(
+            current_message=message,
+            history=[],
+            task_intent=TaskIntentService().classify(message),
+            active_task=_ACTIVE_TASK_BLOCK,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert len(provider.calls) == 1
+    assert decision.method == "llm"
+    assert decision.continuation_type == "ambiguous_boundary"
+    assert decision.should_seed_active_task is False
+    assert decision.should_replace_active_task is False
+
+
 def test_task_context_downgrades_low_confidence_task_switch_to_ambiguous_boundary():
     provider = _JsonProvider(
         '{"continuation_type": "new_task", "is_follow_up": false, '

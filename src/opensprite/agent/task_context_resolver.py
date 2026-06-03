@@ -244,11 +244,15 @@ def _should_consult_llm(
     work_state_summary: str | None = None,
 ) -> bool:
     current = _compact(current_message)
-    if not current or len(current) > 80 or (task_intent is not None and task_intent.kind == "conversation"):
+    if not current or (task_intent is not None and task_intent.kind == "conversation"):
         return False
     if decision.is_follow_up and decision.inherited_tool_group:
         return True
     if decision.confidence >= 0.7:
+        return False
+    if _has_active_task(active_task):
+        return True
+    if len(current) > 80:
         return False
     if decision.is_follow_up:
         return True
