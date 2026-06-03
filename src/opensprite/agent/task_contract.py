@@ -9,6 +9,13 @@ from typing import Any
 
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
+from .harness_profile import (
+    CODE_CHANGE_TASK_TYPE,
+    FILE_CHANGE_REQUIREMENT_KIND,
+    VERIFICATION_REQUIREMENT_KIND,
+    VERIFICATION_TOOL_GROUP,
+    WORKSPACE_WRITE_TOOL_GROUP,
+)
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
@@ -324,12 +331,12 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
 def contract_expects_file_change(task_contract: Any) -> bool:
     """Return whether a task contract requires workspace file changes."""
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {"code_change", "implementation", "refactor"}:
+    if task_type in {CODE_CHANGE_TASK_TYPE, "implementation", "refactor"}:
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
-        if str(getattr(requirement, "kind", "") or "") == "file_change":
+        if str(getattr(requirement, "kind", "") or "") == FILE_CHANGE_REQUIREMENT_KIND:
             return True
-        if str(getattr(requirement, "tool_group", "") or "") == "workspace_write":
+        if str(getattr(requirement, "tool_group", "") or "") == WORKSPACE_WRITE_TOOL_GROUP:
             return True
     return False
 
@@ -567,12 +574,12 @@ def _append_tool_group_contract(
     if tool_group == "workspace_read":
         _append_workspace_contract(requirements, acceptance_criteria)
         return acceptance_criteria
-    if tool_group == "workspace_write":
+    if tool_group == WORKSPACE_WRITE_TOOL_GROUP:
         _append_workspace_contract(requirements, acceptance_criteria)
-        if not _has_requirement(requirements, kind="file_change"):
+        if not _has_requirement(requirements, kind=FILE_CHANGE_REQUIREMENT_KIND):
             requirements.append(
                 EvidenceRequirement(
-                    kind="file_change",
+                    kind=FILE_CHANGE_REQUIREMENT_KIND,
                     min_count=1,
                     description="Record at least one workspace file change.",
                 )
@@ -591,11 +598,11 @@ def _append_tool_group_contract(
     if tool_group in {"scheduling", "execution"}:
         requirements.append(_tool_group_requirement(tool_group))
         return _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
-    if tool_group == "verification":
+    if tool_group == VERIFICATION_TOOL_GROUP:
         requirements.append(
             EvidenceRequirement(
-                kind="verification",
-                tool_group="verification",
+                kind=VERIFICATION_REQUIREMENT_KIND,
+                tool_group=VERIFICATION_TOOL_GROUP,
                 min_count=1,
                 description="Record verification evidence before finalizing.",
             )
