@@ -32,6 +32,7 @@ from .quality_gate import (
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
+from .web_source_policy import is_web_source_artifact_kind
 from .work_progress import WorkProgressUpdate
 
 
@@ -540,7 +541,7 @@ def _existing_web_source_context(execution_result: ExecutionResult | None) -> st
     lines: list[str] = []
     seen_urls: set[str] = set()
     for artifact in execution_result.task_artifacts:
-        if not artifact.ok or artifact.kind != "web_source":
+        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
             continue
         sources = artifact.metadata.get("sources")
         if not isinstance(sources, list):

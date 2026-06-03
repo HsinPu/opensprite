@@ -19,6 +19,12 @@ from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
+from .web_source_policy import (
+    is_fetched_web_source_artifact_tool,
+    is_web_fetch_source_record_tool,
+    is_web_research_source_artifact_tool,
+    is_web_source_artifact_kind,
+)
 
 _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "glob_files", "code_navigation"})
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
@@ -32,9 +38,6 @@ _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"}
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
 _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
-_FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
-_WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
-_WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
 _OPTIONAL_WEB_FETCH_FAILURE_TOOL = "web_fetch"
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _HISTORY_RETRIEVAL_TOOL = "search_history"
@@ -45,7 +48,6 @@ _VERIFICATION_TOOL_GROUP = "verification"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_RESEARCH_TASK_TYPE = "web_research"
 _WEB_RESEARCH_TOOL_GROUP = "web_research"
-_WEB_SOURCE_ARTIFACT_KIND = "web_source"
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
 _PYTHON_FILE_SUFFIX = ".py"
@@ -940,13 +942,13 @@ def _requires_web_research_evidence(task_contract: Any) -> bool:
 
 def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResult) -> bool:
     for artifact in execution_result.task_artifacts:
-        if not _is_web_source_artifact_kind(artifact.kind) or not artifact.ok:
+        if not is_web_source_artifact_kind(artifact.kind) or not artifact.ok:
             continue
         sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if _is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
+        if is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
             return True
         if (
-            _is_web_research_source_artifact_tool(artifact.source_tool)
+            is_web_research_source_artifact_tool(artifact.source_tool)
             and _web_research_artifact_has_successful_fetch(artifact)
         ):
             return True
@@ -1002,22 +1004,6 @@ def _is_web_research_tool_group(tool_group: str | None) -> bool:
     return str(tool_group or "").strip() == _WEB_RESEARCH_TOOL_GROUP
 
 
-def _is_web_source_artifact_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == _WEB_SOURCE_ARTIFACT_KIND
-
-
-def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
-    return str(source_tool or "").strip() in _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS
-
-
-def _is_web_research_source_artifact_tool(source_tool: str | None) -> bool:
-    return str(source_tool or "").strip() == _WEB_RESEARCH_SOURCE_ARTIFACT_TOOL
-
-
-def _is_web_fetch_source_record_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() == _WEB_FETCH_SOURCE_RECORD_TOOL
-
-
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     metadata = artifact.metadata if isinstance(artifact.metadata, dict) else {}
     coverage = metadata.get("coverage") if isinstance(metadata.get("coverage"), dict) else {}
@@ -1029,7 +1015,7 @@ def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
     for source in sources:
         if not isinstance(source, dict):
             continue
-        if not _is_web_fetch_source_record_tool(source.get("tool_name")):
+        if not is_web_fetch_source_record_tool(source.get("tool_name")):
             continue
         if source.get("blocked_or_challenge") or source.get("is_too_short"):
             continue

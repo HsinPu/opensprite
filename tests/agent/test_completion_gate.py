@@ -15,7 +15,6 @@ from opensprite.agent.completion_gate import (
     _is_completed_delegated_review_status,
     _is_generic_task_response_intent_kind,
     _is_one_turn_intent_kind,
-    _is_fetched_web_source_artifact_tool,
     _is_history_retrieval_tool,
     _is_cancelled_workflow_status,
     _is_failed_workflow_status,
@@ -25,9 +24,7 @@ from opensprite.agent.completion_gate import (
     _is_plain_answer_task_type,
     _is_python_file_path,
     _is_python_test_path,
-    _is_web_fetch_source_record_tool,
     _is_web_app_path,
-    _is_web_research_source_artifact_tool,
     _path_requires_delegated_review,
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
@@ -39,13 +36,18 @@ from opensprite.agent.completion_gate import (
     _is_verification_tool_group,
     _is_web_research_task_type,
     _is_web_research_tool_group,
-    _is_web_source_artifact_kind,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
     _is_workflow_completion_intent_kind,
     _workflow_fix_follow_up_fields,
     _workflow_gate_is_complete,
     _workflow_gate_needs_verification,
+)
+from opensprite.agent.web_source_policy import (
+    is_fetched_web_source_artifact_tool,
+    is_web_fetch_source_record_tool,
+    is_web_research_source_artifact_tool,
+    is_web_source_artifact_kind,
 )
 from opensprite.agent.stop_reasons import is_max_tool_iterations_stop_reason
 from opensprite.agent.auto_continue import AutoContinueService
@@ -285,18 +287,18 @@ def test_completion_gate_web_source_policy_helpers_are_centralized():
     assert _is_optional_web_discovery_failure_tool("web_fetch") is False
     assert _is_optional_web_fetch_failure_tool("web_fetch") is True
     assert _is_optional_web_fetch_failure_tool("web_search") is False
-    assert _is_fetched_web_source_artifact_tool("browser_snapshot") is True
-    assert _is_fetched_web_source_artifact_tool("web_research") is False
-    assert _is_web_research_source_artifact_tool("web_research") is True
-    assert _is_web_research_source_artifact_tool("web_fetch") is False
-    assert _is_web_fetch_source_record_tool("web_fetch") is True
-    assert _is_web_fetch_source_record_tool("web_search") is False
+    assert is_fetched_web_source_artifact_tool("browser_snapshot") is True
+    assert is_fetched_web_source_artifact_tool("web_research") is False
+    assert is_web_research_source_artifact_tool("web_research") is True
+    assert is_web_research_source_artifact_tool("web_fetch") is False
+    assert is_web_fetch_source_record_tool("web_fetch") is True
+    assert is_web_fetch_source_record_tool("web_search") is False
     assert _is_web_research_task_type("web_research") is True
     assert _is_web_research_task_type("workspace_read") is False
     assert _is_web_research_tool_group("web_research") is True
     assert _is_web_research_tool_group("workspace_read") is False
-    assert _is_web_source_artifact_kind("web_source") is True
-    assert _is_web_source_artifact_kind("verification_result") is False
+    assert is_web_source_artifact_kind("web_source") is True
+    assert is_web_source_artifact_kind("verification_result") is False
     assert _is_optional_workspace_batch_failure_tool("batch") is True
     assert _is_optional_workspace_batch_failure_tool("read_file") is False
     assert _is_history_retrieval_tool("search_history") is True
