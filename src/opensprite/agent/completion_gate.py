@@ -23,11 +23,16 @@ from .completion_status import (
     NEEDS_VERIFICATION_COMPLETION_STATUS,
 )
 from .harness_profile import (
+    ANALYSIS_TASK_TYPE,
+    HISTORY_RETRIEVAL_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
+    OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,
+    WORKSPACE_READ_TASK_TYPE,
     WORKSPACE_WRITE_TOOL_GROUP,
 )
+from .history_retrieval_policy import is_history_retrieval_tool_name
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
@@ -49,13 +54,14 @@ _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _PLAIN_ANSWER_TASK_TYPE = "pure_answer"
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
-_READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval"})
+_READ_ONLY_TASK_TYPES = frozenset(
+    {ANALYSIS_TASK_TYPE, OPERATIONS_TASK_TYPE, WORKSPACE_READ_TASK_TYPE, HISTORY_RETRIEVAL_TASK_TYPE}
+)
 _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({WORKSPACE_WRITE_TOOL_GROUP, "execution", VERIFICATION_TOOL_GROUP, "scheduling"})
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
-_HISTORY_RETRIEVAL_TOOL = "search_history"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
@@ -987,7 +993,7 @@ def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
 
 
 def _is_history_retrieval_tool(tool_name: str | None) -> bool:
-    return str(tool_name or "").strip() == _HISTORY_RETRIEVAL_TOOL
+    return is_history_retrieval_tool_name(tool_name)
 
 
 def _is_verification_result_artifact_kind(kind: str | None) -> bool:

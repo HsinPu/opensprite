@@ -8,6 +8,8 @@ from urllib.parse import urlparse
 
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
+from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE
+from .history_retrieval_policy import is_history_retrieval_tool_name
 from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
 from .task_intent import TaskIntent
@@ -49,7 +51,7 @@ class QualityGateService:
         command_version_result = _evaluate_command_version_answer(contract, response_text, execution_result)
         if command_version_result is not None:
             return command_version_result
-        if contract.task_type == "history_retrieval" and _history_retrieval_was_empty(execution_result):
+        if contract.task_type == HISTORY_RETRIEVAL_TASK_TYPE and _history_retrieval_was_empty(execution_result):
             history_result = _evaluate_history_grounding(contract, response_text, execution_result)
             if history_result is not None:
                 return history_result
@@ -465,7 +467,7 @@ def _evaluate_history_grounding(
     response_text: str,
     execution_result: ExecutionResult,
 ) -> QualityGateResult | None:
-    if contract.task_type != "history_retrieval":
+    if contract.task_type != HISTORY_RETRIEVAL_TASK_TYPE:
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:
@@ -697,7 +699,7 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
     evidence = [
         item
         for item in execution_result.tool_evidence
-        if item.ok and item.name == "search_history"
+        if item.ok and is_history_retrieval_tool_name(item.name)
     ]
     if not evidence:
         return False
