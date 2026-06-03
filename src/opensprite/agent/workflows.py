@@ -452,7 +452,7 @@ class SubagentWorkflowService:
             if outcome.summary:
                 lines.append(f"Summary: {outcome.summary}")
             if outcome.error:
-                lines.append(f"Error: {outcome.error}")
+                lines.append(f"Failure: {outcome.error}")
             if outcome.content:
                 lines.extend(["Result:", outcome.content])
         return "\n".join(lines)

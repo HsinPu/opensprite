@@ -926,7 +926,7 @@ class SubagentRunService:
             if outcome.status == "completed":
                 lines.extend(["Result:", outcome.content])
             else:
-                lines.extend(["Error:", outcome.error or outcome.summary or "unknown failure"])
+                lines.extend(["Failure:", outcome.error or outcome.summary or "unknown failure"])
         return "\n".join(lines)
 
     async def run_task(

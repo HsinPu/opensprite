@@ -1036,7 +1036,7 @@ def test_run_subagents_many_emits_group_failed_when_one_child_fails(tmp_path):
     result, parent_trace, child_statuses = asyncio.run(scenario())
 
     assert "Parallel delegation completed: 2 task(s), 1 failed." in result
-    assert "Error:" in result
+    assert "Failure:" in result
     assert child_statuses == ["completed", "failed"]
     assert parent_trace is not None
     assert "subagent.group.failed" in [event.event_type for event in parent_trace.events]
