@@ -37,6 +37,7 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
+from .turn_quick_actions import metadata_requests_direct_verification, metadata_requests_follow_up_resume
 from .web_source_policy import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
@@ -1037,7 +1038,7 @@ class AgentTurnRunner:
     @staticmethod
     def _extract_follow_up_resume_request(metadata: dict[str, Any] | None) -> dict[str, str] | None:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
-        if str(payload.get("quick_action") or "").strip() != "resume_follow_up":
+        if not metadata_requests_follow_up_resume(payload):
             return None
         workflow = str(payload.get("follow_up_workflow") or "").strip()
         start_step = str(payload.get("follow_up_step_id") or "").strip()
@@ -1055,7 +1056,7 @@ class AgentTurnRunner:
     @staticmethod
     def _extract_direct_verify_request(metadata: dict[str, Any] | None) -> dict[str, Any] | None:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
-        if str(payload.get("quick_action") or "").strip() != "run_verification":
+        if not metadata_requests_direct_verification(payload):
             return None
         action = str(payload.get("verification_action") or "").strip()
         if not action:
