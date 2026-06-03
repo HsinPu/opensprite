@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, denied_risks_except
+from ..tool_names import APPLY_PATCH_TOOL_NAME, BATCH_TOOL_NAME, EXEC_TOOL_NAME, READ_FILE_TOOL_NAME
 from ..tools import BatchTool, ToolRegistry
 from ..tools.permissions import CompositeToolPermissionPolicy, ToolPermissionPolicy
 from .harness_policy import HarnessPolicy, HarnessPolicyService
@@ -14,13 +15,13 @@ from .harness_policy import HarnessPolicy, HarnessPolicyService
 _RISK_PROBE_TOOLS = {
     "configuration": "configure_mcp",
     "delegation": "delegate",
-    "execute": "exec",
+    "execute": EXEC_TOOL_NAME,
     "external_side_effect": "browser_click",
     "mcp": "mcp_probe_tool",
     "memory": "task_update",
     "network": "web_search",
-    "read": "read_file",
-    "write": "apply_patch",
+    "read": READ_FILE_TOOL_NAME,
+    "write": APPLY_PATCH_TOOL_NAME,
 }
 
 
@@ -62,7 +63,7 @@ class ToolAccessResolver:
         effective_policy = policy_resolution.effective_policy
         metadata = policy_resolution.metadata
         registry = base_registry.filtered(permission_policy=effective_policy, exposed_only=True)
-        if "batch" in registry.tool_names:
+        if BATCH_TOOL_NAME in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
         metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
         registry.permission_resolution_metadata = metadata
@@ -118,7 +119,7 @@ class ToolAccessResolver:
             permission_policy=effective_policy,
             exposed_only=True,
         )
-        if "batch" in registry.tool_names:
+        if BATCH_TOOL_NAME in registry.tool_names:
             registry.register(BatchTool(registry_resolver=lambda: registry))
         metadata = policy_resolution.metadata
         metadata["tool_access"] = _tool_access_metadata(base_registry, registry, effective_policy)
