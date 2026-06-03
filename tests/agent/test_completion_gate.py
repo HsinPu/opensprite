@@ -23,6 +23,10 @@ from opensprite.agent.completion_gate import (
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
     _is_read_only_task_type,
+    _is_verification_requirement_kind,
+    _is_verification_result_artifact_kind,
+    _is_verification_tool,
+    _is_verification_tool_group,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
     _is_workflow_completion_intent_kind,
@@ -206,6 +210,14 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert _is_read_only_blocking_requirement_kind("tool_group") is False
     assert _is_read_only_blocking_tool_group("execution") is True
     assert _is_read_only_blocking_tool_group("workspace_read") is False
+    assert _is_verification_requirement_kind("verification") is True
+    assert _is_verification_requirement_kind("tool_group") is False
+    assert _is_verification_tool_group("verification") is True
+    assert _is_verification_tool_group("workspace_read") is False
+    assert _is_verification_result_artifact_kind("verification_result") is True
+    assert _is_verification_result_artifact_kind("web_source") is False
+    assert _is_verification_tool("verify") is True
+    assert _is_verification_tool("web_fetch") is False
 
 
 def test_completion_gate_workflow_policy_helpers_are_centralized():

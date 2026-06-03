@@ -36,6 +36,11 @@ _WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
 _OPTIONAL_WEB_FETCH_FAILURE_TOOL = "web_fetch"
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _HISTORY_RETRIEVAL_TOOL = "search_history"
+_VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
+_VERIFICATION_TOOL = "verify"
+_VERIFICATION_REQUIREMENT_KIND = "verification"
+_VERIFICATION_TOOL_GROUP = "verification"
+_SKIPPED_VERIFICATION_STATUS = "skipped"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -747,12 +752,12 @@ def _verification_skipped_with_reported_gap(execution_result: ExecutionResult) -
 
 def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> bool:
     for artifact in execution_result.task_artifacts:
-        if artifact.kind != "verification_result" or not artifact.ok:
+        if not _is_verification_result_artifact_kind(artifact.kind) or not artifact.ok:
             continue
         if _verification_status_is_skipped(artifact.metadata):
             return True
     for evidence in execution_result.tool_evidence:
-        if evidence.name != "verify" or not evidence.ok:
+        if not _is_verification_tool(evidence.name) or not evidence.ok:
             continue
         if _verification_status_is_skipped(evidence.metadata):
             return True
@@ -762,7 +767,7 @@ def _has_skipped_verification_artifact(execution_result: ExecutionResult) -> boo
 def _verification_status_is_skipped(metadata: Any) -> bool:
     if not isinstance(metadata, dict):
         return False
-    return str(metadata.get("verification_status") or "").strip().lower() == "skipped"
+    return str(metadata.get("verification_status") or "").strip().lower() == _SKIPPED_VERIFICATION_STATUS
 
 
 def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
@@ -781,8 +786,8 @@ def _path_requires_delegated_review(path: str) -> bool:
 
 def _contract_requires_verification(task_contract: Any) -> bool:
     return any(
-        str(getattr(requirement, "kind", "") or "") == "verification"
-        or str(getattr(requirement, "tool_group", "") or "") == "verification"
+        _is_verification_requirement_kind(str(getattr(requirement, "kind", "") or ""))
+        or _is_verification_tool_group(str(getattr(requirement, "tool_group", "") or ""))
         for requirement in getattr(task_contract, "requirements", ()) or ()
     )
 
@@ -946,6 +951,22 @@ def _is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
 
 def _is_history_retrieval_tool(tool_name: str | None) -> bool:
     return str(tool_name or "").strip() == _HISTORY_RETRIEVAL_TOOL
+
+
+def _is_verification_result_artifact_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() == _VERIFICATION_RESULT_ARTIFACT_KIND
+
+
+def _is_verification_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() == _VERIFICATION_TOOL
+
+
+def _is_verification_requirement_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() == _VERIFICATION_REQUIREMENT_KIND
+
+
+def _is_verification_tool_group(tool_group: str | None) -> bool:
+    return str(tool_group or "").strip() == _VERIFICATION_TOOL_GROUP
 
 
 def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
