@@ -9,7 +9,9 @@ from opensprite.agent.completion_gate import (
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
     _is_read_only_task_type,
+    _is_review_workflow,
     _is_unsuccessful_workflow_status,
+    _workflow_fix_follow_up_fields,
 )
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
@@ -175,6 +177,17 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert _is_read_only_task_type("code_change") is False
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
+
+
+def test_completion_gate_workflow_policy_helpers_are_centralized():
+    assert _is_review_workflow("implement_then_review") is True
+    assert _is_review_workflow("research_then_outline") is False
+    assert _workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
+        "next_step_id": "bugfix",
+        "next_step_label": "Bug fix",
+        "next_step_prompt_type": "bug-fixer",
+    }
+    assert _workflow_fix_follow_up_fields("research_then_outline") == {}
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:

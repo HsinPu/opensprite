@@ -25,6 +25,19 @@ _BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
 _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
 _READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval", "web_research"})
+_REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
+_WORKFLOW_FIX_STEPS = {
+    "implement_then_review": {
+        "next_step_id": "implement",
+        "next_step_label": "Implement",
+        "next_step_prompt_type": "implementer",
+    },
+    "bugfix_then_test_then_review": {
+        "next_step_id": "bugfix",
+        "next_step_label": "Bug fix",
+        "next_step_prompt_type": "bug-fixer",
+    },
+}
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -1015,7 +1028,7 @@ def _workflow_gate_outcome(
             "reason": "workflow research_then_outline completed all required steps",
         }
 
-    if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
+    if _is_review_workflow(workflow_id):
         if not review_attempted:
             review_step = _workflow_review_follow_up_fields(workflow_id)
             return {
@@ -1131,7 +1144,7 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
 
 
 def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    if workflow_id in {"implement_then_review", "bugfix_then_test_then_review"}:
+    if _is_review_workflow(workflow_id):
         return {
             "next_step_id": "review",
             "next_step_label": "Code review",
@@ -1141,19 +1154,11 @@ def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
 
 
 def _workflow_fix_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    if workflow_id == "implement_then_review":
-        return {
-            "next_step_id": "implement",
-            "next_step_label": "Implement",
-            "next_step_prompt_type": "implementer",
-        }
-    if workflow_id == "bugfix_then_test_then_review":
-        return {
-            "next_step_id": "bugfix",
-            "next_step_label": "Bug fix",
-            "next_step_prompt_type": "bug-fixer",
-        }
-    return {}
+    return dict(_WORKFLOW_FIX_STEPS.get(str(workflow_id or "").strip(), {}))
+
+
+def _is_review_workflow(workflow_id: str | None) -> bool:
+    return str(workflow_id or "").strip() in _REVIEW_WORKFLOW_IDS
 
 
 def _string_or_none(value: Any) -> str | None:
