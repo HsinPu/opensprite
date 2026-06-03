@@ -11,11 +11,13 @@ from typing import Any, Callable
 
 from ..skills import SkillsLoader
 from .base import Tool
+from .result_status import tool_error_result
 
 WorkspaceResolver = Callable[[], Path]
 
 # Bundled guide skill (see src/opensprite/skills/skill-creator-design/SKILL.md) — full rules for new skills.
 SKILL_CREATION_GUIDE_NAME = "skill-creator-design"
+_TOOL_NAME = "configure_skill"
 
 
 def path_touches_read_only_app_skills_dir(file_path: Path) -> str | None:
@@ -96,6 +98,37 @@ _CONFIGURE_SKILL_RULES_SUMMARY = (
     "detailed description (what the skill does + when to trigger), imperative body text, "
     "progressive disclosure, and optional scripts/, references/, assets/ next to SKILL.md."
 )
+
+
+def _strip_error_prefix(message: str) -> str:
+    return str(message or "").removeprefix("Error:").strip()
+
+
+def _configure_skill_error_result(
+    message: str,
+    *,
+    category: str,
+    error_type: str = "ConfigureSkillToolError",
+    invalid_arguments: bool = False,
+) -> str:
+    error = _strip_error_prefix(message)
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": _TOOL_NAME},
+    )
+
+
+def _configure_skill_validation_error(message: str) -> str:
+    return _configure_skill_error_result(
+        message,
+        category="invalid_arguments",
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+    )
 
 
 def _validate_skill_id(skill_name: str) -> str | None:
@@ -180,7 +213,7 @@ def _build_skill_md(skill_name: str, description: str, body: str) -> str:
 class ConfigureSkillTool(Tool):
     """Read and update skill definitions under the session workspace ``skills/`` (not under ~/.opensprite/skills/)."""
 
-    name = "configure_skill"
+    name = _TOOL_NAME
     description = (
         "Inspect, add, update, or remove skills (each skill is a directory containing SKILL.md). "
         "Use this when the user wants a new skill or to change skill metadata and instructions instead of editing files manually. "
@@ -267,17 +300,20 @@ class ConfigureSkillTool(Tool):
         skill_name = str(kwargs.get("skill_name", "") or "").strip()
         err = _validate_skill_id(skill_name)
         if err:
-            return err
+            return _configure_skill_validation_error(err)
 
         skill_dir = (root / skill_name).resolve()
         if not self._is_under(root, skill_dir):
-            return "Error: skill path escapes skills root"
+            return _configure_skill_validation_error("skill path escapes skills root")
 
         skill_file = skill_dir / "SKILL.md"
 
         if action == "get":
             if not skill_file.is_file():
-                return f"Error: skill '{skill_name}' not found under {root}"
+                return _configure_skill_error_result(
+                    f"skill '{skill_name}' not found under {root}",
+                    category="skill_not_found",
+                )
             text = skill_file.read_text(encoding="utf-8")
             payload = {
                 "skills_dir": str(root),
@@ -289,7 +325,10 @@ class ConfigureSkillTool(Tool):
 
         if action == "remove":
             if not skill_dir.is_dir():
-                return f"Error: skill directory '{skill_name}' not found under {root}"
+                return _configure_skill_error_result(
+                    f"skill directory '{skill_name}' not found under {root}",
+                    category="skill_not_found",
+                )
             shutil.rmtree(skill_dir)
             return f"Removed skill '{skill_name}' from {root}."
 
@@ -299,16 +338,17 @@ class ConfigureSkillTool(Tool):
 
             desc_err = _validate_description_for_write(description, action=action)
             if desc_err:
-                return desc_err
+                return _configure_skill_validation_error(desc_err)
             body_err = _validate_body_for_write(body, action=action)
             if body_err:
-                return body_err
+                return _configure_skill_validation_error(body_err)
 
             existed = skill_file.is_file()
             if action == "add" and existed:
-                return (
-                    f"Error: skill '{skill_name}' already exists at {skill_file}. "
-                    "Use action=upsert to replace it, or remove it first."
+                return _configure_skill_error_result(
+                    f"skill '{skill_name}' already exists at {skill_file}. "
+                    "Use action=upsert to replace it, or remove it first.",
+                    category="skill_conflict",
                 )
 
             root.mkdir(parents=True, exist_ok=True)
@@ -324,4 +364,4 @@ class ConfigureSkillTool(Tool):
             mode = "Updated" if existed else "Added"
             return f"{mode} skill '{skill_name}' at {skill_file}.{guide_hint}"
 
-        return f"Error: unsupported action '{action}'"
+        return _configure_skill_validation_error(f"unsupported action '{action}'")

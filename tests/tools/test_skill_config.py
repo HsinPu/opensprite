@@ -8,6 +8,7 @@ from opensprite.tools.skill_config import (
     MIN_SKILL_DESCRIPTION_WORDS,
     ConfigureSkillTool,
 )
+from opensprite.tools.result_status import classify_tool_result_status
 
 # Meets fixed minimums for add/upsert validation.
 _VALID_DESCRIPTION = (
@@ -71,7 +72,10 @@ def test_configure_skill_add_upsert_and_get(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "already exists" in duplicate
+    duplicate_status = classify_tool_result_status(duplicate)
+    assert duplicate_status.error_type == "ConfigureSkillToolError"
+    assert duplicate_status.category == "skill_conflict"
+    assert "already exists" in duplicate_status.error
 
     updated = asyncio.run(
         tool.execute(
@@ -117,6 +121,25 @@ def test_configure_skill_remove(tmp_path):
     assert not skill_dir.exists()
 
 
+def test_configure_skill_reports_missing_skill_for_get_and_remove(tmp_path):
+    tool = ConfigureSkillTool(
+        skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
+        workspace_resolver=lambda: tmp_path / "ws",
+    )
+
+    got = asyncio.run(tool.execute(action="get", skill_name="missing-skill"))
+    got_status = classify_tool_result_status(got)
+    assert got_status.error_type == "ConfigureSkillToolError"
+    assert got_status.category == "skill_not_found"
+    assert "missing-skill" in got_status.error
+
+    removed = asyncio.run(tool.execute(action="remove", skill_name="missing-skill"))
+    removed_status = classify_tool_result_status(removed)
+    assert removed_status.error_type == "ConfigureSkillToolError"
+    assert removed_status.category == "skill_not_found"
+    assert "missing-skill" in removed_status.error
+
+
 def test_configure_skill_rejects_invalid_skill_id(tmp_path):
     tool = ConfigureSkillTool(
         skills_loader=SkillsLoader(default_skills_dir=tmp_path / "s"),
@@ -130,7 +153,11 @@ def test_configure_skill_rejects_invalid_skill_id(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "lowercase ASCII" in out
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "lowercase ASCII" in status.error
 
 
 def test_configure_skill_rejects_short_description(tmp_path):
@@ -146,7 +173,11 @@ def test_configure_skill_rejects_short_description(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert str(MIN_SKILL_DESCRIPTION_LEN) in out
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert str(MIN_SKILL_DESCRIPTION_LEN) in status.error
 
 
 def test_configure_skill_rejects_short_body(tmp_path):
@@ -162,7 +193,11 @@ def test_configure_skill_rejects_short_body(tmp_path):
             body="short",
         )
     )
-    assert str(MIN_SKILL_BODY_LEN) in out
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert str(MIN_SKILL_BODY_LEN) in status.error
 
 
 def test_configure_skill_rejects_too_few_english_words(tmp_path):
@@ -180,7 +215,11 @@ def test_configure_skill_rejects_too_few_english_words(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert str(MIN_SKILL_DESCRIPTION_WORDS) in out
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert str(MIN_SKILL_DESCRIPTION_WORDS) in status.error
 
 
 def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
@@ -201,7 +240,11 @@ def test_configure_skill_rejects_low_substance_glue_words(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "substantive" in out.lower()
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "substantive" in status.error.lower()
 
 
 def test_configure_skill_can_shadow_system_skill_id(tmp_path):
@@ -243,4 +286,8 @@ def test_configure_skill_rejects_repetitive_description(tmp_path):
             body=_VALID_BODY,
         )
     )
-    assert "repetitive" in out.lower()
+    status = classify_tool_result_status(out)
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert "repetitive" in status.error.lower()
