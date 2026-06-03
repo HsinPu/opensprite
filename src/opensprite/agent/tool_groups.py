@@ -17,12 +17,13 @@ from .harness_profile import (
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
+from ..tool_names import WORKSPACE_DISCOVERY_TOOL_NAMES
 
 
 EXECUTION_TOOL_GROUP = "execution"
 SCHEDULING_TOOL_GROUP = "scheduling"
 OPERATION_TOOL_GROUPS = frozenset({EXECUTION_TOOL_GROUP, SCHEDULING_TOOL_GROUP})
-WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "glob_files", "grep_files", "code_navigation"})
+WORKSPACE_DISCOVERY_TOOLS = WORKSPACE_DISCOVERY_TOOL_NAMES
 
 TOOL_GROUPS: dict[str, frozenset[str]] = {
     "image_text": frozenset({"ocr_image", "analyze_image"}),

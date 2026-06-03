@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING
 from .harness_profile import PLANNING_TASK_TYPE
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
-from ..tool_names import BATCH_TOOL_NAME
+from ..tool_names import (
+    BATCH_TOOL_NAME,
+    GLOB_FILES_TOOL_NAME,
+    GREP_FILES_TOOL_NAME,
+    LIST_DIR_TOOL_NAME,
+    READ_FILE_TOOL_NAME,
+)
 
 if TYPE_CHECKING:
     from .task_contract import TaskContract
@@ -17,10 +23,10 @@ if TYPE_CHECKING:
 
 PLANNING_ALLOWED_TOOLS = frozenset(
     {
-        "read_file",
-        "list_dir",
-        "glob_files",
-        "grep_files",
+        READ_FILE_TOOL_NAME,
+        LIST_DIR_TOOL_NAME,
+        GLOB_FILES_TOOL_NAME,
+        GREP_FILES_TOOL_NAME,
         BATCH_TOOL_NAME,
         "read_skill",
         HISTORY_SEARCH_TOOL_NAME,
