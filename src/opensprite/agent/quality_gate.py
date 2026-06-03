@@ -38,7 +38,11 @@ from .web_source_policy import (
     web_source_is_referenced,
     web_source_has_substantive_detail,
 )
-from .workspace_grounding_policy import contains_workspace_location_clue
+from .workspace_grounding_policy import (
+    contains_workspace_location_clue,
+    response_references_workspace_path,
+    workspace_paths,
+)
 
 
 _MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
@@ -412,8 +416,8 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     if not normalized_response:
         return None
 
-    requested_paths = _workspace_paths(objective)
-    if requested_paths and not any(_path_referenced(path, normalized_response) for path in requested_paths):
+    requested_paths = workspace_paths(objective)
+    if requested_paths and not any(response_references_workspace_path(path, normalized_response) for path in requested_paths):
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
@@ -426,7 +430,7 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
     )
     if requires_location and not contains_workspace_location_clue(
         normalized_response,
-        has_workspace_path=bool(_workspace_paths(normalized_response)),
+        has_workspace_path=bool(workspace_paths(normalized_response)),
     ):
         return QualityGateResult(
             passed=False,
@@ -620,30 +624,6 @@ def _artifact_web_sources(metadata: dict[str, object], *, source_tool: str = "")
 
 def _source_has_substantive_detail(source: dict[str, object]) -> bool:
     return web_source_has_substantive_detail(source)
-
-
-def _workspace_paths(text: str) -> tuple[str, ...]:
-    matches = re.findall(
-        r"(?:[\w.-]+[\\/])+[\w.-]+|[\w.-]+\.(?:py|js|ts|tsx|jsx|vue|json|toml|yaml|yml|md|css|html|java|go|rs|sql)",
-        str(text or ""),
-        flags=re.IGNORECASE,
-    )
-    seen: set[str] = set()
-    paths: list[str] = []
-    for match in matches:
-        normalized = match.strip().lower().replace("\\", "/")
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            paths.append(normalized)
-    return tuple(paths)
-
-
-def _path_referenced(path: str, normalized_response: str) -> bool:
-    normalized_path = path.lower().replace("\\", "/")
-    if normalized_path in normalized_response.replace("\\", "/"):
-        return True
-    filename = normalized_path.rsplit("/", 1)[-1]
-    return bool(filename and filename in normalized_response)
 
 
 def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
