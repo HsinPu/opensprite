@@ -86,6 +86,9 @@ _ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
 _GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
 _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
+_RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
+_FAILED_WORKFLOW_STATUS = "failed"
+_CANCELLED_WORKFLOW_STATUS = "cancelled"
 _WORKFLOW_GATE_COMPLETE_STATUS = "complete"
 _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = "needs_verification"
 _DELEGATED_REVIEW_COMPLETED_STATUS = "completed"
@@ -1145,12 +1148,12 @@ def _workflow_gate_outcome(
         detail = _workflow_follow_up_detail(workflow_id, workflow_status, workflow)
         return {
             **metadata,
-            "status": "blocked" if workflow_status == "failed" else "incomplete",
+            "status": _completion_status_for_unsuccessful_workflow(workflow_status),
             "reason": f"workflow {workflow_id} did not complete successfully",
             "detail": detail,
         }
 
-    if workflow_id == "research_then_outline":
+    if _is_research_then_outline_workflow(workflow_id):
         return {
             **metadata,
             "status": "complete",
@@ -1217,6 +1220,24 @@ def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
     return str(kind or "").strip() in _WORKFLOW_COMPLETION_INTENT_KINDS
 
 
+def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) -> str:
+    if _is_failed_workflow_status(workflow_status):
+        return "blocked"
+    return "incomplete"
+
+
+def _is_failed_workflow_status(status: str | None) -> bool:
+    return str(status or "").strip().lower() == _FAILED_WORKFLOW_STATUS
+
+
+def _is_cancelled_workflow_status(status: str | None) -> bool:
+    return str(status or "").strip().lower() == _CANCELLED_WORKFLOW_STATUS
+
+
+def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:
+    return str(workflow_id or "").strip() == _RESEARCH_THEN_OUTLINE_WORKFLOW_ID
+
+
 def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
     return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_COMPLETE_STATUS
 
@@ -1277,7 +1298,7 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
     step_label = str(workflow.get("next_step_label") or workflow.get("next_step_id") or "").strip()
     error = str(workflow.get("error") or "").strip()
     summary = str(workflow.get("summary") or "").strip()
-    if workflow_status == "cancelled":
+    if _is_cancelled_workflow_status(workflow_status):
         if step_label and summary:
             return f"Resume with the {step_label} step in {workflow_id}. {summary}"
         if step_label:

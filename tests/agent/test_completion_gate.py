@@ -7,6 +7,7 @@ from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import (
     CompletionGateService,
     _accepts_final_response_task_type,
+    _completion_status_for_unsuccessful_workflow,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
     _is_analysis_response_intent_kind,
@@ -17,6 +18,8 @@ from opensprite.agent.completion_gate import (
     _is_fetched_web_source_artifact_tool,
     _is_history_retrieval_tool,
     _is_max_tool_iterations_stop_reason,
+    _is_cancelled_workflow_status,
+    _is_failed_workflow_status,
     _is_optional_web_discovery_failure_tool,
     _is_optional_web_fetch_failure_tool,
     _is_optional_workspace_batch_failure_tool,
@@ -27,6 +30,7 @@ from opensprite.agent.completion_gate import (
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
     _is_read_only_task_type,
+    _is_research_then_outline_workflow,
     _is_verification_requirement_kind,
     _is_verification_result_artifact_kind,
     _is_verification_tool,
@@ -236,6 +240,14 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
 def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert _is_review_workflow("implement_then_review") is True
     assert _is_review_workflow("research_then_outline") is False
+    assert _is_research_then_outline_workflow("research_then_outline") is True
+    assert _is_research_then_outline_workflow("implement_then_review") is False
+    assert _is_failed_workflow_status("failed") is True
+    assert _is_failed_workflow_status("cancelled") is False
+    assert _is_cancelled_workflow_status("cancelled") is True
+    assert _is_cancelled_workflow_status("failed") is False
+    assert _completion_status_for_unsuccessful_workflow("failed") == "blocked"
+    assert _completion_status_for_unsuccessful_workflow("cancelled") == "incomplete"
     assert _workflow_gate_is_complete({"status": "complete"}) is True
     assert _workflow_gate_is_complete({"status": "needs_review"}) is False
     assert _workflow_gate_needs_verification({"status": "needs_verification"}) is True
