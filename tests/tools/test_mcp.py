@@ -3,6 +3,7 @@ import sys
 from types import ModuleType, SimpleNamespace
 
 from opensprite.tools.mcp import MCPToolWrapper, _http_url_transport_attempts
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class _TextContent:
@@ -59,8 +60,12 @@ def test_mcp_tool_wrapper_returns_timeout_message(monkeypatch):
     wrapper = MCPToolWrapper(SimpleNamespace(call_tool=call_tool), "demo", tool_def, tool_timeout=0.01)
 
     result = asyncio.run(wrapper.execute())
+    status = classify_tool_result_status(result)
 
-    assert result == "(MCP tool call timed out after 0.01s)"
+    assert status.ok is False
+    assert status.error_type == "McpToolError"
+    assert status.category == "mcp_tool_timeout"
+    assert "mcp_demo_slow" in status.error
 
 
 def test_implicit_http_transport_tries_streamable_http_before_sse():

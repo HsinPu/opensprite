@@ -10,6 +10,7 @@ from ..config.schema import MCPServerConfig
 from ..utils.log import logger
 from .base import Tool
 from .registry import ToolRegistry
+from .result_status import tool_error_result
 
 
 def _extract_nullable_branch(options: Any) -> tuple[dict[str, Any], bool] | None:
@@ -187,13 +188,23 @@ class MCPToolWrapper(Tool):
             )
         except asyncio.TimeoutError:
             logger.warning("MCP tool '{}' timed out after {}s", self._name, self._tool_timeout)
-            return f"(MCP tool call timed out after {self._tool_timeout}s)"
+            return tool_error_result(
+                f"MCP tool '{self._name}' timed out after {self._tool_timeout}s.",
+                error_type="McpToolError",
+                category="mcp_tool_timeout",
+                metadata={"tool_name": self._name, "mcp_tool": self._original_name},
+            )
         except asyncio.CancelledError:
             task = asyncio.current_task()
             if task is not None and task.cancelling() > 0:
                 raise
             logger.warning("MCP tool '{}' was cancelled by server/SDK", self._name)
-            return "(MCP tool call was cancelled)"
+            return tool_error_result(
+                f"MCP tool '{self._name}' was cancelled by server/SDK.",
+                error_type="McpToolError",
+                category="mcp_tool_cancelled",
+                metadata={"tool_name": self._name, "mcp_tool": self._original_name},
+            )
         except Exception as exc:
             logger.exception(
                 "MCP tool '{}' failed: {}: {}",
@@ -201,7 +212,12 @@ class MCPToolWrapper(Tool):
                 type(exc).__name__,
                 exc,
             )
-            return f"(MCP tool call failed: {type(exc).__name__})"
+            return tool_error_result(
+                f"MCP tool '{self._name}' failed: {type(exc).__name__}: {exc}",
+                error_type="McpToolError",
+                category="mcp_tool_failed",
+                metadata={"tool_name": self._name, "mcp_tool": self._original_name},
+            )
 
         parts: list[str] = []
         for block in getattr(result, "content", []):
