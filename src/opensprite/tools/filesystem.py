@@ -444,20 +444,54 @@ def _format_post_edit_diagnostics(
     return "", False
 
 
-def _validate_expected_sha256(path: str, content: str, expected_sha256: Any) -> str | None:
+def _validate_expected_sha256(
+    path: str,
+    content: str,
+    expected_sha256: Any,
+    *,
+    tool_name: str,
+    change_index: int | None = None,
+) -> str | None:
+    prefix = f"Change {change_index}: " if change_index is not None else ""
+    metadata: dict[str, Any] = {"path": path}
+    if change_index is not None:
+        metadata["change_index"] = change_index
     if expected_sha256 is None:
-        return (
-            f"Error: Stale-read guard failed for {path}: expected_sha256 is required when modifying an existing file. "
-            "Read the file first and pass the SHA256 shown by read_file."
+        return _filesystem_error_result(
+            (
+                f"{prefix}Stale-read guard failed for {path}: expected_sha256 is required when modifying an existing file. "
+                "Read the file first and pass the SHA256 shown by read_file."
+            ),
+            tool_name=tool_name,
+            error_type="ToolValidationError",
+            category="stale_read",
+            invalid_arguments=True,
+            metadata=metadata,
         )
     if not isinstance(expected_sha256, str):
-        return f"Error: Stale-read guard failed for {path}: expected_sha256 must be a string."
+        return _filesystem_error_result(
+            f"{prefix}Stale-read guard failed for {path}: expected_sha256 must be a string.",
+            tool_name=tool_name,
+            error_type="ToolValidationError",
+            category="stale_read",
+            invalid_arguments=True,
+            metadata=metadata,
+        )
 
     current_sha256 = text_sha256(content)
     if expected_sha256.lower() != current_sha256:
-        return (
-            f"Error: Stale-read guard failed for {path}: current SHA256 is {current_sha256}, "
-            f"but expected {expected_sha256}. Re-read the file before editing."
+        metadata["current_sha256"] = current_sha256
+        metadata["expected_sha256"] = expected_sha256
+        return _filesystem_error_result(
+            (
+                f"{prefix}Stale-read guard failed for {path}: current SHA256 is {current_sha256}, "
+                f"but expected {expected_sha256}. Re-read the file before editing."
+            ),
+            tool_name=tool_name,
+            error_type="ToolValidationError",
+            category="stale_read",
+            invalid_arguments=True,
+            metadata=metadata,
         )
     return None
 
@@ -1222,9 +1256,15 @@ class ApplyPatchTool(Tool):
                             metadata={"path": path, "change_index": index},
                         )
                     if original[file_path] is not None:
-                        stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
+                        stale_error = _validate_expected_sha256(
+                            path,
+                            original[file_path],
+                            change.get("expected_sha256"),
+                            tool_name=self.name,
+                            change_index=index,
+                        )
                         if stale_error:
-                            return f"Error: Change {index}: {stale_error.removeprefix('Error: ')}"
+                            return stale_error
                     old_text = change.get("old_text")
                     new_text = change.get("new_text")
                     if not isinstance(old_text, str) or not old_text:
@@ -1276,9 +1316,15 @@ class ApplyPatchTool(Tool):
                             metadata={"path": path, "change_index": index},
                         )
                     if original[file_path] is not None:
-                        stale_error = _validate_expected_sha256(path, original[file_path], change.get("expected_sha256"))
+                        stale_error = _validate_expected_sha256(
+                            path,
+                            original[file_path],
+                            change.get("expected_sha256"),
+                            tool_name=self.name,
+                            change_index=index,
+                        )
                         if stale_error:
-                            return f"Error: Change {index}: {stale_error.removeprefix('Error: ')}"
+                            return stale_error
                     current[file_path] = None
 
             diffs: list[str] = []
@@ -1418,7 +1464,12 @@ class WriteFileTool(Tool):
 
             before = _read_existing_text(file_path, path)
             if before is not None:
-                stale_error = _validate_expected_sha256(path, before, kwargs.get("expected_sha256"))
+                stale_error = _validate_expected_sha256(
+                    path,
+                    before,
+                    kwargs.get("expected_sha256"),
+                    tool_name=self.name,
+                )
                 if stale_error:
                     return stale_error
             file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1612,7 +1663,12 @@ class EditFileTool(Tool):
                 )
 
             content = file_path.read_text(encoding="utf-8")
-            stale_error = _validate_expected_sha256(path, content, kwargs.get("expected_sha256"))
+            stale_error = _validate_expected_sha256(
+                path,
+                content,
+                kwargs.get("expected_sha256"),
+                tool_name=self.name,
+            )
             if stale_error:
                 return stale_error
 

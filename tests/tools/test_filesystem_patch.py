@@ -287,9 +287,14 @@ def test_write_file_requires_expected_sha256_when_overwriting(tmp_path):
     tool = WriteFileTool(workspace=tmp_path)
 
     result = asyncio.run(tool.execute(path="notes.txt", content="new\n"))
+    status = classify_tool_result_status(result)
 
-    assert "Stale-read guard failed for notes.txt" in result
-    assert "expected_sha256 is required" in result
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "stale_read"
+    assert status.invalid_arguments is True
+    assert "Stale-read guard failed for notes.txt" in status.error
+    assert "expected_sha256 is required" in status.error
     assert target.read_text(encoding="utf-8") == "old\n"
 
 
@@ -301,9 +306,14 @@ def test_write_file_rejects_stale_expected_sha256(tmp_path):
     result = asyncio.run(
         tool.execute(path="notes.txt", content="replacement\n", expected_sha256="0" * 64)
     )
+    status = classify_tool_result_status(result)
 
-    assert "current SHA256" in result
-    assert "Re-read the file before editing" in result
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "stale_read"
+    assert status.invalid_arguments is True
+    assert "current SHA256" in status.error
+    assert "Re-read the file before editing" in status.error
     assert target.read_text(encoding="utf-8") == "newer\n"
 
 
@@ -313,9 +323,14 @@ def test_edit_file_requires_expected_sha256(tmp_path):
     tool = EditFileTool(workspace=tmp_path)
 
     result = asyncio.run(tool.execute(path="notes.txt", old_text="old", new_text="new"))
+    status = classify_tool_result_status(result)
 
-    assert "Stale-read guard failed for notes.txt" in result
-    assert "expected_sha256 is required" in result
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "stale_read"
+    assert status.invalid_arguments is True
+    assert "Stale-read guard failed for notes.txt" in status.error
+    assert "expected_sha256 is required" in status.error
     assert target.read_text(encoding="utf-8") == "old\n"
 
 
@@ -337,7 +352,12 @@ def test_apply_patch_requires_expected_sha256_for_existing_update(tmp_path):
         )
     )
 
-    assert "Error: Change 1: Stale-read guard failed for notes.txt" in result
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "stale_read"
+    assert status.invalid_arguments is True
+    assert "Change 1: Stale-read guard failed for notes.txt" in status.error
     assert target.read_text(encoding="utf-8") == "old\n"
 
 
@@ -361,7 +381,12 @@ def test_apply_patch_rejects_stale_expected_sha256_before_writing_anything(tmp_p
         )
     )
 
-    assert "Error: Change 2: Stale-read guard failed for existing.txt" in result
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "stale_read"
+    assert status.invalid_arguments is True
+    assert "Change 2: Stale-read guard failed for existing.txt" in status.error
     assert not (tmp_path / "created.txt").exists()
     assert existing.read_text(encoding="utf-8") == "newer\n"
 
