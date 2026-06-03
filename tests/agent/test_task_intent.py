@@ -38,6 +38,14 @@ def test_task_intent_classifier_records_media_upload_without_text():
     assert intent.objective == "Save attached media for later use"
 
 
+def test_task_intent_command_and_list_markers_are_centralized():
+    command = TaskIntentService().classify("/status")
+    listed = TaskIntentService().classify("1. inspect\n2. summarize")
+
+    assert command.kind == "command"
+    assert listed.long_running is True
+
+
 def test_task_intent_debug_diagnosis_does_not_require_code_change():
     intent = TaskIntentService().classify("Please investigate why the build is failing.")
 

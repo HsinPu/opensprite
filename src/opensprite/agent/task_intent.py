@@ -24,6 +24,8 @@ ONE_TURN_INTENT_KINDS = frozenset(
 )
 TASK_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, GENERIC_TASK_INTENT_KIND})
 WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, REVIEW_INTENT_KIND})
+COMMAND_PREFIXES = ("/",)
+LIST_ITEM_RE = re.compile(r"(?:^|\s)(?:\d+\.|[-*])\s+")
 
 
 @dataclass(frozen=True)
@@ -89,7 +91,7 @@ class TaskIntentService:
                 long_running=False,
             )
 
-        if compact.startswith("/"):
+        if _is_command_text(compact):
             return TaskIntent(
                 kind=COMMAND_INTENT_KIND,
                 objective=_truncate(compact),
@@ -129,12 +131,21 @@ def _classify_kind(text: str, *, media_count: int) -> str:
     return GENERIC_TASK_INTENT_KIND
 
 
+def _is_command_text(text: str) -> bool:
+    compact = str(text or "").strip()
+    return any(compact.startswith(prefix) for prefix in COMMAND_PREFIXES)
+
+
+def _has_multiple_list_items(text: str) -> bool:
+    return len(LIST_ITEM_RE.findall(text)) >= 2
+
+
 def _is_long_running(text: str, kind: str) -> bool:
     if kind not in TASK_INTENT_KINDS:
         return False
     if len(text) > 180:
         return True
-    if len(re.findall(r"(?:^|\s)(?:\d+\.|[-*])\s+", text)) >= 2:
+    if _has_multiple_list_items(text):
         return True
     return False
 
