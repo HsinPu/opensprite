@@ -14,6 +14,7 @@ from opensprite.agent.completion_gate import (
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
     _is_optional_web_discovery_failure_tool,
+    _path_requires_delegated_review,
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
     _is_read_only_task_type,
@@ -211,6 +212,13 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
         "next_step_prompt_type": "bug-fixer",
     }
     assert _workflow_fix_follow_up_fields("research_then_outline") == {}
+
+
+def test_completion_gate_review_path_policy_helper_is_centralized():
+    assert _path_requires_delegated_review("src/opensprite/runtime.py") is True
+    assert _path_requires_delegated_review("package.json") is True
+    assert _path_requires_delegated_review("snapshot_after/src/opensprite/app.vue") is True
+    assert _path_requires_delegated_review("docs/usage.md") is False
 
 
 def test_completion_gate_web_source_policy_helpers_are_centralized():

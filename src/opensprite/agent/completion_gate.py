@@ -31,6 +31,42 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
 _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
 _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+_DELEGATED_REVIEW_PATH_SUFFIXES = (
+    ".py",
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".vue",
+    ".go",
+    ".rs",
+    ".java",
+    ".kt",
+    ".kts",
+    ".cs",
+    ".c",
+    ".cc",
+    ".cpp",
+    ".h",
+    ".hpp",
+    ".php",
+    ".rb",
+    ".swift",
+    ".sql",
+    ".sh",
+    ".ps1",
+    ".bat",
+    ".cmd",
+)
+_DELEGATED_REVIEW_EXACT_PATHS = frozenset(
+    {
+        "pyproject.toml",
+        "package.json",
+        "package-lock.json",
+        "vite.config.js",
+        "vite.config.ts",
+    }
+)
 _ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
 _GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
 _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
@@ -733,41 +769,9 @@ def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
 
 def _path_requires_delegated_review(path: str) -> bool:
     normalized = _strip_repo_snapshot_prefix(path).lower()
-    if normalized.endswith((
-        ".py",
-        ".js",
-        ".jsx",
-        ".ts",
-        ".tsx",
-        ".vue",
-        ".go",
-        ".rs",
-        ".java",
-        ".kt",
-        ".kts",
-        ".cs",
-        ".c",
-        ".cc",
-        ".cpp",
-        ".h",
-        ".hpp",
-        ".php",
-        ".rb",
-        ".swift",
-        ".sql",
-        ".sh",
-        ".ps1",
-        ".bat",
-        ".cmd",
-    )):
+    if normalized.endswith(_DELEGATED_REVIEW_PATH_SUFFIXES):
         return True
-    return normalized in {
-        "pyproject.toml",
-        "package.json",
-        "package-lock.json",
-        "vite.config.js",
-        "vite.config.ts",
-    }
+    return normalized in _DELEGATED_REVIEW_EXACT_PATHS
 
 
 def _contract_requires_verification(task_contract: Any) -> bool:
