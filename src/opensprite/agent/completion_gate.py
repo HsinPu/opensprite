@@ -22,6 +22,8 @@ from .completion_status import (
     INCOMPLETE_COMPLETION_STATUS,
     NEEDS_REVIEW_COMPLETION_STATUS,
     NEEDS_VERIFICATION_COMPLETION_STATUS,
+    is_complete_completion_status,
+    needs_verification_completion_status,
 )
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
@@ -136,8 +138,6 @@ _GENERIC_TASK_RESPONSE_INTENT_KIND = GENERIC_TASK_INTENT_KIND
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
 _REVIEW_WORKFLOW_IDS = REVIEW_WORKFLOW_IDS
 _RESEARCH_THEN_OUTLINE_WORKFLOW_ID = RESEARCH_THEN_OUTLINE_WORKFLOW_ID
-_WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
-_WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = NEEDS_VERIFICATION_COMPLETION_STATUS
 _WORKFLOW_FIX_STEPS = {
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID: {
         "next_step_id": "implement",
@@ -1257,11 +1257,11 @@ def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:
 
 
 def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
-    return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_COMPLETE_STATUS
+    return is_complete_completion_status(workflow_gate.get("status"))
 
 
 def _workflow_gate_needs_verification(workflow_gate: dict[str, Any]) -> bool:
-    return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS
+    return needs_verification_completion_status(workflow_gate.get("status"))
 
 
 def _is_completed_delegated_review_status(status: str | None) -> bool:
