@@ -39,7 +39,7 @@ def _workflow_error_result(
     error_type: str = "RunWorkflowToolError",
     invalid_arguments: bool = False,
 ) -> str:
-    error = str(message or "").removeprefix("Error:").strip()
+    error = str(message or "").strip()
     return tool_error_result(
         error,
         error_type=error_type,

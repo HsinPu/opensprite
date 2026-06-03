@@ -39,7 +39,7 @@ _CONFIGURE_SUBAGENT_RULES_SUMMARY = (
 
 
 def _strip_error_prefix(message: str) -> str:
-    return str(message or "").removeprefix("Error:").strip()
+    return str(message or "").strip()
 
 
 def _configure_subagent_error_result(

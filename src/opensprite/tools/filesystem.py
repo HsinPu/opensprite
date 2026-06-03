@@ -217,7 +217,7 @@ def _write_guard(
 ) -> str | None:
     def guard_result(message: str, category: str) -> str:
         return _filesystem_error_result(
-            str(message or "").removeprefix("Error:").strip(),
+            str(message or "").strip(),
             tool_name=tool_name,
             error_type="ToolGuardrailError",
             category=category,

@@ -175,7 +175,7 @@ def _format_error(query: str, provider: str, error: str, **metadata: Any) -> str
         "truncated": False,
         "content_type": "application/json",
         "items": [],
-        "error": str(error or "").removeprefix("Error:").strip(),
+        "error": str(error or "").strip(),
         "error_type": "WebSearchError",
         "category": "web_search_error",
     }

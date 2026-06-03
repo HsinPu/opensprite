@@ -16,7 +16,7 @@ from ..utils.log import logger
 
 def _mcp_lifecycle_error_result(message: str, *, category: str) -> str:
     return tool_error_result(
-        str(message or "").removeprefix("Error:").strip(),
+        str(message or "").strip(),
         error_type="ConfigureMCPToolError",
         category=category,
         metadata={"tool_name": "configure_mcp"},

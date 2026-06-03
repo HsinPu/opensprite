@@ -61,7 +61,7 @@ def _verify_error_result(
     error_type: str = "VerifyToolError",
     invalid_arguments: bool = False,
 ) -> str:
-    error = str(message or "").removeprefix("Error:").strip()
+    error = str(message or "").strip()
     return tool_error_result(
         error,
         error_type=error_type,
