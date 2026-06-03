@@ -32,6 +32,8 @@ from .active_task_status import (
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
 from .task_context_policy import (
+    BOUNDARY_CONTINUE_REPLY_COMMAND,
+    BOUNDARY_SWITCH_REPLY_COMMAND,
     is_ambiguous_boundary_continuation_type,
     is_current_task_continuation_type,
     is_current_task_replacement_type,
@@ -477,10 +479,13 @@ def _boundary_confirmation_question(current_task: str, current_message: str) -> 
     new_request = _compact_for_prompt(current_message) or "the new request"
     if current_goal and current_goal.lower() != WORK_STEP_NOT_SET:
         return (
-            f"Reply `switch` to replace the active task ({current_goal}) "
-            f"with the new request ({new_request}), or `continue` to keep the active task."
+            f"Reply `{BOUNDARY_SWITCH_REPLY_COMMAND}` to replace the active task ({current_goal}) "
+            f"with the new request ({new_request}), or `{BOUNDARY_CONTINUE_REPLY_COMMAND}` to keep the active task."
         )
-    return f"Reply `switch` to replace it with the new request ({new_request}), or `continue` to keep the active task."
+    return (
+        f"Reply `{BOUNDARY_SWITCH_REPLY_COMMAND}` to replace it with the new request ({new_request}), "
+        f"or `{BOUNDARY_CONTINUE_REPLY_COMMAND}` to keep the active task."
+    )
 
 
 def _compact_for_prompt(value: str, max_chars: int = 120) -> str:
