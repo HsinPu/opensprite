@@ -22,6 +22,15 @@ from opensprite.tools.web_fetch import WebFetchTool
 from opensprite.tools.web_search import WebSearchTool, _format_results
 
 
+def test_execution_extracts_delegate_task_info_from_shared_result_labels():
+    task_id, prompt_type = ExecutionEngine._extract_delegate_task_info(
+        "Task ID: task_abc123\nSubagent: reviewer\n\nResult:\nlooks good"
+    )
+
+    assert task_id == "task_abc123"
+    assert prompt_type == "reviewer"
+
+
 class DummyTool(Tool):
     @property
     def name(self) -> str:

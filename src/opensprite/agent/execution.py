@@ -27,6 +27,11 @@ from ..utils.log import logger
 from .run_state import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
+from .subagent_result_policy import (
+    SUBAGENT_PROMPT_TYPE_LABEL,
+    SUBAGENT_TASK_ID_LABEL,
+    parse_subagent_result_line,
+)
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 from .verification_policy import is_verification_tool_name
 from .web_source_policy import (
@@ -329,10 +334,8 @@ Output exactly these sections when applicable:
         task_id = None
         prompt_type = None
         for line in str(result or "").splitlines():
-            if line.startswith("Task ID: "):
-                task_id = line.split(": ", 1)[1].strip() or None
-            elif line.startswith("Subagent: "):
-                prompt_type = line.split(": ", 1)[1].strip() or None
+            task_id = task_id or parse_subagent_result_line(line, SUBAGENT_TASK_ID_LABEL)
+            prompt_type = prompt_type or parse_subagent_result_line(line, SUBAGENT_PROMPT_TYPE_LABEL)
         return task_id, prompt_type
 
     @staticmethod

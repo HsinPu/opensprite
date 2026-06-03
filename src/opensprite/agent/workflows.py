@@ -13,6 +13,7 @@ from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
 from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
+from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
@@ -478,7 +479,7 @@ class SubagentWorkflowService:
                 [
                     "",
                     f"[{index}] {outcome.prompt_type} | {outcome.status}",
-                    f"Task ID: {outcome.task_id}",
+                    subagent_result_line(SUBAGENT_TASK_ID_LABEL, outcome.task_id),
                     f"Run ID: {outcome.child_run_id}",
                 ]
             )
