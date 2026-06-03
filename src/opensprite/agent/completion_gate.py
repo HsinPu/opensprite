@@ -12,6 +12,7 @@ from .completion_gate_policy import (
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
+    TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
 )
 from .evidence_gate import EvidenceGateService
@@ -517,7 +518,7 @@ class CompletionGateService:
         if _contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="task contract accepted final response",
+                reason=TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
                 active_task_status="done",
                 should_update_active_task=True,
                 verification_required=verification_required,

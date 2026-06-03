@@ -3,6 +3,7 @@ from opensprite.agent.completion_gate_policy import (
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
+    TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
 )
 
@@ -22,3 +23,7 @@ def test_tool_error_without_blocker_reason_is_stable():
 
 def test_plain_answer_contract_complete_reason_is_stable():
     assert PLAIN_ANSWER_CONTRACT_COMPLETE_REASON == "plain-answer contract received a response"
+
+
+def test_task_contract_accepted_final_response_reason_is_stable():
+    assert TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON == "task contract accepted final response"
