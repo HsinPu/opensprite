@@ -10,6 +10,7 @@ from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
+from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .workflow_status import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
@@ -500,7 +501,7 @@ class SubagentWorkflowService:
             if not is_workflow_completed_status(outcome.status):
                 continue
             structured = outcome.structured_output or {}
-            if str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0:
+            if str(structured.get("status") or "") == STRUCTURED_SUBAGENT_OK_STATUS and int(structured.get("finding_count") or 0) == 0:
                 passed = True
                 continue
         return {

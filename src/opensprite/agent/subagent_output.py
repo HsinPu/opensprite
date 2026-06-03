@@ -10,7 +10,16 @@ from ..utils.json_safe import json_safe_value
 
 STRUCTURED_SUBAGENT_SCHEMA_VERSION = 1
 READONLY_SUBAGENT_RESULT_CONTRACT = "readonly_subagent_result"
-ALLOWED_STRUCTURED_SUBAGENT_STATUSES = frozenset({"ok", "needs_input", "inconclusive"})
+STRUCTURED_SUBAGENT_OK_STATUS = "ok"
+STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS = "needs_input"
+STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS = "inconclusive"
+ALLOWED_STRUCTURED_SUBAGENT_STATUSES = frozenset(
+    {
+        STRUCTURED_SUBAGENT_OK_STATUS,
+        STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS,
+        STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS,
+    }
+)
 MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS = 280
 MAX_STRUCTURED_SUBAGENT_TEXT_CHARS = 500
 MAX_STRUCTURED_SUBAGENT_SECTIONS = 8
@@ -116,9 +125,9 @@ def _normalize_structured_payload(
         return None, "prompt_type_mismatch"
 
     truncated = False
-    status = str(payload.get("status") or "inconclusive").strip() or "inconclusive"
+    status = str(payload.get("status") or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS).strip() or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
     if status not in ALLOWED_STRUCTURED_SUBAGENT_STATUSES:
-        status = "inconclusive"
+        status = STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
         truncated = True
 
     summary = _bounded_text(str(payload.get("summary") or "").strip() or _first_nonempty_line(fallback_text), MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS)

@@ -38,6 +38,7 @@ from .harness_profile import (
 from .history_retrieval_policy import is_history_retrieval_tool_name
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
+from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .task_contract import PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
 from .task_intent import TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS
@@ -120,7 +121,7 @@ _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_the
 _RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
 _WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
 _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = NEEDS_VERIFICATION_COMPLETION_STATUS
-_STRUCTURED_REVIEW_CLEAN_STATUS = "ok"
+_STRUCTURED_REVIEW_CLEAN_STATUS = STRUCTURED_SUBAGENT_OK_STATUS
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
         "next_step_id": "implement",
