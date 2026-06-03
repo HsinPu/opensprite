@@ -48,6 +48,9 @@ PLANNER_INVALID_STATUS = "invalid"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
 PLANNING_ERROR_TASK_TYPE = "planning_error"
+TOOL_GROUP_REQUIREMENT_KIND = "tool_group"
+RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
+ALL_RESOURCE_COVERAGE = "all"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
@@ -308,6 +311,26 @@ def _has_requirement(
     )
 
 
+def _is_tool_group_requirement(requirement: EvidenceRequirement) -> bool:
+    return requirement.kind == TOOL_GROUP_REQUIREMENT_KIND
+
+
+def _is_resource_coverage_requirement(requirement: EvidenceRequirement) -> bool:
+    return requirement.kind == RESOURCE_COVERAGE_REQUIREMENT_KIND
+
+
+def _is_all_resource_coverage(requirement: EvidenceRequirement) -> bool:
+    return requirement.coverage == ALL_RESOURCE_COVERAGE
+
+
+def _is_file_change_requirement(requirement: EvidenceRequirement) -> bool:
+    return requirement.kind == FILE_CHANGE_REQUIREMENT_KIND
+
+
+def _is_verification_requirement(requirement: EvidenceRequirement) -> bool:
+    return requirement.kind == VERIFICATION_REQUIREMENT_KIND
+
+
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
     """Return human-readable missing evidence items for a contract."""
     if contract is None:
@@ -316,12 +339,12 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     ok_evidence = [item for item in evidence if item.ok]
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     for requirement in contract.requirements:
-        if requirement.kind == "tool_group":
+        if _is_tool_group_requirement(requirement):
             tools = TOOL_GROUPS.get(requirement.tool_group, frozenset())
             count = sum(1 for item in ok_evidence if item.name in tools)
             if count < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Use one of: {', '.join(sorted(tools))}")
-        elif requirement.kind == "resource_coverage":
+        elif _is_resource_coverage_requirement(requirement):
             tools = TOOL_GROUPS.get(requirement.tool_group, frozenset())
             covered = {
                 alias
@@ -331,7 +354,7 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
                 for alias in aliases.get(resource_id, {resource_id})
             }
             required = set(requirement.resource_ids)
-            if requirement.coverage == "all":
+            if _is_all_resource_coverage(requirement):
                 uncovered = tuple(resource_id for resource_id in requirement.resource_ids if resource_id not in covered)
                 if uncovered:
                     missing.append(
@@ -339,9 +362,9 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
                     )
             elif len(covered & required) < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Missing {requirement.tool_group} coverage")
-        elif requirement.kind == "file_change" and file_change_count < max(1, requirement.min_count):
+        elif _is_file_change_requirement(requirement) and file_change_count < max(1, requirement.min_count):
             missing.append(requirement.description or "Record a workspace file change.")
-        elif requirement.kind == "verification" and not verification_passed:
+        elif _is_verification_requirement(requirement) and not verification_passed:
             missing.append(requirement.description or "Record passing verification evidence.")
     return tuple(missing)
 
