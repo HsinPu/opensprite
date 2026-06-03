@@ -11,6 +11,7 @@ from .completion_gate_policy import (
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
+    TOOL_ERROR_WITHOUT_BLOCKER_REASON,
 )
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
@@ -329,7 +330,7 @@ class CompletionGateService:
             ):
                 return CompletionGateResult(
                     status=INCOMPLETE_COMPLETION_STATUS,
-                    reason="tool execution reported an error without a clear blocker handoff",
+                    reason=TOOL_ERROR_WITHOUT_BLOCKER_REASON,
                     verification_required=verification_required,
                     verification_attempted=verification_attempted,
                     verification_passed=verification_passed,
