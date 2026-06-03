@@ -86,6 +86,8 @@ _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
 _WORKFLOW_GATE_COMPLETE_STATUS = "complete"
 _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = "needs_verification"
+_DELEGATED_REVIEW_COMPLETED_STATUS = "completed"
+_STRUCTURED_REVIEW_CLEAN_STATUS = "ok"
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
         "next_step_id": "implement",
@@ -1056,7 +1058,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         if prompt_type not in _REVIEW_PROMPT_TYPES:
             continue
         prompt_types.append(prompt_type)
-        if str(task.status or "") != "completed":
+        if not _is_completed_delegated_review_status(task.status):
             continue
         attempted = True
         structured = task.metadata.get("structured_output") if isinstance(task.metadata, dict) else None
@@ -1068,7 +1070,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
             summary = task_summary
         if not first_finding:
             first_finding = _first_review_finding(structured)
-        if structured_status == "ok" and task_findings == 0:
+        if _is_clean_structured_review_status(structured_status) and task_findings == 0:
             clean_review_recorded = True
             continue
         problematic_review_recorded = True
@@ -1211,6 +1213,14 @@ def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
 
 def _workflow_gate_needs_verification(workflow_gate: dict[str, Any]) -> bool:
     return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS
+
+
+def _is_completed_delegated_review_status(status: str | None) -> bool:
+    return str(status or "").strip() == _DELEGATED_REVIEW_COMPLETED_STATUS
+
+
+def _is_clean_structured_review_status(status: str | None) -> bool:
+    return str(status or "").strip() == _STRUCTURED_REVIEW_CLEAN_STATUS
 
 
 def _first_review_finding(structured_output: Any) -> str:

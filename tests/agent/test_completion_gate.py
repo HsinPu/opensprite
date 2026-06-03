@@ -10,6 +10,8 @@ from opensprite.agent.completion_gate import (
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
     _is_analysis_response_intent_kind,
+    _is_clean_structured_review_status,
+    _is_completed_delegated_review_status,
     _is_generic_task_response_intent_kind,
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
@@ -232,6 +234,10 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert _workflow_gate_is_complete({"status": "needs_review"}) is False
     assert _workflow_gate_needs_verification({"status": "needs_verification"}) is True
     assert _workflow_gate_needs_verification({"status": "complete"}) is False
+    assert _is_completed_delegated_review_status("completed") is True
+    assert _is_completed_delegated_review_status("failed") is False
+    assert _is_clean_structured_review_status("ok") is True
+    assert _is_clean_structured_review_status("error") is False
     assert _workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
         "next_step_id": "bugfix",
         "next_step_label": "Bug fix",
