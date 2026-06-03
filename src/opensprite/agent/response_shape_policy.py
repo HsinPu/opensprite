@@ -19,3 +19,10 @@ def response_item_count(response_text: str | None) -> int:
 
 def response_has_minimum_text_length(response_text: str | None, min_chars: int) -> bool:
     return len(normalized_response_text(response_text)) >= max(1, int(min_chars or 1))
+
+
+def itemized_output_follow_up_instruction() -> str:
+    return (
+        "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
+        "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
+    )

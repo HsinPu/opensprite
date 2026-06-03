@@ -35,6 +35,7 @@ from .quality_gate import (
     source_material_gap_detail,
     source_material_satisfies_contract,
 )
+from .response_shape_policy import itemized_output_follow_up_instruction
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import (
     contract_expects_file_change,
@@ -629,10 +630,7 @@ def _quality_follow_up_instruction(
     if execution_result is not None and contract_requests_itemized_output(
         execution_result.task_contract
     ):
-        return (
-            "\n- Quality follow-up: provide the requested itemized result, not an acknowledgement or plan. "
-            "Include enough list/table entries to satisfy the user's requested count or clearly explain any remaining blocker."
-        )
+        return itemized_output_follow_up_instruction()
     if completion_result.missing_evidence:
         return missing_tool_evidence_follow_up_instruction()
     if execution_result is not None and _task_contract_requires_evidence(execution_result):

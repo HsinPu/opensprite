@@ -1,4 +1,5 @@
 from opensprite.agent.response_shape_policy import (
+    itemized_output_follow_up_instruction,
     normalized_response_text,
     response_has_minimum_text_length,
     response_item_count,
@@ -20,3 +21,10 @@ def test_normalized_response_text_collapses_whitespace():
 def test_response_has_minimum_text_length_uses_normalized_text():
     assert response_has_minimum_text_length("hello   world", 11)
     assert not response_has_minimum_text_length("hello", 6)
+
+
+def test_itemized_output_follow_up_instruction_requires_items():
+    instruction = itemized_output_follow_up_instruction()
+
+    assert "requested itemized result" in instruction
+    assert "list/table entries" in instruction
