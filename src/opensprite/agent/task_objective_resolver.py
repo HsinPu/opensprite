@@ -12,7 +12,7 @@ from ..llms import ChatMessage
 from ..utils.log import logger
 from .active_task_status import has_current_active_task
 from .task_context_resolver import TaskContextDecision
-from .task_intent import TaskIntent
+from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 
 
 _SKIP_CONTINUATION_TYPES = frozenset({"ack", "ambiguous_boundary", "continue_active_task"})
@@ -163,7 +163,7 @@ def _should_resolve_objective(
         return False
     if task_context_decision and task_context_decision.continuation_type in _SKIP_CONTINUATION_TYPES:
         return False
-    if task_intent and task_intent.kind == "conversation" and not bool(
+    if task_intent and task_intent.kind == CONVERSATION_INTENT_KIND and not bool(
         task_context_decision
         and (task_context_decision.is_follow_up or task_context_decision.continuation_type in _ENRICHABLE_CONTINUATION_TYPES)
     ):

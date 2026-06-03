@@ -37,7 +37,7 @@ from .task_context_policy import (
     NONE_CONTINUATION_TYPE,
     TASK_SWITCH_CONTINUATION_TYPE,
 )
-from .task_intent import TaskIntent
+from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
@@ -186,7 +186,7 @@ class TaskContextResolver:
     ) -> TaskContextDecision:
         del history
         current = _compact(current_message)
-        if not current or (task_intent is not None and task_intent.kind == "conversation"):
+        if not current or (task_intent is not None and task_intent.kind == CONVERSATION_INTENT_KIND):
             return TaskContextDecision(
                 continuation_type=ACK_CONTINUATION_TYPE,
                 confidence=0.9,
@@ -246,7 +246,7 @@ def _should_consult_llm(
     work_state_summary: str | None = None,
 ) -> bool:
     current = _compact(current_message)
-    if not current or (task_intent is not None and task_intent.kind == "conversation"):
+    if not current or (task_intent is not None and task_intent.kind == CONVERSATION_INTENT_KIND):
         return False
     if decision.is_follow_up and decision.inherited_tool_group:
         return True

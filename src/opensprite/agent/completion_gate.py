@@ -40,7 +40,7 @@ from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .task_contract import PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
-from .task_intent import TaskIntent
+from .task_intent import ONE_TURN_INTENT_KINDS, TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS, WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
@@ -66,7 +66,7 @@ _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({PURE_ANSWER_TASK_TYPE, PLANNI
 _READ_ONLY_TASK_TYPES = frozenset(
     {ANALYSIS_TASK_TYPE, OPERATIONS_TASK_TYPE, WORKSPACE_READ_TASK_TYPE, HISTORY_RETRIEVAL_TASK_TYPE}
 )
-_ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
+_ONE_TURN_INTENT_KINDS = ONE_TURN_INTENT_KINDS
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({ANALYSIS_TASK_TYPE, PLANNING_TASK_TYPE, GENERIC_TASK_TYPE})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(

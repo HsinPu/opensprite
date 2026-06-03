@@ -7,10 +7,21 @@ from dataclasses import dataclass
 from typing import Any
 
 
-_TASK_KINDS = {
-    "analysis",
-    "task",
-}
+ANALYSIS_INTENT_KIND = "analysis"
+GENERIC_TASK_INTENT_KIND = "task"
+CONVERSATION_INTENT_KIND = "conversation"
+COMMAND_INTENT_KIND = "command"
+MEDIA_UPLOAD_INTENT_KIND = "media_upload"
+QUESTION_INTENT_KIND = "question"
+ONE_TURN_INTENT_KINDS = frozenset(
+    {
+        CONVERSATION_INTENT_KIND,
+        QUESTION_INTENT_KIND,
+        COMMAND_INTENT_KIND,
+        MEDIA_UPLOAD_INTENT_KIND,
+    }
+)
+TASK_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, GENERIC_TASK_INTENT_KIND})
 
 
 @dataclass(frozen=True)
@@ -64,13 +75,13 @@ class TaskIntentService:
         if not compact:
             if media_count:
                 return TaskIntent(
-                    kind="media_upload",
+                    kind=MEDIA_UPLOAD_INTENT_KIND,
                     objective="Save attached media for later use",
                     done_criteria=("attached media is persisted or referenced for follow-up",),
                     long_running=False,
                 )
             return TaskIntent(
-                kind="conversation",
+                kind=CONVERSATION_INTENT_KIND,
                 objective="No user text was provided",
                 done_criteria=("no action is required unless context indicates otherwise",),
                 long_running=False,
@@ -78,7 +89,7 @@ class TaskIntentService:
 
         if compact.startswith("/"):
             return TaskIntent(
-                kind="command",
+                kind=COMMAND_INTENT_KIND,
                 objective=_truncate(compact),
                 done_criteria=("the command is handled or rejected with a clear reason",),
                 long_running=False,
@@ -112,12 +123,12 @@ def _truncate(text: str, max_chars: int = 220) -> str:
 
 def _classify_kind(text: str, *, media_count: int) -> str:
     if media_count:
-        return "analysis"
-    return "task"
+        return ANALYSIS_INTENT_KIND
+    return GENERIC_TASK_INTENT_KIND
 
 
 def _is_long_running(text: str, kind: str) -> bool:
-    if kind not in _TASK_KINDS:
+    if kind not in TASK_INTENT_KINDS:
         return False
     if len(text) > 180:
         return True
@@ -127,17 +138,17 @@ def _is_long_running(text: str, kind: str) -> bool:
 
 
 def _done_criteria(kind: str, *, long_running: bool, has_media: bool) -> tuple[str, ...]:
-    if kind == "conversation":
+    if kind == CONVERSATION_INTENT_KIND:
         return ("respond naturally and match the user's tone",)
-    if kind == "command":
+    if kind == COMMAND_INTENT_KIND:
         return ("the command is handled or rejected with a clear reason",)
-    if kind == "media_upload":
+    if kind == MEDIA_UPLOAD_INTENT_KIND:
         return ("attached media is persisted or referenced for follow-up",)
 
     criteria = ["the user request is addressed directly", "the result or blocker is explicit"]
     if long_running:
         criteria.append("relevant tests or checks pass, or the verification gap is stated")
-    if kind == "analysis":
+    if kind == ANALYSIS_INTENT_KIND:
         criteria.append("findings are tied to concrete evidence")
     if has_media:
         criteria.append("attached media is considered only when relevant to the request")
