@@ -9,6 +9,8 @@ from opensprite.agent.completion_gate import (
     _accepts_final_response_task_type,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
+    _is_analysis_response_intent_kind,
+    _is_generic_task_response_intent_kind,
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
     _is_optional_web_discovery_failure_tool,
@@ -17,6 +19,7 @@ from opensprite.agent.completion_gate import (
     _is_read_only_task_type,
     _is_review_workflow,
     _is_unsuccessful_workflow_status,
+    _is_workflow_completion_intent_kind,
     _workflow_fix_follow_up_fields,
 )
 from opensprite.agent.auto_continue import AutoContinueService
@@ -185,6 +188,12 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
     assert _is_one_turn_intent_kind("command") is True
     assert _is_one_turn_intent_kind("task") is False
+    assert _is_analysis_response_intent_kind("analysis") is True
+    assert _is_analysis_response_intent_kind("task") is False
+    assert _is_generic_task_response_intent_kind("task") is True
+    assert _is_generic_task_response_intent_kind("analysis") is False
+    assert _is_workflow_completion_intent_kind("review") is True
+    assert _is_workflow_completion_intent_kind("task") is False
     assert _accepts_final_response_task_type("planning") is True
     assert _accepts_final_response_task_type("web_research") is False
     assert _is_read_only_blocking_requirement_kind("file_change") is True

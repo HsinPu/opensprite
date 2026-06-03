@@ -31,6 +31,9 @@ _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
 _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
 _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+_ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
+_GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
+_WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
@@ -480,7 +483,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "analysis" and response_text.strip():
+        if _is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="analysis-style task returned a substantive response",
@@ -500,7 +503,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if task_intent.kind == "task" and not expects_code_change and response_text.strip():
+        if _is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
             return CompletionGateResult(
                 status="complete",
                 reason="generic task returned a response",
@@ -805,6 +808,14 @@ def _is_one_turn_intent_kind(kind: str | None) -> bool:
     return str(kind or "").strip() in _ONE_TURN_INTENT_KINDS
 
 
+def _is_analysis_response_intent_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() == _ANALYSIS_RESPONSE_INTENT_KIND
+
+
+def _is_generic_task_response_intent_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() == _GENERIC_TASK_RESPONSE_INTENT_KIND
+
+
 def _is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
     return str(kind or "").strip() in _READ_ONLY_BLOCKING_REQUIREMENT_KINDS
 
@@ -1100,7 +1111,7 @@ def _workflow_gate_outcome(
             "detail": str(workflow.get("summary") or "").strip(),
         }
 
-    if task_intent.kind in {"analysis", "review"}:
+    if _is_workflow_completion_intent_kind(task_intent.kind):
         return {
             **metadata,
             "status": "complete",
@@ -1112,6 +1123,10 @@ def _workflow_gate_outcome(
 
 def _is_unsuccessful_workflow_status(status: str | None) -> bool:
     return str(status or "").strip().lower() in _UNSUCCESSFUL_WORKFLOW_STATUSES
+
+
+def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() in _WORKFLOW_COMPLETION_INTENT_KINDS
 
 
 def _first_review_finding(structured_output: Any) -> str:
