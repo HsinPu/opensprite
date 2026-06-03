@@ -15,6 +15,7 @@ from .completion_gate_policy import (
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
+    REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
@@ -628,7 +629,7 @@ class CompletionGateService:
             should_update_active_task = not task_intent.needs_clarification
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="required file changes and evidence were recorded",
+                reason=REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
                 active_task_status="done" if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
                 verification_required=verification_required,

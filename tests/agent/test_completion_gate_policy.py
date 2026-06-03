@@ -8,6 +8,7 @@ from opensprite.agent.completion_gate_policy import (
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
     ONE_TURN_RESPONSE_COMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
+    REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
     TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
@@ -34,6 +35,10 @@ def test_plain_answer_contract_complete_reason_is_stable():
 
 def test_task_contract_accepted_final_response_reason_is_stable():
     assert TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON == "task contract accepted final response"
+
+
+def test_required_file_changes_and_evidence_recorded_reason_is_stable():
+    assert REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON == "required file changes and evidence were recorded"
 
 
 def test_generic_task_complete_reason_is_stable():
