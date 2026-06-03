@@ -12,6 +12,7 @@ from ..llms import ChatMessage
 from ..utils.log import logger
 from .active_task_status import active_task_status, has_current_active_task
 from .task_intent import TaskIntent
+from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
 _ALLOWED_TASK_TYPES = frozenset(
@@ -25,7 +26,7 @@ _ALLOWED_TASK_TYPES = frozenset(
         "pure_answer",
         "review",
         "task",
-        "web_research",
+        WEB_RESEARCH_TASK_TYPE,
         "workspace_read",
         "writing",
     }
@@ -37,7 +38,7 @@ _ALLOWED_TOOL_GROUPS = frozenset(
         "image_text",
         "verification",
         "video_understanding",
-        "web_research",
+        WEB_RESEARCH_TOOL_GROUP,
         "workspace_read",
         "workspace_write",
     }
@@ -73,7 +74,7 @@ _TASK_TYPE_BY_TOOL_GROUP = {
     "image_text": "media_extraction",
     "video_understanding": "media_extraction",
     "history_retrieval": "history_retrieval",
-    "web_research": "web_research",
+    WEB_RESEARCH_TOOL_GROUP: WEB_RESEARCH_TASK_TYPE,
     "workspace_read": "workspace_read",
     "workspace_write": "code_change",
 }
