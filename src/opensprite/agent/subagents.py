@@ -37,6 +37,7 @@ from .workflow_status import (
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_STATUS,
     WORKFLOW_FAILED_STATUS,
+    WORKFLOW_RUNNING_STATUS,
     is_workflow_failed_status,
 )
 
@@ -501,7 +502,7 @@ class SubagentRunService:
         completed = counts.get(WORKFLOW_COMPLETED_STATUS, 0)
         failed = counts.get(WORKFLOW_FAILED_STATUS, 0) + counts.get(WORKFLOW_ERROR_STATUS, 0)
         cancelled = counts.get(WORKFLOW_CANCELLED_STATUS, 0)
-        if status == "running":
+        if status == WORKFLOW_RUNNING_STATUS:
             return f"Queued {total} parallel subagent task(s)."
         if status == WORKFLOW_COMPLETED_STATUS:
             return f"Completed {completed}/{total} parallel subagent task(s)."
@@ -598,7 +599,7 @@ class SubagentRunService:
         }
         started_at = time.time()
         lifecycle_payload = {
-            "status": "running",
+            "status": WORKFLOW_RUNNING_STATUS,
             "task_id": prepared.task_id,
             "prompt_type": prepared.prompt_type,
             "child_session_id": prepared.child_session_id,
@@ -614,7 +615,7 @@ class SubagentRunService:
         await self.run_trace.create_run(
             prepared.child_session_id,
             prepared.child_run_id,
-            status="running",
+            status=WORKFLOW_RUNNING_STATUS,
             metadata=run_metadata,
         )
         await self.run_trace.emit_event(
@@ -625,7 +626,7 @@ class SubagentRunService:
         )
         self._record_task_update(
             prepared,
-            status="running",
+            status=WORKFLOW_RUNNING_STATUS,
             created_at=started_at,
             updated_at=started_at,
         )
@@ -1057,7 +1058,7 @@ class SubagentRunService:
                 prepared_tasks,
                 group_id=group_id,
                 max_parallel=concurrency,
-                status="running",
+                status=WORKFLOW_RUNNING_STATUS,
             ),
         )
 
