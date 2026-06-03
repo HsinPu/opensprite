@@ -8,6 +8,7 @@ from typing import Any
 from .auto_continue_prompt_policy import (
     existing_web_source_section,
     insufficient_source_detail_follow_up_instruction,
+    missing_source_citation_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
@@ -601,10 +602,7 @@ def _quality_follow_up_instruction(
         and contract_requests_source_reference(execution_result.task_contract)
         and _existing_web_source_context(execution_result)
     ):
-        return (
-            "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
-            "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
-        )
+        return missing_source_citation_follow_up_instruction()
     if (
         execution_result is not None
         and contract_requests_substantive_final_answer(execution_result.task_contract)

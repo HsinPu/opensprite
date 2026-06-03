@@ -61,3 +61,10 @@ def insufficient_source_detail_follow_up_instruction() -> str:
         "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
         "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
     )
+
+
+def missing_source_citation_follow_up_instruction() -> str:
+    return (
+        "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
+        "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
+    )

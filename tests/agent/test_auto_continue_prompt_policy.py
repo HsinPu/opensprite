@@ -1,6 +1,7 @@
 from opensprite.agent.auto_continue_prompt_policy import (
     existing_web_source_section,
     insufficient_source_detail_follow_up_instruction,
+    missing_source_citation_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
@@ -65,3 +66,11 @@ def test_insufficient_source_detail_follow_up_instruction_requires_fetch_detail(
     assert "did not inspect enough source material" in instruction
     assert "web_fetch" in instruction
     assert "Do not finalize from search snippets alone" in instruction
+
+
+def test_missing_source_citation_follow_up_instruction_uses_existing_sources():
+    instruction = missing_source_citation_follow_up_instruction()
+
+    assert "gathered sources are available" in instruction
+    assert "Do not rerun tools unless the sources are insufficient" in instruction
+    assert "reference at least one source" in instruction
