@@ -34,6 +34,7 @@ COMPLETION_JUDGE_STATUSES = frozenset(
 _COMPLETION_JUDGE_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_STATUSES))
 COMPLETION_JUDGE_UNAVAILABLE_REASON = "completion judge unavailable"
 COMPLETION_JUDGE_LLM_NOT_CONFIGURED_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: llm not configured"
+COMPLETION_JUDGE_UNSUPPORTED_STATUS_PREFIX = "completion judge returned unsupported status"
 
 COMPLETION_JUDGE_SYSTEM_PROMPT = """You are OpenSprite's completion judge.
 You receive structured facts about one agent turn. Decide whether the assistant
@@ -184,7 +185,7 @@ def normalize_completion_judge_payload(
     """Validate and normalize the judge JSON object."""
     status = str(payload.get("status") or "").strip().lower()
     if status not in COMPLETION_JUDGE_STATUSES:
-        raise CompletionJudgeError(f"completion judge returned unsupported status: {status or '<empty>'}")
+        raise CompletionJudgeError(completion_judge_unsupported_status_reason(status))
     reason = _coerce_text(payload.get("reason"), max_chars=500)
     if not reason:
         raise CompletionJudgeError("completion judge response is missing reason")
@@ -214,6 +215,10 @@ def normalize_completion_judge_payload(
         raw_response_preview=_truncate(raw_response, max_chars=600),
         metadata={"method": "llm"},
     )
+
+
+def completion_judge_unsupported_status_reason(status: str | None) -> str:
+    return f"{COMPLETION_JUDGE_UNSUPPORTED_STATUS_PREFIX}: {status or '<empty>'}"
 
 
 def _build_judge_prompt(facts: dict[str, Any]) -> str:

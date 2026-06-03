@@ -5,6 +5,7 @@ from opensprite.agent.completion_judge import (
     CompletionJudgeService,
     CompletionJudgeVerdict,
     build_completion_judge_facts,
+    completion_judge_unsupported_status_reason,
     normalize_completion_judge_payload,
     parse_completion_judge_json,
 )
@@ -67,8 +68,9 @@ def test_parse_completion_judge_json_rejects_invalid_json():
 
 
 def test_normalize_completion_judge_payload_validates_status():
-    with pytest.raises(CompletionJudgeError):
+    with pytest.raises(CompletionJudgeError) as exc_info:
         normalize_completion_judge_payload({"status": "maybe", "reason": "unclear"})
+    assert str(exc_info.value) == completion_judge_unsupported_status_reason("maybe")
 
 
 def test_normalize_completion_judge_payload_requires_reason():
