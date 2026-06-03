@@ -56,6 +56,7 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import QualityGateService
+from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
@@ -3250,7 +3251,7 @@ def test_completion_gate_marks_progress_only_fetch_response_incomplete():
     )
 
     assert result.status == "incomplete"
-    assert result.reason == "assistant did not provide the requested itemized result"
+    assert result.reason == ITEMIZED_OUTPUT_MISSING_REASON
 
 
 @pytest.mark.anyio
@@ -3389,7 +3390,7 @@ def test_quality_gate_reports_missing_requested_items():
 
     assert result.passed is False
     assert result.status == "incomplete"
-    assert result.reason == "assistant did not provide the requested itemized result"
+    assert result.reason == ITEMIZED_OUTPUT_MISSING_REASON
 
 def test_task_contract_records_itemized_acceptance_criterion():
     intent = TaskIntentService().classify("看一下 ai 版 幫我抓20 筆")
@@ -3454,7 +3455,7 @@ def test_quality_gate_uses_contract_acceptance_criteria():
     )
 
     assert result.passed is False
-    assert result.reason == "assistant did not provide the requested itemized result"
+    assert result.reason == ITEMIZED_OUTPUT_MISSING_REASON
 
 
 def test_quality_gate_requires_recorded_verification_attempt_after_code_changes():

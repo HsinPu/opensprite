@@ -1,9 +1,14 @@
 from opensprite.agent.response_shape_policy import (
+    ITEMIZED_OUTPUT_MISSING_REASON,
     itemized_output_follow_up_instruction,
     normalized_response_text,
     response_has_minimum_text_length,
     response_item_count,
 )
+
+
+def test_itemized_output_missing_reason_is_stable():
+    assert ITEMIZED_OUTPUT_MISSING_REASON == "assistant did not provide the requested itemized result"
 
 
 def test_response_item_count_counts_bullets_numbers_and_table_rows():

@@ -40,7 +40,12 @@ from .task_contract import (
     neutral_task_contract,
 )
 from .task_intent import TaskIntent
-from .response_shape_policy import normalized_response_text, response_has_minimum_text_length, response_item_count
+from .response_shape_policy import (
+    ITEMIZED_OUTPUT_MISSING_REASON,
+    normalized_response_text,
+    response_has_minimum_text_length,
+    response_item_count,
+)
 from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     is_web_research_source_artifact_tool,
@@ -145,7 +150,7 @@ def _evaluate_itemized_output(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="assistant did not provide the requested itemized result",
+        reason=ITEMIZED_OUTPUT_MISSING_REASON,
     )
 
 
