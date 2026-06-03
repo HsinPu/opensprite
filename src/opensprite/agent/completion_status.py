@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 
-CONTINUABLE_COMPLETION_STATUSES = frozenset({"incomplete", "needs_verification", "needs_review"})
-TERMINAL_COMPLETION_STATUSES = frozenset({"blocked", "complete", "waiting_user"})
+INCOMPLETE_COMPLETION_STATUS = "incomplete"
+NEEDS_VERIFICATION_COMPLETION_STATUS = "needs_verification"
+NEEDS_REVIEW_COMPLETION_STATUS = "needs_review"
+COMPLETE_COMPLETION_STATUS = "complete"
+CONTINUABLE_COMPLETION_STATUSES = frozenset(
+    {INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS}
+)
+TERMINAL_COMPLETION_STATUSES = frozenset({"blocked", COMPLETE_COMPLETION_STATUS, "waiting_user"})
 BLOCKING_COMPLETION_STATUSES = frozenset({"blocked", "waiting_user"})
-EVIDENCE_FOLLOW_UP_COMPLETION_STATUSES = frozenset({"needs_verification", "needs_review"})
-REPLACEABLE_NONFINAL_COMPLETION_STATUSES = frozenset({"incomplete", "needs_verification"})
-WORKFLOW_RESUME_COMPLETION_STATUSES = frozenset({"incomplete", "needs_review"})
+EVIDENCE_FOLLOW_UP_COMPLETION_STATUSES = frozenset(
+    {NEEDS_VERIFICATION_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS}
+)
+REPLACEABLE_NONFINAL_COMPLETION_STATUSES = frozenset(
+    {INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS}
+)
+WORKFLOW_RESUME_COMPLETION_STATUSES = frozenset({INCOMPLETE_COMPLETION_STATUS, NEEDS_REVIEW_COMPLETION_STATUS})
 
 
 def normalize_completion_status(status: str | None) -> str:
@@ -21,6 +31,22 @@ def is_continuable_completion_status(status: str | None) -> bool:
 
 def is_terminal_completion_status(status: str | None) -> bool:
     return normalize_completion_status(status) in TERMINAL_COMPLETION_STATUSES
+
+
+def is_complete_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == COMPLETE_COMPLETION_STATUS
+
+
+def is_incomplete_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == INCOMPLETE_COMPLETION_STATUS
+
+
+def needs_verification_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == NEEDS_VERIFICATION_COMPLETION_STATUS
+
+
+def needs_review_completion_status(status: str | None) -> bool:
+    return normalize_completion_status(status) == NEEDS_REVIEW_COMPLETION_STATUS
 
 
 def is_blocking_completion_status(status: str | None) -> bool:

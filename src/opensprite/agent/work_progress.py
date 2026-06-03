@@ -11,7 +11,10 @@ from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks
 from .active_task_status import is_current_active_task_status
 from .completion_gate import CompletionGateResult
 from .completion_status import (
+    is_complete_completion_status,
     is_blocking_completion_status,
+    needs_review_completion_status,
+    needs_verification_completion_status,
     is_terminal_completion_status,
     requires_evidence_follow_up,
 )
@@ -732,9 +735,9 @@ class WorkProgressService:
     def _status(completion_result: CompletionGateResult) -> str:
         if is_terminal_completion_status(completion_result.status):
             return completion_result.status
-        if completion_result.status == "needs_verification":
+        if needs_verification_completion_status(completion_result.status):
             return "verifying"
-        if completion_result.status == "needs_review":
+        if needs_review_completion_status(completion_result.status):
             return "reviewing"
         return "working"
 
@@ -746,7 +749,7 @@ class WorkProgressService:
         attempts: int,
         budget: int,
     ) -> str:
-        if completion_result.status == "complete":
+        if is_complete_completion_status(completion_result.status):
             return "finalize"
         if is_blocking_completion_status(completion_result.status):
             return completion_result.status
@@ -754,9 +757,9 @@ class WorkProgressService:
             return "stop_budget_exhausted"
         if attempts > 0 and not has_progress:
             return "stop_no_progress"
-        if completion_result.status == "needs_verification":
+        if needs_verification_completion_status(completion_result.status):
             return "continue_verification"
-        if completion_result.status == "needs_review":
+        if needs_review_completion_status(completion_result.status):
             return "address_review_findings" if completion_result.review_attempted else "collect_review_evidence"
         return "continue_work"
 
