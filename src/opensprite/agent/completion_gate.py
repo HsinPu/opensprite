@@ -15,6 +15,12 @@ from .completion_judge import (
     CompletionJudgeVerdict,
     build_completion_judge_facts,
 )
+from .harness_profile import (
+    FILE_CHANGE_REQUIREMENT_KIND,
+    VERIFICATION_REQUIREMENT_KIND,
+    VERIFICATION_TOOL_GROUP,
+    WORKSPACE_WRITE_TOOL_GROUP,
+)
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
@@ -38,14 +44,12 @@ _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_erro
 _READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval"})
 _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
-_READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
-_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
+_READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
+_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({WORKSPACE_WRITE_TOOL_GROUP, "execution", VERIFICATION_TOOL_GROUP, "scheduling"})
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _HISTORY_RETRIEVAL_TOOL = "search_history"
 _VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
 _VERIFICATION_TOOL = "verify"
-_VERIFICATION_REQUIREMENT_KIND = "verification"
-_VERIFICATION_TOOL_GROUP = "verification"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_APP_ROOT_PATH = "apps/web"
 _TEST_PATH_PREFIX = "tests/"
@@ -989,11 +993,11 @@ def _is_verification_tool(tool_name: str | None) -> bool:
 
 
 def _is_verification_requirement_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == _VERIFICATION_REQUIREMENT_KIND
+    return str(kind or "").strip() == VERIFICATION_REQUIREMENT_KIND
 
 
 def _is_verification_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() == _VERIFICATION_TOOL_GROUP
+    return str(tool_group or "").strip() == VERIFICATION_TOOL_GROUP
 
 
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
