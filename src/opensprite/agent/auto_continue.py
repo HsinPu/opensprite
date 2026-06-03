@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .completion_gate import CompletionGateResult
+from .completion_status import is_continuable_completion_status, is_terminal_completion_status
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
 from .quality_gate import (
@@ -18,10 +19,6 @@ from .quality_gate import (
 from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
 from .work_progress import WorkProgressUpdate
-
-
-_CONTINUABLE_STATUSES = {"incomplete", "needs_verification", "needs_review"}
-_TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
 
 
 @dataclass(frozen=True)
@@ -108,14 +105,14 @@ class AutoContinueService:
         profile_name = harness_profile.name if harness_profile is not None else ""
         next_attempt = attempts_used + 1
         max_attempts = work_progress.continuation_budget if work_progress is not None else self.max_auto_continues
-        if completion_result.status in _TERMINAL_STATUSES:
+        if is_terminal_completion_status(completion_result.status):
             return self._skip(
                 "completion_gate_terminal_status",
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=False,
             )
-        if completion_result.status not in _CONTINUABLE_STATUSES:
+        if not is_continuable_completion_status(completion_result.status):
             return self._skip(
                 "completion_gate_status_not_continuable",
                 attempt=next_attempt,

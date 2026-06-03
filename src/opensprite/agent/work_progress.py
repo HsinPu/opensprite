@@ -9,13 +9,17 @@ from typing import Any
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
 from .completion_gate import CompletionGateResult
+from .completion_status import (
+    is_blocking_completion_status,
+    is_terminal_completion_status,
+    requires_evidence_follow_up,
+)
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 
 
-_TERMINAL_STATUSES = {"blocked", "complete", "waiting_user"}
 _DEFAULT_VERIFICATION_TARGET = "relevant tests or checks pass, or the verification gap is stated"
 
 
@@ -550,11 +554,7 @@ class WorkProgressService:
         """Summarize the current pass and choose the next high-level action."""
         signals = self._progress_signals(execution_result)
         continuation_budget = self.continuation_budget(task_intent, harness_profile=harness_profile)
-        if (
-            completion_result.status in {"needs_verification", "needs_review"}
-            or completion_result.verification_required
-            or completion_result.review_required
-        ):
+        if requires_evidence_follow_up(completion_result.status) or completion_result.verification_required or completion_result.review_required:
             continuation_budget = max(continuation_budget, self.long_running_continuation_budget)
         status = self._status(completion_result)
         return WorkProgressUpdate(
@@ -728,7 +728,7 @@ class WorkProgressService:
 
     @staticmethod
     def _status(completion_result: CompletionGateResult) -> str:
-        if completion_result.status in _TERMINAL_STATUSES:
+        if is_terminal_completion_status(completion_result.status):
             return completion_result.status
         if completion_result.status == "needs_verification":
             return "verifying"
@@ -746,7 +746,7 @@ class WorkProgressService:
     ) -> str:
         if completion_result.status == "complete":
             return "finalize"
-        if completion_result.status in {"blocked", "waiting_user"}:
+        if is_blocking_completion_status(completion_result.status):
             return completion_result.status
         if attempts >= budget:
             return "stop_budget_exhausted"
@@ -838,7 +838,7 @@ def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
 
 
 def _derive_blockers(completion_result: CompletionGateResult) -> tuple[str, ...]:
-    if completion_result.status in {"blocked", "waiting_user"}:
+    if is_blocking_completion_status(completion_result.status):
         detail = completion_result.active_task_detail or completion_result.reason
         if detail:
             return (detail,)
@@ -904,7 +904,7 @@ def _build_resume_hint(
 def _map_state_status(completion_result: CompletionGateResult, progress: WorkProgressUpdate) -> str:
     if completion_result.status == "complete":
         return "done"
-    if completion_result.status in {"blocked", "waiting_user"}:
+    if is_blocking_completion_status(completion_result.status):
         return completion_result.status
     if progress.status == "verifying":
         return "active"
@@ -939,7 +939,7 @@ def _state_steps(
 ) -> tuple[str, str]:
     if progress.completion_status == "complete":
         return "not set", "not set"
-    if progress.completion_status in {"blocked", "waiting_user"}:
+    if is_blocking_completion_status(progress.completion_status):
         current = steps[-1] if steps else "not set"
         return current, "not set"
     if progress.next_action == "continue_verification":
