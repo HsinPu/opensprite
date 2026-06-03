@@ -14,7 +14,13 @@ from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
-from .completion_status import allows_nonfinal_response_replacement, is_blocking_completion_status
+from .completion_status import (
+    INCOMPLETE_COMPLETION_STATUS,
+    allows_nonfinal_response_replacement,
+    is_blocking_completion_status,
+    is_complete_completion_status,
+    is_incomplete_completion_status,
+)
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
 from .harness_scorecard import HarnessScorecard, HarnessSensorResult
@@ -962,7 +968,10 @@ class AgentTurnRunner:
             delegate_task_id=aggregate_result.active_delegate_task_id,
             delegate_prompt_type=aggregate_result.active_delegate_prompt_type,
         )
-        run_finish_status = "completed" if completion_result.status == "complete" else (completion_result.status or "incomplete")
+        run_finish_status = (
+            "completed" if is_complete_completion_status(completion_result.status)
+            else (completion_result.status or INCOMPLETE_COMPLETION_STATUS)
+        )
 
         async def after_response_saved() -> None:
             await self._save_work_state(updated_work_state)
@@ -1465,7 +1474,7 @@ def _source_fallback_response(
 
 
 def _should_use_source_fallback(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
-    if completion_result.status != "incomplete":
+    if not is_incomplete_completion_status(completion_result.status):
         return False
     return _task_contract_requires_web_sources(execution_result)
 
@@ -1542,7 +1551,7 @@ def _should_replace_nonfinal_response(
     completion_result: CompletionGateResult,
     auto_continue_attempts: int,
 ) -> bool:
-    if completion_result.status == "complete":
+    if is_complete_completion_status(completion_result.status):
         return False
     if not (response or "").strip():
         return True
