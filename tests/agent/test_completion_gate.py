@@ -1967,6 +1967,31 @@ def test_completion_gate_allows_not_found_answer_after_empty_history_retrieval()
     assert completion.status == "complete"
 
 
+def test_completion_gate_does_not_treat_history_as_empty_when_any_result_metadata_has_hits():
+    intent = TaskIntentService().classify("What did we decide earlier about deployment?")
+    contract = TaskContractService.build(
+        task_intent=intent,
+        current_message=intent.objective,
+    )
+    answer = "We previously decided to keep deployment manual until the health check is stable."
+
+    completion = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text=answer,
+        execution_result=ExecutionResult(
+            content=answer,
+            task_contract=contract,
+            executed_tool_calls=2,
+            tool_evidence=(
+                ToolEvidence(name="search_history", ok=True, metadata={"result_count": 0}),
+                ToolEvidence(name="search_history", ok=True, metadata={"result_count": 1}),
+            ),
+        ),
+    )
+
+    assert completion.status == "complete"
+
+
 def test_completion_gate_does_not_infer_empty_history_from_preview_text():
     intent = TaskIntentService().classify("What did we decide earlier about deployment?")
     contract = TaskContractService.build(

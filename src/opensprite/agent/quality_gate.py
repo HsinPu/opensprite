@@ -9,7 +9,11 @@ from urllib.parse import urlparse
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
 from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
-from .history_retrieval_policy import is_history_retrieval_tool_name
+from .history_retrieval_policy import (
+    history_retrieval_metadata_has_results,
+    history_retrieval_metadata_reports_empty,
+    is_history_retrieval_tool_name,
+)
 from .resource_index import ResourceIndex
 from .task_contract import (
     AcceptanceCriterion,
@@ -714,15 +718,10 @@ def _history_retrieval_was_empty(execution_result: ExecutionResult) -> bool:
         return False
     saw_explicit_empty = False
     for item in evidence:
-        metadata = item.metadata if isinstance(item.metadata, dict) else {}
-        for key in ("result_count", "hit_count", "hits", "count"):
-            if key in metadata:
-                value = metadata.get(key)
-                if isinstance(value, list) and len(value) > 0:
-                    return False
-                if _coerce_int(value, default=0) > 0:
-                    return False
-                saw_explicit_empty = True
+        if history_retrieval_metadata_has_results(item.metadata):
+            return False
+        if history_retrieval_metadata_reports_empty(item.metadata):
+            saw_explicit_empty = True
     return saw_explicit_empty
 
 
