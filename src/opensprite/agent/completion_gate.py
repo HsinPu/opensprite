@@ -40,6 +40,7 @@ from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import contract_expects_file_change
 from .task_intent import TaskIntent
+from .tool_groups import OPERATION_TOOL_GROUPS
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,
@@ -68,7 +69,9 @@ _READ_ONLY_TASK_TYPES = frozenset(
 _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "media_upload"})
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({ANALYSIS_TASK_TYPE, PLANNING_TASK_TYPE, GENERIC_TASK_TYPE})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
-_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({WORKSPACE_WRITE_TOOL_GROUP, "execution", VERIFICATION_TOOL_GROUP, "scheduling"})
+_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
+    {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
+)
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = "batch"
 _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_APP_ROOT_PATH = "apps/web"
