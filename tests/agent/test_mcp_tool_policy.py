@@ -1,4 +1,9 @@
-from opensprite.agent.mcp_tool_policy import is_mcp_tool_name, mcp_tool_display_name, mcp_tool_names
+from opensprite.agent.mcp_tool_policy import (
+    is_mcp_tool_name,
+    mcp_tool_display_name,
+    mcp_tool_names,
+    tool_warrants_progress_notice,
+)
 
 
 def test_mcp_tool_policy_classifies_mcp_tool_names():
@@ -17,3 +22,12 @@ def test_mcp_tool_policy_filters_sorted_tool_names():
         "mcp_a_tool",
         "mcp_z_tool",
     ]
+
+
+def test_mcp_tool_policy_classifies_progress_notice_tools():
+    assert tool_warrants_progress_notice("read_skill") is True
+    assert tool_warrants_progress_notice("delegate") is True
+    assert tool_warrants_progress_notice("delegate_many") is True
+    assert tool_warrants_progress_notice("run_workflow") is True
+    assert tool_warrants_progress_notice("mcp_demo_echo") is True
+    assert tool_warrants_progress_notice("web_search") is False
