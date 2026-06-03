@@ -91,6 +91,8 @@ from .workflow_completion_policy import (
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
+COMPLETION_JUDGE_UNAVAILABLE_REASON = "completion judge unavailable"
+COMPLETION_JUDGE_MISSING_CONFIG_REASON = f"{COMPLETION_JUDGE_UNAVAILABLE_REASON}: missing llm config"
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
 @dataclass(frozen=True)
@@ -194,7 +196,7 @@ class CompletionGateService:
         """Return the LLM judge verdict for the current turn."""
         judge = self.judge_service
         if judge is None:
-            return _completion_judge_blocked_result("completion judge unavailable: missing llm config")
+            return _completion_judge_blocked_result(COMPLETION_JUDGE_MISSING_CONFIG_REASON)
         facts = build_completion_judge_facts(
             task_intent=task_intent,
             response_text=response_text,
@@ -715,15 +717,16 @@ def _completion_result_from_judge_verdict(
 
 
 def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
+    detail = reason or COMPLETION_JUDGE_UNAVAILABLE_REASON
     return CompletionGateResult(
         status=BLOCKED_COMPLETION_STATUS,
-        reason=reason or "completion judge unavailable",
+        reason=detail,
         active_task_status="blocked",
-        active_task_detail=reason or "completion judge unavailable",
+        active_task_detail=detail,
         should_update_active_task=True,
         judge_metadata={
             "method": "llm",
-            "error": reason or "completion judge unavailable",
+            "error": detail,
         },
     )
 
