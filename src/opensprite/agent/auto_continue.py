@@ -10,6 +10,7 @@ from .auto_continue_prompt_policy import (
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
+    web_research_coverage_gap_follow_up_instruction,
 )
 from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
@@ -591,12 +592,7 @@ def _quality_follow_up_instruction(
     if execution_result is not None:
         coverage_gap = source_material_gap_detail(execution_result)
         if coverage_gap:
-            return (
-                "\n- Source follow-up: `web_research` reported coverage gaps. "
-                "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
-                "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
-                f"{coverage_gap}"
-            )
+            return web_research_coverage_gap_follow_up_instruction(coverage_gap)
     if execution_result is not None and _source_material_requires_more_detail(execution_result):
         return (
             "\n- Source follow-up: the previous pass did not inspect enough source material. "

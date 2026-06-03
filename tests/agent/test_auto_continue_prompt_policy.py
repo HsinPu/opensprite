@@ -3,6 +3,7 @@ from opensprite.agent.auto_continue_prompt_policy import (
     missing_tool_evidence_follow_up_instruction,
     source_traceability_follow_up_instruction,
     terse_final_answer_follow_up_instruction,
+    web_research_coverage_gap_follow_up_instruction,
 )
 
 
@@ -47,3 +48,11 @@ def test_source_traceability_follow_up_instruction_includes_gap_detail():
     assert "source artifact without traceable source metadata" in instruction
     assert "web_research" in instruction
     assert "- Missing traceable source metadata" in instruction
+
+
+def test_web_research_coverage_gap_follow_up_instruction_includes_gap_detail():
+    instruction = web_research_coverage_gap_follow_up_instruction("- Target fetch count not met")
+
+    assert "`web_research` reported coverage gaps" in instruction
+    assert "focused `queries`" in instruction
+    assert "- Target fetch count not met" in instruction

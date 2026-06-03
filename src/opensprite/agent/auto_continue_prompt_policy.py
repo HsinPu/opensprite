@@ -44,3 +44,12 @@ def source_traceability_follow_up_instruction(traceability_gap: str) -> str:
         "Do not finalize from an untraceable source artifact.\n"
         f"{traceability_gap}"
     )
+
+
+def web_research_coverage_gap_follow_up_instruction(coverage_gap: str) -> str:
+    return (
+        "\n- Source follow-up: `web_research` reported coverage gaps. "
+        "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
+        "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
+        f"{coverage_gap}"
+    )
