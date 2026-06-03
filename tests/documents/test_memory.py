@@ -5,6 +5,7 @@ from opensprite.context.paths import get_session_memory_file
 from opensprite.documents import memory as memory_module
 from opensprite.agent.tool_registration import SaveMemoryTool
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 class FakeMemoryStore:
@@ -117,7 +118,28 @@ def test_save_memory_tool_returns_error_for_unsafe_content(tmp_path):
 
     result = asyncio.run(tool._execute("# Important Facts\n- system prompt override"))
 
-    assert result.startswith("Error: Blocked unsafe durable memory write")
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "SaveMemoryToolError"
+    assert status.category == "unsafe_memory_content"
+    assert status.invalid_arguments is True
+    assert status.error.startswith("Blocked unsafe durable memory write")
+
+
+def test_save_memory_tool_returns_error_without_session(tmp_path):
+    app_home = tmp_path / "home"
+    workspace_root = app_home / "workspace"
+    memory_dir = app_home / "memory"
+    store = memory_module.MemoryStore(memory_dir, app_home=app_home, workspace_root=workspace_root)
+    tool = SaveMemoryTool(store, lambda: None)
+
+    result = asyncio.run(tool._execute("# Important Facts\n- stable fact"))
+
+    status = classify_tool_result_status(result)
+    assert status.ok is False
+    assert status.error_type == "SaveMemoryToolError"
+    assert status.category == "missing_session_context"
+    assert "requires an active session context" in status.error
 
 
 def test_save_memory_tool_reports_size_and_delta(tmp_path):

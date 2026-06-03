@@ -13,6 +13,7 @@ from ..cron import CronManager
 from ..media import MediaRouter
 from ..search.base import SearchStore
 from .media import outbound_media_error_result
+from ..tools.result_status import tool_error_result
 from ..tools import (
     Tool,
     ToolRegistry,
@@ -75,6 +76,23 @@ BROWSER_TOOL_NAMES = (
 )
 
 
+def _save_memory_error_result(
+    message: str,
+    *,
+    category: str,
+    invalid_arguments: bool = False,
+) -> str:
+    error = str(message or "").removeprefix("Error:").strip()
+    return tool_error_result(
+        error,
+        error_type="SaveMemoryToolError",
+        category=category,
+        repeated_error_key=error if invalid_arguments else None,
+        invalid_arguments=invalid_arguments,
+        metadata={"tool_name": "save_memory"},
+    )
+
+
 class SaveMemoryTool(Tool):
     name = "save_memory"
     description = (
@@ -104,13 +122,20 @@ class SaveMemoryTool(Tool):
     async def _execute(self, memory_update: str, **kwargs: Any) -> str:
         session_id = self.get_session_id()
         if not session_id:
-            return "Error: current session_id is unavailable. save_memory requires an active session context."
+            return _save_memory_error_result(
+                "current session_id is unavailable. save_memory requires an active session context.",
+                category="missing_session_context",
+            )
         current = self.memory_store.read(session_id)
         if memory_update != current:
             try:
                 self.memory_store.write(session_id, memory_update)
             except DurableMemorySafetyError as exc:
-                return f"Error: {exc}"
+                return _save_memory_error_result(
+                    str(exc),
+                    category="unsafe_memory_content",
+                    invalid_arguments=True,
+                )
             return f"Memory saved ({len(memory_update):,} chars; delta {len(memory_update) - len(current):+,} chars)"
         return f"Memory unchanged ({len(current):,} chars)"
 
