@@ -558,30 +558,10 @@ class LlmCallService:
         }
         if on_tool_after_execute is not None:
             execute_kwargs["on_tool_after_execute"] = on_tool_after_execute
-        try:
-            result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
-            result.task_contract = task_contract
-            result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
-            return result
-        except TypeError as exc:
-            message = str(exc)
-            if (
-                "work_state_summary" not in message
-                and "should_cancel" not in message
-                and "on_response_delta" not in message
-                and "on_tool_input_delta" not in message
-                and "on_reasoning_delta" not in message
-            ):
-                raise
-            execute_kwargs.pop("work_state_summary", None)
-            execute_kwargs.pop("should_cancel", None)
-            execute_kwargs.pop("on_response_delta", None)
-            execute_kwargs.pop("on_tool_input_delta", None)
-            execute_kwargs.pop("on_reasoning_delta", None)
-            result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
-            result.task_contract = task_contract
-            result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
-            return result
+        result = await self._execute_messages(session_id, chat_messages, **execute_kwargs)
+        result.task_contract = task_contract
+        result.harness_policy = harness_policy.to_metadata() if harness_policy is not None else None
+        return result
 
 
 def _structured_retrieval_decision(task_context_decision: TaskContextDecision | None) -> bool | None:

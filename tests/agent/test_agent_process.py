@@ -3448,8 +3448,13 @@ def test_call_llm_trims_old_history_to_token_budget(tmp_path):
         on_tool_before_execute=None,
         on_tool_after_execute=None,
         on_llm_status=None,
+        on_response_delta=None,
+        on_tool_input_delta=None,
+        on_reasoning_delta=None,
         refresh_system_prompt=None,
         max_tool_iterations=None,
+        should_cancel=None,
+        work_state_summary="",
     ):
         captured["messages"] = list(chat_messages)
         return ExecutionResult(content="ok", executed_tool_calls=0, used_configure_skill=False)
