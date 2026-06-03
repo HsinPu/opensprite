@@ -1149,7 +1149,7 @@ def _workflow_gate_outcome(
     if _is_research_then_outline_workflow(workflow_id):
         return {
             **metadata,
-            "status": "complete",
+            "status": COMPLETE_COMPLETION_STATUS,
             "reason": "workflow research_then_outline completed all required steps",
         }
 
@@ -1158,7 +1158,7 @@ def _workflow_gate_outcome(
             review_step = _workflow_review_follow_up_fields(workflow_id)
             return {
                 **metadata,
-                "status": "needs_review",
+                "status": NEEDS_REVIEW_COMPLETION_STATUS,
                 "reason": f"workflow {workflow_id} completed but review evidence is missing",
                 "detail": "Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
                 **review_step,
@@ -1167,7 +1167,7 @@ def _workflow_gate_outcome(
             fix_step = _workflow_fix_follow_up_fields(workflow_id)
             return {
                 **metadata,
-                "status": "needs_review",
+                "status": NEEDS_REVIEW_COMPLETION_STATUS,
                 "reason": f"workflow {workflow_id} completed but review findings still require follow-up",
                 "detail": workflow_review_first_finding
                 or workflow_review_summary
@@ -1177,20 +1177,20 @@ def _workflow_gate_outcome(
         if verification_required and not (verification_passed or workflow_verification_passed):
             return {
                 **metadata,
-                "status": "needs_verification",
+                "status": NEEDS_VERIFICATION_COMPLETION_STATUS,
                 "reason": "workflow completed but required verification evidence is still missing",
                 "detail": str(workflow.get("summary") or "").strip(),
             }
         return {
             **metadata,
-            "status": "complete",
+            "status": COMPLETE_COMPLETION_STATUS,
             "reason": f"workflow {workflow_id} completed with clean review evidence",
         }
 
     if verification_required and not (verification_passed or workflow_verification_passed):
         return {
             **metadata,
-            "status": "needs_verification",
+            "status": NEEDS_VERIFICATION_COMPLETION_STATUS,
             "reason": "workflow completed but required verification evidence is still missing",
             "detail": str(workflow.get("summary") or "").strip(),
         }
@@ -1198,7 +1198,7 @@ def _workflow_gate_outcome(
     if _is_workflow_completion_intent_kind(task_intent.kind):
         return {
             **metadata,
-            "status": "complete",
+            "status": COMPLETE_COMPLETION_STATUS,
             "reason": f"workflow {workflow_id} completed all required steps",
         }
 
@@ -1215,8 +1215,8 @@ def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
 
 def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) -> str:
     if _is_failed_workflow_status(workflow_status):
-        return "blocked"
-    return "incomplete"
+        return BLOCKED_COMPLETION_STATUS
+    return INCOMPLETE_COMPLETION_STATUS
 
 
 def _is_failed_workflow_status(status: str | None) -> bool:
