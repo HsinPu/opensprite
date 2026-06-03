@@ -17,6 +17,7 @@ import typer
 from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
 from ..context.paths import get_session_workspace, get_tool_workspace
+from ..agent.turn_quick_actions import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
 from ..runtime import (
     apply_network_environment,
     create_agent,
@@ -238,7 +239,7 @@ async def run_web_chat(
                     "sender_name": sender_name,
                     "text": message,
                     "metadata": {
-                        "source": "cli_via_web",
+                        TURN_SOURCE_METADATA_KEY: CLI_VIA_WEB_TURN_SOURCE,
                         "gateway_url": gateway_url,
                         "ws_url": socket_url,
                     },
