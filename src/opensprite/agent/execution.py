@@ -36,6 +36,7 @@ from .context_compaction_policy import (
     LLM_COMPACTION_TOO_LARGE_REASON,
     contains_compaction_handoff,
 )
+from .execution_fallback_policy import format_repeated_invalid_tool_call_content
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .subagent_result_policy import (
@@ -331,13 +332,7 @@ Output exactly these sections when applicable:
         return not classify_tool_result_status(result).ok
 
     def _repeated_invalid_tool_call_content(self, result: str) -> str:
-        template = str(self.repeated_invalid_tool_call_fallback or "").strip()
-        if not template:
-            return str(result or "").strip()
-        try:
-            return template.format(result=result)
-        except (KeyError, IndexError, ValueError):
-            return f"{template}\n\n{result}"
+        return format_repeated_invalid_tool_call_content(self.repeated_invalid_tool_call_fallback, result)
 
     @staticmethod
     def _extract_delegate_task_info(result: str) -> tuple[str | None, str | None]:
