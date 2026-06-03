@@ -15,10 +15,14 @@ from .task_contract import (
     AcceptanceCriterion,
     TaskContract,
     is_itemized_output_criterion,
+    is_media_artifact_criterion,
+    is_operation_report_criterion,
     is_source_artifact_criterion,
     is_source_detail_criterion,
     is_source_reference_criterion,
     is_substantive_final_answer_criterion,
+    is_verification_or_gap_criterion,
+    is_workspace_location_criterion,
     neutral_task_contract,
 )
 from .task_intent import TaskIntent
@@ -85,15 +89,15 @@ class QualityGateService:
                 result = _evaluate_source_reference(criterion, response_text, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "media_artifact":
+            elif is_media_artifact_criterion(criterion):
                 result = _evaluate_media_artifact_criterion(criterion, contract, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "verification_or_gap":
+            elif is_verification_or_gap_criterion(criterion):
                 result = _evaluate_verification_or_gap(criterion, response_text, execution_result)
                 if result is not None:
                     return result
-            elif criterion.kind == "operation_report":
+            elif is_operation_report_criterion(criterion):
                 result = _evaluate_operation_report(criterion, response_text, execution_result)
                 if result is not None:
                     return result
@@ -460,7 +464,9 @@ def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) ->
             active_task_detail="- Reference the inspected workspace path or filename in the final answer.",
         )
 
-    requires_location = any(criterion.kind == "workspace_location" for criterion in contract.acceptance_criteria)
+    requires_location = any(
+        is_workspace_location_criterion(criterion) for criterion in contract.acceptance_criteria
+    )
     if requires_location and not _contains_workspace_location_clue(normalized_response):
         return QualityGateResult(
             passed=False,
@@ -551,7 +557,7 @@ def media_artifact_gap_detail(contract: TaskContract, execution_result: Executio
     if result is not None:
         return result.active_task_detail or result.reason
     for criterion in contract.acceptance_criteria:
-        if criterion.kind != "media_artifact":
+        if not is_media_artifact_criterion(criterion):
             continue
         result = _evaluate_media_artifact_criterion(criterion, contract, execution_result)
         if result is not None:
