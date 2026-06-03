@@ -25,6 +25,16 @@ from .completion_status import (
     is_complete_completion_status,
     needs_verification_completion_status,
 )
+from .change_path_policy import (
+    WEB_APP_ROOT_PATH,
+    common_verification_path,
+    is_python_file_path,
+    is_python_test_path,
+    is_web_app_path,
+    normalized_touched_paths,
+    path_requires_delegated_review,
+    strip_repo_snapshot_prefix,
+)
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
     HISTORY_RETRIEVAL_TASK_TYPE,
@@ -94,45 +104,7 @@ _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
 )
 _OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = BATCH_TOOL_NAME
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
-_WEB_APP_ROOT_PATH = "apps/web"
-_TEST_PATH_PREFIX = "tests/"
-_PYTHON_FILE_SUFFIX = ".py"
-_DELEGATED_REVIEW_PATH_SUFFIXES = (
-    ".py",
-    ".js",
-    ".jsx",
-    ".ts",
-    ".tsx",
-    ".vue",
-    ".go",
-    ".rs",
-    ".java",
-    ".kt",
-    ".kts",
-    ".cs",
-    ".c",
-    ".cc",
-    ".cpp",
-    ".h",
-    ".hpp",
-    ".php",
-    ".rb",
-    ".swift",
-    ".sql",
-    ".sh",
-    ".ps1",
-    ".bat",
-    ".cmd",
-)
-_DELEGATED_REVIEW_EXACT_PATHS = frozenset(
-    {
-        "pyproject.toml",
-        "package.json",
-        "package-lock.json",
-        "vite.config.js",
-        "vite.config.ts",
-    }
-)
+_WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
 _ANALYSIS_RESPONSE_INTENT_KIND = ANALYSIS_INTENT_KIND
 _GENERIC_TASK_RESPONSE_INTENT_KIND = GENERIC_TASK_INTENT_KIND
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
@@ -841,10 +813,7 @@ def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
 
 
 def _path_requires_delegated_review(path: str) -> bool:
-    normalized = _strip_repo_snapshot_prefix(path).lower()
-    if normalized.endswith(_DELEGATED_REVIEW_PATH_SUFFIXES):
-        return True
-    return normalized in _DELEGATED_REVIEW_EXACT_PATHS
+    return path_requires_delegated_review(path)
 
 
 def _contract_requires_verification(task_contract: Any) -> bool:
@@ -1384,44 +1353,24 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
 
 
 def _normalized_touched_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    normalized = [str(path or "").replace("\\", "/").strip("/") for path in paths]
-    return tuple(path for path in normalized if path)
+    return normalized_touched_paths(paths)
 
 
 def _is_web_app_path(path: str | None) -> bool:
-    normalized = str(path or "").replace("\\", "/").strip("/")
-    return normalized == _WEB_APP_ROOT_PATH or normalized.startswith(f"{_WEB_APP_ROOT_PATH}/")
+    return is_web_app_path(path)
 
 
 def _is_python_file_path(path: str | None) -> bool:
-    return str(path or "").replace("\\", "/").strip("/").endswith(_PYTHON_FILE_SUFFIX)
+    return is_python_file_path(path)
 
 
 def _is_python_test_path(path: str | None) -> bool:
-    normalized = str(path or "").replace("\\", "/").strip("/")
-    return normalized.startswith(_TEST_PATH_PREFIX) and _is_python_file_path(normalized)
+    return is_python_test_path(path)
 
 
 def _strip_repo_snapshot_prefix(path: str) -> str:
-    normalized = str(path or "").replace("\\", "/").strip("/")
-    if normalized.startswith("repo/"):
-        return normalized[5:]
-    return normalized
+    return strip_repo_snapshot_prefix(path)
 
 
 def _common_verification_path(paths: tuple[str, ...]) -> str | None:
-    if not paths:
-        return None
-    parts_list = [path.split("/") for path in paths if path]
-    if not parts_list:
-        return None
-    common: list[str] = []
-    for segments in zip(*parts_list):
-        if len(set(segments)) != 1:
-            break
-        common.append(segments[0])
-    if not common:
-        return "."
-    if len(common) == len(parts_list[0]) and not paths[0].endswith("/"):
-        return "/".join(common[:-1]) or "."
-    return "/".join(common) or "."
+    return common_verification_path(paths)
