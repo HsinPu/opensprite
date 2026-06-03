@@ -8,6 +8,7 @@ from typing import Any
 
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
+from .active_task_status import is_current_active_task_status
 from .completion_gate import CompletionGateResult
 from .completion_status import (
     is_blocking_completion_status,
@@ -266,7 +267,7 @@ class WorkProgressService:
         """Reuse persisted task semantics when structured context says this turn continues it."""
         if (
             state is None
-            or state.status not in {"active", "blocked", "waiting_user"}
+            or not is_current_active_task_status(state.status)
             or not _continues_existing_task(task_context_decision)
         ):
             return task_intent
@@ -367,7 +368,7 @@ class WorkProgressService:
         last_progress_signals = tuple(state.last_progress_signals) or tuple(_string_list(legacy.get("last_progress_signals")))
         if not pending_steps:
             pending_steps = tuple(step for step in state.steps if step not in state.completed_steps and step != "not set")
-        if not blockers and state.status in {"blocked", "waiting_user"} and state.last_next_action:
+        if not blockers and is_blocking_completion_status(state.status) and state.last_next_action:
             blockers = (state.last_next_action,)
         if not verification_targets:
             verification_targets = _derive_verification_targets(
@@ -594,7 +595,7 @@ class WorkProgressService:
     ) -> bool:
         if existing_state is None:
             return False
-        if existing_state.status not in {"active", "blocked", "waiting_user"}:
+        if not is_current_active_task_status(existing_state.status):
             return False
         if not existing_state.objective.strip():
             return False
@@ -612,7 +613,7 @@ class WorkProgressService:
     ) -> bool:
         if existing_state is None:
             return False
-        if existing_state.status not in {"active", "blocked", "waiting_user"}:
+        if not is_current_active_task_status(existing_state.status):
             return False
         if task_context_decision is None:
             return True

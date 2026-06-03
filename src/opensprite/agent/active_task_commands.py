@@ -19,6 +19,7 @@ from ..storage.base import get_storage_message_count
 from ..utils.log import logger
 from .active_task_status import is_current_active_task_status, is_current_or_done_active_task_status
 from .completion_gate import CompletionGateResult
+from .completion_status import is_blocking_completion_status
 from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
@@ -139,7 +140,7 @@ class ActiveTaskCommandService:
             open_questions = list(workboard.blockers)
         elif state is not None and state.status in {"active", "done"}:
             open_questions = ["none"]
-        elif progress.status in {"blocked", "waiting_user"}:
+        elif is_blocking_completion_status(progress.status):
             open_questions = [progress.completion_reason]
 
         store.update_fields(

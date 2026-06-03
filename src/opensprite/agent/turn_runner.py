@@ -14,6 +14,7 @@ from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionGateResult, CompletionGateService
+from .completion_status import allows_nonfinal_response_replacement, is_blocking_completion_status
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile, HarnessProfileService
 from .harness_scorecard import HarnessScorecard, HarnessSensorResult
@@ -1534,9 +1535,9 @@ def _should_replace_nonfinal_response(
         return False
     if not (response or "").strip():
         return True
-    if completion_result.status in {"blocked", "waiting_user"}:
+    if is_blocking_completion_status(completion_result.status):
         return False
-    return completion_result.status in {"incomplete", "needs_verification"}
+    return allows_nonfinal_response_replacement(completion_result.status)
 
 
 def _completion_blocker_response(
