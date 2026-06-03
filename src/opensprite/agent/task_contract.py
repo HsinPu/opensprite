@@ -10,11 +10,23 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from .harness_profile import (
+    ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
+    GENERIC_TASK_TYPE,
+    HISTORY_RETRIEVAL_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP,
+    MEDIA_EXTRACTION_TASK_TYPE,
+    MEDIA_TOOL_GROUP,
+    OPERATIONS_TASK_TYPE,
+    PLANNING_TASK_TYPE,
+    PURE_ANSWER_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,
+    WORKSPACE_CHANGE_TASK_TYPE,
     WORKSPACE_WRITE_TOOL_GROUP,
+    WORKSPACE_READ_TASK_TYPE,
+    WORKSPACE_READ_TOOL_GROUP,
 )
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
@@ -41,37 +53,37 @@ _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
 )
 _ALLOWED_PLANNER_TASK_TYPES = frozenset(
     {
-        "pure_answer",
-        "web_research",
-        "workspace_read",
-        "workspace_change",
-        "code_change",
+        PURE_ANSWER_TASK_TYPE,
+        WEB_RESEARCH_TASK_TYPE,
+        WORKSPACE_READ_TASK_TYPE,
+        WORKSPACE_CHANGE_TASK_TYPE,
+        CODE_CHANGE_TASK_TYPE,
         "media_analysis",
-        "media_extraction",
-        "planning",
-        "history_retrieval",
+        MEDIA_EXTRACTION_TASK_TYPE,
+        PLANNING_TASK_TYPE,
+        HISTORY_RETRIEVAL_TASK_TYPE,
         "ops",
-        "operations",
-        "task",
-        "analysis",
+        OPERATIONS_TASK_TYPE,
+        GENERIC_TASK_TYPE,
+        ANALYSIS_TASK_TYPE,
     }
 )
 _PLANNER_TASK_TYPE_ALIASES = {
-    "workspace_change": "code_change",
-    "media_analysis": "media_extraction",
-    "ops": "operations",
+    WORKSPACE_CHANGE_TASK_TYPE: CODE_CHANGE_TASK_TYPE,
+    "media_analysis": MEDIA_EXTRACTION_TASK_TYPE,
+    "ops": OPERATIONS_TASK_TYPE,
 }
 _PLANNER_TOOL_GROUP_ALIASES = {
-    "workspace_change": "workspace_write",
-    "media_analysis": "media",
-    "ops": "verification",
+    WORKSPACE_CHANGE_TASK_TYPE: WORKSPACE_WRITE_TOOL_GROUP,
+    "media_analysis": MEDIA_TOOL_GROUP,
+    "ops": VERIFICATION_TOOL_GROUP,
 }
 _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
     WEB_RESEARCH_TASK_TYPE: (WEB_RESEARCH_TOOL_GROUP,),
-    "workspace_read": ("workspace_read",),
-    "code_change": ("workspace_read", "workspace_write"),
-    "media_extraction": ("media",),
-    "history_retrieval": ("history_retrieval",),
+    WORKSPACE_READ_TASK_TYPE: (WORKSPACE_READ_TOOL_GROUP,),
+    CODE_CHANGE_TASK_TYPE: (WORKSPACE_READ_TOOL_GROUP, WORKSPACE_WRITE_TOOL_GROUP),
+    MEDIA_EXTRACTION_TASK_TYPE: (MEDIA_TOOL_GROUP,),
+    HISTORY_RETRIEVAL_TASK_TYPE: (HISTORY_RETRIEVAL_TOOL_GROUP,),
 }
 _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
@@ -167,7 +179,7 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
     objective = str(getattr(task_intent, "objective", "") or current_message or "").strip()
     return TaskContract(
         objective=objective,
-        task_type="pure_answer",
+        task_type=PURE_ANSWER_TASK_TYPE,
         final_answer_required=True,
         allow_no_tool_final=True,
         contract_sources=("missing_runtime_contract",),
@@ -486,8 +498,8 @@ def _contract_from_planner_payload(
     quality_checks = _normalize_planner_quality_checks(payload.get("quality_checks"))
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = raw_tool_groups
-    if task_type == "history_retrieval":
-        tool_groups = [tool_group for tool_group in tool_groups if tool_group == "history_retrieval"]
+    if task_type == HISTORY_RETRIEVAL_TASK_TYPE:
+        tool_groups = [tool_group for tool_group in tool_groups if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP]
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
     if (
         inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS
@@ -571,7 +583,7 @@ def _append_tool_group_contract(
     if is_web_research_tool_group(tool_group):
         _append_web_contract(requirements, acceptance_criteria, min_source_count=2)
         return acceptance_criteria
-    if tool_group == "workspace_read":
+    if tool_group == WORKSPACE_READ_TOOL_GROUP:
         _append_workspace_contract(requirements, acceptance_criteria)
         return acceptance_criteria
     if tool_group == WORKSPACE_WRITE_TOOL_GROUP:
@@ -585,15 +597,15 @@ def _append_tool_group_contract(
                 )
             )
         return _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
-    if tool_group == "media":
+    if tool_group == MEDIA_TOOL_GROUP:
         return _append_media_contract(
             requirements,
             acceptance_criteria,
             resource_index=resource_index,
             selected=selected,
         )
-    if tool_group == "history_retrieval":
-        requirements.append(_tool_group_requirement("history_retrieval"))
+    if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP:
+        requirements.append(_tool_group_requirement(HISTORY_RETRIEVAL_TOOL_GROUP))
         return _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
     if tool_group in {"scheduling", "execution"}:
         requirements.append(_tool_group_requirement(tool_group))
@@ -655,7 +667,7 @@ def _append_media_contract(
             )
         )
     if not (image_resources or audio_resources or video_resources):
-        requirements.append(_tool_group_requirement("media"))
+        requirements.append(_tool_group_requirement(MEDIA_TOOL_GROUP))
     return _append_acceptance_criteria(
         acceptance_criteria,
         (_media_artifact_criterion(), _media_final_answer_criterion()),
@@ -701,11 +713,11 @@ def _append_workspace_contract(
     requirements: list[EvidenceRequirement],
     acceptance_criteria: list[AcceptanceCriterion],
 ) -> None:
-    if not _has_requirement(requirements, kind="tool_group", tool_group="workspace_read"):
+    if not _has_requirement(requirements, kind="tool_group", tool_group=WORKSPACE_READ_TOOL_GROUP):
         requirements.append(
             EvidenceRequirement(
                 kind="tool_group",
-                tool_group="workspace_read",
+                tool_group=WORKSPACE_READ_TOOL_GROUP,
                 coverage="any",
                 min_count=1,
                 description="Inspect the relevant workspace files or code context before answering.",
