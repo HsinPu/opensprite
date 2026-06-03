@@ -4,7 +4,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.subagents import _subagent_preparation_error_detail
+from opensprite.agent.subagents import SubagentRunService, _subagent_preparation_error_detail
 from opensprite.agent.subagent_policy import RESEARCH_PROFILE, build_subagent_tool_registry
 from opensprite.agent.web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
@@ -61,6 +61,20 @@ def test_subagent_preparation_error_detail_uses_shared_result_status():
             )
         )
         == "task_id missing"
+    )
+
+
+def test_subagent_group_summary_uses_shared_workflow_status_helpers():
+    counts = {"completed": 1, "error": 1, "cancelled": 1}
+
+    assert SubagentRunService._group_summary("running", total=3, counts=counts) == "Queued 3 parallel subagent task(s)."
+    assert (
+        SubagentRunService._group_summary("error", total=3, counts=counts)
+        == "Completed 1/3 parallel subagent task(s); 1 failed; 1 cancelled."
+    )
+    assert (
+        SubagentRunService._group_summary("cancelled", total=3, counts=counts)
+        == "Cancelled parallel subagent group after 3/3 task(s) settled."
     )
 
 

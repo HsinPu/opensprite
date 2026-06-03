@@ -12,6 +12,11 @@ WORKFLOW_FAILURE_STATUSES = frozenset({WORKFLOW_FAILED_STATUS, WORKFLOW_ERROR_ST
 WORKFLOW_UNSUCCESSFUL_STATUSES = WORKFLOW_FAILURE_STATUSES | frozenset({WORKFLOW_CANCELLED_STATUS})
 
 
+def is_workflow_running_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status is running."""
+    return str(status or "").strip().lower() == WORKFLOW_RUNNING_STATUS
+
+
 def is_workflow_completed_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status is completed."""
     return str(status or "").strip().lower() == WORKFLOW_COMPLETED_STATUS
