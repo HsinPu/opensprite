@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
-from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE
+from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
 from .history_retrieval_policy import is_history_retrieval_tool_name
 from .resource_index import ResourceIndex
 from .task_contract import AcceptanceCriterion, TaskContract, neutral_task_contract
@@ -118,7 +118,7 @@ def _evaluate_itemized_output(
 
 
 def _evaluate_media_artifacts(contract: TaskContract, execution_result: ExecutionResult) -> QualityGateResult | None:
-    if contract.task_type != "media_extraction" or not contract.selected_resources:
+    if contract.task_type != MEDIA_EXTRACTION_TASK_TYPE or not contract.selected_resources:
         return None
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     covered = {
@@ -435,7 +435,7 @@ def _meaningful_overlap(expected: str, actual: str) -> bool:
 
 
 def _evaluate_workspace_grounding(contract: TaskContract, response_text: str) -> QualityGateResult | None:
-    if contract.task_type != "workspace_read":
+    if contract.task_type != WORKSPACE_READ_TASK_TYPE:
         return None
     objective = str(contract.objective or "")
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
