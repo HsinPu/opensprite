@@ -1,5 +1,6 @@
 from opensprite.agent.completion_status import (
     allows_nonfinal_response_replacement,
+    allows_workflow_resume,
     is_blocking_completion_status,
     is_continuable_completion_status,
     is_terminal_completion_status,
@@ -19,3 +20,5 @@ def test_completion_status_helpers_normalize_values():
     assert requires_evidence_follow_up("incomplete") is False
     assert allows_nonfinal_response_replacement("incomplete") is True
     assert allows_nonfinal_response_replacement("needs_review") is False
+    assert allows_workflow_resume("needs_review") is True
+    assert allows_workflow_resume("needs_verification") is False

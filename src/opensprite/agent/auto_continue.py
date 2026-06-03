@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .completion_gate import CompletionGateResult
-from .completion_status import is_continuable_completion_status, is_terminal_completion_status
+from .completion_status import allows_workflow_resume, is_continuable_completion_status, is_terminal_completion_status
 from .execution import ExecutionResult
 from .harness_profile import HarnessProfile
 from .quality_gate import (
@@ -381,7 +381,7 @@ class AutoContinueService:
         last_direct_workflow: str | None,
         last_direct_start_step: str | None,
     ) -> tuple[str | None, str | None]:
-        if completion_result.status not in {"incomplete", "needs_review"}:
+        if not allows_workflow_resume(completion_result.status):
             return None, None
         workflow = str(completion_result.follow_up_workflow or "").strip()
         start_step = str(completion_result.follow_up_step_id or "").strip()

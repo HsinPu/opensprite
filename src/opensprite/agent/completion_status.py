@@ -8,6 +8,7 @@ TERMINAL_COMPLETION_STATUSES = frozenset({"blocked", "complete", "waiting_user"}
 BLOCKING_COMPLETION_STATUSES = frozenset({"blocked", "waiting_user"})
 EVIDENCE_FOLLOW_UP_COMPLETION_STATUSES = frozenset({"needs_verification", "needs_review"})
 REPLACEABLE_NONFINAL_COMPLETION_STATUSES = frozenset({"incomplete", "needs_verification"})
+WORKFLOW_RESUME_COMPLETION_STATUSES = frozenset({"incomplete", "needs_review"})
 
 
 def normalize_completion_status(status: str | None) -> str:
@@ -32,3 +33,7 @@ def requires_evidence_follow_up(status: str | None) -> bool:
 
 def allows_nonfinal_response_replacement(status: str | None) -> bool:
     return normalize_completion_status(status) in REPLACEABLE_NONFINAL_COMPLETION_STATUSES
+
+
+def allows_workflow_resume(status: str | None) -> bool:
+    return normalize_completion_status(status) in WORKFLOW_RESUME_COMPLETION_STATUSES
