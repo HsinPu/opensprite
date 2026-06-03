@@ -9,6 +9,7 @@ from opensprite.agent.completion_gate_policy import (
     ONE_TURN_RESPONSE_COMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
+    TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
     one_turn_completion_reason,
 )
@@ -52,3 +53,7 @@ def test_one_turn_completion_reason_reflects_response_presence():
     assert EMPTY_ASSISTANT_RESPONSE_REASON == "assistant response was empty"
     assert one_turn_completion_reason(has_response=True) == ONE_TURN_RESPONSE_COMPLETE_REASON
     assert one_turn_completion_reason(has_response=False) == EMPTY_ASSISTANT_RESPONSE_REASON
+
+
+def test_task_contract_satisfied_reason_is_stable():
+    assert TASK_CONTRACT_SATISFIED_REASON == "task contract was satisfied"

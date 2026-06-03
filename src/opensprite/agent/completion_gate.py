@@ -16,6 +16,7 @@ from .completion_gate_policy import (
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
     PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
     TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
+    TASK_CONTRACT_SATISFIED_REASON,
     TOOL_ERROR_WITHOUT_BLOCKER_REASON,
     one_turn_completion_reason,
 )
@@ -603,7 +604,7 @@ class CompletionGateService:
             )
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="task contract was satisfied",
+                reason=TASK_CONTRACT_SATISFIED_REASON,
                 active_task_status="done" if should_update_active_task else None,
                 should_update_active_task=should_update_active_task,
                 verification_required=verification_required,
