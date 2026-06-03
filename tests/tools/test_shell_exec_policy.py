@@ -16,6 +16,7 @@ from opensprite.tools.shell import (
     _foreground_exec_guidance,
     _has_shell_background_operator,
 )
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def _python_shell_command(code: str) -> str:
@@ -64,8 +65,17 @@ def test_exec_tool_returns_guidance_for_uvicorn(tmp_path):
 
     tool = ExecTool(workspace=Path(tmp_path))
     result = asyncio.run(tool.execute(command="uvicorn app:app"))
-    assert result.startswith("Error:")
-    assert "long-lived" in result.lower() or "server" in result.lower()
+    payload = json.loads(result)
+    status = classify_tool_result_status(result)
+
+    assert payload["ok"] is False
+    assert payload["error_type"] == "ToolValidationError"
+    assert payload["category"] == "invalid_arguments"
+    assert payload["invalid_arguments"] is True
+    assert payload["metadata"]["tool_name"] == "exec"
+    assert payload["metadata"]["command_policy"] == "foreground_exec"
+    assert status.invalid_arguments is True
+    assert "long-lived" in status.error.lower() or "server" in status.error.lower()
 
 
 def test_exec_tool_runs_echo_when_allowed(tmp_path):

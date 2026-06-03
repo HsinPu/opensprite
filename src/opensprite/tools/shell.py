@@ -637,7 +637,13 @@ class ExecTool(Tool):
             allow_long_lived=allow_managed_background,
         )
         if guidance is not None:
-            return f"Error: {guidance}"
+            return tool_error_result(
+                guidance,
+                error_type="ToolValidationError",
+                category="invalid_arguments",
+                invalid_arguments=True,
+                metadata={"tool_name": self.name, "command_policy": "foreground_exec"},
+            )
 
         return None
 
