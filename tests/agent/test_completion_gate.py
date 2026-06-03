@@ -6,7 +6,9 @@ import pytest
 from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import (
     CompletionGateService,
+    _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
+    _is_read_only_task_type,
     _is_unsuccessful_workflow_status,
 )
 from opensprite.agent.auto_continue import AutoContinueService
@@ -165,6 +167,14 @@ def test_completion_gate_status_helpers_normalize_policy_values():
     assert _is_blocking_planner_status("ready") is False
     assert _is_unsuccessful_workflow_status("CANCELLED") is True
     assert _is_unsuccessful_workflow_status("complete") is False
+
+
+def test_completion_gate_task_type_policy_helpers_are_centralized():
+    intent = TaskIntentService().classify("please answer")
+    assert _is_read_only_task_type("web_research") is True
+    assert _is_read_only_task_type("code_change") is False
+    assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
+    assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:

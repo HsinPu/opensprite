@@ -23,6 +23,8 @@ _WORKSPACE_DISCOVERY_TOOLS = frozenset({"read_file", "list_dir", "grep_files", "
 _REVIEW_PROMPT_TYPES = frozenset({"code-reviewer", "security-reviewer", "async-concurrency-reviewer"})
 _BLOCKING_PLANNER_STATUSES = frozenset({"blocked", "invalid"})
 _UNSUCCESSFUL_WORKFLOW_STATUSES = frozenset({"failed", "cancelled"})
+_NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({"pure_answer", "planning_error"})
+_READ_ONLY_TASK_TYPES = frozenset({"analysis", "operations", "workspace_read", "history_retrieval", "web_research"})
 @dataclass(frozen=True)
 class CompletionGateResult:
     """Structured verdict about whether one turn completed the active objective."""
@@ -658,14 +660,14 @@ def _intent_supports_fallback_active_task_update(task_intent: TaskIntent, task_c
     task_type = str(getattr(task_contract, "task_type", "") or "").strip()
     if not task_type:
         return False
-    return task_type not in {"pure_answer", "planning_error"}
+    return task_type not in _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES
 
 
 def _requires_verification(task_contract: Any) -> bool:
     if _contract_requires_verification(task_contract):
         return True
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {"analysis", "operations", "workspace_read", "history_retrieval", "web_research"}:
+    if _is_read_only_task_type(task_type):
         return False
     return False
 
@@ -765,7 +767,7 @@ def _contract_allows_plain_answer(task_contract: Any) -> bool:
 
 def _contract_is_read_only(task_contract: Any) -> bool:
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {"workspace_read", "history_retrieval", "web_research", "analysis", "operations"}:
+    if _is_read_only_task_type(task_type):
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
         if str(getattr(requirement, "kind", "") or "") in {"file_change", "verification"}:
@@ -774,6 +776,10 @@ def _contract_is_read_only(task_contract: Any) -> bool:
         if tool_group in {"workspace_write", "execution", "verification", "scheduling"}:
             return False
     return False
+
+
+def _is_read_only_task_type(task_type: str | None) -> bool:
+    return str(task_type or "").strip() in _READ_ONLY_TASK_TYPES
 
 
 def _task_contract_planner_status(task_contract: Any) -> str:
