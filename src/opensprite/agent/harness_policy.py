@@ -9,6 +9,7 @@ from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPRO
 from ..tools import ToolRegistry
 from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import HarnessProfile
+from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
 
 
@@ -19,7 +20,7 @@ _READ_ONLY_TOOLS = (
     "grep_files",
     "code_navigation",
     "read_skill",
-    "search_history",
+    HISTORY_SEARCH_TOOL_NAME,
     "list_run_file_changes",
     "preview_run_file_change_revert",
     "batch",
