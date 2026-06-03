@@ -34,6 +34,8 @@ from opensprite.agent.completion_gate import (
     _is_unsuccessful_workflow_status,
     _is_workflow_completion_intent_kind,
     _workflow_fix_follow_up_fields,
+    _workflow_gate_is_complete,
+    _workflow_gate_needs_verification,
 )
 from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
@@ -226,6 +228,10 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
 def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert _is_review_workflow("implement_then_review") is True
     assert _is_review_workflow("research_then_outline") is False
+    assert _workflow_gate_is_complete({"status": "complete"}) is True
+    assert _workflow_gate_is_complete({"status": "needs_review"}) is False
+    assert _workflow_gate_needs_verification({"status": "needs_verification"}) is True
+    assert _workflow_gate_needs_verification({"status": "complete"}) is False
     assert _workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
         "next_step_id": "bugfix",
         "next_step_label": "Bug fix",

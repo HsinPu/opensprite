@@ -84,6 +84,8 @@ _ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
 _GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
 _WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
+_WORKFLOW_GATE_COMPLETE_STATUS = "complete"
+_WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS = "needs_verification"
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
         "next_step_id": "implement",
@@ -347,20 +349,26 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=workflow_gate["status"],
                 reason=workflow_gate["reason"],
-                active_task_status="done" if workflow_gate["status"] == "complete" else None,
+                active_task_status="done" if _workflow_gate_is_complete(workflow_gate) else None,
                 active_task_detail=workflow_gate.get("detail") or None,
                 follow_up_workflow=_string_or_none(workflow_gate.get("workflow")),
                 follow_up_step_id=_string_or_none(workflow_gate.get("next_step_id")),
                 follow_up_step_label=_string_or_none(workflow_gate.get("next_step_label")),
                 follow_up_prompt_type=_string_or_none(workflow_gate.get("next_step_prompt_type")),
-                should_update_active_task=workflow_gate["status"] == "complete"
+                should_update_active_task=_workflow_gate_is_complete(workflow_gate)
                 and _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
                 verification_attempted=workflow_verification_attempted,
                 verification_passed=workflow_verification_passed,
-                verification_action=verification_follow_up["action"] if workflow_gate["status"] == "needs_verification" else None,
-                verification_path=verification_follow_up["path"] if workflow_gate["status"] == "needs_verification" else None,
-                verification_pytest_args=verification_follow_up["pytest_args"] if workflow_gate["status"] == "needs_verification" else (),
+                verification_action=verification_follow_up["action"]
+                if _workflow_gate_needs_verification(workflow_gate)
+                else None,
+                verification_path=verification_follow_up["path"]
+                if _workflow_gate_needs_verification(workflow_gate)
+                else None,
+                verification_pytest_args=verification_follow_up["pytest_args"]
+                if _workflow_gate_needs_verification(workflow_gate)
+                else (),
                 review_required=review_required,
                 review_attempted=workflow_review_attempted,
                 review_passed=workflow_review_passed,
@@ -1195,6 +1203,14 @@ def _is_unsuccessful_workflow_status(status: str | None) -> bool:
 
 def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
     return str(kind or "").strip() in _WORKFLOW_COMPLETION_INTENT_KINDS
+
+
+def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
+    return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_COMPLETE_STATUS
+
+
+def _workflow_gate_needs_verification(workflow_gate: dict[str, Any]) -> bool:
+    return str(workflow_gate.get("status") or "").strip() == _WORKFLOW_GATE_NEEDS_VERIFICATION_STATUS
 
 
 def _first_review_finding(structured_output: Any) -> str:
