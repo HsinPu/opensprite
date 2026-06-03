@@ -11,36 +11,50 @@ from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage
 from ..utils.log import logger
 from .active_task_status import active_task_status, has_current_active_task
+from .harness_profile import (
+    ANALYSIS_TASK_TYPE,
+    CODE_CHANGE_TASK_TYPE,
+    HISTORY_RETRIEVAL_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP,
+    MEDIA_EXTRACTION_TASK_TYPE,
+    PLANNING_TASK_TYPE,
+    PURE_ANSWER_TASK_TYPE,
+    GENERIC_TASK_TYPE,
+    VERIFICATION_TOOL_GROUP,
+    WORKSPACE_READ_TASK_TYPE,
+    WORKSPACE_READ_TOOL_GROUP,
+    WORKSPACE_WRITE_TOOL_GROUP,
+)
 from .task_intent import TaskIntent
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
 _ALLOWED_TASK_TYPES = frozenset(
     {
-        "analysis",
-        "code_change",
+        ANALYSIS_TASK_TYPE,
+        CODE_CHANGE_TASK_TYPE,
         "debug",
-        "history_retrieval",
-        "media_extraction",
-        "planning",
-        "pure_answer",
+        HISTORY_RETRIEVAL_TASK_TYPE,
+        MEDIA_EXTRACTION_TASK_TYPE,
+        PLANNING_TASK_TYPE,
+        PURE_ANSWER_TASK_TYPE,
         "review",
-        "task",
+        GENERIC_TASK_TYPE,
         WEB_RESEARCH_TASK_TYPE,
-        "workspace_read",
+        WORKSPACE_READ_TASK_TYPE,
         "writing",
     }
 )
 _ALLOWED_TOOL_GROUPS = frozenset(
     {
         "audio_text",
-        "history_retrieval",
+        HISTORY_RETRIEVAL_TOOL_GROUP,
         "image_text",
-        "verification",
+        VERIFICATION_TOOL_GROUP,
         "video_understanding",
         WEB_RESEARCH_TOOL_GROUP,
-        "workspace_read",
-        "workspace_write",
+        WORKSPACE_READ_TOOL_GROUP,
+        WORKSPACE_WRITE_TOOL_GROUP,
     }
 )
 _ALLOWED_CONTINUATION_TYPES = frozenset(
@@ -70,13 +84,13 @@ _NEW_TASK_CONTINUATION_TYPES = frozenset({"task_switch", "new_task"})
 _AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE = "ambiguous_boundary"
 _LLM_TASK_SWITCH_CONFIDENCE = 0.80
 _TASK_TYPE_BY_TOOL_GROUP = {
-    "audio_text": "media_extraction",
-    "image_text": "media_extraction",
-    "video_understanding": "media_extraction",
-    "history_retrieval": "history_retrieval",
+    "audio_text": MEDIA_EXTRACTION_TASK_TYPE,
+    "image_text": MEDIA_EXTRACTION_TASK_TYPE,
+    "video_understanding": MEDIA_EXTRACTION_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP: HISTORY_RETRIEVAL_TASK_TYPE,
     WEB_RESEARCH_TOOL_GROUP: WEB_RESEARCH_TASK_TYPE,
-    "workspace_read": "workspace_read",
-    "workspace_write": "code_change",
+    WORKSPACE_READ_TOOL_GROUP: WORKSPACE_READ_TASK_TYPE,
+    WORKSPACE_WRITE_TOOL_GROUP: CODE_CHANGE_TASK_TYPE,
 }
 
 
