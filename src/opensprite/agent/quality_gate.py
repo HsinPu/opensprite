@@ -30,6 +30,7 @@ from .task_contract import (
     neutral_task_contract,
 )
 from .task_intent import TaskIntent
+from .response_shape_policy import normalized_response_text, response_has_minimum_text_length, response_item_count
 from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     is_web_research_source_artifact_tool,
@@ -127,11 +128,11 @@ def _evaluate_itemized_output(
 ) -> QualityGateResult | None:
     if execution_result.executed_tool_calls > 0:
         return None
-    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
+    normalized = normalized_response_text(response_text)
     max_response_chars = max(0, int(getattr(criterion, "max_response_chars", 0) or 0))
     if not normalized or (max_response_chars and len(normalized) > max_response_chars):
         return None
-    if _response_item_count(response_text) >= max(1, int(getattr(criterion, "min_count", 1) or 1)):
+    if response_item_count(response_text) >= max(1, int(getattr(criterion, "min_count", 1) or 1)):
         return None
     return QualityGateResult(
         passed=False,
@@ -166,9 +167,8 @@ def _evaluate_substantive_final_answer(
     criterion: AcceptanceCriterion,
     response_text: str,
 ) -> QualityGateResult | None:
-    normalized = re.sub(r"\s+", " ", (response_text or "").strip())
     min_response_chars = max(1, int(getattr(criterion, "min_response_chars", 0) or 1))
-    if len(normalized) >= min_response_chars:
+    if response_has_minimum_text_length(response_text, min_response_chars):
         return None
     return QualityGateResult(
         passed=False,
@@ -456,7 +456,7 @@ def _evaluate_history_grounding(
         return None
 
     requested_count = _history_itemized_min_count(contract)
-    if requested_count > 1 and _response_item_count(response_text) < requested_count:
+    if requested_count > 1 and response_item_count(response_text) < requested_count:
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
@@ -680,12 +680,3 @@ def _string_list(value: object) -> list[str]:
         seen.add(key)
         out.append(text)
     return out
-
-
-def _response_item_count(response_text: str) -> int:
-    lines = [line.strip() for line in str(response_text or "").splitlines() if line.strip()]
-    item_like = 0
-    for line in lines:
-        if re.match(r"^(?:[-*]|\d+[.)]|\|)", line):
-            item_like += 1
-    return item_like
