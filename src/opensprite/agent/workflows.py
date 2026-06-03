@@ -10,6 +10,14 @@ from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
+from .workflow_status import (
+    WORKFLOW_CANCELLED_STATUS,
+    WORKFLOW_COMPLETED_STATUS,
+    WORKFLOW_FAILED_STATUS,
+    is_workflow_completed_status,
+    is_workflow_failed_status,
+    is_workflow_unsuccessful_status,
+)
 
 
 @dataclass(frozen=True)
@@ -109,7 +117,7 @@ def _workflow_progress_fields(
 ) -> dict[str, Any]:
     completed_prefix = start_index
     for outcome in outcomes[: len(steps)]:
-        if outcome.status != "completed":
+        if not is_workflow_completed_status(outcome.status):
             break
         completed_prefix += 1
 
@@ -123,7 +131,7 @@ def _workflow_progress_fields(
                 "last_completed_prompt_type": last_completed.prompt_type,
             }
         )
-    if status != "completed" and completed_prefix < len(steps):
+    if not is_workflow_completed_status(status) and completed_prefix < len(steps):
         next_step = steps[completed_prefix]
         payload.update(
             {
@@ -133,6 +141,18 @@ def _workflow_progress_fields(
             }
         )
     return payload
+
+
+def _completed_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
+    return sum(1 for outcome in outcomes if is_workflow_completed_status(outcome.status))
+
+
+def _failed_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
+    return sum(1 for outcome in outcomes if is_workflow_failed_status(outcome.status))
+
+
+def _unsuccessful_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
+    return sum(1 for outcome in outcomes if is_workflow_unsuccessful_status(outcome.status))
 
 
 def _resolve_start_index(spec: WorkflowSpec, start_step: str | None) -> tuple[int, WorkflowStepSpec | None, str | None]:
@@ -387,11 +407,11 @@ class SubagentWorkflowService:
         start_index: int = 0,
         error: str = "",
     ) -> dict[str, Any]:
-        completed_steps = start_index + sum(1 for outcome in outcomes if outcome.status == "completed")
-        failed_steps = sum(1 for outcome in outcomes if outcome.status in {"failed", "error"})
+        completed_steps = start_index + _completed_outcome_count(outcomes)
+        failed_steps = _failed_outcome_count(outcomes)
         summary = (
             f"Completed {completed_steps}/{len(steps)} workflow step(s)."
-            if status == "completed"
+            if is_workflow_completed_status(status)
             else f"Workflow stopped after {completed_steps}/{len(steps)} completed step(s)."
         )
         payload = {
@@ -468,7 +488,7 @@ class SubagentWorkflowService:
             int((outcome.structured_output or {}).get("finding_count") or 0)
             for outcome in review_outcomes
         )
-        attempted = any(outcome.status == "completed" for outcome in review_outcomes)
+        attempted = any(is_workflow_completed_status(outcome.status) for outcome in review_outcomes)
         passed = False
         summary = ""
         first_finding = ""
@@ -477,7 +497,7 @@ class SubagentWorkflowService:
                 summary = outcome.summary
             if not first_finding:
                 first_finding = _first_structured_review_finding(outcome.structured_output)
-            if outcome.status != "completed":
+            if not is_workflow_completed_status(outcome.status):
                 continue
             structured = outcome.structured_output or {}
             if str(structured.get("status") or "") == "ok" and int(structured.get("finding_count") or 0) == 0:
@@ -513,18 +533,19 @@ class SubagentWorkflowService:
     ) -> dict[str, Any]:
         review = self._review_outcome(outcomes)
         verification = self._verification_outcome(outcomes)
+        completed_steps = start_index + _completed_outcome_count(outcomes)
         return {
             "workflow_run_id": workflow_run_id,
             "workflow": spec.workflow_id,
             "status": status,
             "task_preview": task_preview,
             "total_steps": len(spec.steps),
-            "completed_steps": start_index + sum(1 for outcome in outcomes if outcome.status == "completed"),
-            "failed_steps": sum(1 for outcome in outcomes if outcome.status in {"failed", "error", "cancelled"}),
+            "completed_steps": completed_steps,
+            "failed_steps": _unsuccessful_outcome_count(outcomes),
             "summary": (
-                f"Completed {start_index + sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} workflow step(s)."
-                if status == "completed"
-                else f"Workflow stopped after {start_index + sum(1 for outcome in outcomes if outcome.status == 'completed')}/{len(spec.steps)} completed step(s)."
+                f"Completed {completed_steps}/{len(spec.steps)} workflow step(s)."
+                if is_workflow_completed_status(status)
+                else f"Workflow stopped after {completed_steps}/{len(spec.steps)} completed step(s)."
             ),
             "review_attempted": review["attempted"],
             "review_passed": review["passed"],
@@ -639,9 +660,9 @@ class SubagentWorkflowService:
                         spec=spec,
                         task_preview=task_preview,
                         outcomes=outcomes,
-                        status="cancelled",
+                        status=WORKFLOW_CANCELLED_STATUS,
                         start_index=start_index,
-                        error="cancelled",
+                        error=WORKFLOW_CANCELLED_STATUS,
                     ),
                 )
                 await self._emit_event(
@@ -652,9 +673,9 @@ class SubagentWorkflowService:
                         task_preview=task_preview,
                         steps=spec.steps,
                         outcomes=outcomes,
-                        status="cancelled",
+                        status=WORKFLOW_CANCELLED_STATUS,
                         start_index=start_index,
-                        error="cancelled",
+                        error=WORKFLOW_CANCELLED_STATUS,
                     ),
                 )
                 raise
@@ -668,7 +689,7 @@ class SubagentWorkflowService:
                         spec=spec,
                         task_preview=task_preview,
                         outcomes=outcomes,
-                        status="failed",
+                        status=WORKFLOW_FAILED_STATUS,
                         start_index=start_index,
                         error=error_preview,
                     ),
@@ -693,7 +714,7 @@ class SubagentWorkflowService:
                         task_preview=task_preview,
                         steps=spec.steps,
                         outcomes=outcomes,
-                        status="failed",
+                        status=WORKFLOW_FAILED_STATUS,
                         start_index=start_index,
                         error=error_preview,
                     ),
@@ -725,7 +746,7 @@ class SubagentWorkflowService:
                 task_preview=task_preview,
                 steps=spec.steps,
                 outcomes=outcomes,
-                status="completed",
+                status=WORKFLOW_COMPLETED_STATUS,
                 start_index=start_index,
             ),
         )
@@ -736,8 +757,8 @@ class SubagentWorkflowService:
                 spec=spec,
                 task_preview=task_preview,
                 outcomes=outcomes,
-                status="completed",
+                status=WORKFLOW_COMPLETED_STATUS,
                 start_index=start_index,
             ),
         )
-        return self._format_result(spec.workflow_id, outcomes, status="completed", start_index=start_index)
+        return self._format_result(spec.workflow_id, outcomes, status=WORKFLOW_COMPLETED_STATUS, start_index=start_index)
