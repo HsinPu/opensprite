@@ -79,6 +79,7 @@ from .web_source_policy import (
 )
 from .verification_policy import (
     REQUIRED_VERIFICATION_FAILED_REASON,
+    REQUIRED_VERIFICATION_NOT_RECORDED_REASON,
     SKIPPED_VERIFICATION_STATUS,
     is_verification_result_artifact_kind,
     is_verification_tool_name,
@@ -428,7 +429,7 @@ class CompletionGateService:
             reason = (
                 REQUIRED_VERIFICATION_FAILED_REASON
                 if verification_attempted
-                else "required verification was not recorded"
+                else REQUIRED_VERIFICATION_NOT_RECORDED_REASON
             )
             return CompletionGateResult(
                 status=NEEDS_VERIFICATION_COMPLETION_STATUS,
