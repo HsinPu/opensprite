@@ -29,6 +29,8 @@ _ONE_TURN_INTENT_KINDS = frozenset({"conversation", "question", "command", "medi
 _FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({"analysis", "planning", "task"})
 _READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({"file_change", "verification"})
 _READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset({"workspace_write", "execution", "verification", "scheduling"})
+_OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS = frozenset({"web_search", "web_research"})
+_FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
 _REVIEW_WORKFLOW_IDS = frozenset({"implement_then_review", "bugfix_then_test_then_review"})
 _WORKFLOW_FIX_STEPS = {
     "implement_then_review": {
@@ -835,7 +837,7 @@ def _has_only_optional_web_discovery_failures(execution_result: ExecutionResult)
         return False
     has_successful_fetch_sources = _has_successful_fetched_web_source_artifact(execution_result)
     for item in failed_evidence:
-        if item.name in {"web_search", "web_research"}:
+        if _is_optional_web_discovery_failure_tool(item.name):
             continue
         if item.name == "web_fetch" and has_successful_fetch_sources:
             continue
@@ -891,7 +893,7 @@ def _has_successful_fetched_web_source_artifact(execution_result: ExecutionResul
         if artifact.kind != "web_source" or not artifact.ok:
             continue
         sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
-        if artifact.source_tool in {"web_fetch", "browser_navigate", "browser_snapshot"} and isinstance(sources, list) and sources:
+        if _is_fetched_web_source_artifact_tool(artifact.source_tool) and isinstance(sources, list) and sources:
             return True
         if artifact.source_tool == "web_research" and _web_research_artifact_has_successful_fetch(artifact):
             return True
@@ -905,6 +907,14 @@ def _is_non_exposed_permission_block(evidence: ToolEvidence) -> bool:
         and permission.get("blocked") is True
         and permission.get("exposed") is False
     )
+
+
+def _is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() in _OPTIONAL_WEB_DISCOVERY_FAILURE_TOOLS
+
+
+def _is_fetched_web_source_artifact_tool(source_tool: str | None) -> bool:
+    return str(source_tool or "").strip() in _FETCHED_WEB_SOURCE_ARTIFACT_TOOLS
 
 
 def _web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:

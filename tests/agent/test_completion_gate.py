@@ -10,6 +10,8 @@ from opensprite.agent.completion_gate import (
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
     _is_one_turn_intent_kind,
+    _is_fetched_web_source_artifact_tool,
+    _is_optional_web_discovery_failure_tool,
     _is_read_only_blocking_requirement_kind,
     _is_read_only_blocking_tool_group,
     _is_read_only_task_type,
@@ -200,6 +202,13 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
         "next_step_prompt_type": "bug-fixer",
     }
     assert _workflow_fix_follow_up_fields("research_then_outline") == {}
+
+
+def test_completion_gate_web_source_policy_helpers_are_centralized():
+    assert _is_optional_web_discovery_failure_tool("web_search") is True
+    assert _is_optional_web_discovery_failure_tool("web_fetch") is False
+    assert _is_fetched_web_source_artifact_tool("browser_snapshot") is True
+    assert _is_fetched_web_source_artifact_tool("web_research") is False
 
 
 def _web_research_coverage_gap_artifact() -> TaskArtifact:
