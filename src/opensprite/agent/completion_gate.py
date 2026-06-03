@@ -8,6 +8,7 @@ from typing import Any
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .completion_gate_policy import (
+    ANALYSIS_TASK_COMPLETE_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
@@ -551,7 +552,7 @@ class CompletionGateService:
         if _is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="analysis-style task returned a substantive response",
+                reason=ANALYSIS_TASK_COMPLETE_REASON,
                 active_task_status="done",
                 should_update_active_task=_intent_supports_fallback_active_task_update(
                     task_intent,

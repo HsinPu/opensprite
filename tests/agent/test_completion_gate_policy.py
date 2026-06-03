@@ -1,4 +1,5 @@
 from opensprite.agent.completion_gate_policy import (
+    ANALYSIS_TASK_COMPLETE_REASON,
     GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
@@ -32,3 +33,7 @@ def test_task_contract_accepted_final_response_reason_is_stable():
 
 def test_generic_task_complete_reason_is_stable():
     assert GENERIC_TASK_COMPLETE_REASON == "generic task returned a response"
+
+
+def test_analysis_task_complete_reason_is_stable():
+    assert ANALYSIS_TASK_COMPLETE_REASON == "analysis-style task returned a substantive response"
