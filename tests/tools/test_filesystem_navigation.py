@@ -2,7 +2,7 @@ import asyncio
 import os
 
 import opensprite.tools.filesystem as filesystem
-from opensprite.tools.filesystem import GlobFilesTool, GrepFilesTool, ReadFileTool
+from opensprite.tools.filesystem import GlobFilesTool, GrepFilesTool, ListDirTool, ReadFileTool
 from opensprite.tools.result_status import classify_tool_result_status
 
 
@@ -94,8 +94,6 @@ def test_glob_files_finds_workspace_files_by_pattern(tmp_path):
 
 
 def test_list_dir_includes_subdirectory_agents_hint(tmp_path):
-    from opensprite.tools.filesystem import ListDirTool
-
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "AGENTS.md").write_text("# Src Rules\n\n- List hint.\n", encoding="utf-8")
     (tmp_path / "src" / "app.py").write_text("print('hi')\n", encoding="utf-8")
@@ -106,6 +104,18 @@ def test_list_dir_includes_subdirectory_agents_hint(tmp_path):
     assert "app.py" in result
     assert "# Subdirectory AGENTS.md" in result
     assert "- List hint." in result
+
+
+def test_list_dir_returns_structured_error_for_missing_directory(tmp_path):
+    tool = ListDirTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="missing"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "FilesystemToolError"
+    assert status.category == "not_found"
+    assert status.error == "Directory not found: missing"
 
 
 def test_glob_files_uses_ripgrep_when_available(tmp_path, monkeypatch):

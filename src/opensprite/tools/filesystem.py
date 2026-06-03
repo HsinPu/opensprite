@@ -1351,13 +1351,29 @@ class ListDirTool(Tool):
             workspace = self._get_workspace()
             dir_path = _resolve_workspace_path(workspace, path)
             if dir_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
             
             if not dir_path.exists():
-                return f"Error: Directory not found: {path}"
+                return _filesystem_error_result(
+                    f"Directory not found: {path}",
+                    tool_name=self.name,
+                    category="not_found",
+                    metadata={"path": path},
+                )
             
             if not dir_path.is_dir():
-                return f"Error: Not a directory: {path}"
+                return _filesystem_error_result(
+                    f"Not a directory: {path}",
+                    tool_name=self.name,
+                    category="not_directory",
+                    metadata={"path": path},
+                )
             
             items = []
             for item in sorted(dir_path.iterdir()):
@@ -1367,7 +1383,13 @@ class ListDirTool(Tool):
             result = "\n".join(items) if items else "(empty)"
             return _append_agents_hint(result, workspace, dir_path, self._agents_hint_seen)
         except Exception as e:
-            return f"Error listing directory: {str(e)}"
+            return _filesystem_error_result(
+                f"Error listing directory: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="list_failed",
+                metadata={"path": str(kwargs.get("path", "."))},
+            )
 
 
 class EditFileTool(Tool):
