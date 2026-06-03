@@ -50,6 +50,8 @@ from .response_shape_policy import (
 from .tool_result_grounding_policy import response_reports_tool_result_preview
 from .web_source_policy import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
+    GATHERED_SOURCE_REFERENCE_MISSING_REASON,
+    UNGATHERED_SOURCE_REFERENCED_REASON,
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
     ungrounded_response_source_urls,
@@ -268,7 +270,7 @@ def _evaluate_source_reference(
         return QualityGateResult(
             passed=False,
             status=INCOMPLETE_COMPLETION_STATUS,
-            reason="assistant final answer referenced ungathered sources",
+            reason=UNGATHERED_SOURCE_REFERENCED_REASON,
             active_task_detail=(
                 "- Remove or verify source URLs that were not gathered in this run: "
                 + ", ".join(ungrounded_urls[:3])
@@ -281,7 +283,7 @@ def _evaluate_source_reference(
     return QualityGateResult(
         passed=False,
         status=INCOMPLETE_COMPLETION_STATUS,
-        reason="assistant final answer did not reference gathered sources",
+        reason=GATHERED_SOURCE_REFERENCE_MISSING_REASON,
         active_task_detail=(
             "- Reference at least one gathered source by URL, domain, or title "
             f"(need {min_count}, found {referenced_count})"

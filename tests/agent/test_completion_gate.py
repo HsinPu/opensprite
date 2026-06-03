@@ -42,7 +42,9 @@ from opensprite.agent.completion_gate import (
     _workflow_gate_needs_verification,
 )
 from opensprite.agent.web_source_policy import (
+    GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
+    UNGATHERED_SOURCE_REFERENCED_REASON,
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,
     is_web_fetch_source_record_tool,
@@ -2202,7 +2204,7 @@ def test_completion_gate_rejects_ungathered_source_urls():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer referenced ungathered sources"
+    assert completion.reason == UNGATHERED_SOURCE_REFERENCED_REASON
     assert "https://example.com/fake-reddit-api-news" in (completion.active_task_detail or "")
 
 
@@ -2558,7 +2560,7 @@ def test_completion_gate_rejects_recommended_ungathered_quote_url():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer referenced ungathered sources"
+    assert completion.reason == UNGATHERED_SOURCE_REFERENCED_REASON
     assert "https://finance.yahoo.com/quote/2330.TW/" in (completion.active_task_detail or "")
 
 
@@ -2854,7 +2856,7 @@ def test_completion_gate_requires_web_source_reference_in_final_answer():
     )
 
     assert completion.status == "incomplete"
-    assert completion.reason == "assistant final answer did not reference gathered sources"
+    assert completion.reason == GATHERED_SOURCE_REFERENCE_MISSING_REASON
 
 
 def test_completion_gate_completes_web_research_with_source_artifact_and_answer():

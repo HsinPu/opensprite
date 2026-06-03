@@ -1,5 +1,7 @@
 from opensprite.agent.web_source_policy import (
+    GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
+    UNGATHERED_SOURCE_REFERENCED_REASON,
     normalize_source_url,
     ungrounded_response_source_urls,
     web_source_has_substantive_detail,
@@ -9,6 +11,11 @@ from opensprite.agent.web_source_policy import (
 
 def test_source_material_insufficient_reason_is_stable():
     assert SOURCE_MATERIAL_INSUFFICIENT_REASON == "required source material was insufficient"
+
+
+def test_source_reference_quality_reasons_are_stable():
+    assert UNGATHERED_SOURCE_REFERENCED_REASON == "assistant final answer referenced ungathered sources"
+    assert GATHERED_SOURCE_REFERENCE_MISSING_REASON == "assistant final answer did not reference gathered sources"
 
 
 def test_web_source_has_substantive_detail_accepts_good_fetch_source():
