@@ -13,6 +13,7 @@ from ..skills import SkillsLoader
 from ..utils import format_unified_diff, text_sha256
 from ..utils.log import logger
 from .base import Tool
+from .result_status import tool_error_result
 from .skill_config import path_touches_read_only_app_skills_dir
 from .validation import NON_EMPTY_STRING_PATTERN
 
@@ -60,6 +61,29 @@ _CONTEXT_INVISIBLE_CHARS = frozenset(
         "\u202e",
     }
 )
+
+
+def _filesystem_error_result(
+    error: str,
+    *,
+    tool_name: str,
+    error_type: str = "FilesystemToolError",
+    category: str = "",
+    invalid_arguments: bool = False,
+    metadata: dict[str, Any] | None = None,
+) -> str:
+    merged_metadata: dict[str, Any] = {"tool_name": tool_name}
+    if metadata:
+        merged_metadata.update(metadata)
+    return tool_error_result(
+        error,
+        error_type=error_type,
+        category=category,
+        invalid_arguments=invalid_arguments,
+        metadata=merged_metadata,
+    )
+
+
 _CONTEXT_THREAT_PATTERNS = (
     (re.compile(r"ignore\s+(previous|all|above|prior)\s+instructions", re.IGNORECASE), "prompt_injection"),
     (re.compile(r"disregard\s+(your|all|any)\s+(instructions|rules|guidelines)", re.IGNORECASE), "disregard_rules"),
@@ -677,7 +701,13 @@ class ReadFileTool(Tool):
             workspace = self._get_workspace()
             file_path = _resolve_workspace_path(workspace, path)
             if file_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
             
             # Check if reading a skill file -> redirect to read_skill
             if self.skills_loader and file_path.name == "SKILL.md":
@@ -693,9 +723,19 @@ class ReadFileTool(Tool):
                                 return f"[Note: Use read_skill tool instead]\n\n{content}"
             
             if not file_path.exists():
-                return f"Error: File not found: {path}"
+                return _filesystem_error_result(
+                    f"File not found: {path}",
+                    tool_name=self.name,
+                    category="not_found",
+                    metadata={"path": path},
+                )
             if not file_path.is_file():
-                return f"Error: Not a file: {path}"
+                return _filesystem_error_result(
+                    f"Not a file: {path}",
+                    tool_name=self.name,
+                    category="not_file",
+                    metadata={"path": path},
+                )
             
             offset = int(kwargs.get("offset", 1))
             limit = int(kwargs.get("limit", _DEFAULT_READ_LIMIT))
@@ -703,7 +743,14 @@ class ReadFileTool(Tool):
             lines = content.splitlines()
             total_lines = len(lines)
             if total_lines and offset > total_lines:
-                return f"Error: Offset {offset} is out of range for {path} ({total_lines} lines)."
+                return _filesystem_error_result(
+                    f"Offset {offset} is out of range for {path} ({total_lines} lines).",
+                    tool_name=self.name,
+                    error_type="ToolValidationError",
+                    category="invalid_arguments",
+                    invalid_arguments=True,
+                    metadata={"path": path, "offset": offset, "total_lines": total_lines},
+                )
 
             start = offset - 1
             selected: list[str] = []
@@ -739,7 +786,13 @@ class ReadFileTool(Tool):
                 output.extend(["", f"(End of file - total {total_lines} lines)"])
             return _append_agents_hint("\n".join(output), workspace, file_path, self._agents_hint_seen)
         except Exception as e:
-            return f"Error reading file: {str(e)}"
+            return _filesystem_error_result(
+                f"Error reading file: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="read_failed",
+                metadata={"path": str(kwargs.get("path", ""))},
+            )
 
 
 class GlobFilesTool(Tool):

@@ -3,6 +3,7 @@ import os
 
 import opensprite.tools.filesystem as filesystem
 from opensprite.tools.filesystem import GlobFilesTool, GrepFilesTool, ReadFileTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_read_file_returns_line_numbers_and_pagination_hint(tmp_path):
@@ -59,8 +60,25 @@ def test_read_file_rejects_offset_out_of_range(tmp_path):
     tool = ReadFileTool(workspace=tmp_path)
 
     result = asyncio.run(tool.execute(path="notes.txt", offset=3))
+    status = classify_tool_result_status(result)
 
-    assert result == "Error: Offset 3 is out of range for notes.txt (2 lines)."
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert status.error == "Offset 3 is out of range for notes.txt (2 lines)."
+
+
+def test_read_file_returns_structured_error_for_missing_file(tmp_path):
+    tool = ReadFileTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(path="missing.txt"))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "FilesystemToolError"
+    assert status.category == "not_found"
+    assert status.error == "File not found: missing.txt"
 
 
 def test_glob_files_finds_workspace_files_by_pattern(tmp_path):
