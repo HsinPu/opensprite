@@ -7,6 +7,7 @@ from typing import Any
 
 from .auto_continue_prompt_policy import (
     existing_web_source_section,
+    internal_only_response_follow_up_instruction,
     insufficient_source_detail_follow_up_instruction,
     missing_source_citation_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
@@ -311,16 +312,7 @@ class AutoContinueService:
                 "\n- The missing work is already identified. Resume from the required follow-up detail below before doing broader new work."
             )
         if execution_result.assistant_internal_only_response:
-            incomplete_instruction += (
-                "\n- The previous response only contained internal control text and no user-visible work. "
-                "Do not repeat internal tags such as <system-reminder> or <think>. "
-                "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
-            )
-            if not allow_tools:
-                incomplete_instruction += (
-                    "\n- Do not call tools again in this continuation. The runtime already gathered traceable sources; "
-                    "answer directly using those sources."
-                )
+            incomplete_instruction += internal_only_response_follow_up_instruction(allow_tools=allow_tools)
         handoff = _truncate(compaction_handoff or "", max_chars=2400).strip()
         handoff_section = ""
         if handoff:

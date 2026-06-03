@@ -68,3 +68,17 @@ def missing_source_citation_follow_up_instruction() -> str:
         "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
         "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
     )
+
+
+def internal_only_response_follow_up_instruction(*, allow_tools: bool) -> str:
+    instruction = (
+        "\n- The previous response only contained internal control text and no user-visible work. "
+        "Do not repeat internal tags such as <system-reminder> or <think>. "
+        "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
+    )
+    if not allow_tools:
+        instruction += (
+            "\n- Do not call tools again in this continuation. The runtime already gathered traceable sources; "
+            "answer directly using those sources."
+        )
+    return instruction

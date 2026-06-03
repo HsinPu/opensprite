@@ -1,5 +1,6 @@
 from opensprite.agent.auto_continue_prompt_policy import (
     existing_web_source_section,
+    internal_only_response_follow_up_instruction,
     insufficient_source_detail_follow_up_instruction,
     missing_source_citation_follow_up_instruction,
     missing_tool_evidence_follow_up_instruction,
@@ -74,3 +75,13 @@ def test_missing_source_citation_follow_up_instruction_uses_existing_sources():
     assert "gathered sources are available" in instruction
     assert "Do not rerun tools unless the sources are insufficient" in instruction
     assert "reference at least one source" in instruction
+
+
+def test_internal_only_response_follow_up_instruction_respects_tool_access():
+    with_tools = internal_only_response_follow_up_instruction(allow_tools=True)
+    without_tools = internal_only_response_follow_up_instruction(allow_tools=False)
+
+    assert "only contained internal control text" in with_tools
+    assert "Do not repeat internal tags" in with_tools
+    assert "Do not call tools again" not in with_tools
+    assert "Do not call tools again" in without_tools
