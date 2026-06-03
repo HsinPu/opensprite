@@ -20,3 +20,11 @@ def existing_web_source_section(source_context: str, *, allow_tools: bool) -> st
         "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
         f"{no_tool_instruction}"
     )
+
+
+def terse_final_answer_follow_up_instruction() -> str:
+    return (
+        "\n- Quality follow-up: the previous final answer was too terse. "
+        "Do not reply with only 'done', 'completed', or another short acknowledgement. "
+        "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
+    )

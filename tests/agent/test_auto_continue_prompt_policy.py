@@ -1,4 +1,7 @@
-from opensprite.agent.auto_continue_prompt_policy import existing_web_source_section
+from opensprite.agent.auto_continue_prompt_policy import (
+    existing_web_source_section,
+    terse_final_answer_follow_up_instruction,
+)
 
 
 def test_existing_web_source_section_omits_empty_context():
@@ -19,3 +22,11 @@ def test_existing_web_source_section_requires_final_answer_when_tools_disabled()
     assert "Existing gathered web sources" in section
     assert "progress-only promise" in section
     assert "Write the final answer now" in section
+
+
+def test_terse_final_answer_follow_up_instruction_requires_substantive_answer():
+    instruction = terse_final_answer_follow_up_instruction()
+
+    assert "previous final answer was too terse" in instruction
+    assert "Do not reply with only 'done'" in instruction
+    assert "substantive final answer" in instruction

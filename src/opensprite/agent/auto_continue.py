@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .auto_continue_prompt_policy import existing_web_source_section
+from .auto_continue_prompt_policy import existing_web_source_section, terse_final_answer_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
     allows_workflow_resume,
@@ -614,11 +614,7 @@ def _quality_follow_up_instruction(
         execution_result is not None
         and contract_requests_substantive_final_answer(execution_result.task_contract)
     ):
-        return (
-            "\n- Quality follow-up: the previous final answer was too terse. "
-            "Do not reply with only 'done', 'completed', '已完成', or another short acknowledgement. "
-            "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
-        )
+        return terse_final_answer_follow_up_instruction()
     if (
         execution_result is not None
         and execution_result.task_contract is not None
