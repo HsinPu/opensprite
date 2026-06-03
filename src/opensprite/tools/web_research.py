@@ -94,6 +94,7 @@ _MARKET_QUOTE_PAGE_MARKERS = (
     "股市",
     "報價",
 )
+_MARKET_QUOTE_GENERIC_TEXT_MARKERS = ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")
 _MARKET_QUOTE_QUERY_STOPWORDS = {
     "adr",
     "finance",
@@ -924,7 +925,7 @@ def _market_quote_candidate_kind(*, domain: str, text: str) -> str:
         return "preferred"
     if any(marker in text for marker in _MARKET_QUOTE_PAGE_MARKERS):
         return "quote_page"
-    if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
+    if any(marker in text for marker in _MARKET_QUOTE_GENERIC_TEXT_MARKERS):
         return "generic_quote"
     return "other"
 
