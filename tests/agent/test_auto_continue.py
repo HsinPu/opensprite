@@ -7,6 +7,7 @@ from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
+from opensprite.tools.result_status import tool_error_result
 
 
 def test_auto_continue_allows_missing_verification_once():
@@ -885,7 +886,17 @@ def test_auto_continue_limits_same_target_verify_retries():
     progress = WorkProgressService().evaluate(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="Error: Verification failed: pytest", executed_tool_calls=1, had_tool_error=True, verification_attempted=True),
+        execution_result=ExecutionResult(
+            content=tool_error_result(
+                "Verification failed: pytest",
+                error_type="VerifyToolError",
+                category="verification_failed",
+                metadata={"tool_name": "verify"},
+            ),
+            executed_tool_calls=1,
+            had_tool_error=True,
+            verification_attempted=True,
+        ),
         auto_continue_attempts=3,
         pass_index=4,
     )
@@ -893,7 +904,17 @@ def test_auto_continue_limits_same_target_verify_retries():
     allowed = AutoContinueService(max_auto_continues=1).decide(
         task_intent=intent,
         completion_result=completion,
-        execution_result=ExecutionResult(content="Error: Verification failed: pytest", executed_tool_calls=1, had_tool_error=True, verification_attempted=True),
+        execution_result=ExecutionResult(
+            content=tool_error_result(
+                "Verification failed: pytest",
+                error_type="VerifyToolError",
+                category="verification_failed",
+                metadata={"tool_name": "verify"},
+            ),
+            executed_tool_calls=1,
+            had_tool_error=True,
+            verification_attempted=True,
+        ),
         attempts_used=3,
         previous_response="Verification failed.",
         work_progress=progress,

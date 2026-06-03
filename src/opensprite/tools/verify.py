@@ -103,8 +103,6 @@ def classify_verification_result(result: str) -> dict[str, Any]:
     for prefix, status, ok in (
         ("Verification passed: ", "passed", True),
         ("Verification skipped: ", "skipped", False),
-        ("Error: Verification timed out: ", "timed_out", False),
-        ("Error: Verification failed: ", "failed", False),
     ):
         if first_line.startswith(prefix):
             return {
@@ -113,8 +111,6 @@ def classify_verification_result(result: str) -> dict[str, Any]:
                 "attempted": True,
                 "name": first_line[len(prefix):].strip() or None,
             }
-    if first_line.startswith("Error:"):
-        return {"status": "error", "ok": False, "attempted": True, "name": None}
     return {"status": "unknown", "ok": False, "attempted": bool(text), "name": None}
 
 

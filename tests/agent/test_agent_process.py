@@ -2054,7 +2054,12 @@ def test_agent_process_full_deterministic_review_and_verification_matrix(tmp_pat
             verified.append((action, path, tuple(pytest_args)))
             if len(verified) == 1:
                 return ExecutionResult(
-                    content="Error: Verification failed: pytest\n[stderr] failing test",
+                    content=tool_error_result(
+                        "Verification failed: pytest\n[stderr] failing test",
+                        error_type="VerifyToolError",
+                        category="verification_failed",
+                        metadata={"tool_name": "verify"},
+                    ),
                     executed_tool_calls=1,
                     had_tool_error=True,
                     verification_attempted=True,
