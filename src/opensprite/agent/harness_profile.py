@@ -31,6 +31,13 @@ HISTORY_RETRIEVAL_TOOL_GROUP = "history_retrieval"
 FILE_CHANGE_REQUIREMENT_KIND = "file_change"
 VERIFICATION_REQUIREMENT_KIND = "verification"
 _PROFILE_PRIORITY_ORDER = (OPS_PROFILE_NAME, MEDIA_PROFILE_NAME, CODING_PROFILE_NAME, RESEARCH_PROFILE_NAME, CHAT_PROFILE_NAME)
+CONTRACT_OPERATIONS_PROFILE_REASON = "task contract selected operations profile"
+CONTRACT_WEB_RESEARCH_PROFILE_REASON = "task contract requires web research evidence"
+CONTRACT_MEDIA_PROFILE_REASON = "task contract requires media evidence"
+CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON = "task contract requires workspace changes"
+CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON = "task contract requires workspace evidence"
+CONTRACT_PURE_ANSWER_PROFILE_REASON = "task contract does not require tool-backed evidence"
+DEFAULT_CHAT_PROFILE_REASON = "no task contract available; defaulting to neutral chat profile"
 
 
 @dataclass(frozen=True)
@@ -87,7 +94,7 @@ class HarnessProfileService:
                 verification_policy="validate_or_report",
                 continuation_policy="approval_bounded",
                 approval_required_risk_levels=("external_side_effect", "configuration", "mcp"),
-                reason="task contract selected operations profile",
+                reason=CONTRACT_OPERATIONS_PROFILE_REASON,
                 selection_signals=("contract:operations",),
             )
         if WEB_RESEARCH_TOOL_GROUP in tool_groups or task_type == WEB_RESEARCH_TASK_TYPE:
@@ -99,7 +106,7 @@ class HarnessProfileService:
                 verification_policy="source_grounded",
                 continuation_policy="bounded_with_source_fetch",
                 approval_required_risk_levels=("external_side_effect",),
-                reason="task contract requires web research evidence",
+                reason=CONTRACT_WEB_RESEARCH_PROFILE_REASON,
                 selection_signals=("contract:web_research",),
             )
         if task_type == MEDIA_EXTRACTION_TASK_TYPE or MEDIA_TOOL_GROUP in tool_groups:
@@ -110,7 +117,7 @@ class HarnessProfileService:
                 required_evidence=("media_artifact",),
                 verification_policy="artifact_required",
                 continuation_policy="bounded",
-                reason="task contract requires media evidence",
+                reason=CONTRACT_MEDIA_PROFILE_REASON,
                 selection_signals=("contract:media",),
             )
         if (
@@ -131,7 +138,7 @@ class HarnessProfileService:
                 verification_policy="focused_if_possible",
                 continuation_policy="bounded_with_verification",
                 approval_required_risk_levels=("external_side_effect", "configuration"),
-                reason="task contract requires workspace changes",
+                reason=CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON,
                 selection_signals=("contract:workspace_write",),
             )
         if WORKSPACE_READ_TOOL_GROUP in tool_groups or task_type == WORKSPACE_READ_TASK_TYPE:
@@ -148,7 +155,7 @@ class HarnessProfileService:
                 verification_policy="focused_if_possible",
                 continuation_policy="bounded_with_verification",
                 approval_required_risk_levels=("external_side_effect", "configuration"),
-                reason="task contract requires workspace evidence",
+                reason=CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON,
                 selection_signals=("contract:workspace_read",),
             )
         return HarnessProfile(
@@ -156,7 +163,7 @@ class HarnessProfileService:
             task_type=task_type or PURE_ANSWER_TASK_TYPE,
             verification_policy="none",
             continuation_policy="minimal",
-            reason="task contract does not require tool-backed evidence",
+            reason=CONTRACT_PURE_ANSWER_PROFILE_REASON,
             selection_signals=("contract:pure_answer",),
         )
 
@@ -167,7 +174,7 @@ class HarnessProfileService:
             task_type="pure_answer",
             verification_policy="none",
             continuation_policy="minimal",
-            reason="no task contract available; defaulting to neutral chat profile",
+            reason=DEFAULT_CHAT_PROFILE_REASON,
             selection_signals=("default:chat",),
         )
 

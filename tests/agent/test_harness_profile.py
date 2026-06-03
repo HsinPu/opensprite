@@ -3,6 +3,13 @@ import json
 import pytest
 
 from opensprite.agent.harness_profile import (
+    CONTRACT_MEDIA_PROFILE_REASON,
+    CONTRACT_OPERATIONS_PROFILE_REASON,
+    CONTRACT_PURE_ANSWER_PROFILE_REASON,
+    CONTRACT_WEB_RESEARCH_PROFILE_REASON,
+    CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON,
+    CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON,
+    DEFAULT_CHAT_PROFILE_REASON,
     HarnessProfileService,
     harness_profile_follow_up_instruction,
     is_chat_profile_name,
@@ -38,6 +45,16 @@ def test_harness_profile_derives_research_from_contract():
     assert profile.name == "research"
     assert profile.task_type == "web_research"
     assert profile.selection_signals == ("contract:web_research",)
+
+
+def test_harness_profile_contract_selection_reasons_are_stable():
+    assert CONTRACT_OPERATIONS_PROFILE_REASON == "task contract selected operations profile"
+    assert CONTRACT_WEB_RESEARCH_PROFILE_REASON == "task contract requires web research evidence"
+    assert CONTRACT_MEDIA_PROFILE_REASON == "task contract requires media evidence"
+    assert CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON == "task contract requires workspace changes"
+    assert CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON == "task contract requires workspace evidence"
+    assert CONTRACT_PURE_ANSWER_PROFILE_REASON == "task contract does not require tool-backed evidence"
+    assert DEFAULT_CHAT_PROFILE_REASON == "no task contract available; defaulting to neutral chat profile"
 
 
 def test_harness_profile_derives_workspace_analysis_from_contract():
