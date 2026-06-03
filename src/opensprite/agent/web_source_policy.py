@@ -3,6 +3,15 @@
 from __future__ import annotations
 
 FETCHED_WEB_SOURCE_ARTIFACT_TOOLS = frozenset({"web_fetch", "browser_navigate", "browser_snapshot"})
+WEB_SOURCE_ARTIFACT_TOOLS = frozenset(
+    {
+        "web_search",
+        "web_fetch",
+        "web_research",
+        "browser_navigate",
+        "browser_snapshot",
+    }
+)
 WEB_SOURCE_EVIDENCE_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
 WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
 WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"

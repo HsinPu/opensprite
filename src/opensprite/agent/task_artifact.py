@@ -6,6 +6,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..tools.evidence import ToolEvidence
+from .web_source_policy import (
+    WEB_SOURCE_ARTIFACT_KIND,
+    WEB_SOURCE_ARTIFACT_TOOLS,
+    is_web_source_artifact_kind,
+)
 
 
 _TOOL_ARTIFACT_KINDS: dict[str, str] = {
@@ -13,11 +18,7 @@ _TOOL_ARTIFACT_KINDS: dict[str, str] = {
     "analyze_image": "image_analysis",
     "transcribe_audio": "audio_transcript",
     "analyze_video": "video_analysis",
-    "web_search": "web_source",
-    "web_fetch": "web_source",
-    "web_research": "web_source",
-    "browser_navigate": "web_source",
-    "browser_snapshot": "web_source",
+    **{tool_name: WEB_SOURCE_ARTIFACT_KIND for tool_name in WEB_SOURCE_ARTIFACT_TOOLS},
     "verify": "verification_result",
     "exec": "command_result",
 }
@@ -52,7 +53,7 @@ def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
     kind = _TOOL_ARTIFACT_KINDS.get(evidence.name)
     if kind is None:
         return None
-    if kind == "web_source" and not _has_traceable_sources(evidence.metadata):
+    if is_web_source_artifact_kind(kind) and not _has_traceable_sources(evidence.metadata):
         return None
     metadata = {"tool_args": dict(evidence.args)}
     metadata.update(dict(evidence.metadata))
