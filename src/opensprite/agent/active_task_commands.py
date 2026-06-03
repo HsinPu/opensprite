@@ -39,6 +39,7 @@ from .task_context_resolver import TaskContextDecision
 from .task_intent import TaskIntent
 from .task_objective_resolver import TaskObjectiveDecision
 from .work_progress import (
+    WORK_STEP_NOT_SET,
     WorkProgressService,
     WorkProgressUpdate,
     is_continue_work_progress,
@@ -132,10 +133,12 @@ class ActiveTaskCommandService:
         if not current_step and not next_step:
             if is_verification_work_progress(progress):
                 current_step = self.messages.progress_verify_current_step
-                next_step = "not set"
+                next_step = WORK_STEP_NOT_SET
             elif is_continue_work_progress(progress):
                 current_step = self.messages.progress_continue_current_step
-                next_step = self.messages.progress_verify_current_step if progress.verification_required else "not set"
+                next_step = (
+                    self.messages.progress_verify_current_step if progress.verification_required else WORK_STEP_NOT_SET
+                )
             else:
                 return
         if current_step is None or next_step is None:
@@ -382,12 +385,12 @@ class ActiveTaskCommandService:
         current_block = store.read_managed_block()
         current_step = _extract_task_field(current_block, "Current step")
         next_step = _extract_task_field(current_block, "Next step")
-        if next_step == "not set":
+        if next_step == WORK_STEP_NOT_SET:
             return None
         rendered = store.update_fields(
             status=ACTIVE_ACTIVE_TASK_STATUS,
             current_step=next_step,
-            next_step="not set",
+            next_step=WORK_STEP_NOT_SET,
             append_completed_step=current_step,
             force=True,
         )
@@ -470,7 +473,7 @@ def _decision_controls_task_seed(decision: TaskContextDecision | None) -> bool:
 def _boundary_confirmation_question(current_task: str, current_message: str) -> str:
     current_goal = _compact_for_prompt(_extract_task_field(current_task, "Goal"))
     new_request = _compact_for_prompt(current_message) or "the new request"
-    if current_goal and current_goal.lower() != "not set":
+    if current_goal and current_goal.lower() != WORK_STEP_NOT_SET:
         return (
             f"Reply `switch` to replace the active task ({current_goal}) "
             f"with the new request ({new_request}), or `continue` to keep the active task."

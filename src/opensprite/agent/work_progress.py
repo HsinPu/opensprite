@@ -67,6 +67,7 @@ _PROGRESS_SIGNAL_VERIFICATION_ATTEMPTED = "verification_attempted"
 _PROGRESS_SIGNAL_VERIFICATION_PASSED = "verification_passed"
 _PROGRESS_SIGNAL_CONTEXT_COMPACTION = "context_compaction"
 _PROGRESS_SIGNAL_TOOL_ERROR = "tool_error"
+WORK_STEP_NOT_SET = "not set"
 _REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
     {
         _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
@@ -375,7 +376,7 @@ class WorkProgressService:
 
         numbered_steps = _numbered_steps(work_plan.steps)
         now = time.time()
-        pending_steps = tuple(step for step in numbered_steps if step != "not set")
+        pending_steps = tuple(step for step in numbered_steps if step != WORK_STEP_NOT_SET)
         return StoredWorkState(
             session_id=session_id,
             objective=work_plan.objective,
@@ -388,8 +389,8 @@ class WorkProgressService:
             coding_task=work_plan.coding_task,
             expects_code_change=work_plan.expects_code_change,
             expects_verification=work_plan.expects_verification,
-            current_step=numbered_steps[0] if numbered_steps else "not set",
-            next_step=numbered_steps[1] if len(numbered_steps) > 1 else "not set",
+            current_step=numbered_steps[0] if numbered_steps else WORK_STEP_NOT_SET,
+            next_step=numbered_steps[1] if len(numbered_steps) > 1 else WORK_STEP_NOT_SET,
             completed_steps=(),
             pending_steps=pending_steps,
             blockers=(),
@@ -399,8 +400,8 @@ class WorkProgressService:
             ),
             resume_hint=_build_resume_hint(
                 status="active",
-                current_step=numbered_steps[0] if numbered_steps else "not set",
-                next_step=numbered_steps[1] if len(numbered_steps) > 1 else "not set",
+                current_step=numbered_steps[0] if numbered_steps else WORK_STEP_NOT_SET,
+                next_step=numbered_steps[1] if len(numbered_steps) > 1 else WORK_STEP_NOT_SET,
                 blockers=(),
                 next_action=_NEXT_ACTION_CONTINUE_WORK,
             ),
@@ -433,7 +434,9 @@ class WorkProgressService:
         resume_hint = state.resume_hint or str(legacy.get("resume_hint") or "")
         last_progress_signals = tuple(state.last_progress_signals) or tuple(_string_list(legacy.get("last_progress_signals")))
         if not pending_steps:
-            pending_steps = tuple(step for step in state.steps if step not in state.completed_steps and step != "not set")
+            pending_steps = tuple(
+                step for step in state.steps if step not in state.completed_steps and step != WORK_STEP_NOT_SET
+            )
         if not blockers and is_blocking_completion_status(state.status) and state.last_next_action:
             blockers = (state.last_next_action,)
         if not verification_targets:
@@ -747,11 +750,11 @@ class WorkProgressService:
         progress: WorkProgressUpdate,
         completion_result: CompletionGateResult,
     ) -> WorkboardState:
-        pending_steps = [step for step in steps if step not in completed_steps and step != "not set"]
+        pending_steps = [step for step in steps if step not in completed_steps and step != WORK_STEP_NOT_SET]
         follow_up_step = _follow_up_pending_step(completion_result, progress.next_action)
         if follow_up_step and follow_up_step not in pending_steps:
             pending_steps.insert(0, follow_up_step)
-        if current_step != "not set" and current_step not in completed_steps and current_step not in pending_steps:
+        if current_step != WORK_STEP_NOT_SET and current_step not in completed_steps and current_step not in pending_steps:
             pending_steps.insert(0, current_step)
         blockers = _derive_blockers(completion_result)
         return WorkboardState(
@@ -964,9 +967,9 @@ def _build_resume_hint(
         return "Resume by collecting review evidence or addressing delegated review findings."
     if workflow and step_label:
         return f"Resume with the {step_label} step in {workflow}."
-    if current_step and current_step != "not set":
+    if current_step and current_step != WORK_STEP_NOT_SET:
         return f"Resume at current step: {current_step}"
-    if next_step and next_step != "not set":
+    if next_step and next_step != WORK_STEP_NOT_SET:
         return f"Resume with next step: {next_step}"
     return "Continue the active task from the latest recorded state."
 
@@ -1008,37 +1011,37 @@ def _state_steps(
     expects_verification: bool,
 ) -> tuple[str, str]:
     if is_complete_completion_status(progress.completion_status):
-        return "not set", "not set"
+        return WORK_STEP_NOT_SET, WORK_STEP_NOT_SET
     if is_blocking_completion_status(progress.completion_status):
-        current = steps[-1] if steps else "not set"
-        return current, "not set"
+        current = steps[-1] if steps else WORK_STEP_NOT_SET
+        return current, WORK_STEP_NOT_SET
     if progress.next_action == _NEXT_ACTION_CONTINUE_VERIFICATION:
-        return _verification_step(steps, expects_code_change=expects_code_change), "not set"
+        return _verification_step(steps, expects_code_change=expects_code_change), WORK_STEP_NOT_SET
     if progress.next_action in (
         _NEXT_ACTION_CONTINUE_REVIEW,
         _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
         _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
     ):
-        return (steps[-1] if steps else "not set"), "not set"
+        return (steps[-1] if steps else WORK_STEP_NOT_SET), WORK_STEP_NOT_SET
     if expects_code_change and progress.file_change_count <= 0 and len(steps) >= 2:
-        next_step = steps[2] if len(steps) > 2 else "not set"
+        next_step = steps[2] if len(steps) > 2 else WORK_STEP_NOT_SET
         return steps[1], next_step
     if expects_verification and steps:
-        return _verification_step(steps, expects_code_change=expects_code_change), "not set"
+        return _verification_step(steps, expects_code_change=expects_code_change), WORK_STEP_NOT_SET
     if progress.next_action == _NEXT_ACTION_CONTINUE_WORK and steps:
         current = steps[-1] if progress.file_change_count > 0 else (steps[1] if len(steps) > 1 else steps[0])
-        next_step = "not set"
+        next_step = WORK_STEP_NOT_SET
         if progress.file_change_count <= 0 and len(steps) > 2:
             next_step = steps[2]
         return current, next_step
-    return "not set", "not set"
+    return WORK_STEP_NOT_SET, WORK_STEP_NOT_SET
 
 
 def _verification_step(steps: tuple[str, ...], *, expects_code_change: bool) -> str:
     if not steps:
-        return "not set"
+        return WORK_STEP_NOT_SET
     if expects_code_change and len(steps) >= 3:
         return steps[2]
     if len(steps) >= 2:
         return steps[1]
-    return steps[-1] if steps else "not set"
+    return steps[-1] if steps else WORK_STEP_NOT_SET
