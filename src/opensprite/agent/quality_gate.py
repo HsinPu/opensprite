@@ -14,6 +14,7 @@ from .history_retrieval_policy import (
     history_retrieval_metadata_reports_empty,
     is_history_retrieval_tool_name,
 )
+from .media_artifact_policy import count_media_artifacts, is_media_artifact_kind
 from .resource_index import ResourceIndex
 from .task_contract import (
     AcceptanceCriterion,
@@ -45,8 +46,6 @@ from .workspace_grounding_policy import (
     workspace_paths,
 )
 
-
-_MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
 @dataclass(frozen=True)
 class QualityGateResult:
     """Verdict for deterministic response-quality checks."""
@@ -148,7 +147,7 @@ def _evaluate_media_artifacts(contract: TaskContract, execution_result: Executio
     covered = {
         alias
         for artifact in execution_result.task_artifacts
-        if artifact.ok and artifact.kind in _MEDIA_ARTIFACT_KINDS
+        if artifact.ok and is_media_artifact_kind(artifact.kind)
         for resource_id in artifact.resource_ids
         for alias in aliases.get(resource_id, {resource_id})
     }
@@ -282,11 +281,7 @@ def _evaluate_media_artifact_criterion(
     if not contract.selected_resources:
         return None
     min_count = max(1, int(getattr(criterion, "min_count", 1) or 1))
-    artifact_count = sum(
-        1
-        for artifact in execution_result.task_artifacts
-        if artifact.ok and artifact.kind in _MEDIA_ARTIFACT_KINDS
-    )
+    artifact_count = count_media_artifacts(execution_result.task_artifacts)
     if artifact_count >= min_count:
         return None
     return QualityGateResult(

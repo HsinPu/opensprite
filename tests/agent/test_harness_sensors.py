@@ -48,3 +48,19 @@ def test_workspace_change_sensors_record_missing_change_and_verification():
         ("coding.verification", "warn"),
         ("completion.change_summary", "fail"),
     ]
+
+
+def test_media_extraction_sensor_uses_shared_media_artifact_policy():
+    sensors = evaluate_harness_sensors(
+        task_type="media_extraction",
+        execution_result=ExecutionResult(
+            content="done",
+            task_artifacts=(TaskArtifact(kind="audio_transcript", source_tool="transcribe_audio"),),
+        ),
+        completion_result=CompletionGateResult(status="complete", reason="summarized media"),
+    )
+
+    assert [(sensor.sensor_id, sensor.status) for sensor in sensors] == [
+        ("media.artifact", "pass"),
+        ("completion.media_summary", "pass"),
+    ]

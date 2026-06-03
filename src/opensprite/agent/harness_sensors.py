@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Callable
 from .completion_status import is_complete_completion_status
 from .harness_inventory import expected_sensor_ids_for_task_type
 from .harness_scorecard import HarnessSensorResult
+from .media_artifact_policy import count_media_artifacts
 from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
 
 if TYPE_CHECKING:
@@ -93,7 +94,7 @@ def _evaluate_sensor(
     if sensor_id == "completion.verification_or_gap":
         return _missing_evidence_sensor(sensor_id, completion_result)
     if sensor_id == "media.artifact":
-        count = _artifact_count_any(execution_result, ("image_text", "image_analysis", "audio_transcript", "video_analysis"))
+        count = count_media_artifacts(execution_result.task_artifacts)
         return HarnessSensorResult(
             sensor_id,
             "pass" if count > 0 else "fail",
@@ -143,10 +144,6 @@ def _missing_evidence_sensor(sensor_id: str, completion_result: CompletionGateRe
 
 def _artifact_count_matching(execution_result: ExecutionResult, matches_kind: Callable[[str | None], bool]) -> int:
     return sum(1 for artifact in execution_result.task_artifacts if matches_kind(artifact.kind))
-
-
-def _artifact_count_any(execution_result: ExecutionResult, kinds: tuple[str, ...]) -> int:
-    return sum(1 for artifact in execution_result.task_artifacts if artifact.kind in kinds)
 
 
 def _web_tool_evidence_count(execution_result: ExecutionResult) -> int:
