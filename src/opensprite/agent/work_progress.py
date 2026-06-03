@@ -21,7 +21,13 @@ from .completion_status import (
 )
 from .execution import ExecutionResult
 from .harness_profile import (
+    CODE_CHANGE_TASK_TYPE,
+    FILE_CHANGE_REQUIREMENT_KIND,
     HarnessProfile,
+    VERIFICATION_REQUIREMENT_KIND,
+    VERIFICATION_TOOL_GROUP,
+    WORKSPACE_CHANGE_TASK_TYPE,
+    WORKSPACE_WRITE_TOOL_GROUP,
     is_chat_profile_name,
     is_coding_profile_name,
     is_media_profile_name,
@@ -854,16 +860,16 @@ def _profile_requires_code_change(harness_profile: HarnessProfile) -> bool:
     required_tool_groups = set(harness_profile.required_tool_groups)
     required_evidence = set(harness_profile.required_evidence)
     return (
-        harness_profile.task_type in {"workspace_change", "code_change"}
-        or "workspace_write" in required_tool_groups
-        or "file_change" in required_evidence
+        harness_profile.task_type in {WORKSPACE_CHANGE_TASK_TYPE, CODE_CHANGE_TASK_TYPE}
+        or WORKSPACE_WRITE_TOOL_GROUP in required_tool_groups
+        or FILE_CHANGE_REQUIREMENT_KIND in required_evidence
     )
 
 
 def _profile_requires_verification(harness_profile: HarnessProfile) -> bool:
     required_tool_groups = set(harness_profile.required_tool_groups)
     required_evidence = set(harness_profile.required_evidence)
-    return "verification" in required_tool_groups or "verification" in required_evidence
+    return VERIFICATION_TOOL_GROUP in required_tool_groups or VERIFICATION_REQUIREMENT_KIND in required_evidence
 
 
 def _intent_supports_default_work_plan(task_intent: TaskIntent) -> bool:
