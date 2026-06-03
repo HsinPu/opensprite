@@ -1,4 +1,5 @@
 from opensprite.agent.completion_gate_policy import (
+    GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
@@ -27,3 +28,7 @@ def test_plain_answer_contract_complete_reason_is_stable():
 
 def test_task_contract_accepted_final_response_reason_is_stable():
     assert TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON == "task contract accepted final response"
+
+
+def test_generic_task_complete_reason_is_stable():
+    assert GENERIC_TASK_COMPLETE_REASON == "generic task returned a response"

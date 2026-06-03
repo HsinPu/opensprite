@@ -8,6 +8,7 @@ from typing import Any
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .completion_gate_policy import (
+    GENERIC_TASK_COMPLETE_REASON,
     INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
     MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
     MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
@@ -570,7 +571,7 @@ class CompletionGateService:
         if _is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
             return CompletionGateResult(
                 status=COMPLETE_COMPLETION_STATUS,
-                reason="generic task returned a response",
+                reason=GENERIC_TASK_COMPLETE_REASON,
                 active_task_status=(
                     "done"
                     if _intent_supports_fallback_active_task_update(task_intent, evidence_result.task_contract)

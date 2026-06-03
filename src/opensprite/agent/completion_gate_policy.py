@@ -11,3 +11,4 @@ INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON = "assistant only emitted internal cont
 TOOL_ERROR_WITHOUT_BLOCKER_REASON = "tool execution reported an error without a clear blocker handoff"
 PLAIN_ANSWER_CONTRACT_COMPLETE_REASON = "plain-answer contract received a response"
 TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON = "task contract accepted final response"
+GENERIC_TASK_COMPLETE_REASON = "generic task returned a response"
