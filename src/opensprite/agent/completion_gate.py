@@ -7,7 +7,11 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
-from .completion_gate_policy import MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL, MAX_TOOL_ITERATIONS_INCOMPLETE_REASON
+from .completion_gate_policy import (
+    INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
+    MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
+    MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
+)
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (
@@ -246,7 +250,7 @@ class CompletionGateService:
         if execution_result.assistant_internal_only_response:
             return CompletionGateResult(
                 status=INCOMPLETE_COMPLETION_STATUS,
-                reason="assistant only emitted internal control text",
+                reason=INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
