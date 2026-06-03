@@ -29,11 +29,11 @@ FileChangeRecorder = Callable[[str, list[dict[str, Any]]], Awaitable[None]]
 
 
 _CONFIG_WRITE_GUARD_MSG = (
-    "Error: Cannot modify OpenSprite configuration files with write_file, edit_file, or apply_patch. "
+    "Cannot modify OpenSprite configuration files with write_file, edit_file, or apply_patch. "
     "Use the OpenSprite Web UI Settings or edit them outside the agent."
 )
 _SENSITIVE_USER_WRITE_GUARD_MSG = (
-    "Error: Cannot modify sensitive user configuration files with write_file, edit_file, or apply_patch. "
+    "Cannot modify sensitive user configuration files with write_file, edit_file, or apply_patch. "
     "Edit SSH keys, cloud credentials, shell profiles, and credential files outside the agent."
 )
 _DEFAULT_READ_LIMIT = 2000
@@ -212,18 +212,31 @@ def _build_workspace_resolver(
 def _write_guard(
     file_path: Path,
     *,
+    tool_name: str,
     config_path_resolver: ConfigPathResolver | None = None,
 ) -> str | None:
+    def guard_result(message: str, category: str) -> str:
+        return _filesystem_error_result(
+            str(message or "").removeprefix("Error:").strip(),
+            tool_name=tool_name,
+            error_type="ToolGuardrailError",
+            category=category,
+            metadata={"path": str(file_path)},
+        )
+
     prot_cfg = path_touches_protected_system_config(
         file_path,
         config_path_resolver=config_path_resolver,
     )
     if prot_cfg:
-        return prot_cfg
+        return guard_result(prot_cfg, "protected_config")
     sensitive_user_config = path_touches_sensitive_user_config(file_path)
     if sensitive_user_config:
-        return sensitive_user_config
-    return path_touches_read_only_app_skills_dir(file_path)
+        return guard_result(sensitive_user_config, "sensitive_user_config")
+    read_only_skill = path_touches_read_only_app_skills_dir(file_path)
+    if read_only_skill:
+        return guard_result(read_only_skill, "read_only_skill")
+    return None
 
 
 def _display_path(workspace: Path, path: Path) -> str:
@@ -1218,7 +1231,7 @@ class ApplyPatchTool(Tool):
                         metadata={"path": path, "change_index": index},
                     )
 
-                guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+                guard = _write_guard(file_path, tool_name=self.name, config_path_resolver=self._config_path_resolver)
                 if guard:
                     return guard
 
@@ -1458,7 +1471,7 @@ class WriteFileTool(Tool):
                     metadata={"path": path},
                 )
 
-            guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+            guard = _write_guard(file_path, tool_name=self.name, config_path_resolver=self._config_path_resolver)
             if guard:
                 return guard
 
@@ -1650,7 +1663,7 @@ class EditFileTool(Tool):
                     metadata={"path": path},
                 )
 
-            guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
+            guard = _write_guard(file_path, tool_name=self.name, config_path_resolver=self._config_path_resolver)
             if guard:
                 return guard
 

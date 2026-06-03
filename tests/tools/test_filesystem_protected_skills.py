@@ -3,6 +3,7 @@
 import asyncio
 
 from opensprite.tools.filesystem import EditFileTool, WriteFileTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_write_file_allows_session_workspace_skill_subdir(tmp_path):
@@ -23,6 +24,10 @@ def test_write_file_blocks_under_app_skills_dir(tmp_path, monkeypatch):
     out = asyncio.run(
         tool.execute(path="memory/SKILL.md", content="x")
     )
+    status = classify_tool_result_status(out)
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "read_only_skill"
     assert ".opensprite/skills" in out or "Cannot modify" in out
     assert not (app_skills / "memory" / "SKILL.md").exists()
 

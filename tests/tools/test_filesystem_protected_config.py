@@ -4,11 +4,16 @@ import asyncio
 import json
 
 from opensprite.tools.filesystem import ApplyPatchTool, EditFileTool, WriteFileTool
+from opensprite.tools.result_status import classify_tool_result_status
 
 
 def test_write_file_blocks_opensprite_json_basename(tmp_path):
     tool = WriteFileTool(workspace=tmp_path)
     out = asyncio.run(tool.execute(path="opensprite.json", content="{}"))
+    status = classify_tool_result_status(out)
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "protected_config"
     assert "configuration files" in out.lower()
     assert "cannot modify" in out.lower()
     assert not (tmp_path / "opensprite.json").exists()
@@ -95,7 +100,11 @@ def test_write_file_blocks_sensitive_user_config_under_home(tmp_path, monkeypatc
     tool = WriteFileTool(workspace=tmp_path)
 
     out = asyncio.run(tool.execute(path=".ssh/authorized_keys", content="ssh-rsa AAA"))
+    status = classify_tool_result_status(out)
 
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "sensitive_user_config"
     assert "sensitive user configuration" in out.lower()
     assert not (tmp_path / ".ssh" / "authorized_keys").exists()
 
@@ -109,6 +118,10 @@ def test_apply_patch_blocks_sensitive_user_config_under_home(tmp_path, monkeypat
             changes=[{"action": "add", "path": ".aws/credentials", "content": "[default]\n"}]
         )
     )
+    status = classify_tool_result_status(out)
 
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "sensitive_user_config"
     assert "sensitive user configuration" in out.lower()
     assert not (tmp_path / ".aws" / "credentials").exists()
