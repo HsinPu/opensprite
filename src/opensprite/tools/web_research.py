@@ -901,19 +901,31 @@ def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
     query_terms = _market_quote_entity_terms(query)
     if query_terms and not any(term in text for term in query_terms):
         return 2
+    return {
+        "preferred": 0,
+        "quote_page": 0,
+        "generic_quote": 1,
+        "other": 1,
+        "forecast": 3,
+        "discussion": 4,
+    }[_market_quote_candidate_kind(domain=domain, text=text)]
+
+
+def _market_quote_candidate_kind(*, domain: str, text: str) -> str:
+    """Classify quote-query candidates behind one searchable heuristic boundary."""
     if any(domain == blocked or domain.endswith(f".{blocked}") for blocked in _MARKET_QUOTE_DISCUSSION_DOMAINS):
-        return 4
+        return "discussion"
     if any(marker in text for marker in _MARKET_QUOTE_FORECAST_MARKERS):
-        return 3
+        return "forecast"
     if "blogspot." in domain or domain.endswith(".blogspot.com"):
-        return 3
+        return "forecast"
     if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
-        return 0
+        return "preferred"
     if any(marker in text for marker in _MARKET_QUOTE_PAGE_MARKERS):
-        return 0
+        return "quote_page"
     if any(marker in text for marker in ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")):
-        return 1
-    return 1
+        return "generic_quote"
+    return "other"
 
 
 def _market_quote_entity_terms(query: str) -> set[str]:
