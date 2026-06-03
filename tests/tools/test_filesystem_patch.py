@@ -179,6 +179,40 @@ def test_apply_patch_updates_adds_and_deletes_files(tmp_path):
     assert not old_file.exists()
 
 
+def test_apply_patch_returns_structured_error_for_empty_changes(tmp_path):
+    tool = ApplyPatchTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(changes=[]))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_arguments"
+    assert status.invalid_arguments is True
+    assert status.error == "changes must contain at least one file change."
+
+
+def test_apply_patch_returns_structured_error_for_external_path(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    tool = ApplyPatchTool(workspace=workspace)
+
+    result = asyncio.run(
+        tool.execute(
+            changes=[
+                {"action": "add", "path": "../outside.txt", "content": "secret\n"},
+            ]
+        )
+    )
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolGuardrailError"
+    assert status.category == "access_denied"
+    assert status.error.startswith("Change 1: access denied.")
+    assert not (tmp_path / "outside.txt").exists()
+
+
 def test_apply_patch_validates_all_changes_before_writing(tmp_path):
     tool = ApplyPatchTool(workspace=tmp_path)
 

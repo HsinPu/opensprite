@@ -1142,9 +1142,22 @@ class ApplyPatchTool(Tool):
         try:
             changes = kwargs["changes"]
             if not changes:
-                return "Error: changes must contain at least one file change."
+                return _filesystem_error_result(
+                    "changes must contain at least one file change.",
+                    tool_name=self.name,
+                    error_type="ToolValidationError",
+                    category="invalid_arguments",
+                    invalid_arguments=True,
+                )
             if len(changes) > _MAX_PATCH_CHANGES:
-                return f"Error: apply_patch supports at most {_MAX_PATCH_CHANGES} changes per call."
+                return _filesystem_error_result(
+                    f"apply_patch supports at most {_MAX_PATCH_CHANGES} changes per call.",
+                    tool_name=self.name,
+                    error_type="ToolValidationError",
+                    category="invalid_arguments",
+                    invalid_arguments=True,
+                    metadata={"max_changes": _MAX_PATCH_CHANGES},
+                )
 
             workspace = self._get_workspace()
             original: dict[Path, str | None] = {}
@@ -1163,7 +1176,13 @@ class ApplyPatchTool(Tool):
                 path = str(change["path"])
                 file_path = _resolve_workspace_path(workspace, path)
                 if file_path is None:
-                    return f"Error: Change {index}: access denied. Path must be within workspace: {workspace}"
+                    return _filesystem_error_result(
+                        f"Change {index}: access denied. Path must be within workspace: {workspace}",
+                        tool_name=self.name,
+                        error_type="ToolGuardrailError",
+                        category="access_denied",
+                        metadata={"path": path, "change_index": index},
+                    )
 
                 guard = _write_guard(file_path, config_path_resolver=self._config_path_resolver)
                 if guard:
