@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from .command_version_policy import command_inspects_git_repository_state
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
 from .execution import ExecutionResult
 from .harness_profile import HISTORY_RETRIEVAL_TASK_TYPE, MEDIA_EXTRACTION_TASK_TYPE, WORKSPACE_READ_TASK_TYPE
@@ -382,19 +383,9 @@ def _execution_confuses_command_version_with_repo_state(execution_result: Execut
             args = evidence.metadata.get("tool_args")
             if isinstance(args, dict):
                 command = str(args.get("command") or "").lower()
-        if _command_inspects_git_repository_state(command):
+        if command_inspects_git_repository_state(command):
             return True
     return False
-
-
-def _command_inspects_git_repository_state(command: str) -> bool:
-    normalized = re.sub(r"\s+", " ", str(command or "").strip().lower())
-    if not normalized.startswith("git "):
-        return False
-    return any(
-        f"git {subcommand}" in normalized
-        for subcommand in ("rev-parse", "status", "log", "show", "branch")
-    )
 
 
 def _response_reports_tool_result(response_text: str, execution_result: ExecutionResult) -> bool:
