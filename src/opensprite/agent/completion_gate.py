@@ -34,28 +34,24 @@ from .change_path_policy import (
     path_requires_delegated_review,
     strip_repo_snapshot_prefix,
 )
-from .harness_profile import (
-    ANALYSIS_TASK_TYPE,
-    HISTORY_RETRIEVAL_TASK_TYPE,
-    FILE_CHANGE_REQUIREMENT_KIND,
-    GENERIC_TASK_TYPE,
-    OPERATIONS_TASK_TYPE,
-    PLANNING_TASK_TYPE,
-    PURE_ANSWER_TASK_TYPE,
-    VERIFICATION_REQUIREMENT_KIND,
-    VERIFICATION_TOOL_GROUP,
-    WORKSPACE_READ_TASK_TYPE,
-    WORKSPACE_WRITE_TOOL_GROUP,
+from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP
+from .completion_task_policy import (
+    accepts_final_response_task_type,
+    intent_supports_fallback_active_task_update,
+    is_analysis_response_intent_kind,
+    is_generic_task_response_intent_kind,
+    is_one_turn_intent_kind,
+    is_plain_answer_task_type,
+    is_read_only_blocking_requirement_kind,
+    is_read_only_blocking_tool_group,
+    is_read_only_task_type,
 )
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import is_clean_structured_subagent_status
 from .subagent_policy import REVIEW_PROMPT_TYPES
-from .task_contract import PLANNER_INVALID_STATUS, PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
+from .task_contract import PLANNER_INVALID_STATUS, contract_expects_file_change
 from .task_intent import (
-    ANALYSIS_INTENT_KIND,
-    GENERIC_TASK_INTENT_KIND,
-    ONE_TURN_INTENT_KINDS,
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
 )
@@ -70,7 +66,6 @@ from .tool_failure_policy import (
     is_optional_workspace_batch_failure_tool,
     web_research_artifact_has_successful_fetch,
 )
-from .tool_groups import OPERATION_TOOL_GROUPS
 from .web_source_policy import (
     is_web_research_task_type,
     is_web_research_tool_group,
@@ -95,21 +90,8 @@ from .workflow_completion_policy import (
 
 _REVIEW_PROMPT_TYPES = REVIEW_PROMPT_TYPES
 _BLOCKING_PLANNER_STATUSES = frozenset({BLOCKED_COMPLETION_STATUS, PLANNER_INVALID_STATUS})
-_PLAIN_ANSWER_TASK_TYPE = PURE_ANSWER_TASK_TYPE
-_NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES = frozenset({PURE_ANSWER_TASK_TYPE, PLANNING_ERROR_TASK_TYPE})
-_READ_ONLY_TASK_TYPES = frozenset(
-    {ANALYSIS_TASK_TYPE, OPERATIONS_TASK_TYPE, WORKSPACE_READ_TASK_TYPE, HISTORY_RETRIEVAL_TASK_TYPE}
-)
-_ONE_TURN_INTENT_KINDS = ONE_TURN_INTENT_KINDS
-_FINAL_RESPONSE_ACCEPTED_TASK_TYPES = frozenset({ANALYSIS_TASK_TYPE, PLANNING_TASK_TYPE, GENERIC_TASK_TYPE})
-_READ_ONLY_BLOCKING_REQUIREMENT_KINDS = frozenset({FILE_CHANGE_REQUIREMENT_KIND, VERIFICATION_REQUIREMENT_KIND})
-_READ_ONLY_BLOCKING_TOOL_GROUPS = frozenset(
-    {WORKSPACE_WRITE_TOOL_GROUP, VERIFICATION_TOOL_GROUP, *OPERATION_TOOL_GROUPS}
-)
 _SKIPPED_VERIFICATION_STATUS = SKIPPED_VERIFICATION_STATUS
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
-_ANALYSIS_RESPONSE_INTENT_KIND = ANALYSIS_INTENT_KIND
-_GENERIC_TASK_RESPONSE_INTENT_KIND = GENERIC_TASK_INTENT_KIND
 _WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
 @dataclass(frozen=True)
 class CompletionGateResult:
@@ -747,12 +729,7 @@ def _completion_judge_blocked_result(reason: str) -> CompletionGateResult:
 
 
 def _intent_supports_fallback_active_task_update(task_intent: TaskIntent, task_contract: Any) -> bool:
-    if task_intent.needs_clarification:
-        return False
-    task_type = str(getattr(task_contract, "task_type", "") or "").strip()
-    if not task_type:
-        return False
-    return task_type not in _NO_FALLBACK_ACTIVE_TASK_UPDATE_TYPES
+    return intent_supports_fallback_active_task_update(task_intent, task_contract)
 
 
 def _requires_verification(task_contract: Any) -> bool:
@@ -836,32 +813,31 @@ def _contract_is_read_only(task_contract: Any) -> bool:
 
 
 def _is_read_only_task_type(task_type: str | None) -> bool:
-    normalized = str(task_type or "").strip()
-    return is_web_research_task_type(normalized) or normalized in _READ_ONLY_TASK_TYPES
+    return is_read_only_task_type(task_type)
 
 
 def _is_plain_answer_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() == _PLAIN_ANSWER_TASK_TYPE
+    return is_plain_answer_task_type(task_type)
 
 
 def _is_one_turn_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() in _ONE_TURN_INTENT_KINDS
+    return is_one_turn_intent_kind(kind)
 
 
 def _is_analysis_response_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == _ANALYSIS_RESPONSE_INTENT_KIND
+    return is_analysis_response_intent_kind(kind)
 
 
 def _is_generic_task_response_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == _GENERIC_TASK_RESPONSE_INTENT_KIND
+    return is_generic_task_response_intent_kind(kind)
 
 
 def _is_read_only_blocking_requirement_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() in _READ_ONLY_BLOCKING_REQUIREMENT_KINDS
+    return is_read_only_blocking_requirement_kind(kind)
 
 
 def _is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() in _READ_ONLY_BLOCKING_TOOL_GROUPS
+    return is_read_only_blocking_tool_group(tool_group)
 
 
 def _task_contract_planner_status(task_contract: Any) -> str:
@@ -959,7 +935,7 @@ def _contract_accepts_final_response(task_contract: Any) -> bool:
 
 
 def _accepts_final_response_task_type(task_type: str | None) -> bool:
-    return str(task_type or "").strip() in _FINAL_RESPONSE_ACCEPTED_TASK_TYPES
+    return accepts_final_response_task_type(task_type)
 
 
 def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[str, Any]:
