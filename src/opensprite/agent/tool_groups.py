@@ -17,7 +17,12 @@ from .harness_profile import (
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .verification_policy import VERIFICATION_TOOL_NAME
 from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
-from ..tool_names import WORKSPACE_DISCOVERY_TOOL_NAMES
+from ..tool_names import (
+    EXEC_TOOL_NAME,
+    EXECUTION_TOOL_NAMES,
+    WORKSPACE_DISCOVERY_TOOL_NAMES,
+    WORKSPACE_WRITE_TOOL_NAMES,
+)
 
 
 EXECUTION_TOOL_GROUP = "execution"
@@ -29,7 +34,7 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
     "image_text": frozenset({"ocr_image", "analyze_image"}),
     "image_understanding": frozenset({"analyze_image"}),
     "audio_text": frozenset({"transcribe_audio"}),
-    EXECUTION_TOOL_GROUP: frozenset({"exec", "process"}),
+    EXECUTION_TOOL_GROUP: EXECUTION_TOOL_NAMES,
     "media": frozenset({"analyze_image", "ocr_image", "transcribe_audio", "analyze_video"}),
     SCHEDULING_TOOL_GROUP: frozenset({"cron"}),
     "video_understanding": frozenset({"analyze_video"}),
@@ -42,8 +47,8 @@ TOOL_GROUPS: dict[str, frozenset[str]] = {
             "preview_run_file_change_revert",
         }
     ),
-    WORKSPACE_WRITE_TOOL_GROUP: frozenset({"apply_patch", "write_file", "edit_file"}),
-    VERIFICATION_TOOL_GROUP: frozenset({VERIFICATION_TOOL_NAME, "exec"}),
+    WORKSPACE_WRITE_TOOL_GROUP: WORKSPACE_WRITE_TOOL_NAMES,
+    VERIFICATION_TOOL_GROUP: frozenset({VERIFICATION_TOOL_NAME, EXEC_TOOL_NAME}),
 }
 
 TOOL_GROUP_BY_TOOL_NAME: dict[str, str] = {

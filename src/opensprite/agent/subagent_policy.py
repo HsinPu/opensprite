@@ -18,11 +18,16 @@ from ..tools.permissions import (
 )
 from ..tools.registry import ToolRegistry
 from ..tool_names import (
+    APPLY_PATCH_TOOL_NAME,
     BATCH_TOOL_NAME,
+    EDIT_FILE_TOOL_NAME,
+    EXECUTION_TOOL_NAMES,
     GLOB_FILES_TOOL_NAME,
     GREP_FILES_TOOL_NAME,
     LIST_DIR_TOOL_NAME,
     READ_FILE_TOOL_NAME,
+    WORKSPACE_WRITE_TOOL_NAMES,
+    WRITE_FILE_TOOL_NAME,
 )
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .tool_access import ToolAccessResolver
@@ -41,8 +46,8 @@ READ_ONLY_TOOLS = frozenset(
     }
 )
 WEB_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS
-WRITE_TOOLS = frozenset({"apply_patch", "write_file", "edit_file"})
-EXEC_TOOLS = frozenset({"exec", "process"})
+WRITE_TOOLS = WORKSPACE_WRITE_TOOL_NAMES
+EXEC_TOOLS = EXECUTION_TOOL_NAMES
 
 TEST_WRITE_PATTERNS = frozenset(
     {
@@ -186,9 +191,9 @@ class WritePathPermissionPolicy(ToolPermissionPolicy):
     def _write_paths(tool_name: str, params: Any) -> list[str]:
         if not isinstance(params, dict):
             return []
-        if tool_name in {"write_file", "edit_file"}:
+        if tool_name in {WRITE_FILE_TOOL_NAME, EDIT_FILE_TOOL_NAME}:
             return [str(params.get("path") or "")]
-        if tool_name != "apply_patch":
+        if tool_name != APPLY_PATCH_TOOL_NAME:
             return []
         changes = params.get("changes")
         if not isinstance(changes, list):

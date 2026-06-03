@@ -9,6 +9,11 @@ LIST_DIR_TOOL_NAME = "list_dir"
 GLOB_FILES_TOOL_NAME = "glob_files"
 GREP_FILES_TOOL_NAME = "grep_files"
 CODE_NAVIGATION_TOOL_NAME = "code_navigation"
+APPLY_PATCH_TOOL_NAME = "apply_patch"
+WRITE_FILE_TOOL_NAME = "write_file"
+EDIT_FILE_TOOL_NAME = "edit_file"
+EXEC_TOOL_NAME = "exec"
+PROCESS_TOOL_NAME = "process"
 WORKSPACE_DISCOVERY_TOOL_NAMES = frozenset(
     {
         READ_FILE_TOOL_NAME,
@@ -18,3 +23,11 @@ WORKSPACE_DISCOVERY_TOOL_NAMES = frozenset(
         CODE_NAVIGATION_TOOL_NAME,
     }
 )
+WORKSPACE_WRITE_TOOL_NAMES = frozenset(
+    {
+        APPLY_PATCH_TOOL_NAME,
+        WRITE_FILE_TOOL_NAME,
+        EDIT_FILE_TOOL_NAME,
+    }
+)
+EXECUTION_TOOL_NAMES = frozenset({EXEC_TOOL_NAME, PROCESS_TOOL_NAME})
