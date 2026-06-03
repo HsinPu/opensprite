@@ -31,7 +31,7 @@ from .harness_profile import (
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
-from .tool_groups import TOOL_GROUPS
+from .tool_groups import OPERATION_TOOL_GROUPS, TOOL_GROUPS
 from .web_source_policy import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,
@@ -607,7 +607,7 @@ def _append_tool_group_contract(
     if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP:
         requirements.append(_tool_group_requirement(HISTORY_RETRIEVAL_TOOL_GROUP))
         return _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
-    if tool_group in {"scheduling", "execution"}:
+    if tool_group in OPERATION_TOOL_GROUPS:
         requirements.append(_tool_group_requirement(tool_group))
         return _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
     if tool_group == VERIFICATION_TOOL_GROUP:
