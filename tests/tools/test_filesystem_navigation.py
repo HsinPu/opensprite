@@ -228,9 +228,28 @@ def test_navigation_tools_reject_external_search_path(tmp_path):
     glob_result = asyncio.run(glob_tool.execute(pattern="*.txt", path=".."))
     grep_result = asyncio.run(grep_tool.execute(pattern="secret", path=".."))
     glob_status = classify_tool_result_status(glob_result)
+    grep_status = classify_tool_result_status(grep_result)
 
     assert glob_status.ok is False
     assert glob_status.error_type == "ToolGuardrailError"
     assert glob_status.category == "access_denied"
     assert glob_status.error.startswith("Access denied.")
-    assert grep_result.startswith("Error: Access denied.")
+    assert grep_status.ok is False
+    assert grep_status.error_type == "ToolGuardrailError"
+    assert grep_status.category == "access_denied"
+    assert grep_status.error.startswith("Access denied.")
+
+
+def test_grep_files_returns_structured_error_for_invalid_regex(tmp_path, monkeypatch):
+    (tmp_path / "notes.txt").write_text("needle\n", encoding="utf-8")
+    monkeypatch.setattr(filesystem, "_find_ripgrep", lambda: None)
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern="["))
+    status = classify_tool_result_status(result)
+
+    assert status.ok is False
+    assert status.error_type == "ToolValidationError"
+    assert status.category == "invalid_regex"
+    assert status.invalid_arguments is True
+    assert status.error.startswith("Invalid regex:")

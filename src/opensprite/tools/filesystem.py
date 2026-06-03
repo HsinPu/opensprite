@@ -610,7 +610,14 @@ async def _ripgrep_search(
         return [], None
     if returncode != 0:
         message = stderr.strip().splitlines()[0] if stderr.strip() else "ripgrep failed"
-        return [], f"Error: Invalid regex: {message}"
+        return [], _filesystem_error_result(
+            f"Invalid regex: {message}",
+            tool_name="grep_files",
+            error_type="ToolValidationError",
+            category="invalid_regex",
+            invalid_arguments=True,
+            metadata={"pattern": pattern, "include": include or "", "path": search_arg},
+        )
 
     matches: list[tuple[float, str, int, str]] = []
     for raw_line in stdout.splitlines():
@@ -959,11 +966,27 @@ class GrepFilesTool(Tool):
             workspace = self._get_workspace()
             search_path = _resolve_workspace_path(workspace, path)
             if search_path is None:
-                return f"Error: Access denied. Path must be within workspace: {workspace}"
+                return _filesystem_error_result(
+                    f"Access denied. Path must be within workspace: {workspace}",
+                    tool_name=self.name,
+                    error_type="ToolGuardrailError",
+                    category="access_denied",
+                    metadata={"path": path},
+                )
             if not search_path.exists():
-                return f"Error: Directory not found: {path}"
+                return _filesystem_error_result(
+                    f"Directory not found: {path}",
+                    tool_name=self.name,
+                    category="not_found",
+                    metadata={"path": path},
+                )
             if not search_path.is_dir():
-                return f"Error: Not a directory: {path}"
+                return _filesystem_error_result(
+                    f"Not a directory: {path}",
+                    tool_name=self.name,
+                    category="not_directory",
+                    metadata={"path": path},
+                )
 
             matches, rg_error = await _ripgrep_search(workspace, search_path, pattern, include)
             if rg_error is not None:
@@ -972,7 +995,14 @@ class GrepFilesTool(Tool):
                 try:
                     regex = re.compile(pattern)
                 except re.error as e:
-                    return f"Error: Invalid regex: {e}"
+                    return _filesystem_error_result(
+                        f"Invalid regex: {e}",
+                        tool_name=self.name,
+                        error_type="ToolValidationError",
+                        category="invalid_regex",
+                        invalid_arguments=True,
+                        metadata={"pattern": pattern, "include": include or "", "path": path},
+                    )
                 matches = []
                 for file_path in _iter_workspace_files(workspace, search_path, include):
                     try:
@@ -1018,7 +1048,17 @@ class GrepFilesTool(Tool):
                 ])
             return _append_agents_hint("\n".join(output), workspace, search_path, self._agents_hint_seen)
         except Exception as e:
-            return f"Error searching files: {str(e)}"
+            return _filesystem_error_result(
+                f"Error searching files: {str(e)}",
+                tool_name=self.name,
+                error_type="ToolExecutionError",
+                category="grep_failed",
+                metadata={
+                    "path": str(kwargs.get("path", ".")),
+                    "pattern": str(kwargs.get("pattern", "")),
+                    "include": str(kwargs.get("include", "") or ""),
+                },
+            )
 
 
 class ApplyPatchTool(Tool):
