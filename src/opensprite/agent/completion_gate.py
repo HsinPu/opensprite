@@ -7,6 +7,7 @@ from typing import Any
 
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
+from .completion_gate_policy import MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL, MAX_TOOL_ITERATIONS_INCOMPLETE_REASON
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (
@@ -285,8 +286,8 @@ class CompletionGateService:
         if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
             return CompletionGateResult(
                 status=INCOMPLETE_COMPLETION_STATUS,
-                reason="max tool iterations exhausted before completion",
-                active_task_detail="The execution loop hit the configured max_tool_iterations limit and needs another bounded continuation pass.",
+                reason=MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
+                active_task_detail=MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
                 verification_required=verification_required,
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
