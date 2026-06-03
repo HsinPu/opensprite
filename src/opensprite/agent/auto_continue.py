@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .auto_continue_prompt_policy import existing_web_source_section, terse_final_answer_follow_up_instruction
+from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
     allows_workflow_resume,
@@ -620,11 +621,7 @@ def _quality_follow_up_instruction(
         and execution_result.task_contract is not None
         and contract_requests_quality_check(execution_result.task_contract, "command_version")
     ):
-        return (
-            "\n- Quality follow-up: the user asked for the installed command/program version. "
-            "Run the direct version command, such as `<command> --version`, and answer with the version value. "
-            "Do not inspect `.git`, `HEAD`, repository commits, or package metadata unless the user asks for repository state."
-        )
+        return command_version_follow_up_instruction()
     if execution_result is not None and contract_requests_itemized_output(
         execution_result.task_contract
     ):

@@ -1,4 +1,7 @@
-from opensprite.agent.command_version_policy import command_inspects_git_repository_state
+from opensprite.agent.command_version_policy import (
+    command_inspects_git_repository_state,
+    command_version_follow_up_instruction,
+)
 
 
 def test_command_inspects_git_repository_state_detects_repo_state_commands():
@@ -10,3 +13,10 @@ def test_command_inspects_git_repository_state_detects_repo_state_commands():
 def test_command_inspects_git_repository_state_ignores_direct_version_commands():
     assert not command_inspects_git_repository_state("git --version")
     assert not command_inspects_git_repository_state("python --version")
+
+
+def test_command_version_follow_up_instruction_prefers_direct_version_command():
+    instruction = command_version_follow_up_instruction()
+
+    assert "<command> --version" in instruction
+    assert "Do not inspect `.git`" in instruction

@@ -13,3 +13,11 @@ def command_inspects_git_repository_state(command: str | None) -> bool:
     if not normalized.startswith("git "):
         return False
     return any(f"git {subcommand}" in normalized for subcommand in REPOSITORY_STATE_GIT_SUBCOMMANDS)
+
+
+def command_version_follow_up_instruction() -> str:
+    return (
+        "\n- Quality follow-up: the user asked for the installed command/program version. "
+        "Run the direct version command, such as `<command> --version`, and answer with the version value. "
+        "Do not inspect `.git`, `HEAD`, repository commits, or package metadata unless the user asks for repository state."
+    )
