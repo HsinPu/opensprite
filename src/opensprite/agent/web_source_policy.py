@@ -14,6 +14,8 @@ WEB_SOURCE_ARTIFACT_TOOLS = frozenset(
     }
 )
 WEB_SOURCE_EVIDENCE_TOOLS = frozenset({"web_search", "web_fetch", "web_research"})
+WEB_BROWSER_RESEARCH_TOOLS = frozenset({"browser_snapshot", "browser_scroll"})
+WEB_HARNESS_RESEARCH_TOOLS = WEB_SOURCE_EVIDENCE_TOOLS | WEB_BROWSER_RESEARCH_TOOLS
 WEB_FETCH_SOURCE_RECORD_TOOL = "web_fetch"
 WEB_RESEARCH_SOURCE_ARTIFACT_TOOL = "web_research"
 WEB_RESEARCH_TASK_TYPE = "web_research"

@@ -9,6 +9,7 @@ from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPRO
 from ..tools import ToolRegistry
 from ..tools.permissions import ToolPermissionPolicy
 from .harness_profile import HarnessProfile
+from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
 
 
 _READ_ONLY_TOOLS = (
@@ -23,7 +24,7 @@ _READ_ONLY_TOOLS = (
     "preview_run_file_change_revert",
     "batch",
 )
-_WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, "web_search", "web_fetch", "web_research", "browser_snapshot", "browser_scroll")
+_WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, *WEB_HARNESS_RESEARCH_TOOLS)
 _MEDIA_TOOLS = (*_READ_ONLY_TOOLS, "analyze_image", "ocr_image", "transcribe_audio", "analyze_video", "send_media")
 _CHAT_RISKS = ("read",)
 _RESEARCH_RISKS = ("read", "network")
