@@ -20,9 +20,16 @@ def test_verify_python_compile_reports_syntax_errors(tmp_path):
     tool = VerifyTool(workspace=tmp_path)
 
     result = asyncio.run(tool.execute(action="python_compile", path="."))
+    status = classify_tool_result_status(result)
+    verification = classify_verification_result(result)
 
-    assert result.startswith("Error: Python compile verification failed")
-    assert "bad.py" in result
+    assert status.ok is False
+    assert status.error_type == "VerifyToolError"
+    assert status.category == "python_compile_failed"
+    assert "Python compile verification failed" in status.error
+    assert "bad.py" in status.error
+    assert verification["status"] == "failed"
+    assert verification["name"] == "python_compile"
 
 
 def test_verify_rejects_paths_outside_workspace(tmp_path):

@@ -87,6 +87,8 @@ def classify_verification_result(result: str) -> dict[str, Any]:
     if text.lstrip().startswith("{"):
         status = classify_tool_result_status(text)
         if not status.ok and status.error:
+            if status.category == "python_compile_failed":
+                return {"status": "failed", "ok": False, "attempted": True, "name": "python_compile"}
             return {"status": "error", "ok": False, "attempted": True, "name": None}
 
     first_line = text.splitlines()[0].strip() if text else ""
@@ -285,7 +287,10 @@ class VerifyTool(Tool):
             extra = len(failures) - len(shown)
             if extra > 0:
                 shown.append(f"... ({extra} more failure(s) omitted)")
-            return "\n".join([f"Error: Python compile verification failed for {len(failures)} file(s).", *shown])
+            return _verify_error_result(
+                "\n".join([f"Python compile verification failed for {len(failures)} file(s).", *shown]),
+                category="python_compile_failed",
+            )
 
         return f"Verification passed: python_compile\nFiles checked: {len(files)}"
 
