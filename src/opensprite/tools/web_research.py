@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -54,47 +55,71 @@ _MARKET_QUOTE_QUERY_RE = re.compile(
     r"|(?:\u80a1\u50f9|\u5831\u50f9|\u5373\u6642\u884c\u60c5|\u76ee\u524d\u80a1\u50f9|\u4eca\u65e5\u80a1\u50f9)",
     re.IGNORECASE,
 )
-_MARKET_QUOTE_DOMAINS = (
-    "stock.yahoo.com",
-    "finance.yahoo.com",
-    "google.com",
-    "cnyes.com",
-    "wantgoo.com",
-    "goodinfo.tw",
-    "sinotrade.com.tw",
-    "macromicro.me",
-    "tradingview.com",
-    "cnbc.com",
-    "stockscan.io",
-    "indmoney.com",
+
+
+@dataclass(frozen=True)
+class MarketQuoteCandidateRules:
+    preferred_domains: tuple[str, ...]
+    discussion_domains: tuple[str, ...]
+    forecast_domains: tuple[str, ...]
+    forecast_markers: tuple[str, ...]
+    quote_page_markers: tuple[str, ...]
+    generic_quote_markers: tuple[str, ...]
+    penalties: dict[str, int]
+
+
+_MARKET_QUOTE_RULES = MarketQuoteCandidateRules(
+    preferred_domains=(
+        "stock.yahoo.com",
+        "finance.yahoo.com",
+        "google.com",
+        "cnyes.com",
+        "wantgoo.com",
+        "goodinfo.tw",
+        "sinotrade.com.tw",
+        "macromicro.me",
+        "tradingview.com",
+        "cnbc.com",
+        "stockscan.io",
+        "indmoney.com",
+    ),
+    discussion_domains=(
+        "ptt.cc",
+        "ptt.best",
+        "reddit.com",
+        "threads.com",
+    ),
+    forecast_domains=("blogspot.com",),
+    forecast_markers=(
+        "forecast",
+        "prediction",
+        "price target",
+        "analyst target",
+        "預測",
+        "目標價",
+    ),
+    quote_page_markers=(
+        "/quote/",
+        "/quotes/",
+        "/stocks/",
+        "stock price",
+        "share price",
+        "live share price",
+        "stock quote",
+        "stock chart",
+        "股市",
+        "報價",
+    ),
+    generic_quote_markers=("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5"),
+    penalties={
+        "preferred": 0,
+        "quote_page": 0,
+        "generic_quote": 1,
+        "other": 1,
+        "forecast": 3,
+        "discussion": 4,
+    },
 )
-_MARKET_QUOTE_DISCUSSION_DOMAINS = (
-    "ptt.cc",
-    "ptt.best",
-    "reddit.com",
-    "threads.com",
-)
-_MARKET_QUOTE_FORECAST_MARKERS = (
-    "forecast",
-    "prediction",
-    "price target",
-    "analyst target",
-    "預測",
-    "目標價",
-)
-_MARKET_QUOTE_PAGE_MARKERS = (
-    "/quote/",
-    "/quotes/",
-    "/stocks/",
-    "stock price",
-    "share price",
-    "live share price",
-    "stock quote",
-    "stock chart",
-    "股市",
-    "報價",
-)
-_MARKET_QUOTE_GENERIC_TEXT_MARKERS = ("quote", "stock price", "\u80a1\u50f9", "\u5831\u50f9", "\u884c\u60c5")
 _MARKET_QUOTE_QUERY_STOPWORDS = {
     "adr",
     "finance",
@@ -903,31 +928,30 @@ def _candidate_market_quote_penalty(item: dict[str, Any]) -> int:
     query_terms = _market_quote_entity_terms(query)
     if query_terms and not any(term in text for term in query_terms):
         return 2
-    return {
-        "preferred": 0,
-        "quote_page": 0,
-        "generic_quote": 1,
-        "other": 1,
-        "forecast": 3,
-        "discussion": 4,
-    }[_market_quote_candidate_kind(domain=domain, text=text)]
+    kind = _market_quote_candidate_kind(domain=domain, text=text)
+    return _MARKET_QUOTE_RULES.penalties[kind]
 
 
 def _market_quote_candidate_kind(*, domain: str, text: str) -> str:
     """Classify quote-query candidates behind one searchable heuristic boundary."""
-    if any(domain == blocked or domain.endswith(f".{blocked}") for blocked in _MARKET_QUOTE_DISCUSSION_DOMAINS):
+    rules = _MARKET_QUOTE_RULES
+    if _domain_matches_any(domain, rules.discussion_domains):
         return "discussion"
-    if any(marker in text for marker in _MARKET_QUOTE_FORECAST_MARKERS):
+    if _domain_matches_any(domain, rules.forecast_domains):
         return "forecast"
-    if "blogspot." in domain or domain.endswith(".blogspot.com"):
+    if any(marker in text for marker in rules.forecast_markers):
         return "forecast"
-    if any(domain == preferred or domain.endswith(f".{preferred}") for preferred in _MARKET_QUOTE_DOMAINS):
+    if _domain_matches_any(domain, rules.preferred_domains):
         return "preferred"
-    if any(marker in text for marker in _MARKET_QUOTE_PAGE_MARKERS):
+    if any(marker in text for marker in rules.quote_page_markers):
         return "quote_page"
-    if any(marker in text for marker in _MARKET_QUOTE_GENERIC_TEXT_MARKERS):
+    if any(marker in text for marker in rules.generic_quote_markers):
         return "generic_quote"
     return "other"
+
+
+def _domain_matches_any(domain: str, suffixes: tuple[str, ...]) -> bool:
+    return any(domain == suffix or domain.endswith(f".{suffix}") for suffix in suffixes)
 
 
 def _market_quote_entity_terms(query: str) -> set[str]:

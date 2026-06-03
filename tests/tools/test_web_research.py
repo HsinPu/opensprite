@@ -528,6 +528,41 @@ def test_web_research_prioritizes_quote_pages_over_stock_articles():
     assert payload["fetched_sources"][0]["domain"] == "www.tradingview.com"
 
 
+def test_web_research_deprioritizes_blogspot_market_quote_forecasts():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "TSMC stock price prediction",
+                "url": "https://market-forecast.blogspot.com/tsmc-price",
+                "content": "TSMC stock price prediction and target.",
+            },
+            {
+                "title": "TSM Stock Price - Taiwan Semiconductor Chart",
+                "url": "https://www.tradingview.com/symbols/BCBA-TSM/",
+                "content": "TSM stock price chart for Taiwan Semiconductor Manufacturing.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://market-forecast.blogspot.com/tsmc-price": _fetch_payload(
+                "https://market-forecast.blogspot.com/tsmc-price",
+                title="TSMC forecast",
+            ),
+            "https://www.tradingview.com/symbols/BCBA-TSM/": _fetch_payload(
+                "https://www.tradingview.com/symbols/BCBA-TSM/",
+                title="TSM Stock Price - Taiwan Semiconductor Chart",
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(asyncio.run(tool._execute("TSMC TSM stock price today 2026", count=2, fetch_count=1)))
+
+    assert fetch.calls[0]["url"] == "https://www.tradingview.com/symbols/BCBA-TSM/"
+    assert payload["fetched_sources"][0]["domain"] == "www.tradingview.com"
+
+
 def test_web_research_searches_manual_queries_concurrently():
     class _ConcurrentSearchToolByQuery(_FakeSearchToolByQuery):
         def __init__(self, items_by_query):
