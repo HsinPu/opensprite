@@ -44,6 +44,7 @@ _SKIPPED_VERIFICATION_STATUS = "skipped"
 _WEB_RESEARCH_TASK_TYPE = "web_research"
 _WEB_RESEARCH_TOOL_GROUP = "web_research"
 _WEB_SOURCE_ARTIFACT_KIND = "web_source"
+_MAX_TOOL_ITERATIONS_STOP_REASON = "max_tool_iterations"
 _DELEGATED_REVIEW_PATH_SUFFIXES = (
     ".py",
     ".js",
@@ -287,7 +288,7 @@ class CompletionGateService:
                 review_finding_count=review["finding_count"],
             )
 
-        if execution_result.stop_reason == "max_tool_iterations":
+        if _is_max_tool_iterations_stop_reason(execution_result.stop_reason):
             return CompletionGateResult(
                 status="incomplete",
                 reason="max tool iterations exhausted before completion",
@@ -860,6 +861,10 @@ def _task_contract_planner_status(task_contract: Any) -> str:
 
 def _is_blocking_planner_status(status: str | None) -> bool:
     return str(status or "").strip().lower() in _BLOCKING_PLANNER_STATUSES
+
+
+def _is_max_tool_iterations_stop_reason(stop_reason: str | None) -> bool:
+    return str(stop_reason or "").strip() == _MAX_TOOL_ITERATIONS_STOP_REASON
 
 
 def _task_contract_planner_reason(task_contract: Any) -> str:

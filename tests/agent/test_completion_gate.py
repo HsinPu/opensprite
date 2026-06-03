@@ -16,6 +16,7 @@ from opensprite.agent.completion_gate import (
     _is_one_turn_intent_kind,
     _is_fetched_web_source_artifact_tool,
     _is_history_retrieval_tool,
+    _is_max_tool_iterations_stop_reason,
     _is_optional_web_discovery_failure_tool,
     _is_optional_web_fetch_failure_tool,
     _is_optional_workspace_batch_failure_tool,
@@ -193,6 +194,8 @@ def test_completion_gate_blocks_unvalidated_task_contract():
 def test_completion_gate_status_helpers_normalize_policy_values():
     assert _is_blocking_planner_status(" INVALID ") is True
     assert _is_blocking_planner_status("ready") is False
+    assert _is_max_tool_iterations_stop_reason("max_tool_iterations") is True
+    assert _is_max_tool_iterations_stop_reason("stop") is False
     assert _is_unsuccessful_workflow_status("CANCELLED") is True
     assert _is_unsuccessful_workflow_status("complete") is False
 
