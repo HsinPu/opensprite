@@ -9,6 +9,7 @@ from typing import Any
 
 ANALYSIS_INTENT_KIND = "analysis"
 GENERIC_TASK_INTENT_KIND = "task"
+REVIEW_INTENT_KIND = "review"
 CONVERSATION_INTENT_KIND = "conversation"
 COMMAND_INTENT_KIND = "command"
 MEDIA_UPLOAD_INTENT_KIND = "media_upload"
@@ -22,6 +23,7 @@ ONE_TURN_INTENT_KINDS = frozenset(
     }
 )
 TASK_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, GENERIC_TASK_INTENT_KIND})
+WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({ANALYSIS_INTENT_KIND, REVIEW_INTENT_KIND})
 
 
 @dataclass(frozen=True)

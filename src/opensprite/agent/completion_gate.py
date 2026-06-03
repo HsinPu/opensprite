@@ -41,7 +41,13 @@ from .stop_reasons import is_max_tool_iterations_stop_reason
 from .subagent_output import STRUCTURED_SUBAGENT_OK_STATUS
 from .subagent_policy import REVIEW_PROMPT_TYPES
 from .task_contract import PLANNER_INVALID_STATUS, PLANNING_ERROR_TASK_TYPE, contract_expects_file_change
-from .task_intent import ONE_TURN_INTENT_KINDS, TaskIntent
+from .task_intent import (
+    ANALYSIS_INTENT_KIND,
+    GENERIC_TASK_INTENT_KIND,
+    ONE_TURN_INTENT_KINDS,
+    WORKFLOW_COMPLETION_INTENT_KINDS,
+    TaskIntent,
+)
 from .tool_groups import OPERATION_TOOL_GROUPS, WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import (
     is_fetched_web_source_artifact_tool,
@@ -124,9 +130,9 @@ _DELEGATED_REVIEW_EXACT_PATHS = frozenset(
         "vite.config.ts",
     }
 )
-_ANALYSIS_RESPONSE_INTENT_KIND = "analysis"
-_GENERIC_TASK_RESPONSE_INTENT_KIND = "task"
-_WORKFLOW_COMPLETION_INTENT_KINDS = frozenset({"analysis", "review"})
+_ANALYSIS_RESPONSE_INTENT_KIND = ANALYSIS_INTENT_KIND
+_GENERIC_TASK_RESPONSE_INTENT_KIND = GENERIC_TASK_INTENT_KIND
+_WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
 _REVIEW_WORKFLOW_IDS = REVIEW_WORKFLOW_IDS
 _RESEARCH_THEN_OUTLINE_WORKFLOW_ID = RESEARCH_THEN_OUTLINE_WORKFLOW_ID
 _WORKFLOW_GATE_COMPLETE_STATUS = COMPLETE_COMPLETION_STATUS
