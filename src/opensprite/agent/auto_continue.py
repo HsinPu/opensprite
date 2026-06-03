@@ -15,7 +15,13 @@ from .completion_status import (
     needs_verification_completion_status,
 )
 from .execution import ExecutionResult
-from .harness_profile import HarnessProfile
+from .harness_profile import (
+    HarnessProfile,
+    is_coding_profile_name,
+    is_media_profile_name,
+    is_ops_profile_name,
+    is_research_profile_name,
+)
 from .quality_gate import (
     contract_requests_quality_check,
     media_artifact_gap_detail,
@@ -648,21 +654,21 @@ def _quality_follow_up_instruction(
 def _profile_follow_up_instruction(harness_profile: HarnessProfile | None) -> str:
     if harness_profile is None:
         return ""
-    if harness_profile.name == "research":
+    if is_research_profile_name(harness_profile.name):
         return (
             "\n- Harness profile: research. Gather source evidence first, fetch or inspect at least one substantive source, "
             "and reference gathered sources in the final answer."
         )
-    if harness_profile.name == "coding":
+    if is_coding_profile_name(harness_profile.name):
         return (
             "\n- Harness profile: coding. Inspect workspace context before changing files, make the smallest safe change, "
             "and run focused verification when possible."
         )
-    if harness_profile.name == "media":
+    if is_media_profile_name(harness_profile.name):
         return (
             "\n- Harness profile: media. Use the relevant media tool to produce the required artifact before finalizing."
         )
-    if harness_profile.name == "ops":
+    if is_ops_profile_name(harness_profile.name):
         return (
             "\n- Harness profile: ops. Do not perform external side effects without required approval; report validation or blockers explicitly."
         )
