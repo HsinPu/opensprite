@@ -65,7 +65,7 @@ from .verification_policy import (
     is_verification_tool_name,
 )
 from .workflow_status import (
-    WORKFLOW_CANCELLED_STATUS,
+    is_workflow_cancelled_status,
     is_workflow_completed_status,
     is_workflow_failed_status,
     is_workflow_unsuccessful_status,
@@ -1250,7 +1250,7 @@ def _is_failed_workflow_status(status: str | None) -> bool:
 
 
 def _is_cancelled_workflow_status(status: str | None) -> bool:
-    return str(status or "").strip().lower() == WORKFLOW_CANCELLED_STATUS
+    return is_workflow_cancelled_status(status)
 
 
 def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:

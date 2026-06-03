@@ -22,6 +22,11 @@ def is_workflow_failed_status(status: str | None) -> bool:
     return str(status or "").strip().lower() in WORKFLOW_FAILURE_STATUSES
 
 
+def is_workflow_cancelled_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status represents cancellation."""
+    return str(status or "").strip().lower() == WORKFLOW_CANCELLED_STATUS
+
+
 def is_workflow_unsuccessful_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status is failed, errored, or cancelled."""
     return str(status or "").strip().lower() in WORKFLOW_UNSUCCESSFUL_STATUSES
