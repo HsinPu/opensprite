@@ -400,12 +400,16 @@ def _is_all_resource_coverage(requirement: EvidenceRequirement) -> bool:
     return requirement.coverage == ALL_RESOURCE_COVERAGE
 
 
-def _is_file_change_requirement(requirement: EvidenceRequirement) -> bool:
-    return requirement.kind == FILE_CHANGE_REQUIREMENT_KIND
+def _is_file_change_requirement(requirement: Any) -> bool:
+    return str(getattr(requirement, "kind", "") or "") == FILE_CHANGE_REQUIREMENT_KIND
 
 
 def _is_verification_requirement(requirement: EvidenceRequirement) -> bool:
     return requirement.kind == VERIFICATION_REQUIREMENT_KIND
+
+
+def _is_workspace_write_requirement(requirement: Any) -> bool:
+    return str(getattr(requirement, "tool_group", "") or "") == WORKSPACE_WRITE_TOOL_GROUP
 
 
 def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence, ...], *, file_change_count: int, verification_passed: bool) -> tuple[str, ...]:
@@ -452,9 +456,9 @@ def contract_expects_file_change(task_contract: Any) -> bool:
     if task_type in {CODE_CHANGE_TASK_TYPE, "implementation", "refactor"}:
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
-        if str(getattr(requirement, "kind", "") or "") == FILE_CHANGE_REQUIREMENT_KIND:
+        if _is_file_change_requirement(requirement):
             return True
-        if str(getattr(requirement, "tool_group", "") or "") == WORKSPACE_WRITE_TOOL_GROUP:
+        if _is_workspace_write_requirement(requirement):
             return True
     return False
 
