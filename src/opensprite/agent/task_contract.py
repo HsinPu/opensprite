@@ -45,6 +45,8 @@ from ..tools.evidence import ToolEvidence
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 PLANNER_VALIDATED_STATUS = "validated"
 PLANNER_INVALID_STATUS = "invalid"
+PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
+PLANNER_OPS_TASK_TYPE = "ops"
 PLANNING_ERROR_TASK_TYPE = "planning_error"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
@@ -61,11 +63,11 @@ _ALLOWED_PLANNER_TASK_TYPES = frozenset(
         WORKSPACE_READ_TASK_TYPE,
         WORKSPACE_CHANGE_TASK_TYPE,
         CODE_CHANGE_TASK_TYPE,
-        "media_analysis",
+        PLANNER_MEDIA_ANALYSIS_TASK_TYPE,
         MEDIA_EXTRACTION_TASK_TYPE,
         PLANNING_TASK_TYPE,
         HISTORY_RETRIEVAL_TASK_TYPE,
-        "ops",
+        PLANNER_OPS_TASK_TYPE,
         OPERATIONS_TASK_TYPE,
         GENERIC_TASK_TYPE,
         ANALYSIS_TASK_TYPE,
@@ -73,13 +75,13 @@ _ALLOWED_PLANNER_TASK_TYPES = frozenset(
 )
 _PLANNER_TASK_TYPE_ALIASES = {
     WORKSPACE_CHANGE_TASK_TYPE: CODE_CHANGE_TASK_TYPE,
-    "media_analysis": MEDIA_EXTRACTION_TASK_TYPE,
-    "ops": OPERATIONS_TASK_TYPE,
+    PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_EXTRACTION_TASK_TYPE,
+    PLANNER_OPS_TASK_TYPE: OPERATIONS_TASK_TYPE,
 }
 _PLANNER_TOOL_GROUP_ALIASES = {
     WORKSPACE_CHANGE_TASK_TYPE: WORKSPACE_WRITE_TOOL_GROUP,
-    "media_analysis": MEDIA_TOOL_GROUP,
-    "ops": VERIFICATION_TOOL_GROUP,
+    PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_TOOL_GROUP,
+    PLANNER_OPS_TASK_TYPE: VERIFICATION_TOOL_GROUP,
 }
 _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
     WEB_RESEARCH_TASK_TYPE: (WEB_RESEARCH_TOOL_GROUP,),
@@ -91,8 +93,9 @@ _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
 _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
-    "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, media_analysis, "
-    "planning, history_retrieval, ops, task, analysis. Choose required_tool_groups only from: web_research, "
+    "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, "
+    f"{PLANNER_MEDIA_ANALYSIS_TASK_TYPE}, planning, history_retrieval, {PLANNER_OPS_TASK_TYPE}, "
+    "task, analysis. Choose required_tool_groups only from: web_research, "
     "workspace_read, workspace_write, media, history_retrieval, scheduling, execution, verification. If no tool evidence is needed, "
     "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
     "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
@@ -412,17 +415,21 @@ def _build_planner_contract_prompt(
         "Use semantic judgment from the message and recent history, not string matching. If the user asks for current, "
         "external, public, financial, weather, news, webpage, or source-grounded facts, choose web_research. "
         "If the user asks about local files, repo code, project state, or wants code changes, choose workspace_read or "
-        "workspace_change. If the user asks about attached media, choose media_analysis. If the user asks about previous "
+        "workspace_change. If the user asks about attached media, choose "
+        f"{PLANNER_MEDIA_ANALYSIS_TASK_TYPE}. If the user asks about previous "
         "conversation state, choose history_retrieval. If the user asks to schedule, remind, pause, list, or run reminders "
-        "or recurring jobs, choose ops with required_tool_groups ['scheduling']. If the user asks to inspect the local machine, "
-        "installed commands, command versions, running processes, or local runtime state, choose ops with required_tool_groups "
+        f"or recurring jobs, choose {PLANNER_OPS_TASK_TYPE} with required_tool_groups ['scheduling']. "
+        "If the user asks to inspect the local machine, "
+        "installed commands, command versions, running processes, or local runtime state, choose "
+        f"{PLANNER_OPS_TASK_TYPE} with required_tool_groups "
         "['execution']. Use quality_checks only for extra answer-specific verification: command_version when the answer must "
         "report an installed command version, repository_status when it must report git/worktree status, and workspace_location "
         "when it must name the file path, symbol, or config location found in workspace inspection. If no tool evidence is needed, "
         "choose pure_answer.\n"
         "Return JSON only with this shape:\n"
         "{\n"
-        '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | media_analysis | history_retrieval | ops | task | analysis",\n'
+        '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | '
+        f'{PLANNER_MEDIA_ANALYSIS_TASK_TYPE} | history_retrieval | {PLANNER_OPS_TASK_TYPE} | task | analysis",\n'
         '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | execution | verification"],\n'
         '  "quality_checks": ["command_version | repository_status | workspace_location"],\n'
         '  "final_answer_required": true,\n'
