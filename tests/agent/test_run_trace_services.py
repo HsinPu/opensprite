@@ -15,6 +15,7 @@ from opensprite.bus import MessageBus
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
@@ -412,7 +413,7 @@ def test_serialize_run_event_projects_permission_artifacts():
         event_id=43,
         run_id="run-1",
         session_id="web:browser-1",
-        event_type="permission_requested",
+        event_type=PERMISSION_REQUESTED_EVENT,
         payload={
             "request_id": "perm-1",
             "tool_name": "apply_patch",
