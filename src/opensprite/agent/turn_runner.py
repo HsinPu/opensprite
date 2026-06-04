@@ -9,7 +9,13 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
-from ..runs.events import COMPLETION_GATE_EVALUATED_EVENT, TASK_ARTIFACTS_RECORDED_EVENT, WORK_PROGRESS_UPDATED_EVENT
+from ..runs.events import (
+    COMPLETION_GATE_EVALUATED_EVENT,
+    HARNESS_CHECKPOINT_RECORDED_EVENT,
+    HARNESS_SCORECARD_RECORDED_EVENT,
+    TASK_ARTIFACTS_RECORDED_EVENT,
+    WORK_PROGRESS_UPDATED_EVENT,
+)
 from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
@@ -533,7 +539,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "harness_checkpoint.recorded",
+            HARNESS_CHECKPOINT_RECORDED_EVENT,
             harness_checkpoint,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
@@ -547,7 +553,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "harness_scorecard.recorded",
+            HARNESS_SCORECARD_RECORDED_EVENT,
             harness_scorecard,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,

@@ -15,6 +15,10 @@ from .events import (
     CURATOR_JOB_STARTED_EVENT,
     CURATOR_RUNNING_EVENTS,
     CURATOR_STARTED_EVENT,
+    HARNESS_CHECKPOINT_RECORDED_EVENT,
+    HARNESS_POLICY_SELECTED_EVENT,
+    HARNESS_PROFILE_SELECTED_EVENT,
+    HARNESS_SCORECARD_RECORDED_EVENT,
     MESSAGE_PART_DELTA_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_EVENTS,
@@ -115,10 +119,10 @@ _EVENT_KINDS = {
     WORKFLOW_COMPLETED_EVENT: "work",
     WORKFLOW_FAILED_EVENT: "work",
     COMPLETION_GATE_EVALUATED_EVENT: "completion",
-    "harness_profile.selected": "harness",
-    "harness_policy.selected": "harness",
-    "harness_checkpoint.recorded": "harness",
-    "harness_scorecard.recorded": "harness",
+    HARNESS_PROFILE_SELECTED_EVENT: "harness",
+    HARNESS_POLICY_SELECTED_EVENT: "harness",
+    HARNESS_CHECKPOINT_RECORDED_EVENT: "harness",
+    HARNESS_SCORECARD_RECORDED_EVENT: "harness",
     TASK_CONTRACT_CREATED_EVENT: "harness",
     "execution.stopped": "llm",
     "auto_continue.scheduled": "run",
@@ -1289,7 +1293,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
 
 
 def _summarize_harness_scorecard(events: list[Any], parts: list[Any]) -> dict[str, Any]:
-    payload = _latest_event_payload(events, "harness_scorecard.recorded") or {}
+    payload = _latest_event_payload(events, HARNESS_SCORECARD_RECORDED_EVENT) or {}
     if not payload:
         for part in reversed(parts):
             if getattr(part, "part_type", None) == "harness_scorecard":

@@ -8,6 +8,8 @@ from typing import Any, Awaitable, Callable
 from ..config import AgentConfig
 from ..llms import ChatMessage
 from ..runs.events import (
+    HARNESS_POLICY_SELECTED_EVENT,
+    HARNESS_PROFILE_SELECTED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
@@ -354,7 +356,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "harness_profile.selected",
+                    HARNESS_PROFILE_SELECTED_EVENT,
                     {
                         **harness_profile.to_metadata(),
                         "selection_phase": "contract",
@@ -373,7 +375,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "harness_policy.selected",
+                    HARNESS_POLICY_SELECTED_EVENT,
                     harness_policy.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,

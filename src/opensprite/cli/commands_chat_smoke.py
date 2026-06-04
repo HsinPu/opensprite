@@ -13,7 +13,7 @@ from typing import Any
 
 import typer
 
-from ..runs.events import TASK_CONTRACT_CREATED_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
+from ..runs.events import HARNESS_PROFILE_SELECTED_EVENT, TASK_CONTRACT_CREATED_EVENT, TOOL_RESULT_EVENT, TOOL_STARTED_EVENT
 from ..storage.base import StoredRun, StoredRunEvent, StoredRunFileChange, StoredRunPart, StoredRunTrace
 from .commands_chat import _json_for_stdout, run_web_chat
 
@@ -271,7 +271,7 @@ def summarize_trace(trace: StoredRunTrace | None, fallback: dict[str, Any] | Non
                 failed_tool = _tool_name_from_event(payload)
                 if failed_tool:
                     failed_tools.append(failed_tool)
-        elif event.event_type.startswith("harness_profile."):
+        elif event.event_type == HARNESS_PROFILE_SELECTED_EVENT:
             profile = _profile_from_payload(payload) or profile
         elif event.event_type == TASK_CONTRACT_CREATED_EVENT:
             contract = _contract_type_from_payload(payload) or contract
