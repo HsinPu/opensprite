@@ -6,6 +6,7 @@ from typing import Any
 
 from .events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
+    AUTO_CONTINUE_EVENTS,
     AUTO_CONTINUE_SCHEDULED_EVENT,
     BACKGROUND_PROCESS_COMPLETED_EVENT,
     BACKGROUND_PROCESS_LOST_EVENT,
@@ -221,7 +222,7 @@ def run_event_kind(event_type: str) -> str:
         return "permission"
     if normalized.startswith("harness_"):
         return "harness"
-    if normalized.startswith("run_") or normalized.startswith("auto_continue."):
+    if normalized.startswith("run_") or normalized in AUTO_CONTINUE_EVENTS:
         return "run"
     return "other"
 

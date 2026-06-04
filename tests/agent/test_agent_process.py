@@ -1973,7 +1973,7 @@ def test_agent_process_direct_verify_can_finish_without_second_llm_pass(tmp_path
     assert response.text == "Verification passed: pytest\nCommand: python -m pytest"
     assert len(calls) == 1
     assert verified == [("pytest", ".", ())]
-    scheduled = next(event for event in events if event.event_type == "auto_continue.scheduled")
+    scheduled = next(event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT)
     assert scheduled.payload["direct_verify_action"] == "pytest"
     assert scheduled.payload["direct_verify_path"] == "."
 
@@ -2116,7 +2116,7 @@ def test_agent_process_full_deterministic_review_and_verification_matrix(tmp_pat
         ("pytest", ".", ()),
         ("pytest", ".", ()),
     ]
-    scheduled = [event for event in events if event.event_type == "auto_continue.scheduled"]
+    scheduled = [event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT]
     assert [event.payload.get("direct_start_step") or event.payload.get("direct_verify_action") for event in scheduled] == [
         "review",
         "implement",
@@ -2259,7 +2259,7 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
     assert response.text == "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
     assert resumed == [("implement_then_review", "Please implement the cleanup.", "review")]
     assert len(calls) == 1
-    scheduled = next(event for event in events if event.event_type == "auto_continue.scheduled")
+    scheduled = next(event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT)
     assert scheduled.payload["direct_workflow"] == "implement_then_review"
     assert scheduled.payload["direct_start_step"] == "review"
 
@@ -2372,7 +2372,7 @@ def test_agent_process_can_chain_changed_workflow_follow_up_targets(tmp_path):
         ("implement_then_review", "Please implement the cleanup.", "implement"),
     ]
     assert len(calls) == 1
-    scheduled = [event for event in events if event.event_type == "auto_continue.scheduled"]
+    scheduled = [event for event in events if event.event_type == AUTO_CONTINUE_SCHEDULED_EVENT]
     assert [event.payload.get("direct_start_step") for event in scheduled] == ["review", "implement"]
 
 
