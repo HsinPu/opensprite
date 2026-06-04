@@ -24,16 +24,20 @@ from .events import (
     EXECUTION_STOPPED_EVENT,
     FILE_CHANGED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
+    HARNESS_EVENT_PREFIX,
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    LLM_EVENT_PREFIX,
     LLM_STATUS_EVENT,
     MESSAGE_PART_DELTA_EVENT,
+    PERMISSION_EVENT_PREFIX,
     PERMISSION_DENIED_EVENT,
     PERMISSION_EVENTS,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     REASONING_DELTA_EVENT,
+    RUN_EVENT_PREFIX,
     RUN_PART_DELTA_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
@@ -44,7 +48,9 @@ from .events import (
     TASK_CONTRACT_VALIDATION_FAILED_EVENT,
     TASK_INTENT_DETECTED_EVENT,
     TEXT_DELTA_EVENTS,
+    TASK_EVENT_PREFIX,
     TOOL_LIFECYCLE_EVENTS,
+    TOOL_EVENT_PREFIX,
     TOOL_INPUT_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
@@ -63,6 +69,8 @@ from .events import (
     WORKFLOW_STEP_STARTED_EVENT,
     WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
+    VERIFICATION_EVENT_PREFIX,
+    WORK_EVENT_PREFIX,
     SUBAGENT_CANCELLED_EVENT,
     SUBAGENT_CANCELLED_EVENTS,
     SUBAGENT_COMPLETED_EVENT,
@@ -210,19 +218,19 @@ def run_event_kind(event_type: str) -> str:
     normalized = _text(event_type)
     if normalized in _EVENT_KINDS:
         return _EVENT_KINDS[normalized]
-    if normalized.startswith("tool_"):
+    if normalized.startswith(TOOL_EVENT_PREFIX):
         return "tool"
-    if normalized.startswith("verification_"):
+    if normalized.startswith(VERIFICATION_EVENT_PREFIX):
         return "verification"
-    if normalized.startswith("llm_"):
+    if normalized.startswith(LLM_EVENT_PREFIX):
         return "llm"
-    if normalized.startswith("work_") or normalized.startswith("task_"):
+    if normalized.startswith(WORK_EVENT_PREFIX) or normalized.startswith(TASK_EVENT_PREFIX):
         return "work"
-    if normalized.startswith("permission_"):
+    if normalized.startswith(PERMISSION_EVENT_PREFIX):
         return "permission"
-    if normalized.startswith("harness_"):
+    if normalized.startswith(HARNESS_EVENT_PREFIX):
         return "harness"
-    if normalized.startswith("run_") or normalized in AUTO_CONTINUE_EVENTS:
+    if normalized.startswith(RUN_EVENT_PREFIX) or normalized in AUTO_CONTINUE_EVENTS:
         return "run"
     return "other"
 
