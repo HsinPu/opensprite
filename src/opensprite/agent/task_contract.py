@@ -111,6 +111,8 @@ _PLANNER_TOOL_GROUP_ALIASES = {
     PLANNER_MEDIA_ANALYSIS_TASK_TYPE: MEDIA_TOOL_GROUP,
     PLANNER_OPS_TASK_TYPE: VERIFICATION_TOOL_GROUP,
 }
+LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES = frozenset({"implementation", "refactor"})
+FILE_CHANGE_TASK_TYPES = frozenset({CODE_CHANGE_TASK_TYPE, *LEGACY_FILE_CHANGE_TASK_TYPE_ALIASES})
 _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
     WEB_RESEARCH_TASK_TYPE: (WEB_RESEARCH_TOOL_GROUP,),
     WORKSPACE_READ_TASK_TYPE: (WORKSPACE_READ_TOOL_GROUP,),
@@ -472,7 +474,7 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
 def contract_expects_file_change(task_contract: Any) -> bool:
     """Return whether a task contract requires workspace file changes."""
     task_type = str(getattr(task_contract, "task_type", "") or "")
-    if task_type in {CODE_CHANGE_TASK_TYPE, "implementation", "refactor"}:
+    if task_type in FILE_CHANGE_TASK_TYPES:
         return True
     for requirement in getattr(task_contract, "requirements", ()) or ():
         if _is_file_change_requirement(requirement):
