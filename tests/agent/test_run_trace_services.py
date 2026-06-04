@@ -13,6 +13,7 @@ from opensprite.agent.run_trace import (
 from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
+    COMPLETION_GATE_EVALUATED_EVENT,
     RUN_PART_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
@@ -1245,7 +1246,7 @@ def test_serialize_run_summary_builds_stable_card_payload():
                 event_id=3,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete"},
                 created_at=15.0,
             ),
@@ -1495,7 +1496,7 @@ def test_serialize_run_summary_collects_structured_subagent_results():
                 event_id=2,
                 run_id="run-structured",
                 session_id="web:browser-structured",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete"},
                 created_at=23.0,
             ),
@@ -1663,7 +1664,7 @@ def test_serialize_run_summary_preserves_completion_follow_up_target():
                 event_id=1,
                 run_id="run-follow-up",
                 session_id="web:browser-follow-up",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={
                     "status": "incomplete",
                     "reason": "workflow implement_then_review did not complete successfully",
@@ -1731,7 +1732,7 @@ def test_serialize_run_summary_marks_parallel_delegation_warnings():
                 event_id=2,
                 run_id="run-2",
                 session_id="web:browser-2",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete"},
                 created_at=12.75,
             ),
@@ -1762,7 +1763,7 @@ def test_serialize_run_summary_marks_review_warning_when_required_review_missing
                 event_id=1,
                 run_id="run-review",
                 session_id="web:browser-review",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={
                     "status": "needs_review",
                     "reason": "delegated review was not recorded for code changes",
@@ -1847,7 +1848,7 @@ def test_serialize_run_summary_includes_structured_subagents():
                 event_id=2,
                 run_id="run-3",
                 session_id="web:browser-3",
-                event_type="completion_gate.evaluated",
+                event_type=COMPLETION_GATE_EVALUATED_EVENT,
                 payload={"status": "complete"},
                 created_at=23.0,
             ),
