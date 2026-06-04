@@ -30,6 +30,7 @@ from .resource_index import ResourceIndex
 from .task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .task_contract import (
     AcceptanceCriterion,
+    COMMAND_VERSION_QUALITY_CHECK,
     TaskContract,
     is_itemized_output_criterion,
     is_media_artifact_criterion,
@@ -369,7 +370,7 @@ def _evaluate_command_version_answer(
 ) -> QualityGateResult | None:
     if not is_operations_task_type(contract.task_type):
         return None
-    if not contract_requests_quality_check(contract, "command_version"):
+    if not contract_requests_quality_check(contract, COMMAND_VERSION_QUALITY_CHECK):
         return None
     normalized_response = re.sub(r"\s+", " ", str(response_text or "")).strip().lower()
     if not normalized_response:

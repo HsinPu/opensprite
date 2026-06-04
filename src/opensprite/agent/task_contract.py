@@ -61,12 +61,15 @@ WORKSPACE_LOCATION_CRITERION_KIND = "workspace_location"
 MEDIA_ARTIFACT_CRITERION_KIND = "media_artifact"
 VERIFICATION_OR_GAP_CRITERION_KIND = "verification_or_gap"
 OPERATION_REPORT_CRITERION_KIND = "operation_report"
+COMMAND_VERSION_QUALITY_CHECK = "command_version"
+REPOSITORY_STATUS_QUALITY_CHECK = "repository_status"
+WORKSPACE_LOCATION_QUALITY_CHECK = "workspace_location"
 _ALLOWED_PLANNER_TOOL_GROUPS = frozenset(TOOL_GROUPS.keys())
 _ALLOWED_PLANNER_QUALITY_CHECKS = frozenset(
     {
-        "command_version",
-        "repository_status",
-        "workspace_location",
+        COMMAND_VERSION_QUALITY_CHECK,
+        REPOSITORY_STATUS_QUALITY_CHECK,
+        WORKSPACE_LOCATION_QUALITY_CHECK,
     }
 )
 _ALLOWED_PLANNER_TASK_TYPES = frozenset(
@@ -531,8 +534,9 @@ def _build_planner_contract_prompt(
         "If the user asks to inspect the local machine, "
         "installed commands, command versions, running processes, or local runtime state, choose "
         f"{PLANNER_OPS_TASK_TYPE} with required_tool_groups "
-        "['execution']. Use quality_checks only for extra answer-specific verification: command_version when the answer must "
-        "report an installed command version, repository_status when it must report git/worktree status, and workspace_location "
+        "['execution']. Use quality_checks only for extra answer-specific verification: "
+        f"{COMMAND_VERSION_QUALITY_CHECK} when the answer must "
+        f"report an installed command version, {REPOSITORY_STATUS_QUALITY_CHECK} when it must report git/worktree status, and {WORKSPACE_LOCATION_QUALITY_CHECK} "
         "when it must name the file path, symbol, or config location found in workspace inspection. If no tool evidence is needed, "
         "choose pure_answer.\n"
         "Return JSON only with this shape:\n"
@@ -540,7 +544,7 @@ def _build_planner_contract_prompt(
         '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | '
         f'{PLANNER_MEDIA_ANALYSIS_TASK_TYPE} | history_retrieval | {PLANNER_OPS_TASK_TYPE} | task | analysis",\n'
         '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | execution | verification"],\n'
-        '  "quality_checks": ["command_version | repository_status | workspace_location"],\n'
+        f'  "quality_checks": ["{COMMAND_VERSION_QUALITY_CHECK} | {REPOSITORY_STATUS_QUALITY_CHECK} | {WORKSPACE_LOCATION_QUALITY_CHECK}"],\n'
         '  "final_answer_required": true,\n'
         '  "allow_no_tool_final": true,\n'
         '  "reason": "short explanation for trace only"\n'
@@ -640,7 +644,7 @@ def _contract_from_planner_payload(
             selected=selected,
         )
 
-    if "workspace_location" in quality_checks:
+    if WORKSPACE_LOCATION_QUALITY_CHECK in quality_checks:
         acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_workspace_location_criterion(),))
 
     planner_reason = _truncate(str(payload.get("reason") or PLANNER_VALIDATED_REASON), max_chars=240)

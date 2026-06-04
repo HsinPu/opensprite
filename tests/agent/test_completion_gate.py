@@ -68,6 +68,7 @@ from opensprite.agent.task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_RE
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
+    COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
     PLANNER_INVALID_JSON_REASON,
     TaskContract,
@@ -828,7 +829,7 @@ def test_completion_gate_rejects_repo_state_answer_for_command_version_question(
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     result = CompletionGateService().evaluate(
@@ -861,7 +862,7 @@ def test_completion_gate_accepts_shortened_command_version_from_tool_result():
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     result = CompletionGateService().evaluate(
@@ -892,7 +893,7 @@ def test_completion_gate_rejects_ungrounded_command_version_number():
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     result = CompletionGateService().evaluate(
@@ -924,7 +925,7 @@ def test_completion_gate_rejects_command_unavailable_claim_without_execution_evi
         task_type="operations",
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="execution"),),
         acceptance_criteria=(AcceptanceCriterion(kind="operation_report"),),
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     result = CompletionGateService().evaluate(
@@ -947,7 +948,7 @@ def test_completion_gate_accepts_command_unavailable_from_failed_execution_evide
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     result = CompletionGateService().evaluate(

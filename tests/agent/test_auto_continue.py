@@ -5,7 +5,12 @@ from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.resource_index import ResourceRef
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task_contract import (
+    AcceptanceCriterion,
+    COMMAND_VERSION_QUALITY_CHECK,
+    EvidenceRequirement,
+    TaskContract,
+)
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 from opensprite.tools.result_status import tool_error_result
@@ -486,7 +491,7 @@ def test_auto_continue_uses_command_version_contract_for_retry_guidance():
     contract = TaskContract(
         objective=intent.objective,
         task_type="operations",
-        planner_metadata={"quality_checks": ["command_version"]},
+        planner_metadata={"quality_checks": [COMMAND_VERSION_QUALITY_CHECK]},
     )
 
     decision = AutoContinueService(max_auto_continues=1).decide(

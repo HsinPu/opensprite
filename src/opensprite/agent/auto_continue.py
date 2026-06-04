@@ -56,6 +56,7 @@ from .quality_gate import (
 from .response_shape_policy import itemized_output_follow_up_instruction
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import (
+    COMMAND_VERSION_QUALITY_CHECK,
     contract_expects_file_change,
     contract_requests_itemized_output,
     contract_requests_source_material,
@@ -610,7 +611,7 @@ def _quality_follow_up_instruction(
     if (
         execution_result is not None
         and execution_result.task_contract is not None
-        and contract_requests_quality_check(execution_result.task_contract, "command_version")
+        and contract_requests_quality_check(execution_result.task_contract, COMMAND_VERSION_QUALITY_CHECK)
     ):
         return command_version_follow_up_instruction()
     if execution_result is not None and contract_requests_itemized_output(
