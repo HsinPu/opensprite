@@ -1,15 +1,25 @@
 """Shared constants for tool permission configuration and policy."""
 
+RISK_LEVEL_READ = "read"
+RISK_LEVEL_WRITE = "write"
+RISK_LEVEL_EXECUTE = "execute"
+RISK_LEVEL_NETWORK = "network"
+RISK_LEVEL_EXTERNAL_SIDE_EFFECT = "external_side_effect"
+RISK_LEVEL_CONFIGURATION = "configuration"
+RISK_LEVEL_DELEGATION = "delegation"
+RISK_LEVEL_MEMORY = "memory"
+RISK_LEVEL_MCP = "mcp"
+
 ALL_RISK_LEVELS_ORDER = (
-    "read",
-    "write",
-    "execute",
-    "network",
-    "external_side_effect",
-    "configuration",
-    "delegation",
-    "memory",
-    "mcp",
+    RISK_LEVEL_READ,
+    RISK_LEVEL_WRITE,
+    RISK_LEVEL_EXECUTE,
+    RISK_LEVEL_NETWORK,
+    RISK_LEVEL_EXTERNAL_SIDE_EFFECT,
+    RISK_LEVEL_CONFIGURATION,
+    RISK_LEVEL_DELEGATION,
+    RISK_LEVEL_MEMORY,
+    RISK_LEVEL_MCP,
 )
 
 ALL_RISK_LEVELS = frozenset(ALL_RISK_LEVELS_ORDER)

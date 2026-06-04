@@ -5,7 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from ..permission_constants import ALL_RISK_LEVELS, ALL_RISK_LEVELS_ORDER, APPROVAL_MODE_ASK, APPROVAL_MODE_AUTO, denied_risks_except
+from ..permission_constants import (
+    ALL_RISK_LEVELS,
+    ALL_RISK_LEVELS_ORDER,
+    APPROVAL_MODE_ASK,
+    APPROVAL_MODE_AUTO,
+    RISK_LEVEL_DELEGATION,
+    RISK_LEVEL_EXTERNAL_SIDE_EFFECT,
+    RISK_LEVEL_MCP,
+    RISK_LEVEL_NETWORK,
+    RISK_LEVEL_READ,
+    denied_risks_except,
+)
 from ..tool_names import (
     BATCH_TOOL_NAME,
     LIST_RUN_FILE_CHANGES_TOOL_NAME,
@@ -38,10 +49,10 @@ _READ_ONLY_TOOLS = (
 )
 _WEB_RESEARCH_TOOLS = (*_READ_ONLY_TOOLS, *WEB_HARNESS_RESEARCH_TOOLS)
 _MEDIA_TOOLS = (*_READ_ONLY_TOOLS, *MEDIA_TOOL_NAMES)
-_CHAT_RISKS = ("read",)
-_RESEARCH_RISKS = ("read", "network")
-_MEDIA_RISKS = ("read", "network", "external_side_effect")
-_WORKSPACE_ANALYSIS_RISKS = ("read", "network", "delegation")
+_CHAT_RISKS = (RISK_LEVEL_READ,)
+_RESEARCH_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK)
+_MEDIA_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK, RISK_LEVEL_EXTERNAL_SIDE_EFFECT)
+_WORKSPACE_ANALYSIS_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK, RISK_LEVEL_DELEGATION)
 RESEARCH_HARNESS_POLICY_REASON = (
     "research turns may inspect local context and web sources but cannot mutate workspace or external state"
 )
@@ -139,8 +150,8 @@ class HarnessPolicyService:
                 name="workspace_change_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=("*",),
-                allowed_risk_levels=tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk != "mcp"),
-                denied_risk_levels=("mcp",),
+                allowed_risk_levels=tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk != RISK_LEVEL_MCP),
+                denied_risk_levels=(RISK_LEVEL_MCP,),
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
                 reason=WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
             ), harness_profile)
