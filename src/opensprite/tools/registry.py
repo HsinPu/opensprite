@@ -4,6 +4,7 @@ from dataclasses import replace
 from typing import Any, Awaitable, Callable
 
 from .base import Tool
+from .approval import DEFAULT_PERMISSION_DENIAL_REASON
 from .evidence import ToolEvidence, build_tool_evidence
 from .permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
 from .result_status import classify_tool_result_status, tool_error_result
@@ -127,7 +128,7 @@ class ToolRegistry:
                     if on_before_execute is not None:
                         await on_before_execute(name, display_params if isinstance(display_params, dict) else {})
                     return await tool.execute_validated(params)
-                reason = approval.reason or decision.reason or "user denied approval"
+                reason = approval.reason or decision.reason or DEFAULT_PERMISSION_DENIAL_REASON
                 return tool_error_result(
                     f"Tool '{name}' blocked by permission policy: {reason}.",
                     error_type="ToolPermissionError",
