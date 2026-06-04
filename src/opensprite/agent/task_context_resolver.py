@@ -80,6 +80,8 @@ _ALLOWED_TOOL_GROUPS = frozenset(
     }
 )
 _LLM_TASK_SWITCH_CONFIDENCE = 0.80
+DETERMINISTIC_CONTEXT_METHOD = "deterministic"
+DETERMINISTIC_DECISION_CONTEXT_FIELD = "deterministic_decision"
 CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON = "current message is an acknowledgement"
 TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON = "task context requires LLM classification"
 LLM_RESOLVED_TASK_CONTEXT_REASON = "llm resolved task context"
@@ -107,7 +109,7 @@ class TaskContextDecision:
     inherited_tool_group: str | None = None
     continuation_type: str = NONE_CONTINUATION_TYPE
     confidence: float = 0.0
-    method: str = "deterministic"
+    method: str = DETERMINISTIC_CONTEXT_METHOD
     reason: str = ""
 
     def to_metadata(self) -> dict[str, Any]:
@@ -292,7 +294,7 @@ def _build_llm_prompt(
         "recent_history": _recent_history(history),
         "active_task": _truncate(active_task, 1800),
         "work_state_summary": _truncate(work_state_summary, 1200),
-        "deterministic_decision": deterministic.to_metadata(),
+        DETERMINISTIC_DECISION_CONTEXT_FIELD: deterministic.to_metadata(),
     }
     return (
         "Decide whether the latest user message is a follow-up, continuation, or task switch.\n"
@@ -301,7 +303,8 @@ def _build_llm_prompt(
         "If evidence should be inherited, choose one inherited_tool_group from: "
         f"{', '.join(sorted(_ALLOWED_TOOL_GROUPS))}.\n"
         "Do not mark a turn as no-tool if it likely asks for external web, media, or workspace evidence.\n"
-        "Do not remove evidence or active-task inheritance from deterministic_decision; only add stricter context.\n"
+        f"Do not remove evidence or active-task inheritance from {DETERMINISTIC_DECISION_CONTEXT_FIELD}; "
+        "only add stricter context.\n"
         "If an active task exists and the latest turn might be either a new task or a continuation, use "
         f"continuation_type={AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE} instead of replacing the task.\n"
         "Return only JSON with these keys: continuation_type, is_follow_up, should_inherit_active_task, "
