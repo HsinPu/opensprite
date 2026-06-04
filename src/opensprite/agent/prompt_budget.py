@@ -10,6 +10,10 @@ from ..llms import LLMProvider
 from ..tools import ToolRegistry
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
+from .prompt_budget_policy import (
+    prompt_trim_base_exceeds_budget_reason,
+    prompt_trim_first_message_exceeds_budget_reason,
+)
 
 
 class PromptBudgetService:
@@ -86,8 +90,9 @@ class PromptBudgetService:
             return history, base_tokens, history_tokens, base_tokens + history_tokens
 
         if base_tokens >= budget:
+            reason = prompt_trim_base_exceeds_budget_reason()
             logger.warning(
-                f"[{session_id}] prompt.trim | base_tokens={base_tokens} budget={budget} history_retained=0 reason=base-exceeds-budget"
+                f"[{session_id}] prompt.trim | base_tokens={base_tokens} budget={budget} history_retained=0 reason={reason}"
             )
             return [], base_tokens, 0, base_tokens
 
@@ -99,8 +104,9 @@ class PromptBudgetService:
             if trimmed_reversed and running_tokens + message_tokens > budget:
                 break
             if not trimmed_reversed and running_tokens + message_tokens > budget:
+                reason = prompt_trim_first_message_exceeds_budget_reason()
                 logger.warning(
-                    f"[{session_id}] prompt.trim | base_tokens={base_tokens} first_history_tokens={message_tokens} budget={budget} history_retained=0 reason=first-message-exceeds-budget"
+                    f"[{session_id}] prompt.trim | base_tokens={base_tokens} first_history_tokens={message_tokens} budget={budget} history_retained=0 reason={reason}"
                 )
                 return [], base_tokens, 0, base_tokens
             trimmed_reversed.append(message)
