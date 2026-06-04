@@ -13,6 +13,7 @@ from typing import Any, Awaitable, Callable
 
 from ..utils.log import logger
 from .background_tasks import CoalescingTaskScheduler
+from .curator_policy import CURATOR_NO_RUNNING_EVENT_LOOP_REASON
 from .execution import ExecutionResult
 
 
@@ -124,8 +125,9 @@ class CuratorService:
             on_exception=lambda session_id, _exc: logger.exception("[%s] curator.failed", session_id),
             on_rerun=lambda session_id: logger.info("[%s] curator.rerun", session_id),
             on_schedule_error=lambda session_id, _exc: logger.warning(
-                "[%s] curator.skip | reason=no-running-event-loop",
+                "[%s] curator.skip | reason=%s",
                 session_id,
+                CURATOR_NO_RUNNING_EVENT_LOOP_REASON,
             ),
         )
         self.tasks = self._scheduler.tasks
