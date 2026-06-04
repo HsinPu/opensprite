@@ -574,9 +574,9 @@ class SubagentRunService:
             "group_id": group_id,
             "total_tasks": len(prepared_tasks),
             "max_parallel": max_parallel,
-            "completed_count": counts.get("completed", 0),
-            "failed_count": counts.get("failed", 0) + counts.get("error", 0),
-            "cancelled_count": counts.get("cancelled", 0),
+            "completed_count": counts.get(WORKFLOW_COMPLETED_STATUS, 0),
+            "failed_count": counts.get(WORKFLOW_FAILED_STATUS, 0) + counts.get(WORKFLOW_ERROR_STATUS, 0),
+            "cancelled_count": counts.get(WORKFLOW_CANCELLED_STATUS, 0),
             "task_ids": [prepared.task_id for prepared in prepared_tasks],
             "tasks": tasks_payload,
             "summary": cls._group_summary(status, total=len(prepared_tasks), counts=counts),
@@ -773,7 +773,7 @@ class SubagentRunService:
                 result_metadata,
             )
             completion_payload = {
-                "status": "completed",
+                "status": WORKFLOW_COMPLETED_STATUS,
                 "task_id": prepared.task_id,
                 "prompt_type": prepared.prompt_type,
                 "child_session_id": prepared.child_session_id,
@@ -801,7 +801,7 @@ class SubagentRunService:
             )
             self._record_task_update(
                 prepared,
-                status="completed",
+                status=WORKFLOW_COMPLETED_STATUS,
                 summary=result_summary,
                 structured_output=compact_structured_output,
                 created_at=started_at,
@@ -818,7 +818,7 @@ class SubagentRunService:
                 prompt_type=prepared.prompt_type,
                 child_session_id=prepared.child_session_id,
                 child_run_id=prepared.child_run_id,
-                status="completed",
+                status=WORKFLOW_COMPLETED_STATUS,
                 content=display_content,
                 summary=result_summary,
                 executed_tool_calls=sub_result.executed_tool_calls,
@@ -833,7 +833,7 @@ class SubagentRunService:
             )
         except asyncio.CancelledError:
             cancellation_payload = {
-                "status": "cancelled",
+                "status": WORKFLOW_CANCELLED_STATUS,
                 "task_id": prepared.task_id,
                 "prompt_type": prepared.prompt_type,
                 "child_session_id": prepared.child_session_id,
@@ -841,20 +841,20 @@ class SubagentRunService:
                 "parent_session_id": prepared.parent_session_id,
                 "parent_run_id": prepared.parent_run_id,
                 "resume": prepared.is_resume,
-                "error": "cancelled",
+                "error": WORKFLOW_CANCELLED_STATUS,
                 "max_tool_iterations": max_tool_iterations,
                 **self._delegation_metadata(prepared),
             }
             await self.run_trace.fail_run(
                 prepared.child_session_id,
                 prepared.child_run_id,
-                status="cancelled",
+                status=WORKFLOW_CANCELLED_STATUS,
                 event_payload=cancellation_payload,
             )
             self._record_task_update(
                 prepared,
-                status="cancelled",
-                error="cancelled",
+                status=WORKFLOW_CANCELLED_STATUS,
+                error=WORKFLOW_CANCELLED_STATUS,
                 created_at=started_at,
                 updated_at=time.time(),
             )
@@ -922,7 +922,7 @@ class SubagentRunService:
         group_id: str,
         max_parallel: int,
     ) -> str:
-        failed = sum(1 for outcome in outcomes if outcome.status != "completed")
+        failed = sum(1 for outcome in outcomes if not is_workflow_completed_status(outcome.status))
         lines = [
             f"Parallel delegation completed: {len(outcomes)} task(s), {failed} failed.",
             f"Group ID: {group_id}",
@@ -936,7 +936,7 @@ class SubagentRunService:
                     f"Run ID: {outcome.child_run_id}",
                 ]
             )
-            if outcome.status == "completed":
+            if is_workflow_completed_status(outcome.status):
                 lines.extend(["Result:", outcome.content])
             else:
                 lines.extend(["Failure:", outcome.error or outcome.summary or "unknown failure"])
@@ -1110,9 +1110,9 @@ class SubagentRunService:
                         prepared_tasks,
                         group_id=group_id,
                         max_parallel=concurrency,
-                        status="cancelled",
+                        status=WORKFLOW_CANCELLED_STATUS,
                         outcomes_by_task_id=outcomes_by_task_id,
-                        default_missing_status="cancelled",
+                        default_missing_status=WORKFLOW_CANCELLED_STATUS,
                     ),
                 )
                 raise RunCancelledError("parallel delegated tasks cancelled")
