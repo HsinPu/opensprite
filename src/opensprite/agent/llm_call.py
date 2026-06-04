@@ -7,6 +7,13 @@ from typing import Any, Awaitable, Callable
 
 from ..config import AgentConfig
 from ..llms import ChatMessage
+from ..runs.events import (
+    TASK_CONTRACT_CREATED_EVENT,
+    TASK_CONTRACT_PLANNED_EVENT,
+    TASK_CONTRACT_PLANNING_STARTED_EVENT,
+    TASK_CONTRACT_VALIDATED_EVENT,
+    TASK_CONTRACT_VALIDATION_FAILED_EVENT,
+)
 from .planning_mode import resolve_planning_mode
 from ..tools import ToolRegistry
 from ..utils.log import logger
@@ -286,7 +293,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_contract.planning_started",
+                    TASK_CONTRACT_PLANNING_STARTED_EVENT,
                     {
                         "schema_version": 1,
                         "objective": effective_task_intent.objective,
@@ -309,15 +316,15 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_contract.planned",
+                    TASK_CONTRACT_PLANNED_EVENT,
                     task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
                 validation_event_type = (
-                    "task_contract.validated"
+                    TASK_CONTRACT_VALIDATED_EVENT
                     if _task_contract_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
-                    else "task_contract.validation_failed"
+                    else TASK_CONTRACT_VALIDATION_FAILED_EVENT
                 )
                 await self._emit_run_event(
                     session_id,
@@ -358,7 +365,7 @@ class LlmCallService:
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    "task_contract.created",
+                    TASK_CONTRACT_CREATED_EVENT,
                     task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,
