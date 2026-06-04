@@ -1,11 +1,17 @@
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     EvidenceRequirement,
-    TaskContract,
+    ITEMIZED_OUTPUT_CRITERION_KIND,
+    MEDIA_ARTIFACT_CRITERION_KIND,
+    OPERATION_REPORT_CRITERION_KIND,
     PLANNER_INVALID_JSON_REASON,
     PLANNER_UNAVAILABLE_REASON,
     PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
     PLANNER_VALIDATED_REASON,
+    SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+    TaskContract,
+    VERIFICATION_OR_GAP_CRITERION_KIND,
+    WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_planner_payload,
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
@@ -118,8 +124,8 @@ def test_acceptance_criterion_policy_helpers():
         acceptance_criteria=(
             AcceptanceCriterion(kind="source_reference"),
             AcceptanceCriterion(kind="source_detail"),
-            AcceptanceCriterion(kind="itemized_output"),
-            AcceptanceCriterion(kind="substantive_final_answer"),
+            AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND),
+            AcceptanceCriterion(kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND),
         ),
     )
 
@@ -133,7 +139,7 @@ def test_acceptance_criterion_policy_helpers():
     assert is_itemized_output_criterion(contract.acceptance_criteria[2]) is True
     assert is_substantive_final_answer_criterion(contract.acceptance_criteria[3]) is True
     assert is_source_artifact_criterion(AcceptanceCriterion(kind="source_artifact")) is True
-    assert is_workspace_location_criterion(AcceptanceCriterion(kind="workspace_location")) is True
-    assert is_media_artifact_criterion(AcceptanceCriterion(kind="media_artifact")) is True
-    assert is_verification_or_gap_criterion(AcceptanceCriterion(kind="verification_or_gap")) is True
-    assert is_operation_report_criterion(AcceptanceCriterion(kind="operation_report")) is True
+    assert is_workspace_location_criterion(AcceptanceCriterion(kind=WORKSPACE_LOCATION_CRITERION_KIND)) is True
+    assert is_media_artifact_criterion(AcceptanceCriterion(kind=MEDIA_ARTIFACT_CRITERION_KIND)) is True
+    assert is_verification_or_gap_criterion(AcceptanceCriterion(kind=VERIFICATION_OR_GAP_CRITERION_KIND)) is True
+    assert is_operation_report_criterion(AcceptanceCriterion(kind=OPERATION_REPORT_CRITERION_KIND)) is True

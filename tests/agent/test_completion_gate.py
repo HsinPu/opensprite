@@ -73,6 +73,7 @@ from opensprite.agent.task_contract import (
     PLANNER_INVALID_JSON_REASON,
     REPOSITORY_STATUS_QUALITY_CHECK,
     TaskContract,
+    WORKSPACE_LOCATION_CRITERION_KIND,
     _contract_from_planner_payload,
 )
 from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
@@ -1518,7 +1519,7 @@ def test_completion_gate_requires_workspace_location_for_where_question():
         acceptance_criteria=contract.acceptance_criteria
         + (
             AcceptanceCriterion(
-                kind="workspace_location",
+                kind=WORKSPACE_LOCATION_CRITERION_KIND,
                 description="Identify the relevant workspace location.",
             ),
         ),
@@ -1568,7 +1569,7 @@ def test_completion_gate_completes_workspace_location_answer_with_path():
         acceptance_criteria=contract.acceptance_criteria
         + (
             AcceptanceCriterion(
-                kind="workspace_location",
+                kind=WORKSPACE_LOCATION_CRITERION_KIND,
                 description="Identify the relevant workspace location.",
             ),
         ),

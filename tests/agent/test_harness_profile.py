@@ -25,7 +25,13 @@ from opensprite.agent.harness_profile import (
     is_research_profile_name,
     normalize_profile_name,
 )
-from opensprite.agent.task_contract import EvidenceRequirement, TaskContract, TaskContractPlanner
+from opensprite.agent.task_contract import (
+    EvidenceRequirement,
+    TaskContract,
+    TaskContractPlanner,
+    WORKSPACE_LOCATION_CRITERION_KIND,
+    WORKSPACE_LOCATION_QUALITY_CHECK,
+)
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config import Config
 
@@ -356,7 +362,7 @@ async def test_task_contract_planner_honors_workspace_read_for_repository_status
         {
             "task_type": "workspace_read",
             "required_tool_groups": ["workspace_read"],
-            "quality_checks": ["workspace_location"],
+            "quality_checks": [WORKSPACE_LOCATION_QUALITY_CHECK],
             "allow_no_tool_final": False,
             "reason": "The user asks to inspect the repository files.",
         }
@@ -372,8 +378,8 @@ async def test_task_contract_planner_honors_workspace_read_for_repository_status
 
     assert contract.task_type == "workspace_read"
     assert any(item.kind == "tool_group" and item.tool_group == "workspace_read" for item in contract.requirements)
-    assert contract.planner_metadata["quality_checks"] == ["workspace_location"]
-    assert any(item.kind == "workspace_location" for item in contract.acceptance_criteria)
+    assert contract.planner_metadata["quality_checks"] == [WORKSPACE_LOCATION_QUALITY_CHECK]
+    assert any(item.kind == WORKSPACE_LOCATION_CRITERION_KIND for item in contract.acceptance_criteria)
     assert contract.allow_no_tool_final is False
     assert "override_reason" not in contract.planner_metadata
 
