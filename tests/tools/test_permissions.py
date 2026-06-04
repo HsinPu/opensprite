@@ -27,6 +27,9 @@ from opensprite.tools.permissions import (
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
 from opensprite.runs.events import (
+    PERMISSION_DENIED_EVENT,
+    PERMISSION_GRANTED_EVENT,
+    PERMISSION_REQUESTED_EVENT,
     TOOL_PERMISSION_ALLOWED_EVENT,
     TOOL_PERMISSION_CHECKED_EVENT,
     TOOL_PERMISSION_NOT_EXPOSED_EVENT,
@@ -297,7 +300,7 @@ def test_approval_required_policy_waits_for_approval_in_ask_mode():
     assert PERMISSION_REQUEST_PENDING_STATUS == "pending"
     assert PERMISSION_REQUEST_APPROVED_STATUS == "approved"
     assert PERMISSION_REQUEST_DENIED_STATUS == "denied"
-    assert [event[0] for event in events] == ["permission_requested", "permission_granted"]
+    assert [event[0] for event in events] == [PERMISSION_REQUESTED_EVENT, PERMISSION_GRANTED_EVENT]
     assert events[0][2] == PERMISSION_REQUEST_PENDING_STATUS
     assert events[1][2] == PERMISSION_REQUEST_APPROVED_STATUS
     assert pending == []
@@ -441,7 +444,7 @@ def test_approval_required_policy_times_out_pending_request_in_ask_mode():
     assert PERMISSION_REQUEST_TIMED_OUT_REASON == "permission request timed out"
     _assert_permission_block(result, PERMISSION_REQUEST_TIMED_OUT_REASON)
     assert events == [
-        ("permission_requested", "pending", False),
-        ("permission_denied", "denied", True),
+        (PERMISSION_REQUESTED_EVENT, "pending", False),
+        (PERMISSION_DENIED_EVENT, "denied", True),
     ]
     assert pending == []
