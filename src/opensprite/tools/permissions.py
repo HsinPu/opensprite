@@ -61,6 +61,33 @@ DEFAULT_TOOL_RISKS: dict[str, frozenset[str]] = {
 }
 
 
+PERMISSION_POLICY_DISABLED_REASON = "permission policy disabled"
+
+
+def tool_not_allowed_reason(tool_name: str) -> str:
+    return f"tool '{tool_name}' is not in allowed_tools"
+
+
+def tool_denied_reason(tool_name: str) -> str:
+    return f"tool '{tool_name}' is listed in denied_tools"
+
+
+def risk_levels_denied_reason(risk_levels: list[str]) -> str:
+    return f"risk level(s) denied: {', '.join(risk_levels)}"
+
+
+def risk_levels_not_allowed_reason(risk_levels: list[str]) -> str:
+    return f"risk level(s) not allowed: {', '.join(risk_levels)}"
+
+
+def tool_requires_approval_reason(tool_name: str) -> str:
+    return f"tool '{tool_name}' requires user approval"
+
+
+def risk_levels_require_approval_reason(risk_levels: list[str]) -> str:
+    return f"risk level(s) require user approval: {', '.join(risk_levels)}"
+
+
 @dataclass(frozen=True)
 class PermissionDecision:
     allowed: bool
@@ -191,7 +218,7 @@ class ToolPermissionPolicy:
         tool_risk_levels: Any = None,
     ) -> PermissionDecision:
         if not self.enabled:
-            return self._decision(True, tool_name, frozenset(), reason="permission policy disabled")
+            return self._decision(True, tool_name, frozenset(), reason=PERMISSION_POLICY_DISABLED_REASON)
 
         risks = self.risk_levels_for_tool(tool_name, tool_risk_levels=tool_risk_levels)
         matched_allowed_tools = self._matching_patterns(tool_name, self.allowed_tools)
@@ -199,13 +226,13 @@ class ToolPermissionPolicy:
         matched_allowed_risks = tuple(sorted(risk for risk in risks if risk in self.allowed_risk_levels))
         matched_denied_risks = tuple(sorted(risks & self.denied_risk_levels))
         if not matched_allowed_tools:
-            return self._decision(False, tool_name, risks, reason=f"tool '{tool_name}' is not in allowed_tools")
+            return self._decision(False, tool_name, risks, reason=tool_not_allowed_reason(tool_name))
         if matched_denied_tools:
             return self._decision(
                 False,
                 tool_name,
                 risks,
-                reason=f"tool '{tool_name}' is listed in denied_tools",
+                reason=tool_denied_reason(tool_name),
                 matched_allowed_tools=matched_allowed_tools,
                 matched_denied_tools=matched_denied_tools,
                 matched_allowed_risk_levels=matched_allowed_risks,
@@ -217,7 +244,7 @@ class ToolPermissionPolicy:
                 False,
                 tool_name,
                 risks,
-                reason=f"risk level(s) denied: {', '.join(denied_risks)}",
+                reason=risk_levels_denied_reason(denied_risks),
                 matched_allowed_tools=matched_allowed_tools,
                 matched_allowed_risk_levels=matched_allowed_risks,
                 matched_denied_risk_levels=matched_denied_risks,
@@ -228,7 +255,7 @@ class ToolPermissionPolicy:
                 False,
                 tool_name,
                 risks,
-                reason=f"risk level(s) not allowed: {', '.join(disallowed_risks)}",
+                reason=risk_levels_not_allowed_reason(disallowed_risks),
                 matched_allowed_tools=matched_allowed_tools,
                 matched_allowed_risk_levels=matched_allowed_risks,
             )
@@ -239,7 +266,7 @@ class ToolPermissionPolicy:
                     False,
                     tool_name,
                     risks,
-                    f"tool '{tool_name}' requires user approval",
+                    tool_requires_approval_reason(tool_name),
                     requires_approval=approval_requires_callback,
                     matched_allowed_tools=matched_allowed_tools,
                     matched_allowed_risk_levels=matched_allowed_risks,
@@ -251,7 +278,7 @@ class ToolPermissionPolicy:
                     False,
                     tool_name,
                     risks,
-                    f"risk level(s) require user approval: {', '.join(approval_risks)}",
+                    risk_levels_require_approval_reason(approval_risks),
                     requires_approval=approval_requires_callback,
                     matched_allowed_tools=matched_allowed_tools,
                     matched_allowed_risk_levels=matched_allowed_risks,

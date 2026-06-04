@@ -9,7 +9,16 @@ from opensprite.tools.approval import (
     classify_permission_request,
 )
 from opensprite.tools.base import Tool
-from opensprite.tools.permissions import ToolPermissionPolicy
+from opensprite.tools.permissions import (
+    PERMISSION_POLICY_DISABLED_REASON,
+    ToolPermissionPolicy,
+    risk_levels_denied_reason,
+    risk_levels_not_allowed_reason,
+    risk_levels_require_approval_reason,
+    tool_denied_reason,
+    tool_not_allowed_reason,
+    tool_requires_approval_reason,
+)
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
 
@@ -164,8 +173,20 @@ def test_registry_evidence_includes_permission_block_metadata():
     assert evidence.ok is False
     assert evidence.metadata["permission"]["blocked"] is True
     assert evidence.metadata["permission"]["exposure"] == "not_exposed"
-    assert evidence.metadata["permission"]["reason"] == "risk level(s) not allowed: write"
+    assert evidence.metadata["permission"]["reason"] == risk_levels_not_allowed_reason(["write"])
     assert evidence.metadata["permission"]["risk_levels"] == ["write"]
+
+
+def test_permission_decision_reasons_are_centralized():
+    assert PERMISSION_POLICY_DISABLED_REASON == "permission policy disabled"
+    assert tool_not_allowed_reason("apply_patch") == "tool 'apply_patch' is not in allowed_tools"
+    assert tool_denied_reason("exec") == "tool 'exec' is listed in denied_tools"
+    assert risk_levels_denied_reason(["execute"]) == "risk level(s) denied: execute"
+    assert risk_levels_not_allowed_reason(["write"]) == "risk level(s) not allowed: write"
+    assert tool_requires_approval_reason("apply_patch") == "tool 'apply_patch' requires user approval"
+    assert risk_levels_require_approval_reason(["configuration"]) == (
+        "risk level(s) require user approval: configuration"
+    )
 
 
 def test_registry_restricts_allowed_tools_by_glob():
