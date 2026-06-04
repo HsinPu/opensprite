@@ -4,7 +4,19 @@ from types import SimpleNamespace
 
 from opensprite.agent.run_hooks import RunHookService
 from opensprite.agent.execution import LlmStepEvent
-from opensprite.agent.run_trace import RUN_PART_CONTENT_MAX_CHARS, RunEventSink, RunTraceRecorder, truncate_run_part_content
+from opensprite.agent.run_trace import (
+    RUN_CANCELLED_EVENT,
+    RUN_CANCELLED_STATUS,
+    RUN_COMPLETED_STATUS,
+    RUN_FAILED_EVENT,
+    RUN_FINISHED_EVENT,
+    RUN_PART_CONTENT_MAX_CHARS,
+    RUN_RUNNING_STATUS,
+    RUN_STARTED_EVENT,
+    RunEventSink,
+    RunTraceRecorder,
+    truncate_run_part_content,
+)
 from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
 from opensprite.runs.schema import (
@@ -18,6 +30,16 @@ from opensprite.runs.schema import (
     serialize_run_summary,
 )
 from opensprite.storage import MemoryStorage, StoredWorkState
+
+
+def test_run_trace_lifecycle_markers_are_stable():
+    assert RUN_RUNNING_STATUS == "running"
+    assert RUN_COMPLETED_STATUS == "completed"
+    assert RUN_CANCELLED_STATUS == "cancelled"
+    assert RUN_STARTED_EVENT == "run_started"
+    assert RUN_FINISHED_EVENT == "run_finished"
+    assert RUN_FAILED_EVENT == "run_failed"
+    assert RUN_CANCELLED_EVENT == "run_cancelled"
 
 
 def test_truncate_run_part_content_bounds_large_payloads():

@@ -13,6 +13,13 @@ from ..utils.log import logger
 
 
 RUN_PART_CONTENT_MAX_CHARS = 20_000
+RUN_RUNNING_STATUS = "running"
+RUN_COMPLETED_STATUS = "completed"
+RUN_CANCELLED_STATUS = "cancelled"
+RUN_STARTED_EVENT = "run_started"
+RUN_FINISHED_EVENT = "run_finished"
+RUN_FAILED_EVENT = "run_failed"
+RUN_CANCELLED_EVENT = "run_cancelled"
 
 
 def truncate_run_part_content(
@@ -202,13 +209,13 @@ class RunTraceRecorder:
             "sender_name": sender_name,
         }
         run_metadata = {key: value for key, value in run_metadata.items() if value is not None}
-        await self.create_run(session_id, run_id, status="running", metadata=run_metadata)
+        await self.create_run(session_id, run_id, status=RUN_RUNNING_STATUS, metadata=run_metadata)
         await self.emit_event(
             session_id,
             run_id,
-            "run_started",
+            RUN_STARTED_EVENT,
             {
-                "status": "running",
+                "status": RUN_RUNNING_STATUS,
                 "text_len": len(text or ""),
                 "images_count": len(images or []),
                 "audios_count": len(audios or []),
@@ -438,7 +445,7 @@ class RunTraceRecorder:
         await self.emit_event(
             session_id,
             run_id,
-            "run_finished",
+            RUN_FINISHED_EVENT,
             event_payload,
             channel=channel,
             external_chat_id=external_chat_id,
@@ -446,7 +453,7 @@ class RunTraceRecorder:
         await self.update_run_status(
             session_id,
             run_id,
-            "completed",
+            RUN_COMPLETED_STATUS,
             metadata=status_metadata,
             finished_at=finished_at,
         )
@@ -463,7 +470,7 @@ class RunTraceRecorder:
     ) -> None:
         """Emit a terminal run event and mark the durable run with the supplied status."""
         finished_at = time.time()
-        event_type = "run_cancelled" if status == "cancelled" else "run_failed"
+        event_type = RUN_CANCELLED_EVENT if status == RUN_CANCELLED_STATUS else RUN_FAILED_EVENT
         await self.emit_event(
             session_id,
             run_id,
