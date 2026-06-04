@@ -10,6 +10,10 @@ from opensprite.runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    TASK_CONTRACT_CREATED_EVENT,
+    TASK_CONTRACT_PLANNED_EVENT,
+    TASK_CONTRACT_VALIDATED_EVENT,
+    TASK_CONTRACT_VALIDATION_FAILED_EVENT,
 )
 from opensprite.storage import MemoryStorage
 from opensprite.tools.base import Tool
@@ -137,8 +141,8 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
 
     assert response.text == "Harness runtime reply."
     assert tool_names_by_call[-1] == []
-    assert "task_contract.planned" in event_types
-    assert "task_contract.validated" in event_types
+    assert TASK_CONTRACT_PLANNED_EVENT in event_types
+    assert TASK_CONTRACT_VALIDATED_EVENT in event_types
     assert HARNESS_PROFILE_SELECTED_EVENT in event_types
     assert HARNESS_POLICY_SELECTED_EVENT in event_types
     effective_profile = next(event for event in events if event.event_type == HARNESS_PROFILE_SELECTED_EVENT)
@@ -186,8 +190,8 @@ def test_harness_runtime_records_planning_error_contract_for_invalid_planner_jso
     result, event_types = asyncio.run(scenario())
 
     assert result.text == "Harness runtime reply."
-    assert "task_contract.validation_failed" in event_types
-    assert "task_contract.created" in event_types
+    assert TASK_CONTRACT_VALIDATION_FAILED_EVENT in event_types
+    assert TASK_CONTRACT_CREATED_EVENT in event_types
 
 
 def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
