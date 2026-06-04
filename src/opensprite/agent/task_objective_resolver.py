@@ -28,6 +28,8 @@ from .llm_resolution_policy import (
 
 
 _MIN_CONFIDENCE = 0.65
+OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON = "objective enrichment not needed"
+LLM_RESOLVED_TASK_OBJECTIVE_REASON = "llm resolved task objective"
 
 
 @dataclass(frozen=True)
@@ -79,7 +81,7 @@ class TaskObjectiveResolver:
         deterministic = TaskObjectiveDecision(
             original_message=original,
             resolved_objective=original,
-            reason="objective enrichment not needed",
+            reason=OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
         )
         if not _should_resolve_objective(
             current_message=original,
@@ -229,7 +231,7 @@ def _decision_from_payload(payload: dict[str, Any], *, current_message: str) -> 
         should_use_resolved_objective=should_use,
         confidence=_coerce_confidence(payload.get("confidence")),
         method="llm",
-        reason=_truncate(str(payload.get("reason") or "llm resolved task objective"), 240),
+        reason=_truncate(str(payload.get("reason") or LLM_RESOLVED_TASK_OBJECTIVE_REASON), 240),
     )
 
 
