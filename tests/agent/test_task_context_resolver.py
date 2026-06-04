@@ -4,7 +4,14 @@ from opensprite.agent.active_task_commands import ActiveTaskCommandService
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task_context_resolver import TaskContextDecision, TaskContextResolver, _merge_with_deterministic
+from opensprite.agent.task_context_resolver import (
+    CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
+    LLM_RESOLVED_TASK_CONTEXT_REASON,
+    TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
+    TaskContextDecision,
+    TaskContextResolver,
+    _merge_with_deterministic,
+)
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.agent.work_progress import WorkProgressUpdate
@@ -103,6 +110,12 @@ _WEB_RESEARCH_HISTORY = [
     {"role": "user", "content": "幫我查 00980A 這檔 ETF 的股價和基本資料"},
     {"role": "assistant", "content": "我查到 00980A 的公開資訊來源。"},
 ]
+
+
+def test_task_context_deterministic_reasons_are_stable():
+    assert CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON == "current message is an acknowledgement"
+    assert TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON == "task context requires LLM classification"
+    assert LLM_RESOLVED_TASK_CONTEXT_REASON == "llm resolved task context"
 
 
 def test_task_context_does_not_infer_follow_up_when_llm_fails():

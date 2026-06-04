@@ -80,6 +80,9 @@ _ALLOWED_TOOL_GROUPS = frozenset(
     }
 )
 _LLM_TASK_SWITCH_CONFIDENCE = 0.80
+CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON = "current message is an acknowledgement"
+TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON = "task context requires LLM classification"
+LLM_RESOLVED_TASK_CONTEXT_REASON = "llm resolved task context"
 _TASK_TYPE_BY_TOOL_GROUP = {
     "audio_text": MEDIA_EXTRACTION_TASK_TYPE,
     "image_text": MEDIA_EXTRACTION_TASK_TYPE,
@@ -198,13 +201,13 @@ class TaskContextResolver:
             return TaskContextDecision(
                 continuation_type=ACK_CONTINUATION_TYPE,
                 confidence=0.9,
-                reason="current message is an acknowledgement",
+                reason=CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
             )
 
         return TaskContextDecision(
             continuation_type=NONE_CONTINUATION_TYPE,
             confidence=0.45,
-            reason="task context requires LLM classification",
+            reason=TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
         )
 
     async def _resolve_with_llm(
@@ -353,7 +356,7 @@ def _decision_from_payload(payload: dict[str, Any], *, has_active_task: bool = F
         continuation_type=continuation_type,
         confidence=_coerce_confidence(payload.get("confidence")),
         method="llm",
-        reason=_truncate(str(payload.get("reason") or "llm resolved task context"), 240),
+        reason=_truncate(str(payload.get("reason") or LLM_RESOLVED_TASK_CONTEXT_REASON), 240),
     )
 
 
