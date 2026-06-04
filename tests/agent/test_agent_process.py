@@ -13,8 +13,10 @@ from opensprite.agent.auto_continue_reason_policy import (
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     REVIEW_EVIDENCE_STILL_MISSING_REASON,
 )
+from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
 from opensprite.agent.run_state import RunBusyError
+from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     EvidenceRequirement,
     LLM_PLANNER_CONTRACT_SOURCES,
@@ -2239,6 +2241,101 @@ def test_agent_process_stops_auto_continue_when_continuation_has_no_progress(tmp
     skipped = next(event for event in events if event.event_type == AUTO_CONTINUE_SKIPPED_EVENT)
     assert skipped.payload["reason"] == NO_PROGRESS_DURING_CONTINUATION_REASON
     assert skipped.payload["completion_status"] == "incomplete"
+
+
+def test_agent_process_passes_tool_contract_override_to_auto_continue(tmp_path):
+    async def scenario():
+        storage = MemoryStorage()
+        agent = AgentLoop(
+            config=Config.load_agent_template_config(),
+            provider=FakeProvider(),
+            storage=storage,
+            context_builder=FakeContextBuilder(tmp_path / "workspace"),
+            tools=ToolRegistry(),
+            memory_config=MemoryConfig(**Config.load_template_data()["memory"]),
+            tools_config=ToolsConfig(),
+            log_config=LogConfig(),
+            search_config=SearchConfig(),
+            user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
+            recent_summary_config=RecentSummaryConfig(**{**Config.load_template_data()["recent_summary"], "enabled": False}),
+            **Config.packaged_agent_llm_chat_kwargs(),
+        )
+        web_contract = TaskContract(
+            objective="Find the OpenRouter API base URL and cite the source.",
+            task_type="web_research",
+            requirements=(EvidenceRequirement(kind="tool_group", tool_group="web_research", min_count=1),),
+            allow_no_tool_final=False,
+            contract_sources=("test",),
+            planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
+            harness_profile={"name": "research", "task_type": "web_research"},
+        )
+        calls = []
+        completion_calls = 0
+
+        async def fake_call_llm(session_id, current_message, **kwargs):
+            calls.append(kwargs)
+            if len(calls) == 1:
+                return ExecutionResult(
+                    content="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+                    executed_tool_calls=1,
+                    task_contract=web_contract,
+                    task_artifacts=(
+                        TaskArtifact(
+                            kind="web_source",
+                            source_tool="web_research",
+                            metadata={
+                                "sources": [
+                                    {
+                                        "title": "OpenRouter docs",
+                                        "url": "https://openrouter.ai/docs",
+                                        "snippet": "API base URL is https://openrouter.ai/api/v1",
+                                        "tool_name": "web_fetch",
+                                        "content_chars": 1200,
+                                        "has_main_content": True,
+                                    }
+                                ]
+                            },
+                        ),
+                    ),
+                )
+            return ExecutionResult(
+                content="OpenRouter API base URL is https://openrouter.ai/api/v1. Source: https://openrouter.ai/docs",
+                executed_tool_calls=0,
+                task_contract=web_contract,
+            )
+
+        async def fake_evaluate_with_judge(**kwargs):
+            nonlocal completion_calls
+            completion_calls += 1
+            if completion_calls == 1:
+                return CompletionGateResult(
+                    status="incomplete",
+                    reason="research source was gathered but final answer is missing",
+                    missing_evidence=("final answer with cited source",),
+                    progress_only_response=True,
+                )
+            return CompletionGateResult(status="complete", reason="final answer cites gathered source")
+
+        agent.call_llm = fake_call_llm
+        agent.completion_gate.evaluate_with_judge = fake_evaluate_with_judge
+        agent._schedule_curator = lambda session_id, run_id, channel, external_chat_id, result: None
+
+        await agent.process(
+            UserMessage(
+                text="Find the OpenRouter API base URL and cite the source.",
+                channel="web",
+                external_chat_id="browser-1",
+                session_id="web:browser-1",
+            )
+        )
+        return calls
+
+    calls = asyncio.run(scenario())
+
+    assert len(calls) >= 2
+    assert calls[0].get("task_contract_override") is None
+    assert calls[1].get("task_contract_override") is not None
+    assert calls[1]["task_contract_override"].task_type == "web_research"
 
 
 def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_path):

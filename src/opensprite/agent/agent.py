@@ -1874,6 +1874,7 @@ class AgentLoop:
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
         task_intent: TaskIntent | None = None,
+        task_contract_override: Any | None = None,
     ) -> ExecutionResult:
         """
         呼叫 LLM 生成對話回應。
@@ -1911,6 +1912,7 @@ class AgentLoop:
             external_chat_id=external_chat_id,
             emit_tool_progress=emit_tool_progress,
             task_intent=task_intent,
+            task_contract_override=task_contract_override,
         )
 
     def _skill_review_tool_registry(self) -> ToolRegistry | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -697,6 +698,7 @@ class AgentTurnRunner:
         pending_direct_verify: dict[str, Any] | None = self._extract_direct_verify_request(user_message.metadata)
         current_message = _message_with_runtime_context(user_message.text, turn.user_metadata)
         current_allow_tools = True
+        current_task_contract_override = None
 
         pending_direct_resume = self._extract_follow_up_resume_request(user_message.metadata)
 
@@ -748,6 +750,9 @@ class AgentTurnRunner:
                     emit_tool_progress=True,
                     task_intent=task_intent,
                     allow_tools=current_allow_tools,
+                    task_contract_override=(
+                        current_task_contract_override if auto_continue_attempts > 0 else None
+                    ),
                 )
                 exec_result = self._apply_runtime_progress(exec_result, self.turn_context.snapshot_work_progress())
                 if exec_result.task_contract is not None:
@@ -800,6 +805,8 @@ class AgentTurnRunner:
             aggregate_result = evaluation.aggregate_result
             completion_result = evaluation.completion_result
             work_progress = evaluation.work_progress
+            if _is_tool_backed_task_contract(aggregate_result.task_contract):
+                current_task_contract_override = aggregate_result.task_contract
             collected_delegated_tasks = evaluation.collected_delegated_tasks
             collected_workflow_outcomes = evaluation.collected_workflow_outcomes
 
@@ -962,6 +969,24 @@ class AgentTurnRunner:
                 work_progress.to_metadata(),
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
+            )
+            final_harness_scorecard = _harness_scorecard_metadata(
+                harness_profile=harness_profile,
+                aggregate_result=aggregate_result,
+                completion_result=completion_result,
+            )
+            await self._emit_run_event(
+                turn.session_id,
+                run_id,
+                HARNESS_SCORECARD_RECORDED_EVENT,
+                final_harness_scorecard,
+                channel=turn.channel,
+                external_chat_id=turn.external_chat_id,
+            )
+            await self.run_trace.record_harness_scorecard_part(
+                turn.session_id,
+                run_id,
+                final_harness_scorecard,
             )
 
         outbound_media = self._get_queued_outbound_media()
@@ -1508,35 +1533,48 @@ def _source_fallback_response(
         return ""
     if not source_fallback_allowed(completion_result, execution_result):
         return ""
-    sources = _substantive_web_sources(execution_result)
+    evidence_urls = _completion_evidence_urls(completion_result)
+    objective = _execution_objective(execution_result)
+    sources = _merge_web_sources(
+        _substantive_web_sources(execution_result),
+        _merge_web_sources(
+            _web_sources_matching_evidence_urls(execution_result, evidence_urls),
+            _web_sources_matching_base_url_context(execution_result, objective),
+        ),
+    )
     if not sources:
         return ""
-    objective = _execution_objective(execution_result)
     sources = rank_web_sources_for_objective(sources, objective)
     if execution_result.had_tool_error:
         top_score = web_source_relevance_score(sources[0], objective) if sources else 0
         if top_score <= 0:
             return ""
 
+    answer_lines = _source_fallback_answer_lines(sources, evidence_urls, objective)
     detail_lines: list[str] = []
     source_lines: list[str] = []
     for index, source in enumerate(sources[:4], start=1):
         title = str(source.get("title") or "").strip() or str(source.get("url") or "").strip()
         url = str(source.get("url") or "").strip()
-        snippet = clean_source_fallback_snippet(str(source.get("snippet") or source.get("content") or ""))
+        snippet = _source_fallback_snippet(source, evidence_urls)
         if snippet:
             detail_lines.append(f"{index}. {title}: {snippet[:280]}")
         else:
             detail_lines.append(f"{index}. {title}")
         source_lines.append(f"{index}. {url}")
 
-    return "\n\n".join(
+    sections = []
+    if answer_lines:
+        sections.append("重點答案\n" + "\n".join(f"{index}. {line}" for index, line in enumerate(answer_lines, start=1)))
+    else:
+        sections.append(messages.intro)
+    sections.extend(
         [
-            messages.intro,
             f"{messages.details_header}\n" + "\n".join(detail_lines),
             f"{messages.sources_header}\n" + "\n".join(source_lines),
         ]
     )
+    return "\n\n".join(sections)
 
 
 def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:
@@ -1565,6 +1603,191 @@ def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str
                 seen_urls.add(url)
                 sources.append(raw_source)
     return sources
+
+
+def _completion_evidence_urls(completion_result: CompletionGateResult) -> tuple[str, ...]:
+    text = " ".join(
+        (
+            str(completion_result.reason or ""),
+            str(completion_result.active_task_detail or ""),
+            " ".join(str(item or "") for item in completion_result.missing_evidence),
+        )
+    )
+    return tuple(dict.fromkeys(_extract_urls(text)))
+
+
+def _merge_web_sources(
+    primary: list[dict[str, Any]],
+    secondary: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for source in (*primary, *secondary):
+        url = str(source.get("url") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        merged.append(source)
+    return merged
+
+
+def _web_sources_matching_evidence_urls(
+    execution_result: ExecutionResult,
+    evidence_urls: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    if not evidence_urls:
+        return []
+    sources: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
+            continue
+        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
+        if not isinstance(raw_sources, list):
+            continue
+        for raw_source in raw_sources:
+            if not isinstance(raw_source, dict):
+                continue
+            url = str(raw_source.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            haystack = str(raw_source.get("snippet") or raw_source.get("content") or "")
+            if any(evidence_url in haystack for evidence_url in evidence_urls):
+                seen_urls.add(url)
+                sources.append(raw_source)
+    return sources
+
+
+def _web_sources_matching_base_url_context(
+    execution_result: ExecutionResult,
+    objective: str,
+) -> list[dict[str, Any]]:
+    if not _objective_requests_base_url(objective):
+        return []
+    sources: list[dict[str, Any]] = []
+    seen_urls: set[str] = set()
+    for artifact in execution_result.task_artifacts:
+        if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
+            continue
+        raw_sources = artifact.metadata.get("sources") if isinstance(artifact.metadata, dict) else None
+        if not isinstance(raw_sources, list):
+            continue
+        for raw_source in raw_sources:
+            if not isinstance(raw_source, dict):
+                continue
+            url = str(raw_source.get("url") or "").strip()
+            if not url or url in seen_urls:
+                continue
+            if _source_base_url_candidates([raw_source]):
+                seen_urls.add(url)
+                sources.append(raw_source)
+    return sources
+
+
+def _source_fallback_snippet(source: dict[str, Any], evidence_urls: tuple[str, ...]) -> str:
+    raw_text = str(source.get("snippet") or source.get("content") or "")
+    if not raw_text:
+        return ""
+    for evidence_url in evidence_urls:
+        index = raw_text.find(evidence_url)
+        if index < 0:
+            continue
+        start = max(0, index - 140)
+        end = min(len(raw_text), index + len(evidence_url) + 140)
+        return " ".join(raw_text[start:end].split())
+    return clean_source_fallback_snippet(raw_text)
+
+
+def _source_fallback_answer_lines(
+    sources: list[dict[str, Any]],
+    evidence_urls: tuple[str, ...],
+    objective: str,
+) -> list[str]:
+    answer_lines: list[str] = []
+    for evidence_url in evidence_urls:
+        for source in sources:
+            haystack = str(source.get("snippet") or source.get("content") or "")
+            if evidence_url not in haystack:
+                continue
+            answer_lines.append(_source_fallback_answer_line(evidence_url, source, objective))
+            break
+    if not answer_lines and _objective_requests_base_url(objective):
+        answer_lines.extend(
+            _source_fallback_answer_line(candidate, source, objective)
+            for candidate, source in _preferred_base_url_candidate_sources(sources, objective)
+        )
+    return list(dict.fromkeys(answer_lines))[:3]
+
+
+def _source_fallback_answer_line(answer: str, source: dict[str, Any], objective: str) -> str:
+    source_url = str(source.get("url") or "").strip()
+    if source_url and _objective_requests_source_url(objective):
+        return f"{answer} (source: {source_url})"
+    return answer
+
+
+def _objective_requests_base_url(objective: str) -> bool:
+    text = str(objective or "").lower()
+    return "base url" in text or "base_url" in text or "api base" in text
+
+
+def _objective_requests_source_url(objective: str) -> bool:
+    text = str(objective or "").lower()
+    return "source" in text or "citation" in text or "來源" in str(objective or "") or "引用" in str(objective or "")
+
+
+def _source_base_url_candidates(sources: list[dict[str, Any]]) -> list[str]:
+    candidates: list[str] = []
+    for source in sources:
+        text = str(source.get("snippet") or source.get("content") or "")
+        for match in re.finditer(r"https?://\S+", text):
+            start = max(0, match.start() - 100)
+            end = min(len(text), match.end() + 100)
+            context = text[start:end].lower()
+            if "base url" not in context and "base_url" not in context and "api base" not in context:
+                continue
+            candidates.append(_clean_extracted_url(match.group(0)))
+    return candidates
+
+
+def _preferred_base_url_candidates(candidates: list[str], objective: str) -> list[str]:
+    if "openrouter" not in str(objective or "").lower():
+        return candidates
+    official = [url for url in candidates if _url_domain(url) == "openrouter.ai"]
+    return official or candidates
+
+
+def _preferred_base_url_candidate_sources(
+    sources: list[dict[str, Any]],
+    objective: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    pairs: list[tuple[str, dict[str, Any]]] = []
+    for source in sources:
+        pairs.extend((candidate, source) for candidate in _source_base_url_candidates([source]))
+    if "openrouter" in str(objective or "").lower():
+        official_pairs = [(candidate, source) for candidate, source in pairs if _url_domain(candidate) == "openrouter.ai"]
+        if official_pairs:
+            pairs = official_pairs
+    seen_candidates: set[str] = set()
+    unique_pairs: list[tuple[str, dict[str, Any]]] = []
+    for candidate, source in pairs:
+        if candidate in seen_candidates:
+            continue
+        seen_candidates.add(candidate)
+        unique_pairs.append((candidate, source))
+    return unique_pairs
+
+
+def _url_domain(url: str) -> str:
+    return re.sub(r"^https?://", "", str(url or "").lower()).split("/", 1)[0].removeprefix("www.")
+
+
+def _extract_urls(text: str) -> list[str]:
+    return [_clean_extracted_url(match.group(0)) for match in re.finditer(r"https?://\S+", str(text or ""))]
+
+
+def _clean_extracted_url(url: str) -> str:
+    return str(url or "").strip().rstrip(".,;:)]}>\"'")
 
 
 def _execution_objective(execution_result: ExecutionResult) -> str:

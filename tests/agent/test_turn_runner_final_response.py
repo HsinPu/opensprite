@@ -134,6 +134,96 @@ def test_exhausted_continuation_uses_gathered_web_sources_for_progress_only_resp
     assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
+def test_exhausted_continuation_uses_search_snippet_when_it_contains_missing_evidence_url():
+    response = _final_response_after_exhausted_continuation(
+        response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="Final answer with OpenRouter API base URL https://openrouter.ai/api/v1 was not delivered.",
+            missing_evidence=("OpenRouter API base URL https://openrouter.ai/api/v1",),
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+            task_contract=TaskContract(
+                objective="Find the OpenRouter API base URL and cite sources.",
+                task_type="web_research",
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_search",
+                                "url": "https://dlthub.com/context/source/openrouter",
+                                "title": "OpenRouter Python API Docs",
+                                "snippet": "The REST API base URL is https://openrouter.ai/api/v1 and requests require a Bearer token.",
+                                "content_chars": 150,
+                                "has_main_content": False,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "重點答案" in response
+    assert "https://openrouter.ai/api/v1" in response
+    assert "https://openrouter.ai/api/v1 (source: https://dlthub.com/context/source/openrouter)" in response
+    assert "https://dlthub.com/context/source/openrouter" in response
+    assert "TEST SOURCE FALLBACK INTRO" not in response
+    assert "TEST COMPLETION BLOCKER INTRO" not in response
+
+
+def test_exhausted_continuation_extracts_base_url_from_source_when_missing_evidence_is_generic():
+    response = _final_response_after_exhausted_continuation(
+        response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+        completion_result=CompletionGateResult(
+            status="incomplete",
+            reason="Final answer with OpenRouter API base URL was not delivered.",
+            missing_evidence=("OpenRouter API base URL",),
+        ),
+        auto_continue_attempts=3,
+        execution_result=ExecutionResult(
+            content="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
+            task_contract=TaskContract(
+                objective="Find the OpenRouter API base URL and cite sources.",
+                task_type="web_research",
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_search",
+                                "url": "https://dlthub.com/context/source/openrouter",
+                                "title": "OpenRouter Python API Docs",
+                                "snippet": (
+                                    "The REST API base URL is https://openrouter.ai/api/v1. "
+                                    "Other examples include https://openrouter.apify.actor/api/v1 and http://localhost:11434/v1."
+                                ),
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "重點答案" in response
+    assert "https://openrouter.ai/api/v1" in response
+    assert "https://openrouter.ai/api/v1 (source: https://dlthub.com/context/source/openrouter)" in response
+    assert "https://openrouter.apify.actor/api/v1" not in response
+    assert "http://localhost:11434/v1" not in response
+    assert "TEST SOURCE FALLBACK INTRO" not in response
+
+
 def test_exhausted_continuation_strips_markdown_links_from_source_fallback_snippets():
     response = _final_response_after_exhausted_continuation(
         response="Let me keep checking that.",

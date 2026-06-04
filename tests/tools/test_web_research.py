@@ -803,6 +803,56 @@ def test_web_research_adds_official_site_query_for_official_docs_query():
     ]
 
 
+def test_web_research_fetches_llms_full_candidate_before_changelog():
+    search = _FakeSearchTool(
+        [
+            {
+                "title": "May 27, 2026 | OpenRouter Changelog",
+                "url": "https://openrouter.ai/docs/changelog/2026/5/27",
+                "content": "For full documentation content, see /docs/llms-full.txt.",
+            },
+            {
+                "title": "OpenRouter docs index",
+                "url": "https://openrouter.ai/docs/llms.txt",
+                "content": "For full documentation content, see /docs/llms-full.txt.",
+            },
+        ]
+    )
+    fetch = _FakeFetchTool(
+        {
+            "https://openrouter.ai/docs/changelog/2026/5/27": _fetch_payload(
+                "https://openrouter.ai/docs/changelog/2026/5/27",
+                title="OpenRouter Changelog",
+            ),
+            "https://openrouter.ai/docs/llms.txt": _fetch_payload(
+                "https://openrouter.ai/docs/llms.txt",
+                title="OpenRouter docs index",
+            ),
+            "https://openrouter.ai/docs/llms-full.txt": _fetch_payload(
+                "https://openrouter.ai/docs/llms-full.txt",
+                title="OpenRouter full documentation",
+                content="The REST API base URL is https://openrouter.ai/api/v1." + ("x" * 900),
+            ),
+        }
+    )
+    tool = WebResearchTool(search_tool=search, fetch_tool=fetch)
+
+    payload = json.loads(
+        asyncio.run(
+            tool._execute(
+                "OpenRouter API base URL official documentation",
+                count=2,
+                fetch_count=1,
+                freshness="month",
+            )
+        )
+    )
+
+    assert [call["url"] for call in fetch.calls] == ["https://openrouter.ai/docs/llms-full.txt"]
+    assert payload["fetched_sources"][0]["url"].startswith("https://openrouter.ai/docs/llms-full.txt")
+    assert payload["fetched_sources"][0]["llms_full_derived_from"] == "https://openrouter.ai/docs/llms.txt"
+
+
 def test_web_research_adds_official_site_query_from_brand_domain_match():
     search = _FakeSearchToolByQuery(
         {

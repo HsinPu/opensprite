@@ -149,6 +149,7 @@ class LlmCallService:
         external_chat_id: str | None = None,
         emit_tool_progress: bool = False,
         task_intent: TaskIntent | None = None,
+        task_contract_override: TaskContract | None = None,
     ) -> ExecutionResult:
         """Prepare prompt messages and run the LLM/tool execution loop."""
         run_id = self._get_current_run_id()
@@ -302,30 +303,55 @@ class LlmCallService:
         harness_tool_registry = None
         base_tool_registry = self._get_tool_registry()
         if effective_task_intent is not None:
-            if run_id is not None:
-                await self._emit_run_event(
-                    session_id,
-                    run_id,
-                    TASK_CONTRACT_PLANNING_STARTED_EVENT,
-                    {
-                        "schema_version": 1,
-                        "objective": effective_task_intent.objective,
-                        "task_kind": effective_task_intent.kind,
-                        "history_messages": len(history_dicts),
-                    },
-                    channel=channel,
-                    external_chat_id=external_chat_id,
+            if task_contract_override is not None:
+                task_contract = task_contract_override
+            else:
+                if run_id is not None:
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        TASK_CONTRACT_PLANNING_STARTED_EVENT,
+                        {
+                            "schema_version": 1,
+                            "objective": effective_task_intent.objective,
+                            "task_kind": effective_task_intent.kind,
+                            "history_messages": len(history_dicts),
+                        },
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
+                task_contract = await self._plan_task_contract(
+                    task_intent=effective_task_intent,
+                    current_message=prompt_message,
+                    history=history_dicts,
+                    current_image_files=user_image_files,
+                    current_audio_files=user_audio_files,
+                    current_video_files=user_video_files,
+                    task_context_decision=task_context_decision,
                 )
-            task_contract = await self._plan_task_contract(
-                task_intent=effective_task_intent,
-                current_message=prompt_message,
-                history=history_dicts,
-                current_image_files=user_image_files,
-                current_audio_files=user_audio_files,
-                current_video_files=user_video_files,
-                task_context_decision=task_context_decision,
-            )
-            if run_id is not None:
+                if run_id is not None:
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        TASK_CONTRACT_PLANNED_EVENT,
+                        task_contract.to_metadata(),
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
+                    validation_event_type = (
+                        TASK_CONTRACT_VALIDATED_EVENT
+                        if _task_contract_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
+                        else TASK_CONTRACT_VALIDATION_FAILED_EVENT
+                    )
+                    await self._emit_run_event(
+                        session_id,
+                        run_id,
+                        validation_event_type,
+                        task_contract.to_metadata(),
+                        channel=channel,
+                        external_chat_id=external_chat_id,
+                    )
+            if run_id is not None and task_contract_override is not None:
                 await self._emit_run_event(
                     session_id,
                     run_id,
@@ -334,15 +360,10 @@ class LlmCallService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-                validation_event_type = (
-                    TASK_CONTRACT_VALIDATED_EVENT
-                    if _task_contract_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
-                    else TASK_CONTRACT_VALIDATION_FAILED_EVENT
-                )
                 await self._emit_run_event(
                     session_id,
                     run_id,
-                    validation_event_type,
+                    TASK_CONTRACT_VALIDATED_EVENT,
                     task_contract.to_metadata(),
                     channel=channel,
                     external_chat_id=external_chat_id,

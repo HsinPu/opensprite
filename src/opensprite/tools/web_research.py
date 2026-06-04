@@ -294,6 +294,7 @@ class WebResearchTool(Tool):
             freshness=effective_freshness,
             official_domains=official_domains,
         )
+        fetch_candidates = _expand_llms_full_candidates(fetch_candidates)
         fetched_by_candidate_url = await self._fetch_research_candidates(
             candidates=fetch_candidates,
             fetched_sources=fetched_sources,
@@ -891,6 +892,47 @@ def _prioritize_research_candidates(
     return selected
 
 
+def _expand_llms_full_candidates(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    derived: list[dict[str, Any]] = []
+    seen_derived_urls: set[str] = set()
+    for item in items:
+        full_url = _llms_full_url(item)
+        if not full_url or full_url in seen_derived_urls:
+            continue
+        seen_derived_urls.add(full_url)
+        derived.append(
+            {
+                **item,
+                "url": full_url,
+                "canonical_url": full_url,
+                "title": f"{_clean_text(item.get('title')) or 'Documentation'} full documentation",
+                "snippet": _clean_text(item.get("snippet") or item.get("content")),
+                "llms_full_derived_from": _clean_text(item.get("url")),
+            }
+        )
+    if not derived:
+        return items
+    return _dedupe_search_items([*derived, *items], limit=len(derived) + len(items))
+
+
+def _llms_full_url(item: dict[str, Any]) -> str:
+    url = _clean_text(item.get("url"))
+    if not url:
+        return ""
+    lowered = url.lower()
+    if lowered.endswith("/llms-full.txt"):
+        return ""
+    if lowered.endswith("/llms.txt"):
+        return f"{url[:-len('/llms.txt')]}/llms-full.txt"
+    text = f"{url} {_clean_text(item.get('title'))} {_clean_text(item.get('snippet') or item.get('content'))}".lower()
+    if "/llms-full.txt" not in text:
+        return ""
+    base = url.rstrip("/")
+    if base.endswith("/docs"):
+        return f"{base}/llms-full.txt"
+    return ""
+
+
 def _candidate_priority(item: dict[str, Any], freshness: str, *, official_domains: set[str] | None = None) -> tuple[int, int, int, int, int, int, int]:
     fetchable_penalty = 0 if _is_fetchable_url(item.get("url")) else 1
     quote_penalty = _candidate_market_quote_penalty(item)
@@ -1161,7 +1203,7 @@ def _merge_fetch_source(
         truncated=truncated,
         extractor=extractor,
     )
-    return {
+    source = {
         "rank": item.get("rank"),
         "title": title,
         "url": url,
@@ -1197,6 +1239,10 @@ def _merge_fetch_source(
         "search_freshness": _clean_text(item.get("search_freshness")),
         "search_rank": item.get("rank"),
     }
+    derived_from = _clean_text(item.get("llms_full_derived_from"))
+    if derived_from:
+        source["llms_full_derived_from"] = derived_from
+    return source
 
 
 def _quality_score(
