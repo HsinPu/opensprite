@@ -1,4 +1,4 @@
-from opensprite.agent.auto_continue import AutoContinueService
+from opensprite.agent.auto_continue import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService
 from opensprite.agent.auto_continue_reason_policy import (
     MAX_AUTO_CONTINUES_REACHED_REASON,
     NO_PROGRESS_DURING_CONTINUATION_REASON,
@@ -144,7 +144,7 @@ def test_auto_continue_retries_internal_only_web_answer_with_tools_available():
 
     assert decision.should_continue is True
     assert decision.allow_tools is True
-    assert "allow_tools" not in decision.to_metadata()
+    assert AUTO_CONTINUE_ALLOW_TOOLS_FIELD not in decision.to_metadata()
     assert "Do not call tools again" not in (decision.prompt or "")
     assert "https://example.com/tsmc" in (decision.prompt or "")
 
@@ -249,7 +249,7 @@ def test_auto_continue_keeps_tools_when_existing_web_sources_lack_detail():
 
     assert decision.should_continue is True
     assert decision.allow_tools is True
-    assert "allow_tools" not in decision.to_metadata()
+    assert AUTO_CONTINUE_ALLOW_TOOLS_FIELD not in decision.to_metadata()
 
 
 def test_auto_continue_allows_missing_review_once():

@@ -68,6 +68,21 @@ from .web_source_policy import is_web_source_artifact_kind
 from .work_progress import WorkProgressUpdate
 
 
+AUTO_CONTINUE_SCHEMA_VERSION_FIELD = "schema_version"
+AUTO_CONTINUE_REASON_FIELD = "reason"
+AUTO_CONTINUE_ATTEMPT_FIELD = "attempt"
+AUTO_CONTINUE_MAX_ATTEMPTS_FIELD = "max_attempts"
+AUTO_CONTINUE_WILL_CONTINUE_FIELD = "will_continue"
+AUTO_CONTINUE_PROMPT_LEN_FIELD = "prompt_len"
+AUTO_CONTINUE_DIRECT_WORKFLOW_FIELD = "direct_workflow"
+AUTO_CONTINUE_DIRECT_START_STEP_FIELD = "direct_start_step"
+AUTO_CONTINUE_DIRECT_VERIFY_ACTION_FIELD = "direct_verify_action"
+AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD = "direct_verify_path"
+AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD = "direct_verify_pytest_args"
+AUTO_CONTINUE_HARNESS_PROFILE_FIELD = "harness_profile"
+AUTO_CONTINUE_ALLOW_TOOLS_FIELD = "allow_tools"
+
+
 @dataclass(frozen=True)
 class AutoContinueDecision:
     """Decision for whether the current run may perform one more LLM/tool pass."""
@@ -89,28 +104,28 @@ class AutoContinueDecision:
     def to_metadata(self) -> dict[str, Any]:
         """Return a JSON-safe run event payload."""
         payload: dict[str, Any] = {
-            "schema_version": 1,
-            "reason": self.reason,
-            "attempt": self.attempt,
-            "max_attempts": self.max_attempts,
-            "will_continue": self.should_continue,
+            AUTO_CONTINUE_SCHEMA_VERSION_FIELD: 1,
+            AUTO_CONTINUE_REASON_FIELD: self.reason,
+            AUTO_CONTINUE_ATTEMPT_FIELD: self.attempt,
+            AUTO_CONTINUE_MAX_ATTEMPTS_FIELD: self.max_attempts,
+            AUTO_CONTINUE_WILL_CONTINUE_FIELD: self.should_continue,
         }
         if self.prompt:
-            payload["prompt_len"] = len(self.prompt)
+            payload[AUTO_CONTINUE_PROMPT_LEN_FIELD] = len(self.prompt)
         if self.direct_workflow:
-            payload["direct_workflow"] = self.direct_workflow
+            payload[AUTO_CONTINUE_DIRECT_WORKFLOW_FIELD] = self.direct_workflow
         if self.direct_start_step:
-            payload["direct_start_step"] = self.direct_start_step
+            payload[AUTO_CONTINUE_DIRECT_START_STEP_FIELD] = self.direct_start_step
         if self.direct_verify_action:
-            payload["direct_verify_action"] = self.direct_verify_action
+            payload[AUTO_CONTINUE_DIRECT_VERIFY_ACTION_FIELD] = self.direct_verify_action
         if self.direct_verify_path:
-            payload["direct_verify_path"] = self.direct_verify_path
+            payload[AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD] = self.direct_verify_path
         if self.direct_verify_pytest_args:
-            payload["direct_verify_pytest_args"] = list(self.direct_verify_pytest_args)
+            payload[AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD] = list(self.direct_verify_pytest_args)
         if self.harness_profile_name:
-            payload["harness_profile"] = self.harness_profile_name
+            payload[AUTO_CONTINUE_HARNESS_PROFILE_FIELD] = self.harness_profile_name
         if not self.allow_tools:
-            payload["allow_tools"] = False
+            payload[AUTO_CONTINUE_ALLOW_TOOLS_FIELD] = False
         return payload
 
 
