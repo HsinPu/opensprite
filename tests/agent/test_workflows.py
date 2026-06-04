@@ -4,7 +4,13 @@ from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
 from opensprite.agent.subagents import SubagentTaskOutcome
-from opensprite.agent.workflow_fields import WORKFLOW_NEXT_STEP_ID_FIELD, WORKFLOW_NEXT_STEP_LABEL_FIELD
+from opensprite.agent.workflow_fields import (
+    WORKFLOW_NEXT_STEP_ID_FIELD,
+    WORKFLOW_NEXT_STEP_LABEL_FIELD,
+    WORKFLOW_REVIEW_ATTEMPTED_FIELD,
+    WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
+    WORKFLOW_REVIEW_PASSED_FIELD,
+)
 from opensprite.agent.workflows import SubagentWorkflowService
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
@@ -118,9 +124,9 @@ def test_workflow_review_outcome_requires_structured_clean_review():
 
     result = SubagentWorkflowService._review_outcome([review])
 
-    assert result["attempted"] is True
-    assert result["passed"] is False
-    assert result["finding_count"] == 0
+    assert result[WORKFLOW_REVIEW_ATTEMPTED_FIELD] is True
+    assert result[WORKFLOW_REVIEW_PASSED_FIELD] is False
+    assert result[WORKFLOW_REVIEW_FINDING_COUNT_FIELD] == 0
 
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):

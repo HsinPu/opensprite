@@ -555,11 +555,11 @@ class SubagentWorkflowService:
                 passed = True
                 continue
         return {
-            "attempted": attempted,
-            "passed": attempted and passed and finding_count == 0,
-            "finding_count": finding_count,
-            "summary": summary,
-            "first_finding": first_finding,
+            WORKFLOW_REVIEW_ATTEMPTED_FIELD: attempted,
+            WORKFLOW_REVIEW_PASSED_FIELD: attempted and passed and finding_count == 0,
+            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: finding_count,
+            WORKFLOW_REVIEW_SUMMARY_FIELD: summary,
+            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: first_finding,
         }
 
     @staticmethod
@@ -567,8 +567,8 @@ class SubagentWorkflowService:
         attempted = any(outcome.verification_attempted for outcome in outcomes)
         passed = any(outcome.verification_passed for outcome in outcomes)
         return {
-            "attempted": attempted,
-            "passed": passed,
+            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: attempted,
+            WORKFLOW_VERIFICATION_PASSED_FIELD: passed,
         }
 
     def _build_workflow_outcome(
@@ -598,13 +598,13 @@ class SubagentWorkflowService:
                 if is_workflow_completed_status(status)
                 else f"Workflow stopped after {completed_steps}/{len(spec.steps)} completed step(s)."
             ),
-            WORKFLOW_REVIEW_ATTEMPTED_FIELD: review["attempted"],
-            WORKFLOW_REVIEW_PASSED_FIELD: review["passed"],
-            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: review["finding_count"],
-            WORKFLOW_REVIEW_SUMMARY_FIELD: review["summary"],
-            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: review["first_finding"],
-            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: verification["attempted"],
-            WORKFLOW_VERIFICATION_PASSED_FIELD: verification["passed"],
+            WORKFLOW_REVIEW_ATTEMPTED_FIELD: review[WORKFLOW_REVIEW_ATTEMPTED_FIELD],
+            WORKFLOW_REVIEW_PASSED_FIELD: review[WORKFLOW_REVIEW_PASSED_FIELD],
+            WORKFLOW_REVIEW_FINDING_COUNT_FIELD: review[WORKFLOW_REVIEW_FINDING_COUNT_FIELD],
+            WORKFLOW_REVIEW_SUMMARY_FIELD: review[WORKFLOW_REVIEW_SUMMARY_FIELD],
+            WORKFLOW_REVIEW_FIRST_FINDING_FIELD: review[WORKFLOW_REVIEW_FIRST_FINDING_FIELD],
+            WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: verification[WORKFLOW_VERIFICATION_ATTEMPTED_FIELD],
+            WORKFLOW_VERIFICATION_PASSED_FIELD: verification[WORKFLOW_VERIFICATION_PASSED_FIELD],
             **_workflow_progress_fields(spec.steps, outcomes, status=status, start_index=start_index),
             **(
                 {
