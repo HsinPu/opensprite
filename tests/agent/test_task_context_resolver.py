@@ -7,10 +7,12 @@ from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_context_resolver import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
+    TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX,
     TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON,
     TaskContextDecision,
     TaskContextResolver,
     _merge_with_deterministic,
+    task_boundary_confidence_too_low_reason,
 )
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
@@ -116,6 +118,10 @@ def test_task_context_deterministic_reasons_are_stable():
     assert CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON == "current message is an acknowledgement"
     assert TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON == "task context requires LLM classification"
     assert LLM_RESOLVED_TASK_CONTEXT_REASON == "llm resolved task context"
+    assert TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX == "task boundary confidence too low"
+    assert task_boundary_confidence_too_low_reason(0.724) == (
+        "task boundary confidence too low (0.72); ask for confirmation"
+    )
 
 
 def test_task_context_does_not_infer_follow_up_when_llm_fails():

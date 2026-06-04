@@ -83,6 +83,7 @@ _LLM_TASK_SWITCH_CONFIDENCE = 0.80
 CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON = "current message is an acknowledgement"
 TASK_CONTEXT_REQUIRES_LLM_CLASSIFICATION_REASON = "task context requires LLM classification"
 LLM_RESOLVED_TASK_CONTEXT_REASON = "llm resolved task context"
+TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX = "task boundary confidence too low"
 _TASK_TYPE_BY_TOOL_GROUP = {
     "audio_text": MEDIA_EXTRACTION_TASK_TYPE,
     "image_text": MEDIA_EXTRACTION_TASK_TYPE,
@@ -395,7 +396,7 @@ def _merge_with_deterministic(
             inherited_task_type=None,
             inherited_tool_group=None,
             continuation_type=AMBIGUOUS_BOUNDARY_CONTINUATION_TYPE,
-            reason=f"task boundary confidence too low ({llm_decision.confidence:.2f}); ask for confirmation",
+            reason=task_boundary_confidence_too_low_reason(llm_decision.confidence),
         )
     if (
         deterministic.should_inherit_active_task
@@ -428,6 +429,10 @@ def _merge_with_deterministic(
         inherited_tool_group=inherited_tool_group,
         continuation_type=continuation_type,
     )
+
+
+def task_boundary_confidence_too_low_reason(confidence: float) -> str:
+    return f"{TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX} ({confidence:.2f}); ask for confirmation"
 
 
 def _unresolved_llm_decision(reason: str) -> TaskContextDecision:
