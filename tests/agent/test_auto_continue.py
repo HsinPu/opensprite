@@ -764,7 +764,7 @@ def test_auto_continue_guides_retry_after_terse_final_answer():
     assert decision.should_continue is True
     assert decision.reason == "completion_gate_incomplete"
     assert "previous final answer was too terse" in (decision.prompt or "")
-    assert "Do not reply with only 'done'" in (decision.prompt or "")
+    assert "Do not reply with only a short acknowledgement" in (decision.prompt or "")
     assert "substantive final answer" in (decision.prompt or "")
 
 

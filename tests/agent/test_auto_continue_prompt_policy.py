@@ -34,7 +34,7 @@ def test_terse_final_answer_follow_up_instruction_requires_substantive_answer():
     instruction = terse_final_answer_follow_up_instruction()
 
     assert "previous final answer was too terse" in instruction
-    assert "Do not reply with only 'done'" in instruction
+    assert "Do not reply with only a short acknowledgement" in instruction
     assert "substantive final answer" in instruction
 
 
