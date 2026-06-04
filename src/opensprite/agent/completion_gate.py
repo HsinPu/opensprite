@@ -163,6 +163,12 @@ COMPLETION_RESULT_VERIFICATION_ACTION_FIELD = "verification_action"
 COMPLETION_RESULT_VERIFICATION_PATH_FIELD = "verification_path"
 COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD = "verification_pytest_args"
 COMPLETION_RESULT_JUDGE_FIELD = "judge"
+REVIEW_EVIDENCE_ATTEMPTED_FIELD = "attempted"
+REVIEW_EVIDENCE_PASSED_FIELD = "passed"
+REVIEW_EVIDENCE_SUMMARY_FIELD = "summary"
+REVIEW_EVIDENCE_PROMPT_TYPES_FIELD = "prompt_types"
+REVIEW_EVIDENCE_FINDING_COUNT_FIELD = "finding_count"
+REVIEW_EVIDENCE_FIRST_FINDING_FIELD = "first_finding"
 
 
 @dataclass(frozen=True)
@@ -320,11 +326,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
                 file_change_required=True,
             )
 
@@ -345,11 +351,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if is_max_tool_iterations_stop_reason(execution_result.stop_reason):
@@ -361,11 +367,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if execution_result.had_tool_error:
@@ -380,11 +386,11 @@ class CompletionGateService:
                     verification_path=verification_follow_up["path"],
                     verification_pytest_args=verification_follow_up["pytest_args"],
                     review_required=review_required,
-                    review_attempted=review["attempted"],
-                    review_passed=review["passed"],
-                    review_summary=review["summary"],
-                    review_prompt_types=review["prompt_types"],
-                    review_finding_count=review["finding_count"],
+                    review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                    review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                    review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                    review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                    review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
                 )
             if not self._tool_errors_are_non_blocking(
                 task_intent=task_intent,
@@ -399,20 +405,20 @@ class CompletionGateService:
                     verification_attempted=verification_attempted,
                     verification_passed=verification_passed,
                     review_required=review_required,
-                    review_attempted=review["attempted"],
-                    review_passed=review["passed"],
-                    review_summary=review["summary"],
-                    review_prompt_types=review["prompt_types"],
-                    review_finding_count=review["finding_count"],
+                    review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                    review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                    review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                    review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                    review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
                 )
 
         if workflow_gate is not None:
             workflow_verification_attempted = bool(workflow_gate.get("verification_attempted", verification_attempted))
             workflow_verification_passed = bool(workflow_gate.get("verification_passed", verification_passed))
-            workflow_review_attempted = bool(workflow_gate.get("review_attempted", review["attempted"]))
-            workflow_review_passed = bool(workflow_gate.get("review_passed", review["passed"]))
-            workflow_review_summary = str(workflow_gate.get("review_summary") or review["summary"] or "").strip()
-            workflow_review_finding_count = int(workflow_gate.get("review_finding_count", review["finding_count"]))
+            workflow_review_attempted = bool(workflow_gate.get("review_attempted", review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
+            workflow_review_passed = bool(workflow_gate.get("review_passed", review[REVIEW_EVIDENCE_PASSED_FIELD]))
+            workflow_review_summary = str(workflow_gate.get("review_summary") or review[REVIEW_EVIDENCE_SUMMARY_FIELD] or "").strip()
+            workflow_review_finding_count = int(workflow_gate.get("review_finding_count", review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD]))
             return CompletionGateResult(
                 status=workflow_gate["status"],
                 reason=workflow_gate["reason"],
@@ -440,7 +446,7 @@ class CompletionGateService:
                 review_attempted=workflow_review_attempted,
                 review_passed=workflow_review_passed,
                 review_summary=workflow_review_summary,
-                review_prompt_types=review["prompt_types"],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
                 review_finding_count=workflow_review_finding_count,
             )
 
@@ -465,11 +471,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if expects_code_change and execution_result.file_change_count <= 0:
@@ -480,11 +486,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=False,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if verification_required and not verification_passed:
@@ -499,15 +505,15 @@ class CompletionGateService:
                 verification_path=verification_follow_up["path"],
                 verification_pytest_args=verification_follow_up["pytest_args"],
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
-        if review_required and not review["passed"]:
-            reason = delegated_review_completion_reason(review_attempted=bool(review["attempted"]))
+        if review_required and not review[REVIEW_EVIDENCE_PASSED_FIELD]:
+            reason = delegated_review_completion_reason(review_attempted=bool(review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
             return CompletionGateResult(
                 status=NEEDS_REVIEW_COMPLETION_STATUS,
                 reason=reason,
@@ -516,11 +522,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=True,
-                review_attempted=review["attempted"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
                 review_passed=False,
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         evidence_result = self.evidence_gate.evaluate(
@@ -537,11 +543,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
                 missing_evidence=evidence_result.missing_evidence,
             )
 
@@ -560,11 +566,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if _contract_accepts_final_response(evidence_result.task_contract) and response_text.strip():
@@ -577,11 +583,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if _is_one_turn_intent_kind(task_intent.kind):
@@ -593,11 +599,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if _is_analysis_response_intent_kind(task_intent.kind) and response_text.strip():
@@ -613,11 +619,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if _is_generic_task_response_intent_kind(task_intent.kind) and not expects_code_change and response_text.strip():
@@ -637,11 +643,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
@@ -658,11 +664,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         if (
@@ -670,7 +676,7 @@ class CompletionGateService:
             and execution_result.file_change_count > 0
             and response_text.strip()
             and (not verification_required or verification_passed)
-            and (not review_required or review["passed"])
+            and (not review_required or review[REVIEW_EVIDENCE_PASSED_FIELD])
         ):
             should_update_active_task = not task_intent.needs_clarification
             return CompletionGateResult(
@@ -682,11 +688,11 @@ class CompletionGateService:
                 verification_attempted=verification_attempted,
                 verification_passed=verification_passed,
                 review_required=review_required,
-                review_attempted=review["attempted"],
-                review_passed=review["passed"],
-                review_summary=review["summary"],
-                review_prompt_types=review["prompt_types"],
-                review_finding_count=review["finding_count"],
+                review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+                review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+                review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+                review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+                review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
             )
 
         return CompletionGateResult(
@@ -696,11 +702,11 @@ class CompletionGateService:
             verification_attempted=verification_attempted,
             verification_passed=verification_passed,
             review_required=review_required,
-            review_attempted=review["attempted"],
-            review_passed=review["passed"],
-            review_summary=review["summary"],
-            review_prompt_types=review["prompt_types"],
-            review_finding_count=review["finding_count"],
+            review_attempted=review[REVIEW_EVIDENCE_ATTEMPTED_FIELD],
+            review_passed=review[REVIEW_EVIDENCE_PASSED_FIELD],
+            review_summary=review[REVIEW_EVIDENCE_SUMMARY_FIELD],
+            review_prompt_types=review[REVIEW_EVIDENCE_PROMPT_TYPES_FIELD],
+            review_finding_count=review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD],
         )
 
     def _tool_errors_are_non_blocking(
@@ -1034,12 +1040,12 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
             continue
         problematic_review_recorded = True
     return {
-        "attempted": attempted,
-        "passed": attempted and clean_review_recorded and not problematic_review_recorded and finding_count == 0,
-        "summary": summary,
-        "prompt_types": tuple(dict.fromkeys(prompt_types)),
-        "finding_count": finding_count,
-        "first_finding": first_finding,
+        REVIEW_EVIDENCE_ATTEMPTED_FIELD: attempted,
+        REVIEW_EVIDENCE_PASSED_FIELD: attempted and clean_review_recorded and not problematic_review_recorded and finding_count == 0,
+        REVIEW_EVIDENCE_SUMMARY_FIELD: summary,
+        REVIEW_EVIDENCE_PROMPT_TYPES_FIELD: tuple(dict.fromkeys(prompt_types)),
+        REVIEW_EVIDENCE_FINDING_COUNT_FIELD: finding_count,
+        REVIEW_EVIDENCE_FIRST_FINDING_FIELD: first_finding,
     }
 
 
