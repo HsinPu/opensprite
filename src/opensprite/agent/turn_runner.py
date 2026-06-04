@@ -12,10 +12,13 @@ from ..bus.message import AssistantMessage, UserMessage
 from ..runs.events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_SCHEDULED_EVENT,
+    AUDIO_INPUT_TRANSCRIBED_EVENT,
     COMPLETION_GATE_EVALUATED_EVENT,
     EXECUTION_STOPPED_EVENT,
     HARNESS_CHECKPOINT_RECORDED_EVENT,
     HARNESS_SCORECARD_RECORDED_EVENT,
+    INBOUND_MEDIA_EVENT_PREFIX,
+    INBOUND_MEDIA_PERSISTED_EVENT,
     LLM_STATUS_EVENT,
     TASK_ARTIFACTS_RECORDED_EVENT,
     TASK_CHECKLIST_UPDATED_EVENT,
@@ -197,7 +200,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "audio_input.transcribed",
+            AUDIO_INPUT_TRANSCRIBED_EVENT,
             {
                 "status": result.status,
                 "audio_files": list(result.audio_files),
@@ -269,7 +272,9 @@ class AgentTurnRunner:
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                "inbound_media.persisted" if media_event.get("status") == "persisted" else "inbound_media." + str(media_event.get("status") or "unknown"),
+                INBOUND_MEDIA_PERSISTED_EVENT
+                if media_event.get("status") == "persisted"
+                else f"{INBOUND_MEDIA_EVENT_PREFIX}{media_event.get('status') or 'unknown'}",
                 {"schema_version": 1, **dict(media_event)},
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
