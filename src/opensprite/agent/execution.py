@@ -52,6 +52,11 @@ from .web_source_policy import (
     is_web_source_artifact_kind,
     is_web_source_evidence_tool,
 )
+from .workflow_status import WORKFLOW_COMPLETED_STATUS
+
+
+LLM_STEP_COMPLETED_STATUS = "completed"
+LLM_STEP_ERROR_STATUS = "error"
 
 
 @dataclass
@@ -1364,7 +1369,7 @@ Output exactly these sections when applicable:
                         LlmStepEvent(
                             iteration=iteration + 1,
                             attempt=request_attempt,
-                            status="completed",
+                            status=LLM_STEP_COMPLETED_STATUS,
                             provider=type(active_provider).__name__,
                             model=getattr(response, "model", None),
                             duration_ms=duration_ms,
@@ -1390,7 +1395,7 @@ Output exactly these sections when applicable:
                         LlmStepEvent(
                             iteration=iteration + 1,
                             attempt=request_attempt,
-                            status="error",
+                            status=LLM_STEP_ERROR_STATUS,
                             provider=type(active_provider).__name__,
                             model=self._get_token_model(active_provider),
                             duration_ms=duration_ms,
@@ -1740,7 +1745,7 @@ Output exactly these sections when applicable:
                                 StoredDelegatedTask(
                                     task_id=delegate_task_id,
                                     prompt_type=delegate_prompt_type,
-                                    status="completed",
+                                    status=WORKFLOW_COMPLETED_STATUS,
                                     selected=True,
                                     updated_at=time.time(),
                                 )

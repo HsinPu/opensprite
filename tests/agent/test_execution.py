@@ -5,7 +5,7 @@ from dataclasses import replace
 import opensprite.agent.execution as execution_module
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.context_compaction_policy import LLM_COMPACTION_EMPTY_REASON
-from opensprite.agent.execution import ExecutionEngine
+from opensprite.agent.execution import ExecutionEngine, LLM_STEP_COMPLETED_STATUS, LLM_STEP_ERROR_STATUS
 from opensprite.agent.prompt_logging import PromptLoggingService
 from opensprite.agent.stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.task_artifact import TaskArtifact
@@ -955,7 +955,7 @@ def test_execution_engine_records_llm_step_usage_metadata():
     step = result.llm_step_events[0]
     assert step.iteration == 1
     assert step.attempt == 1
-    assert step.status == "completed"
+    assert step.status == LLM_STEP_COMPLETED_STATUS
     assert step.provider == "FakeProvider"
     assert step.model == "fake-model"
     assert step.tools_enabled is False
@@ -1044,7 +1044,10 @@ def test_execution_engine_retries_transient_provider_errors_with_metadata():
     assert result.content == "retry ok"
     assert len(provider.calls) == 2
     assert provider.recover_calls == 1
-    assert [event.status for event in result.llm_step_events] == ["error", "completed"]
+    assert [event.status for event in result.llm_step_events] == [
+        LLM_STEP_ERROR_STATUS,
+        LLM_STEP_COMPLETED_STATUS,
+    ]
     assert result.llm_step_events[0].retryable is True
     assert result.llm_step_events[0].retry_after_ms == 0
     assert result.llm_step_events[0].next_retry_at is not None
