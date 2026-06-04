@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..bus.message import UserMessage
+from ..runs.events import COMPLETION_GATE_EVALUATED_EVENT
 from ..runs.lifecycle import RUN_CANCELLED_EVENT, RUN_FAILED_EVENT, RUN_FINISHED_EVENT
 from ..storage.base import StoredEvalRun
 
@@ -431,7 +432,7 @@ async def _live_result_from_storage(
         trace = await get_run_trace(session_id, run.run_id) if callable(get_run_trace) else None
 
     events = list(getattr(trace, "events", []) or [])
-    completion_payload = _latest_event_payload(events, "completion_gate.evaluated") or {}
+    completion_payload = _latest_event_payload(events, COMPLETION_GATE_EVALUATED_EVENT) or {}
     terminal_payload = (
         _latest_event_payload(events, RUN_FINISHED_EVENT)
         or _latest_event_payload(events, RUN_FAILED_EVENT)

@@ -9,6 +9,7 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from ..bus.message import AssistantMessage, UserMessage
+from ..runs.events import COMPLETION_GATE_EVALUATED_EVENT, TASK_ARTIFACTS_RECORDED_EVENT, WORK_PROGRESS_UPDATED_EVENT
 from ..utils.log import logger
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService
@@ -500,7 +501,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "completion_gate.evaluated",
+            COMPLETION_GATE_EVALUATED_EVENT,
             completion_metadata,
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
@@ -516,7 +517,7 @@ class AgentTurnRunner:
         await self._emit_run_event(
             turn.session_id,
             run_id,
-            "work_progress.updated",
+            WORK_PROGRESS_UPDATED_EVENT,
             work_progress.to_metadata(),
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
@@ -892,7 +893,7 @@ class AgentTurnRunner:
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                "completion_gate.evaluated",
+                COMPLETION_GATE_EVALUATED_EVENT,
                 completion_metadata,
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
@@ -908,7 +909,7 @@ class AgentTurnRunner:
             await self._emit_run_event(
                 turn.session_id,
                 run_id,
-                "work_progress.updated",
+                WORK_PROGRESS_UPDATED_EVENT,
                 work_progress.to_metadata(),
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
@@ -995,7 +996,7 @@ class AgentTurnRunner:
                 await self._emit_run_event(
                     turn.session_id,
                     run_id,
-                    "task_artifacts.recorded",
+                    TASK_ARTIFACTS_RECORDED_EVENT,
                     {
                         "status": "completed",
                         "count": len(aggregate_result.task_artifacts),

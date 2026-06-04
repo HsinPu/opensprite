@@ -5,12 +5,14 @@ from __future__ import annotations
 from typing import Any
 
 from .events import (
+    COMPLETION_GATE_EVALUATED_EVENT,
     MESSAGE_PART_DELTA_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_EVENTS,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
+    TASK_ARTIFACTS_RECORDED_EVENT,
     TEXT_DELTA_EVENTS,
     TOOL_LIFECYCLE_EVENTS,
     TOOL_RESULT_EVENT,
@@ -18,6 +20,7 @@ from .events import (
     VERIFICATION_EVENTS,
     VERIFICATION_RESULT_EVENT,
     VERIFICATION_STARTED_EVENT,
+    WORK_PROGRESS_UPDATED_EVENT,
 )
 from .lifecycle import (
     RUN_CANCEL_REQUESTED_EVENT,
@@ -46,9 +49,9 @@ _EVENT_KINDS = {
     "reasoning_delta": "llm",
     "task_intent.detected": "work",
     "work_plan.created": "work",
-    "work_progress.updated": "work",
+    WORK_PROGRESS_UPDATED_EVENT: "work",
     "task_checklist.updated": "work",
-    "task_artifacts.recorded": "work",
+    TASK_ARTIFACTS_RECORDED_EVENT: "work",
     "task_contract.planning_started": "work",
     "task_contract.planned": "work",
     "task_contract.validated": "work",
@@ -73,7 +76,7 @@ _EVENT_KINDS = {
     "workflow.step.failed": "work",
     "workflow.completed": "work",
     "workflow.failed": "work",
-    "completion_gate.evaluated": "completion",
+    COMPLETION_GATE_EVALUATED_EVENT: "completion",
     "harness_profile.selected": "harness",
     "harness_policy.selected": "harness",
     "harness_checkpoint.recorded": "harness",
@@ -310,7 +313,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized == "task_artifacts.recorded":
+    if normalized == TASK_ARTIFACTS_RECORDED_EVENT:
         artifacts = data.get("artifacts") if isinstance(data.get("artifacts"), list) else []
         count = _non_negative_int(data.get("count") or len(artifacts))
         source_count = _task_artifact_source_count(artifacts)
@@ -858,7 +861,7 @@ def _latest_work_progress(events: list[Any]) -> dict[str, Any] | None:
     for event in reversed(events):
         payload = dict(getattr(event, "payload", {}) or {})
         event_type = getattr(event, "event_type", None)
-        if event_type == "work_progress.updated":
+        if event_type == WORK_PROGRESS_UPDATED_EVENT:
             return payload
         if event_type == RUN_FINISHED_EVENT and isinstance(payload.get("work_progress"), dict):
             return dict(payload["work_progress"])
@@ -1195,7 +1198,7 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     file_changes = list(getattr(trace, "file_changes", None) or [])
     run_metadata = dict(getattr(run, "metadata", {}) or {})
     task_intent = _latest_event_payload(events, "task_intent.detected") or {}
-    completion = _latest_event_payload(events, "completion_gate.evaluated") or {}
+    completion = _latest_event_payload(events, COMPLETION_GATE_EVALUATED_EVENT) or {}
     work_progress = _latest_work_progress(events) or {}
     verification = _summarize_verification(run_metadata, events)
     review = _summarize_review(completion)
