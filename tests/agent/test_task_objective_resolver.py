@@ -3,6 +3,7 @@ import asyncio
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntent, TaskIntentService
 from opensprite.agent.task_objective_resolver import (
+    LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON,
     LLM_RESOLVED_TASK_OBJECTIVE_REASON,
     OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,
     TaskObjectiveResolver,
@@ -76,6 +77,7 @@ _BOUNDARY_ACTIVE_TASK_BLOCK = (
 def test_task_objective_reasons_are_stable():
     assert OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON == "objective enrichment not needed"
     assert LLM_RESOLVED_TASK_OBJECTIVE_REASON == "llm resolved task objective"
+    assert LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON == "llm objective was not more specific"
 
 
 def test_task_objective_resolver_enriches_short_web_follow_up():

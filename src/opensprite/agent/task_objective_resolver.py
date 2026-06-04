@@ -30,6 +30,7 @@ from .llm_resolution_policy import (
 _MIN_CONFIDENCE = 0.65
 OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON = "objective enrichment not needed"
 LLM_RESOLVED_TASK_OBJECTIVE_REASON = "llm resolved task objective"
+LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON = "llm objective was not more specific"
 
 
 @dataclass(frozen=True)
@@ -119,7 +120,7 @@ class TaskObjectiveResolver:
             llm_decision.resolved_objective,
             original,
         ):
-            return _unresolved_llm_objective(original, "llm objective was not more specific")
+            return _unresolved_llm_objective(original, LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON)
         return llm_decision
 
     async def _resolve_with_llm(
