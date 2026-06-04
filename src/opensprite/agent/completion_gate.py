@@ -102,6 +102,7 @@ from .workflow_status import (
     is_workflow_unsuccessful_status,
 )
 from .workflow_completion_policy import (
+    WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,
     workflow_fix_follow_up_fields,
@@ -1080,7 +1081,7 @@ def _workflow_gate_outcome(
             return {
                 **metadata,
                 "status": NEEDS_VERIFICATION_COMPLETION_STATUS,
-                "reason": "workflow completed but required verification evidence is still missing",
+                "reason": WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
                 "detail": str(workflow.get("summary") or "").strip(),
             }
         return {
@@ -1093,7 +1094,7 @@ def _workflow_gate_outcome(
         return {
             **metadata,
             "status": NEEDS_VERIFICATION_COMPLETION_STATUS,
-            "reason": "workflow completed but required verification evidence is still missing",
+            "reason": WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
             "detail": str(workflow.get("summary") or "").strip(),
         }
 

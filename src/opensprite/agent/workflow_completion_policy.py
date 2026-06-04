@@ -22,6 +22,7 @@ WORKFLOW_FIX_STEPS = {
         "next_step_prompt_type": "bug-fixer",
     },
 }
+WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON = "workflow completed but required verification evidence is still missing"
 
 
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:

@@ -1,4 +1,5 @@
 from opensprite.agent.workflow_completion_policy import (
+    WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
     is_research_then_outline_workflow,
     is_review_workflow,
     workflow_fix_follow_up_fields,
@@ -12,6 +13,13 @@ def test_workflow_completion_policy_classifies_workflow_families():
     assert is_review_workflow("research_then_outline") is False
     assert is_research_then_outline_workflow("research_then_outline") is True
     assert is_research_then_outline_workflow("implement_then_review") is False
+
+
+def test_workflow_completion_reasons_are_stable():
+    assert (
+        WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON
+        == "workflow completed but required verification evidence is still missing"
+    )
 
 
 def test_workflow_completion_policy_returns_review_follow_up_step():
