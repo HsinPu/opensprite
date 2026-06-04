@@ -90,10 +90,10 @@ from .web_source_policy import (
 )
 from .verification_policy import (
     REQUIRED_VERIFICATION_FAILED_REASON,
-    REQUIRED_VERIFICATION_NOT_RECORDED_REASON,
     SKIPPED_VERIFICATION_STATUS,
     is_verification_result_artifact_kind,
     is_verification_tool_name,
+    required_verification_completion_reason,
 )
 from .workflow_status import (
     is_workflow_cancelled_status,
@@ -437,11 +437,7 @@ class CompletionGateService:
             )
 
         if verification_required and not verification_passed:
-            reason = (
-                REQUIRED_VERIFICATION_FAILED_REASON
-                if verification_attempted
-                else REQUIRED_VERIFICATION_NOT_RECORDED_REASON
-            )
+            reason = required_verification_completion_reason(verification_attempted=verification_attempted)
             return CompletionGateResult(
                 status=NEEDS_VERIFICATION_COMPLETION_STATUS,
                 reason=reason,

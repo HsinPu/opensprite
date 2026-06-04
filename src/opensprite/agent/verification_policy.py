@@ -19,3 +19,8 @@ def is_verification_tool_name(tool_name: str | None) -> bool:
 def is_verification_result_artifact_kind(kind: str | None) -> bool:
     """Return whether an artifact kind represents verification output."""
     return str(kind or "").strip() == VERIFICATION_RESULT_ARTIFACT_KIND
+
+
+def required_verification_completion_reason(*, verification_attempted: bool) -> str:
+    """Return the completion-gate reason for an unmet required verification."""
+    return REQUIRED_VERIFICATION_FAILED_REASON if verification_attempted else REQUIRED_VERIFICATION_NOT_RECORDED_REASON
