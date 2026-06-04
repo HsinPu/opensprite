@@ -50,6 +50,28 @@ COMPLETION_JUDGE_ACTIVE_TASK_STATUSES = frozenset(
     }
 )
 _COMPLETION_JUDGE_ACTIVE_TASK_STATUS_SCHEMA = "|".join(sorted(COMPLETION_JUDGE_ACTIVE_TASK_STATUSES))
+COMPLETION_JUDGE_STATUS_FIELD = "status"
+COMPLETION_JUDGE_REASON_FIELD = "reason"
+COMPLETION_JUDGE_ACTIVE_TASK_STATUS_FIELD = "active_task_status"
+COMPLETION_JUDGE_ACTIVE_TASK_DETAIL_FIELD = "active_task_detail"
+COMPLETION_JUDGE_MISSING_EVIDENCE_FIELD = "missing_evidence"
+COMPLETION_JUDGE_PROGRESS_ONLY_RESPONSE_FIELD = "progress_only_response"
+COMPLETION_JUDGE_FOLLOW_UP_WORKFLOW_FIELD = "follow_up_workflow"
+COMPLETION_JUDGE_FOLLOW_UP_STEP_ID_FIELD = "follow_up_step_id"
+COMPLETION_JUDGE_FOLLOW_UP_STEP_LABEL_FIELD = "follow_up_step_label"
+COMPLETION_JUDGE_FOLLOW_UP_PROMPT_TYPE_FIELD = "follow_up_prompt_type"
+COMPLETION_JUDGE_VERIFICATION_ACTION_FIELD = "verification_action"
+COMPLETION_JUDGE_VERIFICATION_PATH_FIELD = "verification_path"
+COMPLETION_JUDGE_VERIFICATION_PYTEST_ARGS_FIELD = "verification_pytest_args"
+COMPLETION_JUDGE_VERIFICATION_REQUIRED_FIELD = "verification_required"
+COMPLETION_JUDGE_VERIFICATION_ATTEMPTED_FIELD = "verification_attempted"
+COMPLETION_JUDGE_VERIFICATION_PASSED_FIELD = "verification_passed"
+COMPLETION_JUDGE_REVIEW_REQUIRED_FIELD = "review_required"
+COMPLETION_JUDGE_REVIEW_ATTEMPTED_FIELD = "review_attempted"
+COMPLETION_JUDGE_REVIEW_PASSED_FIELD = "review_passed"
+COMPLETION_JUDGE_REVIEW_SUMMARY_FIELD = "review_summary"
+COMPLETION_JUDGE_REVIEW_PROMPT_TYPES_FIELD = "review_prompt_types"
+COMPLETION_JUDGE_REVIEW_FINDING_COUNT_FIELD = "review_finding_count"
 
 COMPLETION_JUDGE_SYSTEM_PROMPT = """You are OpenSprite's completion judge.
 You receive structured facts about one agent turn. Decide whether the assistant
@@ -198,35 +220,35 @@ def normalize_completion_judge_payload(
     raw_response: str = "",
 ) -> CompletionJudgeVerdict:
     """Validate and normalize the judge JSON object."""
-    status = str(payload.get("status") or "").strip().lower()
+    status = str(payload.get(COMPLETION_JUDGE_STATUS_FIELD) or "").strip().lower()
     if status not in COMPLETION_JUDGE_STATUSES:
         raise CompletionJudgeError(completion_judge_unsupported_status_reason(status))
-    reason = _coerce_text(payload.get("reason"), max_chars=500)
+    reason = _coerce_text(payload.get(COMPLETION_JUDGE_REASON_FIELD), max_chars=500)
     if not reason:
         raise CompletionJudgeError("completion judge response is missing reason")
     return CompletionJudgeVerdict(
         status=status,
         reason=reason,
-        active_task_status=_optional_active_task_status(payload.get("active_task_status")),
-        active_task_detail=_optional_text(payload.get("active_task_detail"), max_chars=1000),
-        follow_up_workflow=_optional_text(payload.get("follow_up_workflow"), max_chars=80),
-        follow_up_step_id=_optional_text(payload.get("follow_up_step_id"), max_chars=120),
-        follow_up_step_label=_optional_text(payload.get("follow_up_step_label"), max_chars=160),
-        follow_up_prompt_type=_optional_text(payload.get("follow_up_prompt_type"), max_chars=80),
-        verification_action=_optional_text(payload.get("verification_action"), max_chars=80),
-        verification_path=_optional_text(payload.get("verification_path"), max_chars=500),
-        verification_pytest_args=tuple(_string_list(payload.get("verification_pytest_args"), max_items=20, max_chars=200)),
-        verification_required=_coerce_bool(payload.get("verification_required")),
-        verification_attempted=_coerce_bool(payload.get("verification_attempted")),
-        verification_passed=_coerce_bool(payload.get("verification_passed")),
-        review_required=_coerce_bool(payload.get("review_required")),
-        review_attempted=_coerce_bool(payload.get("review_attempted")),
-        review_passed=_coerce_bool(payload.get("review_passed")),
-        review_summary=_coerce_text(payload.get("review_summary"), max_chars=1000),
-        review_prompt_types=tuple(_string_list(payload.get("review_prompt_types"), max_items=10, max_chars=80)),
-        review_finding_count=_coerce_non_negative_int(payload.get("review_finding_count")),
-        missing_evidence=tuple(_string_list(payload.get("missing_evidence"), max_items=20, max_chars=240)),
-        progress_only_response=_coerce_bool(payload.get("progress_only_response")),
+        active_task_status=_optional_active_task_status(payload.get(COMPLETION_JUDGE_ACTIVE_TASK_STATUS_FIELD)),
+        active_task_detail=_optional_text(payload.get(COMPLETION_JUDGE_ACTIVE_TASK_DETAIL_FIELD), max_chars=1000),
+        follow_up_workflow=_optional_text(payload.get(COMPLETION_JUDGE_FOLLOW_UP_WORKFLOW_FIELD), max_chars=80),
+        follow_up_step_id=_optional_text(payload.get(COMPLETION_JUDGE_FOLLOW_UP_STEP_ID_FIELD), max_chars=120),
+        follow_up_step_label=_optional_text(payload.get(COMPLETION_JUDGE_FOLLOW_UP_STEP_LABEL_FIELD), max_chars=160),
+        follow_up_prompt_type=_optional_text(payload.get(COMPLETION_JUDGE_FOLLOW_UP_PROMPT_TYPE_FIELD), max_chars=80),
+        verification_action=_optional_text(payload.get(COMPLETION_JUDGE_VERIFICATION_ACTION_FIELD), max_chars=80),
+        verification_path=_optional_text(payload.get(COMPLETION_JUDGE_VERIFICATION_PATH_FIELD), max_chars=500),
+        verification_pytest_args=tuple(_string_list(payload.get(COMPLETION_JUDGE_VERIFICATION_PYTEST_ARGS_FIELD), max_items=20, max_chars=200)),
+        verification_required=_coerce_bool(payload.get(COMPLETION_JUDGE_VERIFICATION_REQUIRED_FIELD)),
+        verification_attempted=_coerce_bool(payload.get(COMPLETION_JUDGE_VERIFICATION_ATTEMPTED_FIELD)),
+        verification_passed=_coerce_bool(payload.get(COMPLETION_JUDGE_VERIFICATION_PASSED_FIELD)),
+        review_required=_coerce_bool(payload.get(COMPLETION_JUDGE_REVIEW_REQUIRED_FIELD)),
+        review_attempted=_coerce_bool(payload.get(COMPLETION_JUDGE_REVIEW_ATTEMPTED_FIELD)),
+        review_passed=_coerce_bool(payload.get(COMPLETION_JUDGE_REVIEW_PASSED_FIELD)),
+        review_summary=_coerce_text(payload.get(COMPLETION_JUDGE_REVIEW_SUMMARY_FIELD), max_chars=1000),
+        review_prompt_types=tuple(_string_list(payload.get(COMPLETION_JUDGE_REVIEW_PROMPT_TYPES_FIELD), max_items=10, max_chars=80)),
+        review_finding_count=_coerce_non_negative_int(payload.get(COMPLETION_JUDGE_REVIEW_FINDING_COUNT_FIELD)),
+        missing_evidence=tuple(_string_list(payload.get(COMPLETION_JUDGE_MISSING_EVIDENCE_FIELD), max_items=20, max_chars=240)),
+        progress_only_response=_coerce_bool(payload.get(COMPLETION_JUDGE_PROGRESS_ONLY_RESPONSE_FIELD)),
         raw_response_preview=_truncate(raw_response, max_chars=600),
         metadata={"method": "llm"},
     )
@@ -238,21 +260,21 @@ def completion_judge_unsupported_status_reason(status: str | None) -> str:
 
 def _build_judge_prompt(facts: dict[str, Any]) -> str:
     schema = {
-        "status": _COMPLETION_JUDGE_STATUS_SCHEMA,
-        "reason": "short reason",
-        "active_task_status": f"{_COMPLETION_JUDGE_ACTIVE_TASK_STATUS_SCHEMA}|null",
-        "active_task_detail": "optional detail",
-        "missing_evidence": ["optional missing items"],
-        "progress_only_response": False,
-        "verification_required": False,
-        "verification_attempted": False,
-        "verification_passed": False,
-        "review_required": False,
-        "review_attempted": False,
-        "review_passed": False,
-        "review_summary": "",
-        "review_prompt_types": [],
-        "review_finding_count": 0,
+        COMPLETION_JUDGE_STATUS_FIELD: _COMPLETION_JUDGE_STATUS_SCHEMA,
+        COMPLETION_JUDGE_REASON_FIELD: "short reason",
+        COMPLETION_JUDGE_ACTIVE_TASK_STATUS_FIELD: f"{_COMPLETION_JUDGE_ACTIVE_TASK_STATUS_SCHEMA}|null",
+        COMPLETION_JUDGE_ACTIVE_TASK_DETAIL_FIELD: "optional detail",
+        COMPLETION_JUDGE_MISSING_EVIDENCE_FIELD: ["optional missing items"],
+        COMPLETION_JUDGE_PROGRESS_ONLY_RESPONSE_FIELD: False,
+        COMPLETION_JUDGE_VERIFICATION_REQUIRED_FIELD: False,
+        COMPLETION_JUDGE_VERIFICATION_ATTEMPTED_FIELD: False,
+        COMPLETION_JUDGE_VERIFICATION_PASSED_FIELD: False,
+        COMPLETION_JUDGE_REVIEW_REQUIRED_FIELD: False,
+        COMPLETION_JUDGE_REVIEW_ATTEMPTED_FIELD: False,
+        COMPLETION_JUDGE_REVIEW_PASSED_FIELD: False,
+        COMPLETION_JUDGE_REVIEW_SUMMARY_FIELD: "",
+        COMPLETION_JUDGE_REVIEW_PROMPT_TYPES_FIELD: [],
+        COMPLETION_JUDGE_REVIEW_FINDING_COUNT_FIELD: 0,
     }
     return (
         "Judge this agent turn using only the structured facts below. "
