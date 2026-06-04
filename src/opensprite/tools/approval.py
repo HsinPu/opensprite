@@ -16,6 +16,9 @@ from .shell import classify_destructive_shell_command
 DEFAULT_PERMISSION_DENIAL_REASON = "user denied approval"
 PERMISSION_REQUEST_TIMED_OUT_REASON = "permission request timed out"
 PERMISSION_APPROVED_ONCE_REASON = "approved once"
+PERMISSION_REQUEST_PENDING_STATUS = "pending"
+PERMISSION_REQUEST_APPROVED_STATUS = "approved"
+PERMISSION_REQUEST_DENIED_STATUS = "denied"
 SQL_DROP_TABLE_COMMAND_MARKER = "drop table"
 SQL_DROP_TABLE_DESTRUCTIVE_REASON = "sql drop table"
 
@@ -114,7 +117,7 @@ class PermissionRequest:
     preview: str = ""
     recommended_decision: str = "approve"
     destructive_reason: str = ""
-    status: str = "pending"
+    status: str = PERMISSION_REQUEST_PENDING_STATUS
     resolved_at: float | None = None
     resolution_reason: str = ""
     timed_out: bool = False
@@ -141,7 +144,7 @@ class PermissionRequestManager:
     def pending_requests(self) -> list[PermissionRequest]:
         """Return currently pending requests from oldest to newest."""
         return sorted(
-            (request for request in self._requests.values() if request.status == "pending"),
+            (request for request in self._requests.values() if request.status == PERMISSION_REQUEST_PENDING_STATUS),
             key=lambda request: request.created_at,
         )
 
@@ -183,14 +186,14 @@ class PermissionRequestManager:
             except TimeoutError:
                 await self._resolve(
                     request.request_id,
-                    status="denied",
+                    status=PERMISSION_REQUEST_DENIED_STATUS,
                     reason=PERMISSION_REQUEST_TIMED_OUT_REASON,
                     timed_out=True,
                     event_type="permission_denied",
                 )
 
             return PermissionApprovalResult(
-                approved=request.status == "approved",
+                approved=request.status == PERMISSION_REQUEST_APPROVED_STATUS,
                 request_id=request.request_id,
                 reason=request.resolution_reason or request.reason,
                 status=request.status,
@@ -203,7 +206,7 @@ class PermissionRequestManager:
         """Approve one pending request and allow that single tool call to continue."""
         return await self._resolve(
             request_id,
-            status="approved",
+            status=PERMISSION_REQUEST_APPROVED_STATUS,
             reason=PERMISSION_APPROVED_ONCE_REASON,
             timed_out=False,
             event_type="permission_granted",
@@ -213,7 +216,7 @@ class PermissionRequestManager:
         """Deny one pending request."""
         return await self._resolve(
             request_id,
-            status="denied",
+            status=PERMISSION_REQUEST_DENIED_STATUS,
             reason=reason,
             timed_out=False,
             event_type="permission_denied",
@@ -230,7 +233,7 @@ class PermissionRequestManager:
     ) -> PermissionRequest | None:
         async with self._lock:
             request = self._requests.get(request_id)
-            if request is None or request.status != "pending":
+            if request is None or request.status != PERMISSION_REQUEST_PENDING_STATUS:
                 return None
             request.status = status
             request.resolved_at = time.time()

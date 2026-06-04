@@ -4,6 +4,9 @@ import json
 from opensprite.tools.approval import (
     DEFAULT_PERMISSION_DENIAL_REASON,
     PERMISSION_APPROVED_ONCE_REASON,
+    PERMISSION_REQUEST_APPROVED_STATUS,
+    PERMISSION_REQUEST_DENIED_STATUS,
+    PERMISSION_REQUEST_PENDING_STATUS,
     PERMISSION_REQUEST_TIMED_OUT_REASON,
     SQL_DROP_TABLE_COMMAND_MARKER,
     SQL_DROP_TABLE_DESTRUCTIVE_REASON,
@@ -286,9 +289,12 @@ def test_approval_required_policy_waits_for_approval_in_ask_mode():
 
     assert result == "ran:apply_patch"
     assert PERMISSION_APPROVED_ONCE_REASON == "approved once"
+    assert PERMISSION_REQUEST_PENDING_STATUS == "pending"
+    assert PERMISSION_REQUEST_APPROVED_STATUS == "approved"
+    assert PERMISSION_REQUEST_DENIED_STATUS == "denied"
     assert [event[0] for event in events] == ["permission_requested", "permission_granted"]
-    assert events[0][2] == "pending"
-    assert events[1][2] == "approved"
+    assert events[0][2] == PERMISSION_REQUEST_PENDING_STATUS
+    assert events[1][2] == PERMISSION_REQUEST_APPROVED_STATUS
     assert pending == []
 
 
