@@ -56,6 +56,10 @@ from ..runs.events import (
     PERMISSION_DENIED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
+    TOOL_APPROVAL_APPROVED_EVENT,
+    TOOL_APPROVAL_DENIED_EVENT,
+    TOOL_APPROVAL_EXPIRED_EVENT,
+    TOOL_APPROVAL_REQUESTED_EVENT,
 )
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
@@ -127,11 +131,11 @@ from .work_progress import WorkProgressService, WorkProgressUpdate
 
 def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:
     if event_type == PERMISSION_REQUESTED_EVENT:
-        return "tool_approval.requested"
+        return TOOL_APPROVAL_REQUESTED_EVENT
     if event_type == PERMISSION_GRANTED_EVENT:
-        return "tool_approval.approved"
+        return TOOL_APPROVAL_APPROVED_EVENT
     if event_type == PERMISSION_DENIED_EVENT:
-        return "tool_approval.expired" if request.timed_out else "tool_approval.denied"
+        return TOOL_APPROVAL_EXPIRED_EVENT if request.timed_out else TOOL_APPROVAL_DENIED_EVENT
     return None
 
 

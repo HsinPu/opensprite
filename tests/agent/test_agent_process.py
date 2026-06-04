@@ -20,7 +20,14 @@ from opensprite.context.paths import get_session_skills_dir
 from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
-from opensprite.runs.events import TASK_CONTEXT_RESOLVED_EVENT, TASK_OBJECTIVE_RESOLVED_EVENT
+from opensprite.runs.events import (
+    PERMISSION_GRANTED_EVENT,
+    PERMISSION_REQUESTED_EVENT,
+    TASK_CONTEXT_RESOLVED_EVENT,
+    TASK_OBJECTIVE_RESOLVED_EVENT,
+    TOOL_APPROVAL_APPROVED_EVENT,
+    TOOL_APPROVAL_REQUESTED_EVENT,
+)
 from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
@@ -1247,10 +1254,10 @@ def test_agent_tool_permission_requests_emit_run_events(tmp_path):
     assert [event.event_type for event in stored_events] == [
         "tool_permission.checked",
         "tool_permission.approval_required",
-        "permission_requested",
-        "tool_approval.requested",
-        "permission_granted",
-        "tool_approval.approved",
+        PERMISSION_REQUESTED_EVENT,
+        TOOL_APPROVAL_REQUESTED_EVENT,
+        PERMISSION_GRANTED_EVENT,
+        TOOL_APPROVAL_APPROVED_EVENT,
     ]
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
     assert stored_events[2].payload["tool_name"] == "dummy"
