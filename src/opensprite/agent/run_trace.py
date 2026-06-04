@@ -22,6 +22,31 @@ from ..utils.log import logger
 
 
 RUN_PART_CONTENT_MAX_CHARS = 20_000
+TRACE_PROFILE_FIELD = "profile"
+TRACE_HARNESS_PROFILE_FIELD = "harness_profile"
+TRACE_HARNESS_POLICY_FIELD = "harness_policy"
+TRACE_POLICY_FIELD = "policy"
+TRACE_CONTRACT_FIELD = "contract"
+TRACE_COMPLETION_FIELD = "completion"
+TRACE_TRACE_HEALTH_FIELD = "trace_health"
+TRACE_SENSOR_COUNTS_FIELD = "sensor_counts"
+TRACE_STATUS_FIELD = "status"
+TRACE_NAME_FIELD = "name"
+TRACE_TASK_TYPE_FIELD = "task_type"
+TRACE_NEXT_ACTION_FIELD = "next_action"
+TRACE_SUMMARY_FIELD = "summary"
+TRACE_KIND_FIELD = "kind"
+TRACE_OK_FIELD = "ok"
+TRACE_PASSED_CASES_FIELD = "passed_cases"
+TRACE_TOTAL_CASES_FIELD = "total_cases"
+TRACE_PASSED_CHECKS_FIELD = "passed_checks"
+TRACE_TOTAL_CHECKS_FIELD = "total_checks"
+TRACE_OPERATION_TYPE_FIELD = "operation_type"
+TRACE_TARGET_FIELD = "target"
+TRACE_ROLLBACK_AVAILABLE_FIELD = "rollback_available"
+TRACE_SENSOR_FAIL_FIELD = "fail"
+TRACE_SENSOR_WARN_FIELD = "warn"
+TRACE_SENSOR_PASS_FIELD = "pass"
 
 
 def truncate_run_part_content(
@@ -294,16 +319,16 @@ class RunTraceRecorder:
         checkpoint: dict[str, Any],
     ) -> None:
         """Persist the latest harness state as a durable run part."""
-        profile = checkpoint.get("harness_profile") if isinstance(checkpoint, dict) else {}
-        policy = checkpoint.get("harness_policy") if isinstance(checkpoint, dict) else {}
-        completion = checkpoint.get("completion") if isinstance(checkpoint, dict) else {}
+        profile = checkpoint.get(TRACE_HARNESS_PROFILE_FIELD) if isinstance(checkpoint, dict) else {}
+        policy = checkpoint.get(TRACE_HARNESS_POLICY_FIELD) if isinstance(checkpoint, dict) else {}
+        completion = checkpoint.get(TRACE_COMPLETION_FIELD) if isinstance(checkpoint, dict) else {}
         content = " · ".join(
             item
             for item in (
-                f"profile={profile.get('name')}" if isinstance(profile, dict) and profile.get("name") else "",
-                f"policy={policy.get('name')}" if isinstance(policy, dict) and policy.get("name") else "",
-                f"completion={completion.get('status')}" if isinstance(completion, dict) and completion.get("status") else "",
-                f"next={checkpoint.get('next_action')}" if isinstance(checkpoint, dict) and checkpoint.get("next_action") else "",
+                f"profile={profile.get(TRACE_NAME_FIELD)}" if isinstance(profile, dict) and profile.get(TRACE_NAME_FIELD) else "",
+                f"policy={policy.get(TRACE_NAME_FIELD)}" if isinstance(policy, dict) and policy.get(TRACE_NAME_FIELD) else "",
+                f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
+                f"next={checkpoint.get(TRACE_NEXT_ACTION_FIELD)}" if isinstance(checkpoint, dict) and checkpoint.get(TRACE_NEXT_ACTION_FIELD) else "",
             )
             if item
         )
@@ -322,18 +347,18 @@ class RunTraceRecorder:
         scorecard: dict[str, Any],
     ) -> None:
         """Persist the latest harness scorecard as a durable run part."""
-        profile = scorecard.get("profile") if isinstance(scorecard, dict) else {}
-        contract = scorecard.get("contract") if isinstance(scorecard, dict) else {}
-        completion = scorecard.get("completion") if isinstance(scorecard, dict) else {}
-        trace_health = scorecard.get("trace_health") if isinstance(scorecard, dict) else {}
-        sensor_counts = trace_health.get("sensor_counts") if isinstance(trace_health, dict) else {}
+        profile = scorecard.get(TRACE_PROFILE_FIELD) if isinstance(scorecard, dict) else {}
+        contract = scorecard.get(TRACE_CONTRACT_FIELD) if isinstance(scorecard, dict) else {}
+        completion = scorecard.get(TRACE_COMPLETION_FIELD) if isinstance(scorecard, dict) else {}
+        trace_health = scorecard.get(TRACE_TRACE_HEALTH_FIELD) if isinstance(scorecard, dict) else {}
+        sensor_counts = trace_health.get(TRACE_SENSOR_COUNTS_FIELD) if isinstance(trace_health, dict) else {}
         content = " · ".join(
             item
             for item in (
-                f"profile={profile.get('name')}" if isinstance(profile, dict) and profile.get("name") else "",
-                f"contract={contract.get('task_type')}" if isinstance(contract, dict) and contract.get("task_type") else "",
-                f"completion={completion.get('status')}" if isinstance(completion, dict) and completion.get("status") else "",
-                f"trace={trace_health.get('status')}" if isinstance(trace_health, dict) and trace_health.get("status") else "",
+                f"profile={profile.get(TRACE_NAME_FIELD)}" if isinstance(profile, dict) and profile.get(TRACE_NAME_FIELD) else "",
+                f"contract={contract.get(TRACE_TASK_TYPE_FIELD)}" if isinstance(contract, dict) and contract.get(TRACE_TASK_TYPE_FIELD) else "",
+                f"completion={completion.get(TRACE_STATUS_FIELD)}" if isinstance(completion, dict) and completion.get(TRACE_STATUS_FIELD) else "",
+                f"trace={trace_health.get(TRACE_STATUS_FIELD)}" if isinstance(trace_health, dict) and trace_health.get(TRACE_STATUS_FIELD) else "",
                 _scorecard_sensor_summary(sensor_counts),
             )
             if item
@@ -356,9 +381,9 @@ class RunTraceRecorder:
         content = " · ".join(
             item
             for item in (
-                f"operation={audit.get('operation_type')}",
-                f"target={audit.get('target')}",
-                f"rollback={bool(audit.get('rollback_available'))}",
+                f"operation={audit.get(TRACE_OPERATION_TYPE_FIELD)}",
+                f"target={audit.get(TRACE_TARGET_FIELD)}",
+                f"rollback={bool(audit.get(TRACE_ROLLBACK_AVAILABLE_FIELD))}",
             )
             if item
         )
@@ -377,14 +402,14 @@ class RunTraceRecorder:
         result: dict[str, Any],
     ) -> None:
         """Persist a controlled harness eval result as a durable run part."""
-        summary = result.get("summary") if isinstance(result, dict) else {}
+        summary = result.get(TRACE_SUMMARY_FIELD) if isinstance(result, dict) else {}
         content = " · ".join(
             item
             for item in (
-                f"kind={result.get('kind')}",
-                f"ok={bool(result.get('ok'))}",
-                f"cases={summary.get('passed_cases')}/{summary.get('total_cases')}" if isinstance(summary, dict) else "",
-                f"checks={summary.get('passed_checks')}/{summary.get('total_checks')}" if isinstance(summary, dict) else "",
+                f"kind={result.get(TRACE_KIND_FIELD)}",
+                f"ok={bool(result.get(TRACE_OK_FIELD))}",
+                f"cases={summary.get(TRACE_PASSED_CASES_FIELD)}/{summary.get(TRACE_TOTAL_CASES_FIELD)}" if isinstance(summary, dict) else "",
+                f"checks={summary.get(TRACE_PASSED_CHECKS_FIELD)}/{summary.get(TRACE_TOTAL_CHECKS_FIELD)}" if isinstance(summary, dict) else "",
             )
             if item
         )
@@ -428,7 +453,7 @@ class RunTraceRecorder:
             session_id,
             run_id,
             "worktree_sandbox",
-            content=str(metadata.get("status") or "unknown"),
+            content=str(metadata.get(TRACE_STATUS_FIELD) or "unknown"),
             metadata=metadata,
         )
 
@@ -487,9 +512,9 @@ class RunTraceRecorder:
 def _scorecard_sensor_summary(sensor_counts: Any) -> str:
     if not isinstance(sensor_counts, dict):
         return ""
-    fail_count = int(sensor_counts.get("fail") or 0)
-    warn_count = int(sensor_counts.get("warn") or 0)
-    pass_count = int(sensor_counts.get("pass") or 0)
+    fail_count = int(sensor_counts.get(TRACE_SENSOR_FAIL_FIELD) or 0)
+    warn_count = int(sensor_counts.get(TRACE_SENSOR_WARN_FIELD) or 0)
+    pass_count = int(sensor_counts.get(TRACE_SENSOR_PASS_FIELD) or 0)
     if fail_count or warn_count:
         return f"sensors={pass_count} pass/{warn_count} warn/{fail_count} fail"
     return f"sensors={pass_count} pass" if pass_count else ""
