@@ -44,6 +44,7 @@ from ..tools.evidence import ToolEvidence
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)
 PLANNER_VALIDATED_STATUS = "validated"
+PLANNER_BLOCKED_STATUS = "blocked"
 PLANNER_INVALID_STATUS = "invalid"
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
@@ -557,7 +558,7 @@ def _planner_blocked_contract(
     *,
     objective: str,
     reason: str,
-    status: str = "blocked",
+    status: str = PLANNER_BLOCKED_STATUS,
     raw_response_preview: str = "",
 ) -> TaskContract:
     metadata: dict[str, Any] = {
