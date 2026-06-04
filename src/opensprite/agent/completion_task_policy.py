@@ -46,8 +46,8 @@ def intent_supports_fallback_active_task_update(task_intent: Any, task_contract:
 
 def intent_supports_default_work_plan(task_intent: Any) -> bool:
     return str(getattr(task_intent, "kind", "") or "").strip() in {
-        ANALYSIS_TASK_TYPE,
-        GENERIC_TASK_TYPE,
+        ANALYSIS_INTENT_KIND,
+        GENERIC_TASK_INTENT_KIND,
     } and not bool(getattr(task_intent, "needs_clarification", False))
 
 
