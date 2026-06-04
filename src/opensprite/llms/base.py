@@ -17,6 +17,8 @@ CHAT_ROLE_SYSTEM = "system"
 CHAT_ROLE_USER = "user"
 CHAT_ROLE_ASSISTANT = "assistant"
 CHAT_ROLE_TOOL = "tool"
+CHAT_CONTENT_TYPE_TEXT = "text"
+CHAT_CONTENT_TYPE_IMAGE_URL = "image_url"
 
 
 @dataclass
@@ -68,9 +70,9 @@ class ChatMessage:
         """
         if images:
             # 混合內容格式（文字 + 圖片）
-            content = [{"type": "text", "text": text}]
+            content = [{"type": CHAT_CONTENT_TYPE_TEXT, "text": text}]
             for img in images:
-                content.append({"type": "image_url", "image_url": {"url": img}})
+                content.append({"type": CHAT_CONTENT_TYPE_IMAGE_URL, "image_url": {"url": img}})
             return ChatMessage(role=CHAT_ROLE_USER, content=content)
         else:
             return ChatMessage(role=CHAT_ROLE_USER, content=text)

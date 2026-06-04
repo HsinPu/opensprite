@@ -11,6 +11,8 @@ from typing import Any, Awaitable, Callable, Sequence
 
 from ..config import DEFAULT_CONTEXT_OVERFLOW_ERROR_MARKERS, DocumentLlmConfig, ToolsConfig
 from ..llms import (
+    CHAT_CONTENT_TYPE_IMAGE_URL,
+    CHAT_CONTENT_TYPE_TEXT,
     CHAT_ROLE_ASSISTANT,
     CHAT_ROLE_SYSTEM,
     CHAT_ROLE_TOOL,
@@ -1011,9 +1013,9 @@ Output exactly these sections when applicable:
                     parts.append(str(item))
                     continue
                 item_type = item.get("type")
-                if item_type == "text":
+                if item_type == CHAT_CONTENT_TYPE_TEXT:
                     parts.append(str(item.get("text", "")))
-                elif item_type == "image_url":
+                elif item_type == CHAT_CONTENT_TYPE_IMAGE_URL:
                     parts.append("[image attachment omitted during compaction]")
                 else:
                     try:

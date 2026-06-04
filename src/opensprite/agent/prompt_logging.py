@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..config import LogConfig
+from ..llms import CHAT_CONTENT_TYPE_IMAGE_URL, CHAT_CONTENT_TYPE_TEXT
 from ..utils import sanitize_assistant_visible_text, strip_assistant_internal_scaffolding
 from ..utils.log_redaction import redact_log_preview
 from ..utils.log import logger
@@ -83,9 +84,9 @@ class PromptLoggingService:
                     other_items += 1
                     continue
                 item_type = item.get("type")
-                if item_type == "text":
+                if item_type == CHAT_CONTENT_TYPE_TEXT:
                     text_parts.append(str(item.get("text", "")))
-                elif item_type == "image_url":
+                elif item_type == CHAT_CONTENT_TYPE_IMAGE_URL:
                     image_count += 1
                 else:
                     other_items += 1
