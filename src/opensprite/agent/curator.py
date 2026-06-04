@@ -11,6 +11,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from ..runs.events import (
+    CURATOR_COMPLETED_EVENT,
+    CURATOR_FAILED_EVENT,
+    CURATOR_JOB_COMPLETED_EVENT,
+    CURATOR_JOB_SKIPPED_EVENT,
+    CURATOR_JOB_STARTED_EVENT,
+    CURATOR_STARTED_EVENT,
+)
 from ..utils.log import logger
 from .background_tasks import CoalescingTaskScheduler
 from .curator_policy import CURATOR_NO_RUNNING_EVENT_LOOP_REASON
@@ -579,7 +587,7 @@ class CuratorService:
             try:
                 await self._emit_event(
                     request,
-                    "curator.started",
+                    CURATOR_STARTED_EVENT,
                     {
                         "status": "running",
                         "message": "Background curator tasks started.",
@@ -594,7 +602,7 @@ class CuratorService:
                         runtime_state["current_job_label"] = job.label
                     await self._emit_event(
                         request,
-                        "curator.job.started",
+                        CURATOR_JOB_STARTED_EVENT,
                         {
                             "status": "running",
                             "job": job.key,
@@ -617,7 +625,7 @@ class CuratorService:
                         changed_labels.append(job.label)
                         await self._emit_event(
                             request,
-                            "curator.job.completed",
+                            CURATOR_JOB_COMPLETED_EVENT,
                             {
                                 "status": "completed",
                                 "job": job.key,
@@ -631,7 +639,7 @@ class CuratorService:
                     else:
                         await self._emit_event(
                             request,
-                            "curator.job.skipped",
+                            CURATOR_JOB_SKIPPED_EVENT,
                             {
                                 "status": "skipped",
                                 "job": job.key,
@@ -651,7 +659,7 @@ class CuratorService:
                     runtime_state["current_job_label"] = ""
                 await self._emit_event(
                     request,
-                    "curator.completed",
+                    CURATOR_COMPLETED_EVENT,
                     {
                         "status": "completed",
                         "message": "Background curator tasks completed.",
@@ -675,7 +683,7 @@ class CuratorService:
                 runtime_state = self._runtime_state.get(session_id) or {}
                 await self._emit_event(
                     request,
-                    "curator.failed",
+                    CURATOR_FAILED_EVENT,
                     {
                         "status": "failed",
                         "error": error,

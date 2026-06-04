@@ -6,6 +6,15 @@ from typing import Any
 
 from .events import (
     COMPLETION_GATE_EVALUATED_EVENT,
+    CURATOR_COMPLETED_EVENT,
+    CURATOR_EVENTS,
+    CURATOR_FAILED_EVENT,
+    CURATOR_JOB_COMPLETED_EVENT,
+    CURATOR_JOB_EVENTS,
+    CURATOR_JOB_SKIPPED_EVENT,
+    CURATOR_JOB_STARTED_EVENT,
+    CURATOR_RUNNING_EVENTS,
+    CURATOR_STARTED_EVENT,
     MESSAGE_PART_DELTA_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_EVENTS,
@@ -85,12 +94,12 @@ _EVENT_KINDS = {
     TASK_CONTRACT_PLANNED_EVENT: "work",
     TASK_CONTRACT_VALIDATED_EVENT: "work",
     TASK_CONTRACT_VALIDATION_FAILED_EVENT: "work",
-    "curator.started": "work",
-    "curator.job.started": "work",
-    "curator.job.completed": "work",
-    "curator.job.skipped": "work",
-    "curator.failed": "work",
-    "curator.completed": "work",
+    CURATOR_STARTED_EVENT: "work",
+    CURATOR_JOB_STARTED_EVENT: "work",
+    CURATOR_JOB_COMPLETED_EVENT: "work",
+    CURATOR_JOB_SKIPPED_EVENT: "work",
+    CURATOR_FAILED_EVENT: "work",
+    CURATOR_COMPLETED_EVENT: "work",
     SUBAGENT_STARTED_EVENT: "work",
     SUBAGENT_GROUP_STARTED_EVENT: "work",
     SUBAGENT_GROUP_COMPLETED_EVENT: "work",
@@ -207,11 +216,11 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
     explicit = _text(data.get("status") or data.get("state"))
     if normalized == RUN_STARTED_EVENT:
         return explicit or RUN_RUNNING_STATUS
-    if normalized in {"curator.started", "curator.job.started"}:
+    if normalized in CURATOR_RUNNING_EVENTS:
         return explicit or "running"
-    if normalized == "curator.failed":
+    if normalized == CURATOR_FAILED_EVENT:
         return explicit or "failed"
-    if normalized == "curator.job.skipped":
+    if normalized == CURATOR_JOB_SKIPPED_EVENT:
         return explicit or "skipped"
     if normalized in SUBAGENT_STARTED_EVENTS:
         return explicit or "running"
@@ -352,9 +361,9 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {"curator.started", "curator.failed", "curator.completed"}:
+    if normalized in CURATOR_EVENTS:
         detail = _text(data.get("summary") or data.get("error") or data.get("message"))
-        if not detail and normalized == "curator.started":
+        if not detail and normalized == CURATOR_STARTED_EVENT:
             total_jobs = _non_negative_int(data.get("total_jobs"))
             detail = f"{total_jobs} job(s) queued" if total_jobs else "Background curator tasks started."
         if not detail:
@@ -370,11 +379,11 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {"curator.job.started", "curator.job.completed", "curator.job.skipped"}:
+    if normalized in CURATOR_JOB_EVENTS:
         job = _text(data.get("job"))
         label = _text(data.get("label") or job or "curator job")
         detail = _text(data.get("summary") or data.get("message") or data.get("reason"))
-        if normalized == "curator.job.completed" and not detail:
+        if normalized == CURATOR_JOB_COMPLETED_EVENT and not detail:
             detail = f"Updated {label}."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
