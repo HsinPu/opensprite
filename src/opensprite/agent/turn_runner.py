@@ -37,6 +37,11 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
+from .turn_runner_policy import (
+    LLM_NOT_CONFIGURED_LOG_REASON,
+    LLM_NOT_CONFIGURED_TURN_REASON,
+    MEDIA_ONLY_TURN_REASON,
+)
 from .turn_quick_actions import (
     metadata_is_cli_via_web,
     metadata_requests_direct_verification,
@@ -389,10 +394,10 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
             assistant_metadata=turn.assistant_metadata,
-            run_part_metadata={"reason": "media_only", "response_len": len(response or "")},
+            run_part_metadata={"reason": MEDIA_ONLY_TURN_REASON, "response_len": len(response or "")},
             run_event_payload={
                 "status": "completed",
-                "reason": "media_only",
+                "reason": MEDIA_ONLY_TURN_REASON,
                 "response_len": len(response or ""),
             },
             log_prefix="media_only=true ",
@@ -407,7 +412,7 @@ class AgentTurnRunner:
         run_id: str,
     ) -> AssistantMessage:
         """Persist a turn and return the configured setup hint when no LLM is available."""
-        logger.warning("[{}] agent.skip | reason=llm-not-configured", turn.session_id)
+        logger.warning("[{}] agent.skip | reason={}", turn.session_id, LLM_NOT_CONFIGURED_LOG_REASON)
         await self._save_message(turn.session_id, "user", user_message.text, metadata=turn.user_metadata)
         response = self._llm_not_configured_message()
         return await self.response_finalizer.finalize(
@@ -417,10 +422,10 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
             assistant_metadata=turn.assistant_metadata,
-            run_part_metadata={"reason": "llm_not_configured", "response_len": len(response or "")},
+            run_part_metadata={"reason": LLM_NOT_CONFIGURED_TURN_REASON, "response_len": len(response or "")},
             run_event_payload={
                 "status": "completed",
-                "reason": "llm_not_configured",
+                "reason": LLM_NOT_CONFIGURED_TURN_REASON,
                 "response_len": len(response or ""),
             },
             log_before_record=True,
