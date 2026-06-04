@@ -14,6 +14,16 @@ from ..llms.routed import ModelRoutedProvider
 from ..llms.registry import create_llm
 from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..config.llm_presets import provider_profile_defaults
+from ..runs.events import (
+    SUBAGENT_CANCELLED_EVENT,
+    SUBAGENT_COMPLETED_EVENT,
+    SUBAGENT_FAILED_EVENT,
+    SUBAGENT_GROUP_CANCELLED_EVENT,
+    SUBAGENT_GROUP_COMPLETED_EVENT,
+    SUBAGENT_GROUP_FAILED_EVENT,
+    SUBAGENT_GROUP_STARTED_EVENT,
+    SUBAGENT_STARTED_EVENT,
+)
 from ..runs.lifecycle import RUN_STARTED_EVENT
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
@@ -639,7 +649,7 @@ class SubagentRunService:
         await self._emit_parent_event(
             parent_session_id=prepared.parent_session_id,
             parent_run_id=prepared.parent_run_id,
-            event_type="subagent.started",
+            event_type=SUBAGENT_STARTED_EVENT,
             payload=lifecycle_payload,
         )
 
@@ -811,7 +821,7 @@ class SubagentRunService:
             await self._emit_parent_event(
                 parent_session_id=prepared.parent_session_id,
                 parent_run_id=prepared.parent_run_id,
-                event_type="subagent.completed",
+                event_type=SUBAGENT_COMPLETED_EVENT,
                 payload=completion_payload,
             )
             return SubagentTaskOutcome(
@@ -862,7 +872,7 @@ class SubagentRunService:
             await self._emit_parent_event(
                 parent_session_id=prepared.parent_session_id,
                 parent_run_id=prepared.parent_run_id,
-                event_type="subagent.cancelled",
+                event_type=SUBAGENT_CANCELLED_EVENT,
                 payload=cancellation_payload,
             )
             raise
@@ -897,7 +907,7 @@ class SubagentRunService:
             await self._emit_parent_event(
                 parent_session_id=prepared.parent_session_id,
                 parent_run_id=prepared.parent_run_id,
-                event_type="subagent.failed",
+                event_type=SUBAGENT_FAILED_EVENT,
                 payload=failure_payload,
             )
             if raise_on_failure:
@@ -1059,7 +1069,7 @@ class SubagentRunService:
         await self._emit_parent_event(
             parent_session_id=parent_session_id,
             parent_run_id=parent_run_id,
-            event_type="subagent.group.started",
+            event_type=SUBAGENT_GROUP_STARTED_EVENT,
             payload=self._build_group_payload(
                 prepared_tasks,
                 group_id=group_id,
@@ -1106,7 +1116,7 @@ class SubagentRunService:
                 await self._emit_parent_event(
                     parent_session_id=parent_session_id,
                     parent_run_id=parent_run_id,
-                    event_type="subagent.group.cancelled",
+                    event_type=SUBAGENT_GROUP_CANCELLED_EVENT,
                     payload=self._build_group_payload(
                         prepared_tasks,
                         group_id=group_id,
@@ -1151,7 +1161,7 @@ class SubagentRunService:
         await self._emit_parent_event(
             parent_session_id=parent_session_id,
             parent_run_id=parent_run_id,
-            event_type="subagent.group.failed" if any_failed else "subagent.group.completed",
+            event_type=SUBAGENT_GROUP_FAILED_EVENT if any_failed else SUBAGENT_GROUP_COMPLETED_EVENT,
             payload=self._build_group_payload(
                 prepared_tasks,
                 group_id=group_id,

@@ -36,6 +36,20 @@ from .events import (
     WORKFLOW_STEP_FAILED_EVENT,
     WORKFLOW_STEP_STARTED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
+    SUBAGENT_CANCELLED_EVENT,
+    SUBAGENT_CANCELLED_EVENTS,
+    SUBAGENT_COMPLETED_EVENT,
+    SUBAGENT_COMPLETED_EVENTS,
+    SUBAGENT_EVENTS,
+    SUBAGENT_FAILED_EVENT,
+    SUBAGENT_FAILED_EVENTS,
+    SUBAGENT_GROUP_CANCELLED_EVENT,
+    SUBAGENT_GROUP_COMPLETED_EVENT,
+    SUBAGENT_GROUP_EVENTS,
+    SUBAGENT_GROUP_FAILED_EVENT,
+    SUBAGENT_GROUP_STARTED_EVENT,
+    SUBAGENT_STARTED_EVENT,
+    SUBAGENT_STARTED_EVENTS,
 )
 from .lifecycle import (
     RUN_CANCEL_REQUESTED_EVENT,
@@ -77,14 +91,14 @@ _EVENT_KINDS = {
     "curator.job.skipped": "work",
     "curator.failed": "work",
     "curator.completed": "work",
-    "subagent.started": "work",
-    "subagent.group.started": "work",
-    "subagent.group.completed": "work",
-    "subagent.group.failed": "work",
-    "subagent.group.cancelled": "work",
-    "subagent.completed": "work",
-    "subagent.failed": "work",
-    "subagent.cancelled": "work",
+    SUBAGENT_STARTED_EVENT: "work",
+    SUBAGENT_GROUP_STARTED_EVENT: "work",
+    SUBAGENT_GROUP_COMPLETED_EVENT: "work",
+    SUBAGENT_GROUP_FAILED_EVENT: "work",
+    SUBAGENT_GROUP_CANCELLED_EVENT: "work",
+    SUBAGENT_COMPLETED_EVENT: "work",
+    SUBAGENT_FAILED_EVENT: "work",
+    SUBAGENT_CANCELLED_EVENT: "work",
     WORKFLOW_STARTED_EVENT: "work",
     WORKFLOW_STEP_STARTED_EVENT: "work",
     WORKFLOW_STEP_COMPLETED_EVENT: "work",
@@ -199,21 +213,13 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "failed"
     if normalized == "curator.job.skipped":
         return explicit or "skipped"
-    if normalized == "subagent.started":
+    if normalized in SUBAGENT_STARTED_EVENTS:
         return explicit or "running"
-    if normalized == "subagent.group.started":
-        return explicit or "running"
-    if normalized == "subagent.group.failed":
+    if normalized in SUBAGENT_FAILED_EVENTS:
         return explicit or "failed"
-    if normalized == "subagent.group.completed":
+    if normalized in SUBAGENT_COMPLETED_EVENTS:
         return explicit or "completed"
-    if normalized == "subagent.group.cancelled":
-        return explicit or "cancelled"
-    if normalized == "subagent.failed":
-        return explicit or "failed"
-    if normalized == "subagent.completed":
-        return explicit or "completed"
-    if normalized == "subagent.cancelled":
+    if normalized in SUBAGENT_CANCELLED_EVENTS:
         return explicit or "cancelled"
     if normalized in WORKFLOW_RUNNING_EVENTS:
         return explicit or "running"
@@ -381,18 +387,18 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {"subagent.started", "subagent.completed", "subagent.failed", "subagent.cancelled"}:
+    if normalized in SUBAGENT_EVENTS:
         prompt_type = _text(data.get("prompt_type") or "subagent")
         task_id = _text(data.get("task_id"))
         child_run_id = _text(data.get("child_run_id"))
         detail = _text(data.get("summary") or data.get("error") or data.get("message"))
-        if not detail and normalized == "subagent.started":
+        if not detail and normalized == SUBAGENT_STARTED_EVENT:
             detail = f"Task {task_id or child_run_id or prompt_type} started."
-        if not detail and normalized == "subagent.completed":
+        if not detail and normalized == SUBAGENT_COMPLETED_EVENT:
             detail = f"Task {task_id or child_run_id or prompt_type} completed."
-        if not detail and normalized == "subagent.failed":
+        if not detail and normalized == SUBAGENT_FAILED_EVENT:
             detail = f"Task {task_id or child_run_id or prompt_type} failed."
-        if not detail and normalized == "subagent.cancelled":
+        if not detail and normalized == SUBAGENT_CANCELLED_EVENT:
             detail = f"Task {task_id or child_run_id or prompt_type} cancelled."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
@@ -405,22 +411,17 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {
-        "subagent.group.started",
-        "subagent.group.completed",
-        "subagent.group.failed",
-        "subagent.group.cancelled",
-    }:
+    if normalized in SUBAGENT_GROUP_EVENTS:
         group_id = _text(data.get("group_id"))
         total_tasks = _non_negative_int(data.get("total_tasks"))
         detail = _text(data.get("summary") or data.get("error") or data.get("message"))
-        if not detail and normalized == "subagent.group.started":
+        if not detail and normalized == SUBAGENT_GROUP_STARTED_EVENT:
             detail = f"{total_tasks} parallel subagent task(s) queued." if total_tasks else "Parallel subagent tasks queued."
-        if not detail and normalized == "subagent.group.completed":
+        if not detail and normalized == SUBAGENT_GROUP_COMPLETED_EVENT:
             detail = f"Completed {total_tasks} parallel subagent task(s)." if total_tasks else "Parallel subagent group completed."
-        if not detail and normalized == "subagent.group.failed":
+        if not detail and normalized == SUBAGENT_GROUP_FAILED_EVENT:
             detail = "Parallel subagent group failed."
-        if not detail and normalized == "subagent.group.cancelled":
+        if not detail and normalized == SUBAGENT_GROUP_CANCELLED_EVENT:
             detail = "Parallel subagent group cancelled."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
@@ -1025,12 +1026,7 @@ def _summarize_parallel_delegation(events: list[Any]) -> dict[str, Any]:
     ordered_group_ids: list[str] = []
     for event in events:
         event_type = str(getattr(event, "event_type", "") or "")
-        if event_type not in {
-            "subagent.group.started",
-            "subagent.group.completed",
-            "subagent.group.failed",
-            "subagent.group.cancelled",
-        }:
+        if event_type not in SUBAGENT_GROUP_EVENTS:
             continue
         payload = dict(getattr(event, "payload", {}) or {})
         group_id = _text(payload.get("group_id"))
@@ -1085,7 +1081,7 @@ def _summarize_structured_subagents(events: list[Any]) -> dict[str, Any]:
     total_residual_risks = 0
 
     for event in events:
-        if str(getattr(event, "event_type", "") or "") != "subagent.completed":
+        if str(getattr(event, "event_type", "") or "") != SUBAGENT_COMPLETED_EVENT:
             continue
         payload = dict(getattr(event, "payload", {}) or {})
         structured_output = payload.get("structured_output")
