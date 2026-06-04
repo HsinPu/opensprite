@@ -28,7 +28,24 @@ from ..runs.lifecycle import RUN_STARTED_EVENT
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
-from .subagent_output import parse_structured_subagent_output
+from .subagent_output import (
+    STRUCTURED_SUBAGENT_CONTRACT_FIELD,
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD,
+    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_QUESTIONS_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD,
+    STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD,
+    STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_SECTIONS_FIELD,
+    STRUCTURED_SUBAGENT_SOURCES_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    STRUCTURED_SUBAGENT_TRUNCATED_FIELD,
+    parse_structured_subagent_output,
+)
 from ..subagent_prompts import get_all_subagents, load_metadata
 from .subagent_session import (
     build_child_subagent_session_id,
@@ -488,21 +505,21 @@ class SubagentRunService:
         if not isinstance(structured_output, dict):
             return None
         return {
-            "schema_version": structured_output.get("schema_version"),
-            "contract": structured_output.get("contract"),
-            "prompt_type": structured_output.get("prompt_type"),
-            "status": structured_output.get("status"),
-            "summary": structured_output.get("summary"),
-            "section_count": structured_output.get("section_count", 0),
-            "item_count": structured_output.get("item_count", 0),
-            "finding_count": structured_output.get("finding_count", 0),
-            "question_count": structured_output.get("question_count", 0),
-            "residual_risk_count": structured_output.get("residual_risk_count", 0),
-            "sections": structured_output.get("sections", []),
-            "questions": structured_output.get("questions", []),
-            "residual_risks": structured_output.get("residual_risks", []),
-            "sources": structured_output.get("sources", []),
-            "truncated": bool(structured_output.get("truncated")),
+            STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD),
+            STRUCTURED_SUBAGENT_CONTRACT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_CONTRACT_FIELD),
+            STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD: structured_output.get(STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD),
+            STRUCTURED_SUBAGENT_STATUS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
+            STRUCTURED_SUBAGENT_SUMMARY_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
+            STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
+            STRUCTURED_SUBAGENT_SECTIONS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD, []),
+            STRUCTURED_SUBAGENT_QUESTIONS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_QUESTIONS_FIELD, []),
+            STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD: structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD, []),
+            STRUCTURED_SUBAGENT_SOURCES_FIELD: structured_output.get(STRUCTURED_SUBAGENT_SOURCES_FIELD, []),
+            STRUCTURED_SUBAGENT_TRUNCATED_FIELD: bool(structured_output.get(STRUCTURED_SUBAGENT_TRUNCATED_FIELD)),
         }
 
     @staticmethod
@@ -569,13 +586,13 @@ class SubagentRunService:
                 compact_structured_output = cls._compact_structured_output(outcome.structured_output)
                 if compact_structured_output is not None:
                     item["structured_output"] = {
-                        "status": compact_structured_output.get("status"),
-                        "summary": compact_structured_output.get("summary"),
-                        "section_count": compact_structured_output.get("section_count", 0),
-                        "item_count": compact_structured_output.get("item_count", 0),
-                        "finding_count": compact_structured_output.get("finding_count", 0),
-                        "question_count": compact_structured_output.get("question_count", 0),
-                        "residual_risk_count": compact_structured_output.get("residual_risk_count", 0),
+                        STRUCTURED_SUBAGENT_STATUS_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
+                        STRUCTURED_SUBAGENT_SUMMARY_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
+                        STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD, 0),
+                        STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD, 0),
+                        STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
+                        STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
+                        STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: compact_structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
                     }
             tasks_payload.append(item)
 
@@ -745,7 +762,7 @@ class SubagentRunService:
             )
             compact_structured_output = self._compact_structured_output(structured_output)
             result_summary = self._format_log_preview(
-                (compact_structured_output or {}).get("summary") or display_content,
+                (compact_structured_output or {}).get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or display_content,
                 max_chars=240,
             )
             result_metadata = {

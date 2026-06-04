@@ -67,7 +67,14 @@ from .completion_task_policy import (
 )
 from .quality_gate import QualityGateService
 from .stop_reasons import is_max_tool_iterations_stop_reason
-from .subagent_output import is_clean_structured_subagent_status
+from .subagent_output import (
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_ITEMS_FIELD,
+    STRUCTURED_SUBAGENT_SECTIONS_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    is_clean_structured_subagent_status,
+)
 from .subagent_policy import REVIEW_PROMPT_TYPES
 from .task_contract import (
     PLANNER_BLOCKED_STATUS,
@@ -1038,10 +1045,10 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
             continue
         attempted = True
         structured = task.metadata.get("structured_output") if isinstance(task.metadata, dict) else None
-        structured_status = str((structured or {}).get("status") or "").strip()
-        task_findings = int((structured or {}).get("finding_count") or 0)
+        structured_status = str((structured or {}).get(STRUCTURED_SUBAGENT_STATUS_FIELD) or "").strip()
+        task_findings = int((structured or {}).get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD) or 0)
         finding_count += max(0, task_findings)
-        task_summary = str((structured or {}).get("summary") or task.summary or "").strip()
+        task_summary = str((structured or {}).get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or task.summary or "").strip()
         if task_summary and not summary:
             summary = task_summary
         if not first_finding:
@@ -1218,13 +1225,13 @@ def _is_clean_structured_review_status(status: str | None) -> bool:
 
 
 def _first_review_finding(structured_output: Any) -> str:
-    sections = structured_output.get("sections") if isinstance(structured_output, dict) else None
+    sections = structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD) if isinstance(structured_output, dict) else None
     if not isinstance(sections, list):
         return ""
     for section in sections:
         if not isinstance(section, dict):
             continue
-        items = section.get("items")
+        items = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
         if not isinstance(items, list):
             continue
         for item in items:

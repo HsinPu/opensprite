@@ -19,7 +19,16 @@ from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_state import RunCancelledError
 from .subagents import SubagentTaskOutcome
-from .subagent_output import is_clean_structured_subagent_status
+from .subagent_output import (
+    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_ITEMS_FIELD,
+    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD,
+    STRUCTURED_SUBAGENT_SECTIONS_FIELD,
+    STRUCTURED_SUBAGENT_STATUS_FIELD,
+    STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    is_clean_structured_subagent_status,
+)
 from .subagent_policy import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
 from .subagent_result_policy import SUBAGENT_TASK_ID_LABEL, subagent_result_line
 from .workflow_fields import (
@@ -131,13 +140,13 @@ def _format_review_finding(item: dict[str, Any]) -> str:
 
 
 def _first_structured_review_finding(structured_output: dict[str, Any] | None) -> str:
-    sections = structured_output.get("sections") if isinstance(structured_output, dict) else None
+    sections = structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD) if isinstance(structured_output, dict) else None
     if not isinstance(sections, list):
         return ""
     for section in sections:
         if not isinstance(section, dict):
             continue
-        items = section.get("items")
+        items = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
         if not isinstance(items, list):
             continue
         for item in items:
@@ -427,11 +436,11 @@ class SubagentWorkflowService:
             )
             if outcome.structured_output is not None:
                 payload["structured_output"] = {
-                    "status": outcome.structured_output.get("status"),
-                    "summary": outcome.structured_output.get("summary"),
-                    "finding_count": outcome.structured_output.get("finding_count", 0),
-                    "question_count": outcome.structured_output.get("question_count", 0),
-                    "residual_risk_count": outcome.structured_output.get("residual_risk_count", 0),
+                    STRUCTURED_SUBAGENT_STATUS_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
+                    STRUCTURED_SUBAGENT_SUMMARY_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD),
+                    STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD, 0),
+                    STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD, 0),
+                    STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD, 0),
                 }
         if error:
             payload[WORKFLOW_ERROR_FIELD] = error
@@ -527,7 +536,7 @@ class SubagentWorkflowService:
             if outcome.prompt_type in REVIEW_PROMPT_TYPES
         ]
         finding_count = sum(
-            int((outcome.structured_output or {}).get("finding_count") or 0)
+            int((outcome.structured_output or {}).get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD) or 0)
             for outcome in review_outcomes
         )
         attempted = any(is_workflow_completed_status(outcome.status) for outcome in review_outcomes)
@@ -542,7 +551,7 @@ class SubagentWorkflowService:
             if not is_workflow_completed_status(outcome.status):
                 continue
             structured = outcome.structured_output or {}
-            if is_clean_structured_subagent_status(structured.get("status")) and int(structured.get("finding_count") or 0) == 0:
+            if is_clean_structured_subagent_status(structured.get(STRUCTURED_SUBAGENT_STATUS_FIELD)) and int(structured.get(STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD) or 0) == 0:
                 passed = True
                 continue
         return {

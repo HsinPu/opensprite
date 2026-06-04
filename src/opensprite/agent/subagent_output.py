@@ -10,6 +10,24 @@ from ..utils.json_safe import json_safe_value
 
 STRUCTURED_SUBAGENT_SCHEMA_VERSION = 1
 READONLY_SUBAGENT_RESULT_CONTRACT = "readonly_subagent_result"
+STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD = "schema_version"
+STRUCTURED_SUBAGENT_CONTRACT_FIELD = "contract"
+STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD = "prompt_type"
+STRUCTURED_SUBAGENT_STATUS_FIELD = "status"
+STRUCTURED_SUBAGENT_SUMMARY_FIELD = "summary"
+STRUCTURED_SUBAGENT_SECTIONS_FIELD = "sections"
+STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD = "type"
+STRUCTURED_SUBAGENT_ITEMS_FIELD = "items"
+STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD = "section_count"
+STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD = "item_count"
+STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD = "finding_count"
+STRUCTURED_SUBAGENT_QUESTIONS_FIELD = "questions"
+STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD = "question_count"
+STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD = "residual_risks"
+STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD = "residual_risk_count"
+STRUCTURED_SUBAGENT_SOURCES_FIELD = "sources"
+STRUCTURED_SUBAGENT_SOURCE_COUNT_FIELD = "source_count"
+STRUCTURED_SUBAGENT_TRUNCATED_FIELD = "truncated"
 STRUCTURED_SUBAGENT_OK_STATUS = "ok"
 STRUCTURED_SUBAGENT_NEEDS_INPUT_STATUS = "needs_input"
 STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS = "inconclusive"
@@ -54,7 +72,7 @@ def parse_structured_subagent_output(
     normalized, error = _normalize_structured_payload(payload, prompt_type=prompt_type, fallback_text=visible_text)
     if normalized is None:
         return _fallback_visible_text(visible_text, raw_text), None, error
-    return _fallback_visible_text(visible_text, raw_text) or normalized["summary"], normalized, None
+    return _fallback_visible_text(visible_text, raw_text) or normalized[STRUCTURED_SUBAGENT_SUMMARY_FIELD], normalized, None
 
 
 def build_structured_subagent_contract_instructions(prompt_type: str) -> str:
@@ -120,53 +138,53 @@ def _normalize_structured_payload(
 ) -> tuple[dict[str, Any] | None, str | None]:
     if not isinstance(payload, dict):
         return None, "payload_must_be_object"
-    if int(payload.get("schema_version") or 0) != STRUCTURED_SUBAGENT_SCHEMA_VERSION:
+    if int(payload.get(STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD) or 0) != STRUCTURED_SUBAGENT_SCHEMA_VERSION:
         return None, "schema_version_mismatch"
-    if str(payload.get("contract") or "").strip() != READONLY_SUBAGENT_RESULT_CONTRACT:
+    if str(payload.get(STRUCTURED_SUBAGENT_CONTRACT_FIELD) or "").strip() != READONLY_SUBAGENT_RESULT_CONTRACT:
         return None, "contract_mismatch"
 
-    payload_prompt_type = str(payload.get("prompt_type") or "").strip()
+    payload_prompt_type = str(payload.get(STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD) or "").strip()
     if payload_prompt_type and payload_prompt_type != str(prompt_type or "").strip():
         return None, "prompt_type_mismatch"
 
     truncated = False
-    status = str(payload.get("status") or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS).strip() or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
+    status = str(payload.get(STRUCTURED_SUBAGENT_STATUS_FIELD) or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS).strip() or STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
     if status not in ALLOWED_STRUCTURED_SUBAGENT_STATUSES:
         status = STRUCTURED_SUBAGENT_INCONCLUSIVE_STATUS
         truncated = True
 
-    summary = _bounded_text(str(payload.get("summary") or "").strip() or _first_nonempty_line(fallback_text), MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS)
-    if summary != str(payload.get("summary") or "").strip():
-        truncated = truncated or bool(str(payload.get("summary") or "").strip())
+    summary = _bounded_text(str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip() or _first_nonempty_line(fallback_text), MAX_STRUCTURED_SUBAGENT_SUMMARY_CHARS)
+    if summary != str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip():
+        truncated = truncated or bool(str(payload.get(STRUCTURED_SUBAGENT_SUMMARY_FIELD) or "").strip())
 
-    sections, sections_truncated = _normalize_sections(payload.get("sections"))
-    questions, questions_truncated = _normalize_string_list(payload.get("questions"), limit=MAX_STRUCTURED_SUBAGENT_QUESTIONS)
+    sections, sections_truncated = _normalize_sections(payload.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD))
+    questions, questions_truncated = _normalize_string_list(payload.get(STRUCTURED_SUBAGENT_QUESTIONS_FIELD), limit=MAX_STRUCTURED_SUBAGENT_QUESTIONS)
     residual_risks, residual_risks_truncated = _normalize_string_list(
-        payload.get("residual_risks") or payload.get("residualRisks"),
+        payload.get(STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD) or payload.get("residualRisks"),
         limit=MAX_STRUCTURED_SUBAGENT_RESIDUAL_RISKS,
     )
-    sources, sources_truncated = _normalize_sources(payload.get("sources"))
+    sources, sources_truncated = _normalize_sources(payload.get(STRUCTURED_SUBAGENT_SOURCES_FIELD))
     truncated = truncated or sections_truncated or questions_truncated or residual_risks_truncated or sources_truncated
 
-    item_count = sum(len(section.get("items", [])) for section in sections)
-    finding_count = sum(len(section.get("items", [])) for section in sections if section.get("type") == "finding_list")
+    item_count = sum(len(section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD, [])) for section in sections)
+    finding_count = sum(len(section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD, [])) for section in sections if section.get(STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD) == "finding_list")
     return {
-        "schema_version": STRUCTURED_SUBAGENT_SCHEMA_VERSION,
-        "contract": READONLY_SUBAGENT_RESULT_CONTRACT,
-        "prompt_type": str(prompt_type or "").strip() or None,
-        "status": status,
-        "summary": summary,
-        "sections": sections,
-        "section_count": len(sections),
-        "item_count": item_count,
-        "finding_count": finding_count,
-        "questions": questions,
-        "question_count": len(questions),
-        "residual_risks": residual_risks,
-        "residual_risk_count": len(residual_risks),
-        "sources": sources,
-        "source_count": len(sources),
-        "truncated": truncated,
+        STRUCTURED_SUBAGENT_SCHEMA_VERSION_FIELD: STRUCTURED_SUBAGENT_SCHEMA_VERSION,
+        STRUCTURED_SUBAGENT_CONTRACT_FIELD: READONLY_SUBAGENT_RESULT_CONTRACT,
+        STRUCTURED_SUBAGENT_PROMPT_TYPE_FIELD: str(prompt_type or "").strip() or None,
+        STRUCTURED_SUBAGENT_STATUS_FIELD: status,
+        STRUCTURED_SUBAGENT_SUMMARY_FIELD: summary,
+        STRUCTURED_SUBAGENT_SECTIONS_FIELD: sections,
+        STRUCTURED_SUBAGENT_SECTION_COUNT_FIELD: len(sections),
+        STRUCTURED_SUBAGENT_ITEM_COUNT_FIELD: item_count,
+        STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD: finding_count,
+        STRUCTURED_SUBAGENT_QUESTIONS_FIELD: questions,
+        STRUCTURED_SUBAGENT_QUESTION_COUNT_FIELD: len(questions),
+        STRUCTURED_SUBAGENT_RESIDUAL_RISKS_FIELD: residual_risks,
+        STRUCTURED_SUBAGENT_RESIDUAL_RISK_COUNT_FIELD: len(residual_risks),
+        STRUCTURED_SUBAGENT_SOURCES_FIELD: sources,
+        STRUCTURED_SUBAGENT_SOURCE_COUNT_FIELD: len(sources),
+        STRUCTURED_SUBAGENT_TRUNCATED_FIELD: truncated,
     }, None
 
 
@@ -181,8 +199,8 @@ def _normalize_sections(value: Any) -> tuple[list[dict[str, Any]], bool]:
             continue
         key = _bounded_text(str(section.get("key") or f"section_{index}"), 64)
         title = _bounded_text(str(section.get("title") or key), 120)
-        section_type = _bounded_text(str(section.get("type") or "bullet_list"), 64)
-        items_value = section.get("items")
+        section_type = _bounded_text(str(section.get(STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD) or "bullet_list"), 64)
+        items_value = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
         items: list[Any] = []
         if isinstance(items_value, list):
             truncated = truncated or len(items_value) > MAX_STRUCTURED_SUBAGENT_ITEMS_PER_SECTION
@@ -197,8 +215,8 @@ def _normalize_sections(value: Any) -> tuple[list[dict[str, Any]], bool]:
             {
                 "key": key,
                 "title": title,
-                "type": section_type,
-                "items": items,
+                STRUCTURED_SUBAGENT_SECTION_TYPE_FIELD: section_type,
+                STRUCTURED_SUBAGENT_ITEMS_FIELD: items,
             }
         )
     return sections, truncated
