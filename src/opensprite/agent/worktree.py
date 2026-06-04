@@ -18,6 +18,7 @@ MISSING_WORKTREE_MARKER_REASON = "missing OpenSprite worktree marker"
 WORKTREE_MARKER_NOT_MANAGED_REASON = "worktree marker is not managed by OpenSprite"
 REPOSITORY_ROOT_MISSING_REASON = "repository root no longer exists"
 GIT_WORKTREE_REMOVE_FAILED_REASON = "git worktree remove failed"
+GIT_COMMAND_FAILED_REASON = "git command failed"
 
 
 @dataclass
@@ -207,4 +208,4 @@ class WorktreeSandboxInspector:
                 timeout=timeout,
             )
         except (OSError, subprocess.TimeoutExpired):
-            return subprocess.CompletedProcess(["git", *args], 1, stdout="", stderr="git command failed")
+            return subprocess.CompletedProcess(["git", *args], 1, stdout="", stderr=GIT_COMMAND_FAILED_REASON)

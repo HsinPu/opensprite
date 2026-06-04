@@ -1,5 +1,6 @@
 from opensprite.agent.worktree import (
     GIT_WORKTREE_ADD_FAILED_REASON,
+    GIT_COMMAND_FAILED_REASON,
     GIT_WORKTREE_REMOVE_FAILED_REASON,
     MISSING_WORKTREE_MARKER_REASON,
     REPOSITORY_ROOT_MISSING_REASON,
@@ -16,6 +17,7 @@ def test_worktree_sandbox_reasons_are_stable(tmp_path):
     assert WORKSPACE_NOT_GIT_REPOSITORY_REASON == "workspace is not inside a git repository"
     assert WORKTREE_SANDBOX_EXISTS_REASON == "worktree sandbox already exists"
     assert GIT_WORKTREE_ADD_FAILED_REASON == "git worktree add failed"
+    assert GIT_COMMAND_FAILED_REASON == "git command failed"
     assert MISSING_WORKTREE_MARKER_REASON == "missing OpenSprite worktree marker"
     assert WORKTREE_MARKER_NOT_MANAGED_REASON == "worktree marker is not managed by OpenSprite"
     assert REPOSITORY_ROOT_MISSING_REASON == "repository root no longer exists"
