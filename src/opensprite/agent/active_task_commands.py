@@ -8,6 +8,8 @@ from typing import Any, Callable
 
 from ..config import TaskMessagesConfig
 from ..documents.active_task import (
+    TASK_BOUNDARY_CONFIRMATION_EVENT,
+    TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT,
     _extract_task_field,
     build_task_block_from_intent_fields,
     build_task_block_from_text,
@@ -216,7 +218,7 @@ class ActiveTaskCommandService:
                 store.update_fields(status=WAITING_USER_ACTIVE_TASK_STATUS, open_questions=[question], force=True)
                 await self._mark_processed(session_id, store)
                 store.append_event(
-                    "task_boundary_confirmation",
+                    TASK_BOUNDARY_CONFIRMATION_EVENT,
                     "immediate",
                     details={
                         "message": re.sub(r"\s+", " ", current_message).strip()[:120],
@@ -230,7 +232,7 @@ class ActiveTaskCommandService:
                     store.update_fields(status=ACTIVE_ACTIVE_TASK_STATUS, open_questions=clear_open_questions(), force=True)
                     await self._mark_processed(session_id, store)
                     store.append_event(
-                        "task_boundary_confirmation_resolved",
+                        TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT,
                         "immediate",
                         details={"action": "continue", "message": _compact_for_prompt(current_message)},
                     )

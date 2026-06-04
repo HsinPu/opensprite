@@ -20,7 +20,7 @@ from opensprite.config.schema import (
 )
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
-from opensprite.documents.active_task import create_active_task_store
+from opensprite.documents.active_task import TASK_BOUNDARY_CONFIRMATION_EVENT, create_active_task_store
 from opensprite.agent.llm_call import _effective_task_intent
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
@@ -739,7 +739,7 @@ def test_main_agent_call_llm_switches_to_confirmed_boundary_request(tmp_path: Pa
             "with the new request (please update README), or `continue` to keep the active task."
         )
         task_store.append_event(
-            "task_boundary_confirmation",
+            TASK_BOUNDARY_CONFIRMATION_EVENT,
             "immediate",
             details={"pending_request": "please update README", "confidence": 0.72},
         )

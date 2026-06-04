@@ -18,7 +18,11 @@ from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.task_objective_resolver import TaskObjectiveDecision
 from opensprite.agent.work_progress import WorkProgressUpdate
 from opensprite.config import Config, TaskMessagesConfig
-from opensprite.documents.active_task import create_active_task_store
+from opensprite.documents.active_task import (
+    TASK_BOUNDARY_CONFIRMATION_EVENT,
+    TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT,
+    create_active_task_store,
+)
 from opensprite.llms.base import LLMResponse, UnconfiguredLLM
 
 
@@ -1115,7 +1119,7 @@ def test_active_task_seed_marks_ambiguous_boundary_waiting_user(tmp_path):
     assert "`continue` to keep the active task" in updated
     assert message in updated
     assert not any(event["event_type"] == "seed" for event in store.read_events())
-    boundary_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation")
+    boundary_event = next(event for event in store.read_events() if event["event_type"] == TASK_BOUNDARY_CONFIRMATION_EVENT)
     assert boundary_event["details"]["confidence"] == 0.72
     assert boundary_event["details"]["pending_request"] == message
     assert store.read_pending_boundary_request() == message
@@ -1133,7 +1137,7 @@ def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
     store = create_active_task_store(app_home, session_id, workspace_root=workspace)
     store.write_managed_block(_BOUNDARY_ACTIVE_TASK_BLOCK)
     store.append_event(
-        "task_boundary_confirmation",
+        TASK_BOUNDARY_CONFIRMATION_EVENT,
         "immediate",
         details={"pending_request": "please update README", "confidence": 0.72},
     )
@@ -1161,7 +1165,7 @@ def test_active_task_seed_reactivates_confirmed_boundary_continue(tmp_path):
     assert "- Goal: Refactor the agent in small safe steps." in updated
     assert "- Open questions:\n  - none" in updated
     assert "Reply `switch` to replace the active task" not in updated
-    resolved_event = next(event for event in store.read_events() if event["event_type"] == "task_boundary_confirmation_resolved")
+    resolved_event = next(event for event in store.read_events() if event["event_type"] == TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT)
     assert resolved_event["details"]["action"] == "continue"
 
 
@@ -1199,4 +1203,4 @@ def test_active_task_seed_does_not_reactivate_boundary_from_markdown_prompt_only
     assert "- Status: waiting_user" in updated
     assert "Reply `switch` to replace the active task" in updated
     assert store.read_pending_boundary_request() is None
-    assert not any(event["event_type"] == "task_boundary_confirmation_resolved" for event in store.read_events())
+    assert not any(event["event_type"] == TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT for event in store.read_events())

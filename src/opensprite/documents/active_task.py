@@ -22,6 +22,8 @@ from .state import JsonProgressStore
 ACTIVE_TASK_HEADER = "## Task State"
 ACTIVE_TASK_START_MARKER = "<!-- OPENSPRITE:ACTIVE_TASK:START -->"
 ACTIVE_TASK_END_MARKER = "<!-- OPENSPRITE:ACTIVE_TASK:END -->"
+TASK_BOUNDARY_CONFIRMATION_EVENT = "task_boundary_confirmation"
+TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT = "task_boundary_confirmation_resolved"
 DEFAULT_ACTIVE_TASK_CONTENT = """- Status: inactive
 - Goal: not set
 - Deliverable: not set
@@ -218,9 +220,9 @@ class ActiveTaskStore(ConversationDocumentStore):
             return None
         for event in reversed(self.read_events()):
             event_type = str(event.get("event_type") or "")
-            if event_type == "task_boundary_confirmation_resolved":
+            if event_type == TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT:
                 return None
-            if event_type != "task_boundary_confirmation":
+            if event_type != TASK_BOUNDARY_CONFIRMATION_EVENT:
                 continue
             details = event.get("details") if isinstance(event.get("details"), dict) else {}
             pending_request = str(details.get("pending_request") or "").strip()
