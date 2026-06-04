@@ -11,10 +11,12 @@ from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
     PERMISSION_REQUESTED_EVENT,
     RUN_PART_DELTA_EVENT,
+    TASK_INTENT_DETECTED_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    WORK_PROGRESS_UPDATED_EVENT,
 )
-from opensprite.runs.lifecycle import RUN_FINISHED_EVENT
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.storage import MemoryStorage
 
 from tests.agent.agent_test_helpers import make_agent_loop
@@ -754,7 +756,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
             external_chat_id="browser-1",
             session_id="web:browser-1",
             run_id="run-1",
-            event_type="run_started",
+            event_type=RUN_STARTED_EVENT,
         )
         await queue._set_session_status_from_run_event(event)
         thinking = queue.session_status.get("web:browser-1")
@@ -825,7 +827,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type="work_progress.updated",
+                event_type=WORK_PROGRESS_UPDATED_EVENT,
                 payload={"status": "waiting_user"},
             )
         )
@@ -837,7 +839,7 @@ def test_message_queue_maps_run_events_to_granular_session_status():
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 run_id="run-1",
-                event_type="run_finished",
+                event_type=RUN_FINISHED_EVENT,
             )
         )
         idle = queue.session_status.get("web:browser-1")
@@ -944,9 +946,9 @@ def test_message_queue_persists_run_trace_for_telegram_message(tmp_path):
     assert run.metadata["channel"] == "telegram"
     assert run.metadata["external_chat_id"] == "trace-chat"
     event_types = [event.event_type for event in events]
-    assert "run_started" in event_types
-    assert "task_intent.detected" in event_types
-    assert "run_finished" in event_types
+    assert RUN_STARTED_EVENT in event_types
+    assert TASK_INTENT_DETECTED_EVENT in event_types
+    assert RUN_FINISHED_EVENT in event_types
     assert events[0].payload["status"] == "running"
     assert events[-1].payload["status"] == "completed"
     assert [part.part_type for part in parts] == [
