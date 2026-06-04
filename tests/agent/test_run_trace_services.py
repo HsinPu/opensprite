@@ -14,9 +14,12 @@ from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
+    HARNESS_SCORECARD_RECORDED_EVENT,
     RUN_PART_DELTA_EVENT,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    VERIFICATION_RESULT_EVENT,
+    WORKFLOW_FAILED_EVENT,
 )
 from opensprite.runs.lifecycle import (
     RUN_CANCELLED_EVENT,
@@ -1230,7 +1233,7 @@ def test_serialize_run_summary_builds_stable_card_payload():
                 event_id=1,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="tool_started",
+                event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "demo", "tool_call_id": "call-1"},
                 created_at=11.0,
             ),
@@ -1238,7 +1241,7 @@ def test_serialize_run_summary_builds_stable_card_payload():
                 event_id=2,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="verification_result",
+                event_type=VERIFICATION_RESULT_EVENT,
                 payload={"ok": True, "verification_status": "passed", "verification_name": "pytest", "result_preview": "ok"},
                 created_at=14.0,
             ),
@@ -1412,7 +1415,7 @@ def test_serialize_run_summary_includes_harness_scorecard_health():
                 event_id=1,
                 run_id="run-harness",
                 session_id="web:browser-1",
-                event_type="harness_scorecard.recorded",
+                event_type=HARNESS_SCORECARD_RECORDED_EVENT,
                 payload={
                     "profile": {"name": "research"},
                     "contract": {"task_type": "web_research"},
@@ -1605,7 +1608,7 @@ def test_serialize_run_summary_collects_failed_workflow_follow_up_detail():
                 event_id=1,
                 run_id="run-workflow-failed",
                 session_id="web:browser-workflow",
-                event_type="workflow.failed",
+                event_type=WORKFLOW_FAILED_EVENT,
                 payload={
                     "workflow_run_id": "workflow_abc12345",
                     "workflow": "implement_then_review",
