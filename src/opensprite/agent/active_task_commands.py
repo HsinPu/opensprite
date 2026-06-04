@@ -21,8 +21,10 @@ from .active_task_open_questions import clear_open_questions
 from .active_task_status import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_STATUS,
+    BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     DONE_ACTIVE_TASK_STATUS,
     WAITING_USER_ACTIVE_TASK_STATUS,
+    WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     clears_active_task_open_questions,
     is_current_active_task_status,
     is_current_or_done_active_task_status,
@@ -104,9 +106,17 @@ class ActiveTaskCommandService:
         status = result.active_task_status
         detail = result.active_task_detail or result.reason
         if status == WAITING_USER_ACTIVE_TASK_STATUS:
-            store.update_fields(status=WAITING_USER_ACTIVE_TASK_STATUS, open_questions=[detail or "need user input"], force=True)
+            store.update_fields(
+                status=WAITING_USER_ACTIVE_TASK_STATUS,
+                open_questions=[detail or WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION],
+                force=True,
+            )
         elif status == BLOCKED_ACTIVE_TASK_STATUS:
-            store.update_fields(status=BLOCKED_ACTIVE_TASK_STATUS, open_questions=[detail or "blocked"], force=True)
+            store.update_fields(
+                status=BLOCKED_ACTIVE_TASK_STATUS,
+                open_questions=[detail or BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION],
+                force=True,
+            )
         elif status == DONE_ACTIVE_TASK_STATUS:
             store.update_fields(status=DONE_ACTIVE_TASK_STATUS, open_questions=clear_open_questions(), force=True)
         else:

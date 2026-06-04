@@ -1,4 +1,6 @@
 from opensprite.agent.active_task_status import (
+    BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
+    WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     active_task_status,
     has_current_active_task,
     is_current_active_task_status,
@@ -23,3 +25,8 @@ def test_active_task_status_helpers_normalize_stored_status_values():
     assert is_current_active_task_status("done") is False
     assert is_current_or_done_active_task_status("done") is True
     assert is_current_or_done_active_task_status("inactive") is False
+
+
+def test_active_task_default_open_questions_are_stable():
+    assert WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION == "need user input"
+    assert BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION == "blocked"
