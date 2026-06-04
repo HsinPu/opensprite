@@ -52,6 +52,9 @@ PLANNER_METADATA_REASON_FIELD = "reason"
 PLANNER_METADATA_RAW_RESPONSE_PREVIEW_FIELD = "raw_response_preview"
 LLM_PLANNER_CONTRACT_SOURCE = "llm_planner"
 LLM_PLANNER_CONTRACT_SOURCES = (LLM_PLANNER_CONTRACT_SOURCE,)
+MISSING_RUNTIME_CONTRACT_SOURCE = "missing_runtime_contract"
+MISSING_RUNTIME_CONTRACT_SOURCES = (MISSING_RUNTIME_CONTRACT_SOURCE,)
+MISSING_RUNTIME_CONTRACT_REASON = "execution result did not include a task contract"
 PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
@@ -211,10 +214,10 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
         task_type=PURE_ANSWER_TASK_TYPE,
         final_answer_required=True,
         allow_no_tool_final=True,
-        contract_sources=("missing_runtime_contract",),
+        contract_sources=MISSING_RUNTIME_CONTRACT_SOURCES,
         planner_metadata={
             PLANNER_METADATA_STATUS_FIELD: PLANNER_MISSING_STATUS,
-            PLANNER_METADATA_REASON_FIELD: "execution result did not include a task contract",
+            PLANNER_METADATA_REASON_FIELD: MISSING_RUNTIME_CONTRACT_REASON,
         },
     )
 
