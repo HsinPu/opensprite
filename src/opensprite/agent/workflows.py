@@ -6,6 +6,14 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
+from ..runs.events import (
+    WORKFLOW_COMPLETED_EVENT,
+    WORKFLOW_FAILED_EVENT,
+    WORKFLOW_STARTED_EVENT,
+    WORKFLOW_STEP_COMPLETED_EVENT,
+    WORKFLOW_STEP_FAILED_EVENT,
+    WORKFLOW_STEP_STARTED_EVENT,
+)
 from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
@@ -623,7 +631,7 @@ class SubagentWorkflowService:
             else f"Started workflow {spec.workflow_id} with {len(spec.steps)} step(s)."
         )
         await self._emit_event(
-            "workflow.started",
+            WORKFLOW_STARTED_EVENT,
             {
                 "workflow_run_id": workflow_run_id,
                 "workflow": spec.workflow_id,
@@ -654,7 +662,7 @@ class SubagentWorkflowService:
             )
             step_preview = self._format_log_preview(step_task, max_chars=240)
             await self._emit_event(
-                "workflow.step.started",
+                WORKFLOW_STEP_STARTED_EVENT,
                 self._step_payload(
                     workflow_run_id=workflow_run_id,
                     workflow_id=spec.workflow_id,
@@ -680,7 +688,7 @@ class SubagentWorkflowService:
                     ),
                 )
                 await self._emit_event(
-                    "workflow.failed",
+                    WORKFLOW_FAILED_EVENT,
                     self._workflow_payload(
                         workflow_run_id=workflow_run_id,
                         workflow_id=spec.workflow_id,
@@ -709,7 +717,7 @@ class SubagentWorkflowService:
                     ),
                 )
                 await self._emit_event(
-                    "workflow.step.failed",
+                    WORKFLOW_STEP_FAILED_EVENT,
                     self._step_payload(
                         workflow_run_id=workflow_run_id,
                         workflow_id=spec.workflow_id,
@@ -721,7 +729,7 @@ class SubagentWorkflowService:
                     ),
                 )
                 await self._emit_event(
-                    "workflow.failed",
+                    WORKFLOW_FAILED_EVENT,
                     self._workflow_payload(
                         workflow_run_id=workflow_run_id,
                         workflow_id=spec.workflow_id,
@@ -741,7 +749,7 @@ class SubagentWorkflowService:
 
             outcomes.append(outcome)
             await self._emit_event(
-                "workflow.step.completed",
+                WORKFLOW_STEP_COMPLETED_EVENT,
                 self._step_payload(
                     workflow_run_id=workflow_run_id,
                     workflow_id=spec.workflow_id,
@@ -753,7 +761,7 @@ class SubagentWorkflowService:
             )
 
         await self._emit_event(
-            "workflow.completed",
+            WORKFLOW_COMPLETED_EVENT,
             self._workflow_payload(
                 workflow_run_id=workflow_run_id,
                 workflow_id=spec.workflow_id,

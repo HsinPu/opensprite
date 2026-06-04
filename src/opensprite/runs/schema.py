@@ -22,9 +22,19 @@ from .events import (
     TOOL_LIFECYCLE_EVENTS,
     TOOL_RESULT_EVENT,
     TOOL_STARTED_EVENT,
+    TERMINAL_WORKFLOW_EVENTS,
     VERIFICATION_EVENTS,
     VERIFICATION_RESULT_EVENT,
     VERIFICATION_STARTED_EVENT,
+    WORKFLOW_COMPLETED_EVENT,
+    WORKFLOW_COMPLETED_EVENTS,
+    WORKFLOW_FAILED_EVENT,
+    WORKFLOW_FAILED_EVENTS,
+    WORKFLOW_RUNNING_EVENTS,
+    WORKFLOW_STARTED_EVENT,
+    WORKFLOW_STEP_COMPLETED_EVENT,
+    WORKFLOW_STEP_FAILED_EVENT,
+    WORKFLOW_STEP_STARTED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
 from .lifecycle import (
@@ -75,12 +85,12 @@ _EVENT_KINDS = {
     "subagent.completed": "work",
     "subagent.failed": "work",
     "subagent.cancelled": "work",
-    "workflow.started": "work",
-    "workflow.step.started": "work",
-    "workflow.step.completed": "work",
-    "workflow.step.failed": "work",
-    "workflow.completed": "work",
-    "workflow.failed": "work",
+    WORKFLOW_STARTED_EVENT: "work",
+    WORKFLOW_STEP_STARTED_EVENT: "work",
+    WORKFLOW_STEP_COMPLETED_EVENT: "work",
+    WORKFLOW_STEP_FAILED_EVENT: "work",
+    WORKFLOW_COMPLETED_EVENT: "work",
+    WORKFLOW_FAILED_EVENT: "work",
     COMPLETION_GATE_EVALUATED_EVENT: "completion",
     "harness_profile.selected": "harness",
     "harness_policy.selected": "harness",
@@ -205,11 +215,11 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "completed"
     if normalized == "subagent.cancelled":
         return explicit or "cancelled"
-    if normalized in {"workflow.started", "workflow.step.started"}:
+    if normalized in WORKFLOW_RUNNING_EVENTS:
         return explicit or "running"
-    if normalized in {"workflow.completed", "workflow.step.completed"}:
+    if normalized in WORKFLOW_COMPLETED_EVENTS:
         return explicit or "completed"
-    if normalized in {"workflow.failed", "workflow.step.failed"}:
+    if normalized in WORKFLOW_FAILED_EVENTS:
         return explicit or "failed"
     if normalized == RUN_FINISHED_EVENT:
         return explicit or RUN_COMPLETED_STATUS
@@ -423,16 +433,16 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {"workflow.started", "workflow.completed", "workflow.failed"}:
+    if normalized in {WORKFLOW_STARTED_EVENT, WORKFLOW_COMPLETED_EVENT, WORKFLOW_FAILED_EVENT}:
         workflow = _text(data.get("workflow") or "workflow")
         workflow_run_id = _text(data.get("workflow_run_id"))
         detail = _text(data.get("summary") or data.get("error") or data.get("message"))
-        if not detail and normalized == "workflow.started":
+        if not detail and normalized == WORKFLOW_STARTED_EVENT:
             total_steps = _non_negative_int(data.get("total_steps"))
             detail = f"Started workflow with {total_steps} step(s)." if total_steps else "Workflow started."
-        if not detail and normalized == "workflow.completed":
+        if not detail and normalized == WORKFLOW_COMPLETED_EVENT:
             detail = "Workflow completed."
-        if not detail and normalized == "workflow.failed":
+        if not detail and normalized == WORKFLOW_FAILED_EVENT:
             detail = "Workflow failed."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
@@ -445,16 +455,16 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "metadata": data,
         }
 
-    if normalized in {"workflow.step.started", "workflow.step.completed", "workflow.step.failed"}:
+    if normalized in {WORKFLOW_STEP_STARTED_EVENT, WORKFLOW_STEP_COMPLETED_EVENT, WORKFLOW_STEP_FAILED_EVENT}:
         workflow_run_id = _text(data.get("workflow_run_id"))
         step_id = _text(data.get("step_id") or data.get("label") or "step")
         label = _text(data.get("label") or step_id or "workflow step")
         detail = _text(data.get("summary") or data.get("error") or data.get("task_preview"))
-        if not detail and normalized == "workflow.step.started":
+        if not detail and normalized == WORKFLOW_STEP_STARTED_EVENT:
             detail = f"Started {label}."
-        if not detail and normalized == "workflow.step.completed":
+        if not detail and normalized == WORKFLOW_STEP_COMPLETED_EVENT:
             detail = f"Completed {label}."
-        if not detail and normalized == "workflow.step.failed":
+        if not detail and normalized == WORKFLOW_STEP_FAILED_EVENT:
             detail = f"Failed {label}."
         return {
             "schema_version": RUN_SCHEMA_VERSION,
@@ -1129,7 +1139,7 @@ def _summarize_workflows(events: list[Any]) -> dict[str, Any]:
     ordered_ids: list[str] = []
     for event in events:
         event_type = str(getattr(event, "event_type", "") or "")
-        if event_type not in {"workflow.completed", "workflow.failed"}:
+        if event_type not in TERMINAL_WORKFLOW_EVENTS:
             continue
         payload = dict(getattr(event, "payload", {}) or {})
         workflow_run_id = _text(payload.get("workflow_run_id"))
