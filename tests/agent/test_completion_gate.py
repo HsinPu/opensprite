@@ -70,6 +70,7 @@ from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
     EvidenceRequirement,
+    ITEMIZED_OUTPUT_CRITERION_KIND,
     PLANNER_INVALID_JSON_REASON,
     REPOSITORY_STATUS_QUALITY_CHECK,
     TaskContract,
@@ -485,7 +486,7 @@ def _itemized_contract(intent) -> TaskContract:
     return TaskContract(
         objective=intent.objective,
         task_type="pure_answer",
-        acceptance_criteria=(AcceptanceCriterion(kind="itemized_output", min_count=3, max_response_chars=260),),
+        acceptance_criteria=(AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND, min_count=3, max_response_chars=260),),
         allow_no_tool_final=True,
         contract_sources=("test",),
     )
@@ -1876,7 +1877,7 @@ def test_completion_gate_requires_enough_history_items():
         requirements=(EvidenceRequirement(kind="tool_group", tool_group="history_retrieval"),),
         acceptance_criteria=(
             AcceptanceCriterion(kind="substantive_final_answer", min_response_chars=80),
-            AcceptanceCriterion(kind="itemized_output", min_count=3),
+            AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND, min_count=3),
         ),
     )
     answer = (
@@ -3418,10 +3419,10 @@ def test_task_contract_records_itemized_acceptance_criterion():
 
     assert len(contract.acceptance_criteria) == 1
     criterion = contract.acceptance_criteria[0]
-    assert criterion.kind == "itemized_output"
+    assert criterion.kind == ITEMIZED_OUTPUT_CRITERION_KIND
     assert criterion.min_count == 3
     assert criterion.max_response_chars == 260
-    assert contract.to_metadata()["acceptance_criteria"][0]["kind"] == "itemized_output"
+    assert contract.to_metadata()["acceptance_criteria"][0]["kind"] == ITEMIZED_OUTPUT_CRITERION_KIND
 
 
 def test_task_contract_ignores_numbers_inside_identifiers_for_itemized_count():
@@ -3432,7 +3433,7 @@ def test_task_contract_ignores_numbers_inside_identifiers_for_itemized_count():
         current_message=intent.objective,
     )
 
-    assert not any(criterion.kind == "itemized_output" for criterion in contract.acceptance_criteria)
+    assert not any(criterion.kind == ITEMIZED_OUTPUT_CRITERION_KIND for criterion in contract.acceptance_criteria)
 
 
 def test_completion_gate_accepts_one_sentence_identifier_recall():
@@ -3455,7 +3456,7 @@ def test_quality_gate_uses_contract_acceptance_criteria():
         task_type="task",
         acceptance_criteria=(
             AcceptanceCriterion(
-                kind="itemized_output",
+                kind=ITEMIZED_OUTPUT_CRITERION_KIND,
                 min_count=3,
                 max_response_chars=260,
                 description="Provide at least three listed items.",
