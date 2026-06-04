@@ -22,12 +22,16 @@ from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
     ACTIVE_TASK_COMMAND_APPLIED_EVENT,
+    FILE_CHANGED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
     TASK_OBJECTIVE_RESOLVED_EVENT,
     TOOL_APPROVAL_APPROVED_EVENT,
     TOOL_APPROVAL_REQUESTED_EVENT,
+    TOOL_PERMISSION_ALLOWED_EVENT,
+    TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT,
+    TOOL_PERMISSION_CHECKED_EVENT,
 )
 from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
@@ -1185,9 +1189,9 @@ def test_agent_default_filesystem_tools_record_run_file_changes(tmp_path):
     assert changes[0].metadata["diff_len"] == len(changes[0].diff)
     assert changes[0].metadata["after_content_available"] is True
     assert [event.event_type for event in events] == [
-        "tool_permission.checked",
-        "tool_permission.allowed",
-        "file_changed",
+        TOOL_PERMISSION_CHECKED_EVENT,
+        TOOL_PERMISSION_ALLOWED_EVENT,
+        FILE_CHANGED_EVENT,
     ]
     assert events[2].payload["path"] == "notes.txt"
 
@@ -1253,8 +1257,8 @@ def test_agent_tool_permission_requests_emit_run_events(tmp_path):
 
     assert result == "ok"
     assert [event.event_type for event in stored_events] == [
-        "tool_permission.checked",
-        "tool_permission.approval_required",
+        TOOL_PERMISSION_CHECKED_EVENT,
+        TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT,
         PERMISSION_REQUESTED_EVENT,
         TOOL_APPROVAL_REQUESTED_EVENT,
         PERMISSION_GRANTED_EVENT,

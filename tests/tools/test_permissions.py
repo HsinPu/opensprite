@@ -26,6 +26,11 @@ from opensprite.tools.permissions import (
 )
 from opensprite.tools.registry import ToolRegistry
 from opensprite.tools.result_status import classify_tool_result_status
+from opensprite.runs.events import (
+    TOOL_PERMISSION_ALLOWED_EVENT,
+    TOOL_PERMISSION_CHECKED_EVENT,
+    TOOL_PERMISSION_NOT_EXPOSED_EVENT,
+)
 
 
 class EchoTool(Tool):
@@ -129,9 +134,9 @@ def test_registry_emits_permission_decision_trace_events():
     assert allowed_result == "ran:read_file"
     _assert_unavailable_tool(denied_result, "exec", ["read_file"])
     assert [event[0] for event in events] == [
-        "tool_permission.checked",
-        "tool_permission.allowed",
-        "tool_permission.not_exposed",
+        TOOL_PERMISSION_CHECKED_EVENT,
+        TOOL_PERMISSION_ALLOWED_EVENT,
+        TOOL_PERMISSION_NOT_EXPOSED_EVENT,
     ]
     assert events[0][2]["risk_levels"] == ["read"]
     assert events[0][2]["exposed"] is True

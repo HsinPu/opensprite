@@ -10,6 +10,12 @@ from opensprite.agent.web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.runs.events import (
+    SUBAGENT_COMPLETED_EVENT,
+    SUBAGENT_STARTED_EVENT,
+    TOOL_PERMISSION_ALLOWED_EVENT,
+    TOOL_PERMISSION_CHECKED_EVENT,
+)
 from opensprite.runs.schema import serialize_run_artifacts
 from opensprite.storage import MemoryStorage
 from opensprite.tools.permissions import ToolPermissionPolicy
@@ -836,10 +842,10 @@ def test_subagent_run_persists_child_run_lineage_and_parent_events(tmp_path):
     parent_trace = asyncio.run(storage.get_run_trace("telegram:user-a", "run_parent"))
     assert parent_trace is not None
     assert [event.event_type for event in parent_trace.events] == [
-        "subagent.started",
-        "tool_permission.checked",
-        "tool_permission.allowed",
-        "subagent.completed",
+        SUBAGENT_STARTED_EVENT,
+        TOOL_PERMISSION_CHECKED_EVENT,
+        TOOL_PERMISSION_ALLOWED_EVENT,
+        SUBAGENT_COMPLETED_EVENT,
     ]
     artifacts = serialize_run_artifacts(parent_trace)
     assert len(artifacts) == 1

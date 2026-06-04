@@ -8,6 +8,13 @@ from .approval import DEFAULT_PERMISSION_DENIAL_REASON
 from .evidence import ToolEvidence, build_tool_evidence
 from .permissions import PermissionApprovalResult, PermissionDecision, ToolPermissionPolicy
 from .result_status import classify_tool_result_status, tool_error_result
+from ..runs.events import (
+    TOOL_PERMISSION_ALLOWED_EVENT,
+    TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT,
+    TOOL_PERMISSION_CHECKED_EVENT,
+    TOOL_PERMISSION_DENIED_EVENT,
+    TOOL_PERMISSION_NOT_EXPOSED_EVENT,
+)
 
 
 PermissionRequestHandler = Callable[[str, Any, PermissionDecision], Awaitable[PermissionApprovalResult]]
@@ -111,7 +118,7 @@ class ToolRegistry:
         if not exposed:
             decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
             await self._emit_permission_decision(
-                "tool_permission.not_exposed",
+                TOOL_PERMISSION_NOT_EXPOSED_EVENT,
                 name,
                 decision,
                 display_params,
@@ -119,10 +126,10 @@ class ToolRegistry:
             )
             return _tool_not_available_result(name, self.tool_names)
         decision = self._permission_policy.check(name, display_params, tool_risk_levels=tool.risk_levels)
-        await self._emit_permission_decision("tool_permission.checked", name, decision, display_params, exposed=exposed)
+        await self._emit_permission_decision(TOOL_PERMISSION_CHECKED_EVENT, name, decision, display_params, exposed=exposed)
         if not decision.allowed:
             if decision.requires_approval and self._permission_request_handler is not None:
-                await self._emit_permission_decision("tool_permission.approval_required", name, decision, display_params, exposed=exposed)
+                await self._emit_permission_decision(TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT, name, decision, display_params, exposed=exposed)
                 approval = await self._permission_request_handler(name, display_params, decision)
                 if approval.approved:
                     if on_before_execute is not None:
@@ -134,14 +141,14 @@ class ToolRegistry:
                     error_type="ToolPermissionError",
                     category="permission_block",
                 )
-            await self._emit_permission_decision("tool_permission.denied", name, decision, display_params, exposed=exposed)
+            await self._emit_permission_decision(TOOL_PERMISSION_DENIED_EVENT, name, decision, display_params, exposed=exposed)
             return tool_error_result(
                 f"Tool '{name}' blocked by permission policy: {decision.reason}.",
                 error_type="ToolPermissionError",
                 category="permission_block",
             )
 
-        await self._emit_permission_decision("tool_permission.allowed", name, decision, display_params, exposed=exposed)
+        await self._emit_permission_decision(TOOL_PERMISSION_ALLOWED_EVENT, name, decision, display_params, exposed=exposed)
         if on_before_execute is not None:
             await on_before_execute(name, display_params if isinstance(display_params, dict) else {})
         return await tool.execute_validated(params)
