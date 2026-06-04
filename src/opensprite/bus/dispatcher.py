@@ -36,6 +36,7 @@ from ..agent.curator import CURATOR_SCOPE_CHOICES
 from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
 from ..cron.types import CronSchedule
+from ..runs.lifecycle import ACTIVE_RUN_EVENTS, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
 from ..utils.log import logger
 
 
@@ -988,7 +989,7 @@ class MessageQueue:
         event_type = str(event.event_type or "")
         payload = dict(event.payload or {})
         current = self.session_status.get(event.session_id)
-        if current.status == "idle" and event_type not in {"run_started", "run_finished", "run_failed", "run_cancelled"}:
+        if current.status == "idle" and event_type not in ACTIVE_RUN_EVENTS:
             return
 
         metadata = {
@@ -997,7 +998,7 @@ class MessageQueue:
             "run_id": event.run_id,
             "event_type": event_type,
         }
-        if event_type == "run_started":
+        if event_type == RUN_STARTED_EVENT:
             await self._set_session_status(event.session_id, "thinking", metadata)
         elif event_type in {"run_part_delta", "message_part_delta"}:
             await self._set_session_status(event.session_id, "streaming", metadata)
@@ -1019,7 +1020,7 @@ class MessageQueue:
             await self._set_session_status(event.session_id, "thinking", metadata)
         elif str(payload.get("status") or payload.get("state") or "") == "waiting_user":
             await self._set_session_status(event.session_id, "waiting_user", metadata)
-        elif event_type in {"run_finished", "run_failed", "run_cancelled"}:
+        elif event_type in TERMINAL_RUN_EVENTS:
             await self._set_session_status(event.session_id, "idle")
     
     async def enqueue(self, user_message: UserMessage) -> None:

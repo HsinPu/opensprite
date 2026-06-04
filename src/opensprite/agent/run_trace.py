@@ -6,6 +6,15 @@ import time
 from typing import Any, Callable
 
 from ..bus.events import RunEvent
+from ..runs.lifecycle import (
+    RUN_CANCELLED_EVENT,
+    RUN_CANCELLED_STATUS,
+    RUN_COMPLETED_STATUS,
+    RUN_FAILED_EVENT,
+    RUN_FINISHED_EVENT,
+    RUN_RUNNING_STATUS,
+    RUN_STARTED_EVENT,
+)
 from ..runs.schema import serialize_work_state_todos
 from ..storage import StorageProvider
 from ..utils.json_safe import json_safe_payload
@@ -13,13 +22,6 @@ from ..utils.log import logger
 
 
 RUN_PART_CONTENT_MAX_CHARS = 20_000
-RUN_RUNNING_STATUS = "running"
-RUN_COMPLETED_STATUS = "completed"
-RUN_CANCELLED_STATUS = "cancelled"
-RUN_STARTED_EVENT = "run_started"
-RUN_FINISHED_EVENT = "run_finished"
-RUN_FAILED_EVENT = "run_failed"
-RUN_CANCELLED_EVENT = "run_cancelled"
 
 
 def truncate_run_part_content(

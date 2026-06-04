@@ -8,10 +8,8 @@ from typing import Any
 
 from ..bus import RunEvent, SessionStatusEvent
 from ..bus.message import AssistantMessage, MessageAdapter, UserMessage
+from ..runs.lifecycle import TERMINAL_RUN_EVENTS
 from .identity import build_session_id, normalize_identifier
-
-
-TERMINAL_RUN_EVENTS = {"run_finished", "run_failed", "run_cancelled"}
 
 
 @dataclass

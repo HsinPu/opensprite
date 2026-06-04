@@ -4,6 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from .lifecycle import (
+    RUN_CANCEL_REQUESTED_EVENT,
+    RUN_CANCELLED_EVENT,
+    RUN_CANCELLED_STATUS,
+    RUN_COMPLETED_STATUS,
+    RUN_FAILED_EVENT,
+    RUN_FINISHED_EVENT,
+    RUN_RUNNING_STATUS,
+    RUN_STARTED_EVENT,
+)
 from ..utils.json_safe import json_safe_payload
 
 RUN_SCHEMA_VERSION = 1
@@ -12,11 +22,11 @@ MAX_SERIALIZED_TEXT_EVENTS = 24
 
 
 _EVENT_KINDS = {
-    "run_started": "run",
-    "run_finished": "run",
-    "run_failed": "run",
-    "run_cancelled": "run",
-    "run_cancel_requested": "run",
+    RUN_STARTED_EVENT: "run",
+    RUN_FINISHED_EVENT: "run",
+    RUN_FAILED_EVENT: "run",
+    RUN_CANCELLED_EVENT: "run",
+    RUN_CANCEL_REQUESTED_EVENT: "run",
     "llm_status": "llm",
     "reasoning_delta": "llm",
     "task_intent.detected": "work",
@@ -151,8 +161,8 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
     normalized = _text(event_type)
     data = payload or {}
     explicit = _text(data.get("status") or data.get("state"))
-    if normalized == "run_started":
-        return explicit or "running"
+    if normalized == RUN_STARTED_EVENT:
+        return explicit or RUN_RUNNING_STATUS
     if normalized in {"curator.started", "curator.job.started"}:
         return explicit or "running"
     if normalized == "curator.failed":
@@ -181,13 +191,13 @@ def run_event_status(event_type: str, payload: dict[str, Any] | None) -> str:
         return explicit or "completed"
     if normalized in {"workflow.failed", "workflow.step.failed"}:
         return explicit or "failed"
-    if normalized == "run_finished":
-        return explicit or "completed"
-    if normalized == "run_failed":
+    if normalized == RUN_FINISHED_EVENT:
+        return explicit or RUN_COMPLETED_STATUS
+    if normalized == RUN_FAILED_EVENT:
         return explicit or "failed"
-    if normalized == "run_cancelled":
-        return explicit or "cancelled"
-    if normalized == "run_cancel_requested":
+    if normalized == RUN_CANCELLED_EVENT:
+        return explicit or RUN_CANCELLED_STATUS
+    if normalized == RUN_CANCEL_REQUESTED_EVENT:
         return explicit or "cancelling"
     if normalized in {"run_part_delta", "message_part_delta"}:
         return explicit or "running"
@@ -838,7 +848,7 @@ def _latest_work_progress(events: list[Any]) -> dict[str, Any] | None:
         event_type = getattr(event, "event_type", None)
         if event_type == "work_progress.updated":
             return payload
-        if event_type == "run_finished" and isinstance(payload.get("work_progress"), dict):
+        if event_type == RUN_FINISHED_EVENT and isinstance(payload.get("work_progress"), dict):
             return dict(payload["work_progress"])
     return None
 

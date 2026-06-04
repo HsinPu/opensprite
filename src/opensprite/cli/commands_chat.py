@@ -18,6 +18,7 @@ from ..channels.cli import CliAdapter, CliChatResult
 from ..config import Config
 from ..context.paths import get_session_workspace, get_tool_workspace
 from ..agent.turn_quick_actions import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
+from ..runs.lifecycle import RUN_CANCELLED_EVENT, RUN_FAILED_EVENT, RUN_STARTED_EVENT, TERMINAL_RUN_EVENTS
 from ..runtime import (
     apply_network_environment,
     create_agent,
@@ -27,7 +28,6 @@ from ..runtime import (
 from ..utils.log import setup_log
 
 
-TERMINAL_RUN_EVENTS = {"run_finished", "run_failed", "run_cancelled"}
 _SNAPSHOT_DIR_NAME = "repo"
 _SNAPSHOT_IGNORES = {
     ".git",
@@ -280,7 +280,7 @@ async def run_web_chat(
                         event_type = str(frame.get("event_type") or "")
                         frame_run_id = str(frame.get("run_id") or "") or None
                         if run_id is None:
-                            if event_type not in {"run_started", "run_failed", "run_cancelled"}:
+                            if event_type not in {RUN_STARTED_EVENT, RUN_FAILED_EVENT, RUN_CANCELLED_EVENT}:
                                 continue
                             run_id = frame_run_id
                         elif frame_run_id != run_id:

@@ -14,6 +14,7 @@ from ..llms.routed import ModelRoutedProvider
 from ..llms.registry import create_llm
 from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..config.llm_presets import provider_profile_defaults
+from ..runs.lifecycle import RUN_STARTED_EVENT
 from ..storage import StorageProvider
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
@@ -626,7 +627,7 @@ class SubagentRunService:
         await self.run_trace.emit_event(
             prepared.child_session_id,
             prepared.child_run_id,
-            "run_started",
+            RUN_STARTED_EVENT,
             lifecycle_payload,
         )
         self._record_task_update(
