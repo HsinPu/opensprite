@@ -15,7 +15,14 @@ from ..tool_names import (
 )
 from ..tools import ToolRegistry
 from ..tools.permissions import ToolPermissionPolicy
-from .harness_profile import HarnessProfile
+from .harness_profile import (
+    WORKSPACE_ANALYSIS_TASK_TYPE,
+    HarnessProfile,
+    is_coding_profile_name,
+    is_media_profile_name,
+    is_ops_profile_name,
+    is_research_profile_name,
+)
 from .history_retrieval_policy import HISTORY_SEARCH_TOOL_NAME
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
@@ -109,7 +116,7 @@ class HarnessPolicyService:
     def select(self, harness_profile: HarnessProfile) -> HarnessPolicy:
         """Return the runtime policy for one selected harness profile."""
         profile_name = harness_profile.name
-        if profile_name == "research":
+        if is_research_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
                 name="research_source_policy",
                 harness_profile_name=profile_name,
@@ -118,8 +125,8 @@ class HarnessPolicyService:
                 denied_risk_levels=denied_risks_except(_RESEARCH_RISKS),
                 reason=RESEARCH_HARNESS_POLICY_REASON,
             ), harness_profile)
-        if profile_name == "coding":
-            if harness_profile.task_type == "workspace_analysis":
+        if is_coding_profile_name(profile_name):
+            if harness_profile.task_type == WORKSPACE_ANALYSIS_TASK_TYPE:
                 return _with_profile_denied_tools(HarnessPolicy(
                     name="workspace_analysis_policy",
                     harness_profile_name=profile_name,
@@ -137,7 +144,7 @@ class HarnessPolicyService:
                 approval_required_risk_levels=tuple(harness_profile.approval_required_risk_levels),
                 reason=WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
             ), harness_profile)
-        if profile_name == "media":
+        if is_media_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
                 name="media_artifact_policy",
                 harness_profile_name=profile_name,
@@ -145,7 +152,7 @@ class HarnessPolicyService:
                 allowed_risk_levels=_MEDIA_RISKS,
                 reason=MEDIA_HARNESS_POLICY_REASON,
             ), harness_profile)
-        if profile_name == "ops":
+        if is_ops_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
                 name="operations_approval_policy",
                 harness_profile_name=profile_name,
