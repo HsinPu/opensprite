@@ -6,9 +6,12 @@ from opensprite.agent.workflow_completion_policy import (
     workflow_completed_all_steps_reason,
     workflow_fix_follow_up_fields,
     workflow_review_evidence_missing_reason,
+    workflow_review_evidence_missing_detail,
     workflow_review_findings_follow_up_reason,
     workflow_review_follow_up_fields,
     workflow_unsuccessful_reason,
+    task_review_evidence_missing_detail,
+    task_review_findings_follow_up_detail,
 )
 
 
@@ -39,6 +42,18 @@ def test_workflow_completion_reasons_are_stable():
     )
     assert workflow_completed_all_steps_reason("research_then_outline") == (
         "workflow research_then_outline completed all required steps"
+    )
+
+
+def test_workflow_review_follow_up_details_are_stable():
+    assert workflow_review_evidence_missing_detail() == (
+        "Run or rerun a delegated review step for the changed code before treating the workflow as complete."
+    )
+    assert task_review_evidence_missing_detail() == (
+        "Run or rerun a delegated review step for the changed code before treating the task as complete."
+    )
+    assert task_review_findings_follow_up_detail() == (
+        "Address the delegated review findings before treating the task as complete."
     )
 
 

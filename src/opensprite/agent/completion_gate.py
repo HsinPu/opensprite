@@ -111,6 +111,9 @@ from .workflow_completion_policy import (
     workflow_review_evidence_missing_reason,
     workflow_review_findings_follow_up_reason,
     workflow_review_follow_up_fields,
+    workflow_review_evidence_missing_detail,
+    task_review_evidence_missing_detail,
+    task_review_findings_follow_up_detail,
     workflow_unsuccessful_reason,
 )
 
@@ -1068,7 +1071,7 @@ def _workflow_gate_outcome(
                 **metadata,
                 "status": NEEDS_REVIEW_COMPLETION_STATUS,
                 "reason": workflow_review_evidence_missing_reason(workflow_id),
-                "detail": "Run or rerun a delegated review step for the changed code before treating the workflow as complete.",
+                "detail": workflow_review_evidence_missing_detail(),
                 **review_step,
             }
         if not review_passed or review_finding_count > 0:
@@ -1190,9 +1193,9 @@ def _format_review_finding(item: dict[str, Any]) -> str:
 
 def _review_follow_up_detail(review: dict[str, Any]) -> str | None:
     if not review.get("attempted"):
-        return "Run or rerun a delegated review step for the changed code before treating the task as complete."
+        return task_review_evidence_missing_detail()
     detail = str(review.get("first_finding") or review.get("summary") or "").strip()
-    return detail or "Address the delegated review findings before treating the task as complete."
+    return detail or task_review_findings_follow_up_detail()
 
 
 def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow: dict[str, Any]) -> str:

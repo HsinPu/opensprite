@@ -23,6 +23,15 @@ WORKFLOW_FIX_STEPS = {
     },
 }
 WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON = "workflow completed but required verification evidence is still missing"
+WORKFLOW_REVIEW_EVIDENCE_MISSING_DETAIL = (
+    "Run or rerun a delegated review step for the changed code before treating the workflow as complete."
+)
+TASK_REVIEW_EVIDENCE_MISSING_DETAIL = (
+    "Run or rerun a delegated review step for the changed code before treating the task as complete."
+)
+TASK_REVIEW_FINDINGS_FOLLOW_UP_DETAIL = (
+    "Address the delegated review findings before treating the task as complete."
+)
 
 
 def workflow_unsuccessful_reason(workflow_id: str | None) -> str:
@@ -43,6 +52,18 @@ def workflow_clean_review_reason(workflow_id: str | None) -> str:
 
 def workflow_completed_all_steps_reason(workflow_id: str | None) -> str:
     return f"workflow {str(workflow_id or '').strip()} completed all required steps"
+
+
+def workflow_review_evidence_missing_detail() -> str:
+    return WORKFLOW_REVIEW_EVIDENCE_MISSING_DETAIL
+
+
+def task_review_evidence_missing_detail() -> str:
+    return TASK_REVIEW_EVIDENCE_MISSING_DETAIL
+
+
+def task_review_findings_follow_up_detail() -> str:
+    return TASK_REVIEW_FINDINGS_FOLLOW_UP_DETAIL
 
 
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:
