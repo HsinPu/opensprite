@@ -55,6 +55,7 @@ from .work_progress_action_policy import (
     NEXT_ACTION_FINALIZE,
     NEXT_ACTION_STOP_BUDGET_EXHAUSTED,
     NEXT_ACTION_STOP_NO_PROGRESS,
+    build_resume_hint as build_policy_resume_hint,
     is_continue_work_next_action,
     is_review_follow_up_next_action,
     is_review_phase_next_action,
@@ -962,31 +963,20 @@ def _build_resume_hint(
     prompt_type = str(getattr(completion_result, "follow_up_prompt_type", "") or "").strip()
     verification_action = str(getattr(completion_result, "verification_action", "") or "").strip()
     verification_path = str(getattr(completion_result, "verification_path", "") or "").strip()
-    if is_verification_next_action(next_action):
-        if workflow and step_label:
-            return f"Resume by finishing verification around the {step_label} step in {workflow}."
-        if verification_action and verification_path:
-            return f"Resume by running verify {verification_action} for `{verification_path}`."
-        return "Resume by running or fixing the required verification."
-    if next_action == _NEXT_ACTION_COLLECT_REVIEW_EVIDENCE:
-        if workflow and step_label and prompt_type:
-            return f"Resume by running or rerunning the delegated {prompt_type} step ({step_label}) for {workflow}."
-        if prompt_type:
-            return f"Resume by running or rerunning the delegated {prompt_type} step for the changed code."
-        return "Resume by running or rerunning a delegated review step for the changed code."
-    if next_action == _NEXT_ACTION_ADDRESS_REVIEW_FINDINGS:
-        if workflow:
-            return f"Resume by addressing the review findings for {workflow} before rerunning review if needed."
-        return "Resume by addressing the delegated review findings before treating the task as complete."
-    if next_action == _NEXT_ACTION_CONTINUE_REVIEW:
-        return "Resume by collecting review evidence or addressing delegated review findings."
-    if workflow and step_label:
-        return f"Resume with the {step_label} step in {workflow}."
-    if current_step and current_step != WORK_STEP_NOT_SET:
-        return f"Resume at current step: {current_step}"
-    if next_step and next_step != WORK_STEP_NOT_SET:
-        return f"Resume with next step: {next_step}"
-    return "Continue the active task from the latest recorded state."
+    return build_policy_resume_hint(
+        status=status,
+        current_step=current_step,
+        next_step=next_step,
+        blockers=blockers,
+        next_action=next_action,
+        workflow=workflow,
+        step_label=step_label,
+        prompt_type=prompt_type,
+        verification_action=verification_action,
+        verification_path=verification_path,
+        done_status=_WORK_STATE_DONE_STATUS,
+        unset_step=WORK_STEP_NOT_SET,
+    )
 
 
 def _map_state_status(completion_result: CompletionGateResult, progress: WorkProgressUpdate) -> str:
