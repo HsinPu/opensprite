@@ -55,6 +55,7 @@ from .work_progress_action_policy import (
     NEXT_ACTION_FINALIZE,
     NEXT_ACTION_STOP_BUDGET_EXHAUSTED,
     NEXT_ACTION_STOP_NO_PROGRESS,
+    TASK_DONE_RESUME_HINT,
     build_resume_hint as build_policy_resume_hint,
     is_continue_work_next_action,
     is_review_follow_up_next_action,
@@ -955,7 +956,7 @@ def _build_resume_hint(
     completion_result: CompletionGateResult | None = None,
 ) -> str:
     if status == _WORK_STATE_DONE_STATUS:
-        return "Task is complete; only continue if the user asks for follow-up work."
+        return TASK_DONE_RESUME_HINT
     if blockers:
         return f"Resolve blocker first: {blockers[0]}"
     workflow = str(getattr(completion_result, "follow_up_workflow", "") or "").strip()

@@ -4,6 +4,7 @@ from opensprite.agent.work_progress_action_policy import (
     NEXT_ACTION_CONTINUE_REVIEW,
     NEXT_ACTION_CONTINUE_VERIFICATION,
     NEXT_ACTION_CONTINUE_WORK,
+    TASK_DONE_RESUME_HINT,
     build_resume_hint,
     is_continue_work_next_action,
     is_review_follow_up_next_action,
@@ -77,7 +78,7 @@ def test_work_progress_action_policy_builds_default_resume_hints():
         next_step="",
         blockers=(),
         next_action=NEXT_ACTION_CONTINUE_WORK,
-    ) == "Task is complete; only continue if the user asks for follow-up work."
+    ) == TASK_DONE_RESUME_HINT
     assert build_resume_hint(
         status="active",
         current_step="2. change",

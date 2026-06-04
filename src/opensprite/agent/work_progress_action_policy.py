@@ -12,6 +12,7 @@ NEXT_ACTION_ADDRESS_REVIEW_FINDINGS = "address_review_findings"
 NEXT_ACTION_CONTINUE_REVIEW = "continue_review"
 NEXT_ACTION_CONTINUE_WORK = "continue_work"
 DEFAULT_WORK_STEP_NOT_SET = "not set"
+TASK_DONE_RESUME_HINT = "Task is complete; only continue if the user asks for follow-up work."
 
 REVIEW_FOLLOW_UP_NEXT_ACTIONS = frozenset(
     {
@@ -63,7 +64,7 @@ def build_resume_hint(
     unset_step: str = DEFAULT_WORK_STEP_NOT_SET,
 ) -> str:
     if status == done_status:
-        return "Task is complete; only continue if the user asks for follow-up work."
+        return TASK_DONE_RESUME_HINT
     if blockers:
         return f"Resolve blocker first: {blockers[0]}"
     if is_verification_next_action(next_action):
