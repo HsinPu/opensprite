@@ -62,6 +62,9 @@ HISTORY_LOADED_EVENT = "history.loaded"
 PROMPT_BUILT_EVENT = "prompt.built"
 TASK_CONTEXT_RESOLVED_EVENT = "task_context.resolved"
 TASK_OBJECTIVE_RESOLVED_EVENT = "task_objective.resolved"
+ACTIVE_TASK_REPLACED_EVENT = "active_task.replaced"
+ACTIVE_TASK_SEEDED_EVENT = "active_task.seeded"
+ACTIVE_TASK_UNCHANGED_EVENT = "active_task.unchanged"
 
 TEXT_DELTA_EVENTS = frozenset({RUN_PART_DELTA_EVENT, MESSAGE_PART_DELTA_EVENT})
 TOOL_LIFECYCLE_EVENTS = frozenset({TOOL_STARTED_EVENT, TOOL_RESULT_EVENT})

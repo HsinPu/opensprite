@@ -16,6 +16,7 @@ from ..documents.active_task import (
 from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
+from ..runs.events import ACTIVE_TASK_SEEDED_EVENT
 from ..utils.log import logger
 from .active_task_open_questions import clear_open_questions
 from .active_task_status import (
@@ -293,7 +294,7 @@ class ActiveTaskCommandService:
                 }
             )
         store.append_event("seed", "immediate", details=event_details)
-        logger.info("[{}] active_task.seeded | replace={}", session_id, replacing)
+        logger.info("[{}] {} | replace={}", session_id, ACTIVE_TASK_SEEDED_EVENT, replacing)
 
     async def show(self, session_id: str) -> str | None:
         """Return the current ACTIVE_TASK block for user display, if any."""

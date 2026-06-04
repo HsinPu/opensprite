@@ -49,7 +49,14 @@ from ..media import (
 )
 from ..documents.user_profile import UserProfileConsolidator, create_user_profile_store
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
-from ..runs.events import PERMISSION_DENIED_EVENT, PERMISSION_GRANTED_EVENT, PERMISSION_REQUESTED_EVENT
+from ..runs.events import (
+    ACTIVE_TASK_REPLACED_EVENT,
+    ACTIVE_TASK_SEEDED_EVENT,
+    ACTIVE_TASK_UNCHANGED_EVENT,
+    PERMISSION_DENIED_EVENT,
+    PERMISSION_GRANTED_EVENT,
+    PERMISSION_REQUESTED_EVENT,
+)
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequest, PermissionRequestManager
@@ -1382,7 +1389,7 @@ class AgentLoop:
             return
         changed = before_status != after_status
         replacing = is_current_active_task_status(before_status) and changed
-        event_type = "active_task.replaced" if replacing else "active_task.seeded" if changed else "active_task.unchanged"
+        event_type = ACTIVE_TASK_REPLACED_EVENT if replacing else ACTIVE_TASK_SEEDED_EVENT if changed else ACTIVE_TASK_UNCHANGED_EVENT
         await self._emit_run_event(
             session_id,
             run_id,
