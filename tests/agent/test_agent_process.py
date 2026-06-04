@@ -25,17 +25,27 @@ from opensprite.runs.events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_SCHEDULED_EVENT,
     AUTO_CONTINUE_SKIPPED_EVENT,
+    COMPLETION_GATE_EVALUATED_EVENT,
+    CURATOR_STARTED_EVENT,
     FILE_CHANGED_EVENT,
+    HARNESS_CHECKPOINT_RECORDED_EVENT,
+    HARNESS_SCORECARD_RECORDED_EVENT,
+    LLM_STATUS_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
+    TASK_CHECKLIST_UPDATED_EVENT,
+    TASK_INTENT_DETECTED_EVENT,
     TASK_OBJECTIVE_RESOLVED_EVENT,
     TOOL_APPROVAL_APPROVED_EVENT,
     TOOL_APPROVAL_REQUESTED_EVENT,
     TOOL_PERMISSION_ALLOWED_EVENT,
     TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT,
     TOOL_PERMISSION_CHECKED_EVENT,
+    WORK_PLAN_CREATED_EVENT,
+    WORK_PROGRESS_UPDATED_EVENT,
 )
+from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 from opensprite.media.router import MediaRouter
 from opensprite.storage import MemoryStorage, StoredDelegatedTask
 from opensprite.storage.base import StoredMessage, StoredWorkState
@@ -833,14 +843,14 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
     assert run.status == "completed"
     assert run.session_id == "web:browser-1"
     assert [event.event_type for event in events] == [
-        "run_started",
-        "task_intent.detected",
-        "llm_status",
-        "completion_gate.evaluated",
-        "work_progress.updated",
-        "harness_checkpoint.recorded",
-        "harness_scorecard.recorded",
-        "run_finished",
+        RUN_STARTED_EVENT,
+        TASK_INTENT_DETECTED_EVENT,
+        LLM_STATUS_EVENT,
+        COMPLETION_GATE_EVALUATED_EVENT,
+        WORK_PROGRESS_UPDATED_EVENT,
+        HARNESS_CHECKPOINT_RECORDED_EVENT,
+        HARNESS_SCORECARD_RECORDED_EVENT,
+        RUN_FINISHED_EVENT,
     ]
     assert events[0].payload["status"] == "running"
     assert events[1].payload["kind"] == "task"
@@ -910,9 +920,9 @@ def test_agent_process_schedules_curator_after_run_finished(tmp_path):
     events = asyncio.run(scenario())
     event_types = [event.event_type for event in events]
 
-    assert "run_finished" in event_types
-    assert "curator.started" in event_types
-    assert event_types.index("run_finished") < event_types.index("curator.started")
+    assert RUN_FINISHED_EVENT in event_types
+    assert CURATOR_STARTED_EVENT in event_types
+    assert event_types.index(RUN_FINISHED_EVENT) < event_types.index(CURATOR_STARTED_EVENT)
 
 
 def test_agent_verify_hooks_emit_verification_events(tmp_path):
@@ -1684,7 +1694,7 @@ def test_agent_process_emits_completion_gate_needs_verification_after_code_chang
 
     events = asyncio.run(scenario())
 
-    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
+    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
     assert completion_event.payload["status"] == "needs_verification"
     assert completion_event.payload["reason"] == "required verification was not recorded"
 
@@ -1732,8 +1742,8 @@ def test_agent_process_emits_completion_gate_needs_review_after_code_changes_wit
 
     events = asyncio.run(scenario())
 
-    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
-    work_progress_event = next(event for event in events if event.event_type == "work_progress.updated")
+    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
+    work_progress_event = next(event for event in events if event.event_type == WORK_PROGRESS_UPDATED_EVENT)
     assert completion_event.payload["status"] == "needs_review"
     assert completion_event.payload["reason"] == "delegated review was not recorded for code changes"
     assert completion_event.payload["review_required"] is True
@@ -1775,8 +1785,8 @@ def test_agent_process_workflow_completion_authority_marks_complete_with_clean_r
     response, events = asyncio.run(scenario())
 
     assert response.text == "Here is the reviewed outcome."
-    completion_event = next(event for event in events if event.event_type == "completion_gate.evaluated")
-    run_finished = next(event for event in events if event.event_type == "run_finished")
+    completion_event = next(event for event in events if event.event_type == COMPLETION_GATE_EVALUATED_EVENT)
+    run_finished = next(event for event in events if event.event_type == RUN_FINISHED_EVENT)
     assert completion_event.payload["status"] == "complete"
     assert completion_event.payload["reason"] == "workflow implement_then_review completed with clean review evidence"
     assert run_finished.payload["completion_gate"]["status"] == "complete"
@@ -1863,23 +1873,23 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
     assert len(calls) == 2
     assert "Completion gate reason: expected code changes were not recorded" in calls[1]
     assert [event.event_type for event in events] == [
-        "run_started",
-        "task_intent.detected",
-        "llm_status",
-        "work_plan.created",
-        "completion_gate.evaluated",
-        "work_progress.updated",
-        "harness_checkpoint.recorded",
-        "harness_scorecard.recorded",
+        RUN_STARTED_EVENT,
+        TASK_INTENT_DETECTED_EVENT,
+        LLM_STATUS_EVENT,
+        WORK_PLAN_CREATED_EVENT,
+        COMPLETION_GATE_EVALUATED_EVENT,
+        WORK_PROGRESS_UPDATED_EVENT,
+        HARNESS_CHECKPOINT_RECORDED_EVENT,
+        HARNESS_SCORECARD_RECORDED_EVENT,
         AUTO_CONTINUE_SCHEDULED_EVENT,
-        "completion_gate.evaluated",
-        "work_progress.updated",
-        "harness_checkpoint.recorded",
-        "harness_scorecard.recorded",
+        COMPLETION_GATE_EVALUATED_EVENT,
+        WORK_PROGRESS_UPDATED_EVENT,
+        HARNESS_CHECKPOINT_RECORDED_EVENT,
+        HARNESS_SCORECARD_RECORDED_EVENT,
         AUTO_CONTINUE_COMPLETED_EVENT,
         AUTO_CONTINUE_SKIPPED_EVENT,
-        "task_checklist.updated",
-        "run_finished",
+        TASK_CHECKLIST_UPDATED_EVENT,
+        RUN_FINISHED_EVENT,
     ]
     assert events[4].payload["status"] == "incomplete"
     assert events[4].payload["reason"] == "expected code changes were not recorded"
