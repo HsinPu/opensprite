@@ -5,6 +5,8 @@ from opensprite.tools.approval import (
     DEFAULT_PERMISSION_DENIAL_REASON,
     PERMISSION_APPROVED_ONCE_REASON,
     PERMISSION_REQUEST_TIMED_OUT_REASON,
+    SQL_DROP_TABLE_COMMAND_MARKER,
+    SQL_DROP_TABLE_DESTRUCTIVE_REASON,
     PermissionRequestManager,
     classify_permission_request,
 )
@@ -327,6 +329,11 @@ def test_permission_request_classification_fields():
     assert inline_wrapper_destructive["action_type"] == "destructive"
     assert inline_wrapper_destructive["recommended_decision"] == "deny"
     assert inline_wrapper_destructive["destructive_reason"] == "bash -c -> git reset --hard"
+
+    sql_destructive = classify_permission_request("exec", {"command": "psql -c 'DROP TABLE users'"})
+    assert SQL_DROP_TABLE_COMMAND_MARKER == "drop table"
+    assert sql_destructive["action_type"] == "destructive"
+    assert sql_destructive["destructive_reason"] == SQL_DROP_TABLE_DESTRUCTIVE_REASON
 
 
 def test_permission_request_classification_uses_decision_risk_levels():

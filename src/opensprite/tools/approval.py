@@ -16,6 +16,8 @@ from .shell import classify_destructive_shell_command
 DEFAULT_PERMISSION_DENIAL_REASON = "user denied approval"
 PERMISSION_REQUEST_TIMED_OUT_REASON = "permission request timed out"
 PERMISSION_APPROVED_ONCE_REASON = "approved once"
+SQL_DROP_TABLE_COMMAND_MARKER = "drop table"
+SQL_DROP_TABLE_DESTRUCTIVE_REASON = "sql drop table"
 
 
 def _text(value: Any) -> str:
@@ -65,10 +67,10 @@ def classify_permission_request(
         action_type = "commit"
     if "git push" in lowered_command:
         action_type = "push"
-    if destructive_reason or "drop table" in lowered_command:
+    if destructive_reason or SQL_DROP_TABLE_COMMAND_MARKER in lowered_command:
         action_type = "destructive"
-        if not destructive_reason and "drop table" in lowered_command:
-            destructive_reason = "sql drop table"
+        if not destructive_reason and SQL_DROP_TABLE_COMMAND_MARKER in lowered_command:
+            destructive_reason = SQL_DROP_TABLE_DESTRUCTIVE_REASON
 
     if action_type in {"destructive", "push"}:
         risk_level = "high"
