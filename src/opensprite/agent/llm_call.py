@@ -9,11 +9,14 @@ from ..config import AgentConfig
 from ..llms import ChatMessage
 from ..runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
+    HARNESS_POLICY_MERGE_RESOLVED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
     HISTORY_LOADED_EVENT,
     MCP_TOOLS_SYNCED_EVENT,
     PROMPT_BUILT_EVENT,
     PROMPT_TOKENS_ESTIMATED_EVENT,
+    PLANNING_MODE_SELECTED_EVENT,
+    RETRIEVAL_PROACTIVE_CHECKED_EVENT,
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,
     TASK_CONTRACT_PLANNING_STARTED_EVENT,
@@ -391,7 +394,7 @@ class LlmCallService:
                     await self._emit_run_event(
                         session_id,
                         run_id,
-                        "harness_policy.merge_resolved",
+                        HARNESS_POLICY_MERGE_RESOLVED_EVENT,
                         policy_resolution,
                         channel=channel,
                         external_chat_id=external_chat_id,
@@ -427,7 +430,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "planning_mode.selected",
+                PLANNING_MODE_SELECTED_EVENT,
                 {
                     "enabled": bool(planning_mode.enabled),
                     "tool_names": list(selected_tool_registry.tool_names) if selected_tool_registry is not None else [],
@@ -457,7 +460,7 @@ class LlmCallService:
             await self._emit_run_event(
                 session_id,
                 run_id,
-                "retrieval.proactive_checked",
+                RETRIEVAL_PROACTIVE_CHECKED_EVENT,
                 {
                     "should_retrieve": should_retrieve,
                     "applied": bool(proactive_retrieval_context),
