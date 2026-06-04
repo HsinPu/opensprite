@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agent.verification_policy import VERIFICATION_STATUS_METADATA_FIELD
+from ..agent.verification_policy import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD
 from .events import (
     AUTO_CONTINUE_COMPLETED_EVENT,
     AUTO_CONTINUE_EVENTS,
@@ -340,7 +340,7 @@ def event_artifact(event_type: str, payload: dict[str, Any] | None) -> dict[str,
             "artifact_type": "verification",
             "kind": "verification",
             "status": status,
-            "title": _text(data.get("verification_name") or data.get("action") or "verification"),
+            "title": _text(data.get(VERIFICATION_NAME_METADATA_FIELD) or data.get("action") or "verification"),
             "detail": _text(data.get("result_preview") or data.get("path")),
         }
 
@@ -1023,7 +1023,7 @@ def _summarize_verification(run_metadata: dict[str, Any], events: list[Any]) -> 
         status = "passed" if passed else "failed"
     if latest is not None:
         status = str(latest.get(VERIFICATION_STATUS_METADATA_FIELD) or status)
-        name = latest.get("verification_name")
+        name = latest.get(VERIFICATION_NAME_METADATA_FIELD)
         summary = str(latest.get("result_preview") or "")
 
     return {

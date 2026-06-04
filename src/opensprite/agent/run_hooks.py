@@ -31,7 +31,7 @@ from .mcp_tool_policy import (
     mcp_tool_display_name,
     tool_warrants_progress_notice as policy_tool_warrants_progress_notice,
 )
-from .verification_policy import VERIFICATION_STATUS_METADATA_FIELD, is_verification_tool_name
+from .verification_policy import VERIFICATION_NAME_METADATA_FIELD, VERIFICATION_STATUS_METADATA_FIELD, is_verification_tool_name
 
 
 _TRACE_TEXT_FIELDS = {
@@ -400,7 +400,7 @@ class RunHookService:
                         "path": (tool_args or {}).get("path", "."),
                         "ok": ok,
                         VERIFICATION_STATUS_METADATA_FIELD: verification["status"],
-                        "verification_name": verification["name"],
+                        VERIFICATION_NAME_METADATA_FIELD: verification["name"],
                         "result_preview": result_preview,
                     },
                     channel=channel,

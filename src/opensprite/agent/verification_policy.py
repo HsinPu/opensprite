@@ -6,6 +6,7 @@ from __future__ import annotations
 VERIFICATION_TOOL_NAME = "verify"
 VERIFICATION_RESULT_ARTIFACT_KIND = "verification_result"
 VERIFICATION_STATUS_METADATA_FIELD = "verification_status"
+VERIFICATION_NAME_METADATA_FIELD = "verification_name"
 SKIPPED_VERIFICATION_STATUS = "skipped"
 REQUIRED_VERIFICATION_FAILED_REASON = "required verification did not pass"
 REQUIRED_VERIFICATION_NOT_RECORDED_REASON = "required verification was not recorded"
