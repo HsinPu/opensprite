@@ -13,6 +13,9 @@ from .permissions import PermissionApprovalResult, ToolPermissionPolicy
 from .shell import classify_destructive_shell_command
 
 
+DEFAULT_PERMISSION_DENIAL_REASON = "user denied approval"
+
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -202,7 +205,7 @@ class PermissionRequestManager:
             event_type="permission_granted",
         )
 
-    async def deny(self, request_id: str, reason: str = "user denied approval") -> PermissionRequest | None:
+    async def deny(self, request_id: str, reason: str = DEFAULT_PERMISSION_DENIAL_REASON) -> PermissionRequest | None:
         """Deny one pending request."""
         return await self._resolve(
             request_id,

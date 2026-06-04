@@ -51,7 +51,7 @@ from ..documents.user_profile import UserProfileConsolidator, create_user_profil
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayPromotionService, UserOverlayStore
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
-from ..tools.approval import PermissionRequest, PermissionRequestManager
+from ..tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
 from ..tools.result_status import classify_tool_result_status, tool_error_result
@@ -505,7 +505,7 @@ class AgentLoop:
     async def deny_permission_request(
         self,
         request_id: str,
-        reason: str = "user denied approval",
+        reason: str = DEFAULT_PERMISSION_DENIAL_REASON,
     ) -> PermissionRequest | None:
         """Deny one pending tool permission request."""
         return await self.permissions.deny_request(request_id, reason=reason)

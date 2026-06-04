@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from ..tools.approval import PermissionRequest, PermissionRequestManager
+from ..tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequest, PermissionRequestManager
 from ..tools.permissions import PermissionApprovalResult, PermissionDecision
 from .permission_events import PermissionEventRecorder
 
@@ -40,7 +40,7 @@ class AgentPermissionService:
     async def deny_request(
         self,
         request_id: str,
-        reason: str = "user denied approval",
+        reason: str = DEFAULT_PERMISSION_DENIAL_REASON,
     ) -> PermissionRequest | None:
         """Deny one pending tool permission request."""
         return await self.requests.deny(request_id, reason=reason)

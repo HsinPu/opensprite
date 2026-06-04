@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from opensprite.tools.approval import PermissionRequestManager, classify_permission_request
+from opensprite.tools.approval import DEFAULT_PERMISSION_DENIAL_REASON, PermissionRequestManager, classify_permission_request
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
@@ -362,7 +362,8 @@ def test_approval_required_policy_denies_pending_request_in_ask_mode():
 
     result, pending = asyncio.run(scenario())
 
-    _assert_permission_block(result, "user denied approval")
+    assert DEFAULT_PERMISSION_DENIAL_REASON == "user denied approval"
+    _assert_permission_block(result, DEFAULT_PERMISSION_DENIAL_REASON)
     assert pending == []
 
 
