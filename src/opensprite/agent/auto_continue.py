@@ -15,6 +15,17 @@ from .auto_continue_prompt_policy import (
     terse_final_answer_follow_up_instruction,
     web_research_coverage_gap_follow_up_instruction,
 )
+from .auto_continue_reason_policy import (
+    COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON,
+    COMPLETION_GATE_TERMINAL_STATUS_REASON,
+    MAX_AUTO_CONTINUES_REACHED_REASON,
+    MAX_DETERMINISTIC_ACTIONS_REACHED_REASON,
+    NO_PROGRESS_DURING_CONTINUATION_REASON,
+    NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
+    TOOL_ERROR_REQUIRES_BLOCKER_OR_USER_HANDOFF_REASON,
+    completion_gate_continue_reason,
+    review_follow_up_skip_reason,
+)
 from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
@@ -142,14 +153,14 @@ class AutoContinueService:
         max_attempts = work_progress.continuation_budget if work_progress is not None else self.max_auto_continues
         if is_terminal_completion_status(completion_result.status):
             return self._skip(
-                "completion_gate_terminal_status",
+                COMPLETION_GATE_TERMINAL_STATUS_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=False,
             )
         if not is_continuable_completion_status(completion_result.status):
             return self._skip(
-                "completion_gate_status_not_continuable",
+                COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=False,
@@ -173,28 +184,28 @@ class AutoContinueService:
         direct_action_available = bool((direct_workflow and direct_start_step) or direct_verify_action)
         if direct_action_available and direct_actions_used >= self.max_deterministic_actions:
             return self._skip(
-                "max_deterministic_actions_reached",
+                MAX_DETERMINISTIC_ACTIONS_REACHED_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=True,
             )
         if attempts_used > 0 and work_progress is not None and not work_progress.has_progress and not direct_action_available:
             return self._skip(
-                "no_progress_during_continuation",
+                NO_PROGRESS_DURING_CONTINUATION_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=True,
             )
         if not direct_action_available and attempts_used >= max_attempts:
             return self._skip(
-                "max_auto_continues_reached",
+                MAX_AUTO_CONTINUES_REACHED_REASON,
                 attempt=attempts_used,
                 max_attempts=max_attempts,
                 emit_event=True,
             )
         if execution_result.had_tool_error and not direct_action_available:
             return self._skip(
-                "tool_error_requires_blocker_or_user_handoff",
+                TOOL_ERROR_REQUIRES_BLOCKER_OR_USER_HANDOFF_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=True,
@@ -206,15 +217,14 @@ class AutoContinueService:
             and not _can_continue_incomplete_without_prior_tool_progress(task_intent, completion_result, execution_result)
         ):
             return self._skip(
-                "no_tool_progress_after_incomplete_response",
+                NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=True,
             )
         if needs_review_completion_status(completion_result.status) and attempts_used > 0 and not (direct_workflow and direct_start_step):
-            reason = "review_findings_require_follow_up" if completion_result.review_attempted else "review_evidence_still_missing"
             return self._skip(
-                reason,
+                review_follow_up_skip_reason(review_attempted=completion_result.review_attempted),
                 attempt=next_attempt,
                 max_attempts=max_attempts,
                 emit_event=True,
@@ -222,7 +232,7 @@ class AutoContinueService:
         allow_tools = not _should_answer_from_existing_web_sources(completion_result, execution_result)
         return AutoContinueDecision(
             should_continue=True,
-            reason=f"completion_gate_{completion_result.status}",
+            reason=completion_gate_continue_reason(completion_result.status),
             attempt=next_attempt,
             max_attempts=max_attempts,
             prompt=self.build_prompt(
