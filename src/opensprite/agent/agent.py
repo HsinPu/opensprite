@@ -53,6 +53,8 @@ from ..runs.events import (
     ACTIVE_TASK_REPLACED_EVENT,
     ACTIVE_TASK_SEEDED_EVENT,
     ACTIVE_TASK_UNCHANGED_EVENT,
+    ACTIVE_TASK_COMMAND_APPLIED_EVENT,
+    ACTIVE_TASK_COMMAND_FAILED_EVENT,
     PERMISSION_DENIED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
@@ -2317,7 +2319,7 @@ class AgentLoop:
         await self._emit_run_event(
             session_id,
             run_id,
-            "active_task.command_applied" if applied else "active_task.command_failed",
+            ACTIVE_TASK_COMMAND_APPLIED_EVENT if applied else ACTIVE_TASK_COMMAND_FAILED_EVENT,
             payload,
             channel=self.turn_context.current_channel(),
             external_chat_id=self.turn_context.current_external_chat_id(),

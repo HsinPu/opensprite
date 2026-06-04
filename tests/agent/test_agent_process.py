@@ -21,6 +21,7 @@ from opensprite.bus.message import UserMessage
 from opensprite.documents.active_task import create_active_task_store
 from opensprite.llms.base import LLMResponse, ToolCall
 from opensprite.runs.events import (
+    ACTIVE_TASK_COMMAND_APPLIED_EVENT,
     PERMISSION_GRANTED_EVENT,
     PERMISSION_REQUESTED_EVENT,
     TASK_CONTEXT_RESOLVED_EVENT,
@@ -639,7 +640,7 @@ def test_agent_goal_command_persists_resumable_work_state(tmp_path):
     assert work_state.long_running is True
     assert work_state.metadata["source"] == "goal_command"
     assert work_state.resume_hint.startswith("Resume at current step:")
-    assert [event.event_type for event in events] == ["active_task.command_applied"]
+    assert [event.event_type for event in events] == [ACTIVE_TASK_COMMAND_APPLIED_EVENT]
     assert events[0].payload["command"] == "set_goal"
     assert events[0].payload["work_state_created"] is True
 
