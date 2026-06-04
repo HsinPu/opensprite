@@ -12,6 +12,11 @@ from opensprite.agent.run_trace import (
 )
 from opensprite.agent.worktree import WorktreeSandboxInspector
 from opensprite.bus import MessageBus
+from opensprite.runs.events import (
+    RUN_PART_DELTA_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+)
 from opensprite.runs.lifecycle import (
     RUN_CANCELLED_EVENT,
     RUN_CANCELLED_STATUS,
@@ -301,7 +306,7 @@ def test_run_event_sink_persists_and_publishes_safe_payloads():
         await sink.emit(
             "web:browser-1",
             "run-1",
-            "tool_result",
+            TOOL_RESULT_EVENT,
             {"tool_name": "demo", "value": object()},
             channel="web",
             external_chat_id="browser-1",
@@ -314,10 +319,10 @@ def test_run_event_sink_persists_and_publishes_safe_payloads():
     stored_events, bus_event = asyncio.run(scenario())
 
     assert len(stored_events) == 1
-    assert stored_events[0].event_type == "tool_result"
+    assert stored_events[0].event_type == TOOL_RESULT_EVENT
     assert stored_events[0].payload["tool_name"] == "demo"
     assert isinstance(stored_events[0].payload["value"], str)
-    assert bus_event.event_type == "tool_result"
+    assert bus_event.event_type == TOOL_RESULT_EVENT
     assert bus_event.payload == stored_events[0].payload
     assert bus_event.channel == "web"
     assert bus_event.external_chat_id == "browser-1"
@@ -328,7 +333,7 @@ def test_serialize_run_event_builds_stable_envelope():
         event_id=42,
         run_id="run-1",
         session_id="web:browser-1",
-        event_type="tool_result",
+        event_type=TOOL_RESULT_EVENT,
         payload={"tool_name": "demo", "tool_call_id": "call-1", "ok": False, "result_preview": "failed"},
         created_at=12.5,
     )
@@ -366,7 +371,7 @@ def test_serialize_run_event_projects_tool_trace_metadata():
         event_id=45,
         run_id="run-1",
         session_id="web:browser-1",
-        event_type="tool_result",
+        event_type=TOOL_RESULT_EVENT,
         payload={
             "tool_name": "web_search",
             "tool_call_id": "call-1",
@@ -881,7 +886,7 @@ def test_serialize_run_event_classifies_part_delta_as_streaming_text():
         event_id=44,
         run_id="run-1",
         session_id="web:browser-1",
-        event_type="run_part_delta",
+        event_type=RUN_PART_DELTA_EVENT,
         payload={"part_id": "assistant-1", "part_type": "assistant_message", "content_delta": "hello"},
         created_at=13.0,
     )
@@ -901,7 +906,7 @@ def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
                 event_id=index + 1,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="tool_result",
+                event_type=TOOL_RESULT_EVENT,
                 payload={"tool_name": f"tool-{index}"},
                 created_at=float(index),
             )
@@ -912,7 +917,7 @@ def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
                 event_id=1000 + index,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="run_part_delta",
+                event_type=RUN_PART_DELTA_EVENT,
                 payload={"content_delta": str(index)},
                 created_at=100.0 + index,
             )
@@ -922,12 +927,12 @@ def test_compact_run_events_keeps_lifecycle_events_over_text_noise():
     payload = serialize_run_events(events)
 
     assert len(compacted) == 104
-    assert sum(1 for event in compacted if event.event_type == "run_part_delta") == 24
-    assert sum(1 for event in compacted if event.event_type == "tool_result") == 80
+    assert sum(1 for event in compacted if event.event_type == RUN_PART_DELTA_EVENT) == 24
+    assert sum(1 for event in compacted if event.event_type == TOOL_RESULT_EVENT) == 80
     assert compacted[0].event_id == 11
     assert compacted[-1].event_id == 1029
     assert len(payload) == 104
-    assert payload[-1]["event_type"] == "run_part_delta"
+    assert payload[-1]["event_type"] == RUN_PART_DELTA_EVENT
     assert serialize_run_event_counts(events, payload) == {
         "total": 120,
         "returned": 104,
@@ -968,7 +973,7 @@ def test_llm_delta_hook_emits_empty_completion_marker():
     assert len(calls) == 1
     assert calls[0][0] == "web:browser-1"
     assert calls[0][1] == "run-1"
-    assert calls[0][2] == "run_part_delta"
+    assert calls[0][2] == RUN_PART_DELTA_EVENT
     assert calls[0][3] == {
         "part_id": "assistant:run-1:1",
         "part_type": "assistant_message",
@@ -1167,7 +1172,7 @@ def test_serialize_run_artifacts_merges_tool_event_and_part_by_call_id():
                 event_id=1,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="tool_started",
+                event_type=TOOL_STARTED_EVENT,
                 payload={"tool_name": "demo", "tool_call_id": "call-1", "args_preview": "{}"},
                 created_at=10.0,
             ),
@@ -1175,7 +1180,7 @@ def test_serialize_run_artifacts_merges_tool_event_and_part_by_call_id():
                 event_id=2,
                 run_id="run-1",
                 session_id="web:browser-1",
-                event_type="tool_result",
+                event_type=TOOL_RESULT_EVENT,
                 payload={"tool_name": "demo", "tool_call_id": "call-1", "ok": True, "result_preview": "done"},
                 created_at=11.0,
             ),
