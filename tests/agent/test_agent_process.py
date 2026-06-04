@@ -42,6 +42,10 @@ from opensprite.runs.events import (
     TOOL_PERMISSION_ALLOWED_EVENT,
     TOOL_PERMISSION_APPROVAL_REQUIRED_EVENT,
     TOOL_PERMISSION_CHECKED_EVENT,
+    TOOL_RESULT_EVENT,
+    TOOL_STARTED_EVENT,
+    VERIFICATION_RESULT_EVENT,
+    VERIFICATION_STARTED_EVENT,
     WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
@@ -974,10 +978,10 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
     stored_events, stored_parts, bus_events = asyncio.run(scenario())
 
     assert [event.event_type for event in stored_events] == [
-        "tool_started",
-        "verification_started",
-        "tool_result",
-        "verification_result",
+        TOOL_STARTED_EVENT,
+        VERIFICATION_STARTED_EVENT,
+        TOOL_RESULT_EVENT,
+        VERIFICATION_RESULT_EVENT,
     ]
     assert [event.event_type for event in bus_events] == [event.event_type for event in stored_events]
     assert stored_events[1].payload == {"action": "python_compile", "path": "src"}
@@ -1041,7 +1045,7 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
 
     stored_events, stored_parts = asyncio.run(scenario())
 
-    assert stored_events[-1].event_type == "tool_result"
+    assert stored_events[-1].event_type == TOOL_RESULT_EVENT
     assert stored_events[-1].payload["ok"] is False
     assert stored_events[-1].payload["state"] == "error"
     assert stored_events[-1].payload["error"] == "HTTP Error: 404 Not Found"
