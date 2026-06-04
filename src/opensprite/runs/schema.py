@@ -103,6 +103,17 @@ from .lifecycle import (
 from ..utils.json_safe import json_safe_payload
 
 RUN_SCHEMA_VERSION = 1
+RUN_WARNING_TOOL_ERROR = "tool_error"
+RUN_WARNING_VERIFICATION_NOT_PASSED = "verification_not_passed"
+RUN_WARNING_REVIEW_NOT_PASSED = "review_not_passed"
+RUN_WARNING_PARALLEL_DELEGATION_FAILED = "parallel_delegation_failed"
+RUN_WARNING_PARALLEL_DELEGATION_CANCELLED = "parallel_delegation_cancelled"
+RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC = "external_http_via_exec"
+RUN_WARNING_HARNESS_PREFIX = "harness_"
+RUN_WARNING_HARNESS_STATUSES = frozenset({"warn", "fail"})
+RUN_FAILED_STATUSES = frozenset({"failed", "error"})
+RUN_CANCELLED_STATUSES = frozenset({"cancelled", "cancelling"})
+RUN_STATUS_WARNING_STATUSES = frozenset({"failed", "cancelled"})
 MAX_SERIALIZED_RUN_EVENTS = 80
 MAX_SERIALIZED_TEXT_EVENTS = 24
 
@@ -1263,21 +1274,21 @@ def serialize_run_summary(trace: Any) -> dict[str, Any]:
     had_tool_error = _metadata_bool(run_metadata, "had_tool_error")
     warnings: list[str] = []
     if had_tool_error:
-        warnings.append("tool_error")
+        warnings.append(RUN_WARNING_TOOL_ERROR)
     if verification["attempted"] and not verification["passed"]:
-        warnings.append("verification_not_passed")
+        warnings.append(RUN_WARNING_VERIFICATION_NOT_PASSED)
     if review["required"] and not review["passed"]:
-        warnings.append("review_not_passed")
-    if any(str(group.get("status") or "") in {"failed", "error"} for group in parallel_delegation.get("groups", [])):
-        warnings.append("parallel_delegation_failed")
-    if any(str(group.get("status") or "") in {"cancelled", "cancelling"} for group in parallel_delegation.get("groups", [])):
-        warnings.append("parallel_delegation_cancelled")
-    if harness_scorecard.get("status") in {"warn", "fail"}:
-        warnings.append(f"harness_{harness_scorecard['status']}")
-    if getattr(run, "status", None) in {"failed", "cancelled"}:
+        warnings.append(RUN_WARNING_REVIEW_NOT_PASSED)
+    if any(str(group.get("status") or "") in RUN_FAILED_STATUSES for group in parallel_delegation.get("groups", [])):
+        warnings.append(RUN_WARNING_PARALLEL_DELEGATION_FAILED)
+    if any(str(group.get("status") or "") in RUN_CANCELLED_STATUSES for group in parallel_delegation.get("groups", [])):
+        warnings.append(RUN_WARNING_PARALLEL_DELEGATION_CANCELLED)
+    if harness_scorecard.get("status") in RUN_WARNING_HARNESS_STATUSES:
+        warnings.append(f"{RUN_WARNING_HARNESS_PREFIX}{harness_scorecard['status']}")
+    if getattr(run, "status", None) in RUN_STATUS_WARNING_STATUSES:
         warnings.append(run.status)
     if _has_external_http_exec_artifact(artifacts):
-        warnings.append("external_http_via_exec")
+        warnings.append(RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC)
 
     duration_seconds = None
     if getattr(run, "finished_at", None) is not None:

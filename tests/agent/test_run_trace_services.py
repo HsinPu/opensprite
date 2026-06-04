@@ -37,6 +37,10 @@ from opensprite.runs.lifecycle import (
     RUN_STARTED_EVENT,
 )
 from opensprite.runs.schema import (
+    RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC,
+    RUN_WARNING_HARNESS_PREFIX,
+    RUN_WARNING_PARALLEL_DELEGATION_FAILED,
+    RUN_WARNING_REVIEW_NOT_PASSED,
     compact_run_events,
     serialize_file_change,
     serialize_run_artifacts,
@@ -1408,7 +1412,7 @@ def test_serialize_run_summary_warns_on_external_http_exec():
 
     summary = serialize_run_summary(trace)
 
-    assert "external_http_via_exec" in summary["warnings"]
+    assert RUN_WARNING_EXTERNAL_HTTP_VIA_EXEC in summary["warnings"]
 
 
 def test_serialize_run_summary_includes_harness_scorecard_health():
@@ -1455,7 +1459,7 @@ def test_serialize_run_summary_includes_harness_scorecard_health():
         "failing_sensors": [],
         "warning_sensors": ["research.freshness"],
     }
-    assert "harness_warn" in summary["warnings"]
+    assert f"{RUN_WARNING_HARNESS_PREFIX}warn" in summary["warnings"]
 
 
 def test_serialize_run_summary_collects_structured_subagent_results():
@@ -1759,7 +1763,7 @@ def test_serialize_run_summary_marks_parallel_delegation_warnings():
     summary = serialize_run_summary(trace)
 
     assert summary["parallel_delegation"]["group_count"] == 1
-    assert summary["warnings"] == ["parallel_delegation_failed"]
+    assert summary["warnings"] == [RUN_WARNING_PARALLEL_DELEGATION_FAILED]
 
 
 def test_serialize_run_summary_marks_review_warning_when_required_review_missing():
@@ -1807,7 +1811,7 @@ def test_serialize_run_summary_marks_review_warning_when_required_review_missing
         "prompt_types": [],
         "finding_count": 0,
     }
-    assert summary["warnings"] == ["review_not_passed"]
+    assert summary["warnings"] == [RUN_WARNING_REVIEW_NOT_PASSED]
 
 
 def test_serialize_run_summary_includes_structured_subagents():
