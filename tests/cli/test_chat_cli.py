@@ -16,7 +16,7 @@ from opensprite.cli.commands_chat import (
     snapshot_workspace_for_session,
 )
 from opensprite.runs.events import TOOL_STARTED_EVENT
-from opensprite.runs.lifecycle import RUN_FINISHED_EVENT, RUN_STARTED_EVENT
+from opensprite.runs.lifecycle import RUN_FAILED_EVENT, RUN_FINISHED_EVENT, RUN_STARTED_EVENT
 
 
 def test_build_ws_url_defaults_to_gateway_ws_path():
@@ -101,7 +101,7 @@ def test_result_payload_includes_trace_summary():
         external_chat_id="smoke",
         session_id="cli:smoke",
         run_id="run-cli",
-        event_type="run_finished",
+        event_type=RUN_FINISHED_EVENT,
         payload={"status": "completed"},
         created_at=1.0,
     )
@@ -192,7 +192,7 @@ def test_run_web_chat_sends_message_to_gateway_websocket(tmp_path):
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -202,7 +202,7 @@ def test_run_web_chat_sends_message_to_gateway_websocket(tmp_path):
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "completed",
                 }
             )
@@ -266,7 +266,7 @@ def test_run_web_chat_ignores_stale_run_events_before_current_run_start():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-old",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "completed",
                 }
             )
@@ -276,7 +276,7 @@ def test_run_web_chat_ignores_stale_run_events_before_current_run_start():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-new",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -286,7 +286,7 @@ def test_run_web_chat_ignores_stale_run_events_before_current_run_start():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-new",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "completed",
                 }
             )
@@ -337,7 +337,7 @@ def test_run_web_chat_ignores_intermediate_messages_until_run_finishes():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -355,7 +355,7 @@ def test_run_web_chat_ignores_intermediate_messages_until_run_finishes():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "completed",
                 }
             )
@@ -404,7 +404,7 @@ def test_run_web_chat_returns_when_final_message_arrives_before_run_finished():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -422,7 +422,7 @@ def test_run_web_chat_returns_when_final_message_arrives_before_run_finished():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "completed",
                 }
             )
@@ -464,7 +464,7 @@ def test_run_web_chat_accepts_reply_when_terminal_event_is_missing_before_timeou
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-web",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -519,7 +519,7 @@ def test_run_web_chat_returns_trace_ids_when_gateway_fails_after_run_start():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-failed",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -529,7 +529,7 @@ def test_run_web_chat_returns_trace_ids_when_gateway_fails_after_run_start():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-failed",
-                    "event_type": "run_failed",
+                    "event_type": RUN_FAILED_EVENT,
                     "status": "failed",
                 }
             )
@@ -573,7 +573,7 @@ def test_run_web_chat_marks_needs_verification_status_not_ok():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-verify",
-                    "event_type": "run_started",
+                    "event_type": RUN_STARTED_EVENT,
                     "status": "running",
                 }
             )
@@ -583,7 +583,7 @@ def test_run_web_chat_marks_needs_verification_status_not_ok():
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-verify",
-                    "event_type": "run_finished",
+                    "event_type": RUN_FINISHED_EVENT,
                     "status": "needs_verification",
                 }
             )
@@ -633,7 +633,7 @@ def test_run_web_chat_marks_run_failed_status_not_ok_even_with_apology_message()
                     "session_id": session_id,
                     "external_chat_id": external_chat_id,
                     "run_id": "run-failed",
-                    "event_type": "run_failed",
+                    "event_type": RUN_FAILED_EVENT,
                     "status": "failed",
                 }
             )
