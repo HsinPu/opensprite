@@ -153,6 +153,52 @@ def test_grep_files_searches_with_include_filter(tmp_path):
     assert "README.md" not in result
 
 
+def test_grep_files_schema_says_path_accepts_directory_or_file(tmp_path):
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    description = tool.description
+    path_description = tool.parameters["properties"]["path"]["description"]
+
+    assert "path" in description
+    assert "directory" in description
+    assert "one file" in description
+    assert "Directory or single file" in path_description
+    assert "searches only that file" in path_description
+
+
+def test_grep_files_searches_single_file_path_without_directory_error(tmp_path, monkeypatch):
+    (tmp_path / "target.py").write_text("def plan():\n    pass\n", encoding="utf-8")
+    (tmp_path / "other.py").write_text("def plan():\n    pass\n", encoding="utf-8")
+    monkeypatch.setattr(filesystem, "_find_ripgrep", lambda: None)
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern=r"def\s+plan", path="target.py"))
+
+    assert "Found 1 matches" in result
+    assert "target.py:" in result
+    assert "other.py:" not in result
+
+
+def test_grep_files_ripgrep_single_file_path_keeps_filename(tmp_path, monkeypatch):
+    (tmp_path / "target.py").write_text("def plan():\n    pass\n", encoding="utf-8")
+    calls = []
+
+    async def fake_run_ripgrep(args, cwd):
+        calls.append((args, cwd))
+        return 0, "target.py:1:def plan():\n", ""
+
+    monkeypatch.setattr(filesystem, "_find_ripgrep", lambda: "rg")
+    monkeypatch.setattr(filesystem, "_run_ripgrep", fake_run_ripgrep)
+    tool = GrepFilesTool(workspace=tmp_path)
+
+    result = asyncio.run(tool.execute(pattern=r"def\s+plan", path="target.py"))
+
+    assert "--with-filename" in calls[0][0]
+    assert calls[0][0][-1] == "target.py"
+    assert "Found 1 matches" in result
+    assert "target.py:" in result
+
+
 def test_grep_files_uses_ripgrep_and_post_filters_include(tmp_path, monkeypatch):
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "app.py").write_text("class Sprite:\n    pass\n", encoding="utf-8")
@@ -174,6 +220,7 @@ def test_grep_files_uses_ripgrep_and_post_filters_include(tmp_path, monkeypatch)
             "rg",
             "--line-number",
             "--no-heading",
+            "--with-filename",
             "--color",
             "never",
             "--no-messages",

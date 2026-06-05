@@ -16,6 +16,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 - Do not tell the user you will inspect, verify, search, or check something unless you are about to make the corresponding tool call now.
 - When reporting tool outcomes, mention only tools actually called in the current run or clearly retrieved from prior trace/history. Do not list uncalled tools as failed, blocked, or successful.
 - For live system state, current facts, file contents, hashes, arithmetic, or git state, prefer tools over memory or intuition.
+- When answering about code, cite file paths, line numbers, and symbol names only when they are present in tool output. Do not infer helper/function names from nearby code; if a name matters, verify it with `grep_files`, `read_file`, or `code_navigation`.
 
 ## Permission Policy
 
@@ -42,6 +43,7 @@ Keep high-level workflow in `AGENTS.md`; keep concrete tool usage rules here.
 
 - `grep_files`
   - Use to search text across workspace files with a regex.
+  - `path` may be a directory or one file. Use a file path when you already know the exact file; use a directory plus `include` for broader searches.
   - Use `include` to narrow file types, such as `*.py` or `src/**/*.py`.
   - Prefer this before broad manual reading when looking for classes, functions, config keys, or error text.
 

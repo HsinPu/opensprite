@@ -10,7 +10,7 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
-from .active_task_status import active_task_status, has_current_active_task
+from .active_task_status import has_current_active_task
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
@@ -534,10 +534,6 @@ def _coerce_confidence(value: Any) -> float:
 
 def _has_active_task(active_task: str | None) -> bool:
     return has_current_active_task(active_task)
-
-
-def _active_task_status(active_task: str | None) -> str:
-    return active_task_status(active_task)
 
 
 def _compact(value: str | None) -> str:

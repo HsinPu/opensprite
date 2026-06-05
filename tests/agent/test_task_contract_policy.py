@@ -31,8 +31,49 @@ from opensprite.agent.task_contract import (
     is_workspace_location_criterion,
     missing_evidence,
 )
+from opensprite.agent.planner_capabilities import build_planner_capability_catalog
 from opensprite.agent.task_intent import TaskIntent
+from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
+from opensprite.tools.registry import ToolRegistry
+
+
+class _CatalogTool(Tool):
+    def __init__(
+        self,
+        name: str,
+        *,
+        description: str,
+        capability_groups: frozenset[str] | None = None,
+        risk_levels: frozenset[str] | None = None,
+    ):
+        self._name = name
+        self._description = description
+        self._capability_groups = capability_groups
+        self._risk_levels = risk_levels
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return self._description
+
+    @property
+    def parameters(self) -> dict:
+        return {"type": "object", "properties": {}}
+
+    @property
+    def capability_groups(self) -> frozenset[str] | None:
+        return self._capability_groups
+
+    @property
+    def risk_levels(self) -> frozenset[str] | None:
+        return self._risk_levels
+
+    async def _execute(self, **kwargs) -> str:
+        return "ok"
 
 
 def test_planner_fallback_reasons_are_centralized():
@@ -85,6 +126,92 @@ def test_planner_prompt_preserves_tail_of_long_current_message():
     assert "... [middle omitted] ..." in prompt
     assert "最後一句才是任務" in prompt
     assert "GAMMA-772" in prompt
+
+
+def test_planner_prompt_uses_dynamic_capability_catalog_instead_of_if_routing():
+    registry = ToolRegistry()
+    registry.register(
+        _CatalogTool(
+            "quote_lookup",
+            description="Look up current public market quotes from configured market-data sources.",
+            capability_groups=frozenset({"market_data"}),
+            risk_levels=frozenset({"network"}),
+        )
+    )
+    catalog = build_planner_capability_catalog(registry)
+
+    prompt = _build_planner_contract_prompt(
+        current_message="Find the current TSMC quote.",
+        history=[],
+        task_intent=TaskIntent(kind="question", objective="Find the current TSMC quote."),
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+        capability_catalog=catalog,
+    )
+
+    assert "market_data" in prompt
+    assert "quote_lookup" in prompt
+    assert "Look up current public market quotes" in prompt
+    assert "If the user asks" not in prompt
+    assert "current, external, public" not in prompt
+
+
+def test_planner_prompt_warns_against_inventing_unavailable_capabilities():
+    prompt = _build_planner_contract_prompt(
+        current_message="Find the implementation.",
+        history=[],
+        task_intent=TaskIntent(kind="question", objective="Find the implementation."),
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert "Do not invent unavailable tool groups" in prompt
+    assert "Use semantic judgment" in prompt
+
+
+def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata():
+    registry = ToolRegistry()
+    registry.register(
+        _CatalogTool(
+            "quote_lookup",
+            description="Look up current public market quotes.",
+            capability_groups=frozenset({"market_data"}),
+        )
+    )
+    catalog = build_planner_capability_catalog(registry)
+
+    contract = _contract_from_planner_payload(
+        {
+            "task_type": "task",
+            "required_tool_groups": ["market_data"],
+            "allow_no_tool_final": False,
+            "reason": "The available market_data capability can gather quote evidence.",
+        },
+        task_intent=TaskIntent(kind="question", objective="Find the current TSMC quote."),
+        current_message="Find the current TSMC quote.",
+        history=None,
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+        capability_catalog=catalog,
+    )
+
+    assert contract.task_type == "task"
+    assert contract.allow_no_tool_final is False
+    assert contract.planner_metadata["capability_tools"]["market_data"] == ["quote_lookup"]
+    assert any(item.kind == "tool_group" and item.tool_group == "market_data" for item in contract.requirements)
+    assert missing_evidence(contract, (), file_change_count=0, verification_passed=False)
+    assert missing_evidence(
+        contract,
+        (ToolEvidence(name="quote_lookup", args={}, result_preview="ok", ok=True),),
+        file_change_count=0,
+        verification_passed=False,
+    ) == ()
 
 
 def test_planner_tool_group_aliases_are_normalized_without_duplicates():

@@ -35,6 +35,11 @@ class Tool(ABC):
         """Optional risk metadata used by runtime permission policies."""
         return None
 
+    @property
+    def capability_groups(self) -> frozenset[str] | None:
+        """Optional planner capability groups exposed by this tool."""
+        return None
+
     async def execute(self, **kwargs: Any) -> str:
         """
         Validate and execute the tool with given parameters.

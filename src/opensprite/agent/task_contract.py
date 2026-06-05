@@ -28,6 +28,7 @@ from .harness_profile import (
     WORKSPACE_READ_TASK_TYPE,
     WORKSPACE_READ_TOOL_GROUP,
 )
+from .planner_capabilities import PlannerCapabilityCatalog, build_planner_capability_catalog
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import TaskIntent
@@ -123,12 +124,9 @@ _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
 _PLANNER_CONTRACT_SYSTEM_PROMPT = (
     "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
-    "Choose task_type from: pure_answer, web_research, workspace_read, workspace_change, "
-    f"{PLANNER_MEDIA_ANALYSIS_TASK_TYPE}, planning, history_retrieval, {PLANNER_OPS_TASK_TYPE}, "
-    "task, analysis. Choose required_tool_groups only from: web_research, "
-    "workspace_read, workspace_write, media, history_retrieval, scheduling, execution, verification. If no tool evidence is needed, "
-    "use pure_answer and an empty required_tool_groups array. The JSON keys are: task_type, "
-    "required_tool_groups, final_answer_required, allow_no_tool_final, reason."
+    "Choose the smallest necessary set from the available runtime capabilities supplied in the user prompt. "
+    "If no tool-backed evidence is needed, use pure_answer and an empty required_tool_groups array. "
+    "The JSON keys are: task_type, required_tool_groups, final_answer_required, allow_no_tool_final, reason."
 )
 _PLANNER_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
@@ -237,6 +235,7 @@ class TaskContractPlanner:
         *,
         provider: Any,
         model: str | None,
+        tool_registry: Any | None = None,
         task_intent: TaskIntent,
         current_message: str,
         history: list[dict[str, Any]] | None,
@@ -250,6 +249,7 @@ class TaskContractPlanner:
                 objective=str(task_intent.objective or current_message or "").strip(),
                 reason=PLANNER_UNAVAILABLE_REASON,
             )
+        capability_catalog = build_planner_capability_catalog(tool_registry)
         planner_prompt = _build_planner_contract_prompt(
             current_message=current_message,
             history=history or [],
@@ -258,6 +258,7 @@ class TaskContractPlanner:
             current_audio_files=current_audio_files,
             current_video_files=current_video_files,
             task_context_decision=task_context_decision,
+            capability_catalog=capability_catalog,
         )
         try:
             response = await provider.chat(
@@ -320,6 +321,7 @@ class TaskContractPlanner:
             current_audio_files=current_audio_files,
             current_video_files=current_video_files,
             task_context_decision=task_context_decision,
+            capability_catalog=capability_catalog,
         )
 
 
@@ -442,12 +444,12 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
     aliases = ResourceIndex.aliases_for(contract.selected_resources)
     for requirement in contract.requirements:
         if is_tool_group_requirement(requirement):
-            tools = TOOL_GROUPS.get(requirement.tool_group, frozenset())
+            tools = _contract_tool_group_tools(contract, requirement.tool_group)
             count = sum(1 for item in ok_evidence if item.name in tools)
             if count < max(1, requirement.min_count):
                 missing.append(requirement.description or f"Use one of: {', '.join(sorted(tools))}")
         elif _is_resource_coverage_requirement(requirement):
-            tools = TOOL_GROUPS.get(requirement.tool_group, frozenset())
+            tools = _contract_tool_group_tools(contract, requirement.tool_group)
             covered = {
                 alias
                 for item in ok_evidence
@@ -469,6 +471,16 @@ def missing_evidence(contract: TaskContract | None, evidence: tuple[ToolEvidence
         elif _is_verification_requirement(requirement) and not verification_passed:
             missing.append(requirement.description or "Record passing verification evidence.")
     return tuple(missing)
+
+
+def _contract_tool_group_tools(contract: TaskContract, tool_group: str) -> frozenset[str]:
+    metadata = getattr(contract, "planner_metadata", None) or {}
+    capability_tools = metadata.get("capability_tools") if isinstance(metadata, dict) else None
+    if isinstance(capability_tools, dict):
+        tools = capability_tools.get(tool_group)
+        if isinstance(tools, (list, tuple, set, frozenset)):
+            return frozenset(str(tool or "").strip() for tool in tools if str(tool or "").strip())
+    return TOOL_GROUPS.get(tool_group, frozenset())
 
 
 def contract_expects_file_change(task_contract: Any) -> bool:
@@ -524,7 +536,9 @@ def _build_planner_contract_prompt(
     current_audio_files: list[str] | None,
     current_video_files: list[str] | None,
     task_context_decision: TaskContextDecision | None,
+    capability_catalog: PlannerCapabilityCatalog | None = None,
 ) -> str:
+    catalog = capability_catalog or build_planner_capability_catalog()
     context = {
         "current_message": _truncate_middle(current_message, max_chars=1200),
         "task_intent": task_intent.to_metadata(),
@@ -535,36 +549,49 @@ def _build_planner_contract_prompt(
             "video_files": list(current_video_files or []),
         },
         "task_context": task_context_decision.to_metadata() if task_context_decision is not None else None,
+        "capability_catalog": catalog.to_prompt_metadata(),
+        "quality_checks": _quality_check_catalog(),
     }
     return (
         "Create the task contract for the latest user turn. The contract controls which tools the main assistant can see.\n"
-        "Use semantic judgment from the message and recent history, not string matching. If the user asks for current, "
-        "external, public, financial, weather, news, webpage, or source-grounded facts, choose web_research. "
-        "If the user asks about local files, repo code, project state, or wants code changes, choose workspace_read or "
-        "workspace_change. If the user asks about attached media, choose "
-        f"{PLANNER_MEDIA_ANALYSIS_TASK_TYPE}. If the user asks about previous "
-        "conversation state, choose history_retrieval. If the user asks to schedule, remind, pause, list, or run reminders "
-        f"or recurring jobs, choose {PLANNER_OPS_TASK_TYPE} with required_tool_groups ['scheduling']. "
-        "If the user asks to inspect the local machine, "
-        "installed commands, command versions, running processes, or local runtime state, choose "
-        f"{PLANNER_OPS_TASK_TYPE} with required_tool_groups "
-        "['execution']. Use quality_checks only for extra answer-specific verification: "
-        f"{COMMAND_VERSION_QUALITY_CHECK} when the answer must "
-        f"report an installed command version, {REPOSITORY_STATUS_QUALITY_CHECK} when it must report git/worktree status, and {WORKSPACE_LOCATION_QUALITY_CHECK} "
-        "when it must name the file path, symbol, or config location found in workspace inspection. If no tool evidence is needed, "
-        "choose pure_answer.\n"
+        "Use semantic judgment from the message and recent history, not string matching. Select the smallest set of "
+        "required_tool_groups from capability_catalog.available_capabilities that is necessary to finish the task with "
+        "evidence. Do not invent unavailable tool groups. If no tool-backed evidence is needed, choose pure_answer with "
+        "an empty required_tool_groups array. Use quality_checks only when the final answer needs extra verification "
+        "beyond the selected capabilities.\n"
         "Return JSON only with this shape:\n"
         "{\n"
-        '  "task_type": "pure_answer | web_research | workspace_read | workspace_change | '
-        f'{PLANNER_MEDIA_ANALYSIS_TASK_TYPE} | history_retrieval | {PLANNER_OPS_TASK_TYPE} | task | analysis",\n'
-        '  "required_tool_groups": ["web_research | workspace_read | workspace_write | media | history_retrieval | scheduling | execution | verification"],\n'
-        f'  "quality_checks": ["{COMMAND_VERSION_QUALITY_CHECK} | {REPOSITORY_STATUS_QUALITY_CHECK} | {WORKSPACE_LOCATION_QUALITY_CHECK}"],\n'
+        f'  "task_type": "{_schema_union(catalog.task_types)}",\n'
+        f'  "required_tool_groups": ["{_schema_union(catalog.tool_group_ids)}"],\n'
+        f'  "quality_checks": ["{_schema_union(_ALLOWED_PLANNER_QUALITY_CHECKS)}"],\n'
         '  "final_answer_required": true,\n'
         '  "allow_no_tool_final": true,\n'
         '  "reason": "short explanation for trace only"\n'
         "}\n\n"
         f"Input:\n{json.dumps(context, ensure_ascii=False, indent=2)}"
     )
+
+
+def _quality_check_catalog() -> list[dict[str, str]]:
+    return [
+        {
+            "id": COMMAND_VERSION_QUALITY_CHECK,
+            "description": "Use when the final answer must report an installed command version.",
+        },
+        {
+            "id": REPOSITORY_STATUS_QUALITY_CHECK,
+            "description": "Use when the final answer must report repository or worktree status.",
+        },
+        {
+            "id": WORKSPACE_LOCATION_QUALITY_CHECK,
+            "description": "Use when the final answer must identify a workspace file path, symbol, or config location.",
+        },
+    ]
+
+
+def _schema_union(values: tuple[str, ...] | frozenset[str]) -> str:
+    ordered = list(values) if isinstance(values, tuple) else sorted(values)
+    return " | ".join(ordered) if ordered else "<none>"
 
 
 def _planner_blocked_contract(
@@ -614,7 +641,9 @@ def _contract_from_planner_payload(
     current_audio_files: list[str] | None,
     current_video_files: list[str] | None,
     task_context_decision: TaskContextDecision | None,
+    capability_catalog: PlannerCapabilityCatalog | None = None,
 ) -> TaskContract:
+    catalog = capability_catalog or build_planner_capability_catalog()
     objective = str(task_intent.objective or current_message or "").strip()
     resource_index = ResourceIndex.from_turn_and_history(
         current_message=current_message,
@@ -631,7 +660,10 @@ def _contract_from_planner_payload(
             reason=PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
             raw_response_preview=_truncate(json.dumps(payload, ensure_ascii=False, sort_keys=True), max_chars=240),
         )
-    raw_tool_groups = _normalize_planner_tool_groups(payload.get("required_tool_groups"))
+    raw_tool_groups = _normalize_planner_tool_groups(
+        payload.get("required_tool_groups"),
+        allowed_tool_groups=catalog.tool_group_ids,
+    )
     quality_checks = _normalize_planner_quality_checks(payload.get("quality_checks"))
     task_type = _PLANNER_TASK_TYPE_ALIASES.get(raw_task_type, raw_task_type)
     tool_groups = raw_tool_groups
@@ -639,7 +671,7 @@ def _contract_from_planner_payload(
         tool_groups = [tool_group for tool_group in tool_groups if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP]
     inherited_tool_group = getattr(task_context_decision, "inherited_tool_group", "") or ""
     if (
-        inherited_tool_group in _ALLOWED_PLANNER_TOOL_GROUPS
+        inherited_tool_group in catalog.tool_group_ids
         and inherited_tool_group not in tool_groups
     ):
         tool_groups.append(inherited_tool_group)
@@ -667,6 +699,7 @@ def _contract_from_planner_payload(
         "raw_task_type": raw_task_type,
         "required_tool_groups": list(tool_groups),
         "quality_checks": list(quality_checks),
+        "capability_tools": {key: list(value) for key, value in catalog.capability_tools.items()},
         PLANNER_METADATA_REASON_FIELD: planner_reason,
     }
     return TaskContract(
@@ -682,13 +715,18 @@ def _contract_from_planner_payload(
     )
 
 
-def _normalize_planner_tool_groups(value: Any) -> list[str]:
+def _normalize_planner_tool_groups(
+    value: Any,
+    *,
+    allowed_tool_groups: tuple[str, ...] | frozenset[str] | None = None,
+) -> list[str]:
+    allowed = set(allowed_tool_groups or _ALLOWED_PLANNER_TOOL_GROUPS)
     raw_values = value if isinstance(value, list) else []
     groups: list[str] = []
     for item in raw_values:
         text = str(item or "").strip()
         text = _PLANNER_TOOL_GROUP_ALIASES.get(text, text)
-        if text in _ALLOWED_PLANNER_TOOL_GROUPS and text not in groups:
+        if text in allowed and text not in groups:
             groups.append(text)
     return groups
 
@@ -756,7 +794,9 @@ def _append_tool_group_contract(
                 description="Record verification evidence before finalizing.",
             )
         )
-    return acceptance_criteria
+        return acceptance_criteria
+    requirements.append(_tool_group_requirement(tool_group))
+    return _append_acceptance_criteria(acceptance_criteria, (_tool_backed_final_answer_criterion(),))
 
 
 def _append_media_contract(
@@ -969,6 +1009,14 @@ def _workspace_final_answer_criterion() -> AcceptanceCriterion:
         kind="substantive_final_answer",
         min_response_chars=80,
         description="Provide a substantive final answer that uses the inspected workspace context.",
+    )
+
+
+def _tool_backed_final_answer_criterion() -> AcceptanceCriterion:
+    return AcceptanceCriterion(
+        kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        min_response_chars=80,
+        description="Provide a substantive final answer that uses the gathered tool evidence.",
     )
 
 

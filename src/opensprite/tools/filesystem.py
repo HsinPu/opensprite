@@ -573,6 +573,15 @@ async def _run_ripgrep(args: list[str], cwd: Path) -> tuple[int, str, str]:
 
 def _iter_workspace_files(workspace: Path, base: Path, include: str | None = None):
     """Yield files under base without following symlinks outside the workspace."""
+    if base.is_file():
+        resolved = base.resolve(strict=False)
+        try:
+            resolved.relative_to(workspace)
+        except ValueError:
+            return
+        if _file_matches_include(workspace, base.parent, resolved, include):
+            yield resolved
+        return
     for file_path in base.rglob("*"):
         resolved = file_path.resolve(strict=False)
         try:
@@ -650,6 +659,7 @@ async def _ripgrep_search(
         rg,
         "--line-number",
         "--no-heading",
+        "--with-filename",
         "--color",
         "never",
         "--no-messages",
@@ -988,7 +998,8 @@ class GrepFilesTool(Tool):
     def description(self) -> str:
         return (
             "Search text files inside the current workspace using ripgrep-backed regular expressions. "
-            "Supports optional 'path' and 'include' glob filters such as '*.py' or 'src/**/*.py'."
+            "The optional 'path' argument may be a directory or one file. "
+            "Use optional 'include' glob filters such as '*.py' or 'src/**/*.py' to narrow matching files."
         )
 
     @property
@@ -1003,7 +1014,10 @@ class GrepFilesTool(Tool):
                 },
                 "path": {
                     "type": "string",
-                    "description": "Optional. Directory to search, relative to the current workspace. Defaults to '.'.",
+                    "description": (
+                        "Optional. Directory or single file to search, relative to the current workspace. "
+                        "Defaults to '.'. When path is a file, grep_files searches only that file."
+                    ),
                 },
                 "include": {
                     "type": "string",
@@ -1031,16 +1045,9 @@ class GrepFilesTool(Tool):
                 )
             if not search_path.exists():
                 return _filesystem_error_result(
-                    f"Directory not found: {path}",
+                    f"Path not found: {path}",
                     tool_name=self.name,
                     category="not_found",
-                    metadata={"path": path},
-                )
-            if not search_path.is_dir():
-                return _filesystem_error_result(
-                    f"Not a directory: {path}",
-                    tool_name=self.name,
-                    category="not_directory",
                     metadata={"path": path},
                 )
 

@@ -321,6 +321,7 @@ class LlmCallService:
                         external_chat_id=external_chat_id,
                     )
                 task_contract = await self._plan_task_contract(
+                    tool_registry=base_tool_registry,
                     task_intent=effective_task_intent,
                     current_message=prompt_message,
                     history=history_dicts,
@@ -749,7 +750,10 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     if is_source_reference_criterion(criterion):
         return "Reference at least one gathered source by URL, domain, or title in the final answer."
     if is_workspace_location_criterion(criterion):
-        return "Identify the relevant workspace file path, symbol, or configuration location in the final answer."
+        return (
+            "Identify the relevant workspace file path, symbol, or configuration location in the final answer, "
+            "using only names and locations shown by workspace tool output; verify uncertain symbol names before citing them."
+        )
     if is_media_artifact_criterion(criterion):
         return "Produce the required media artifact before finalizing."
     if is_verification_or_gap_criterion(criterion):
