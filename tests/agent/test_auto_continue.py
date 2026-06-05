@@ -1,4 +1,4 @@
-from opensprite.agent.auto_continue import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService
+from opensprite.agent.auto_continue import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService, format_web_source_context
 from opensprite.agent.auto_continue_reason_policy import (
     MAX_AUTO_CONTINUES_REACHED_REASON,
     NO_PROGRESS_DURING_CONTINUATION_REASON,
@@ -802,6 +802,52 @@ def test_auto_continue_includes_fetched_source_detail_for_finalization():
     assert "fetched content (1800 chars)" in (decision.prompt or "")
     assert "context engineering" in (decision.prompt or "")
     assert "software development" in (decision.prompt or "")
+
+
+def test_auto_continue_build_prompt_uses_explicit_source_context_override():
+    intent = TaskIntentService().classify("Please summarize the current AI agent market.")
+    completion = CompletionGateResult(status="incomplete", reason="needs final source answer")
+    irrelevant_source = {
+        "tool_name": "web_fetch",
+        "title": "Unrelated list",
+        "url": "https://example.com/unrelated",
+        "snippet": "This page is about unrelated product rankings.",
+        "content_chars": 1200,
+    }
+    relevant_context = format_web_source_context(
+        [
+            {
+                "tool_name": "web_fetch",
+                "title": "Relevant market report",
+                "url": "https://example.com/agent-market",
+                "snippet": "Agent markets are shifting toward governed production deployments.",
+                "content_chars": 2400,
+            }
+        ]
+    )
+
+    prompt = AutoContinueService(max_auto_continues=1).build_prompt(
+        task_intent=intent,
+        completion_result=completion,
+        previous_response="I found sources.",
+        execution_result=ExecutionResult(
+            content="I found sources.",
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_fetch",
+                    metadata={"sources": [irrelevant_source]},
+                ),
+            ),
+        ),
+        allow_tools=False,
+        source_context_override=relevant_context,
+    )
+
+    assert "Relevant market report" in prompt
+    assert "governed production deployments" in prompt
+    assert "Unrelated list" not in prompt
+    assert "unrelated product rankings" not in prompt
 
 
 def test_auto_continue_guides_retry_after_terse_final_answer():

@@ -279,6 +279,7 @@ class AutoContinueService:
         harness_profile: HarnessProfile | None = None,
         execution_result: ExecutionResult | None = None,
         allow_tools: bool = True,
+        source_context_override: str | None = None,
     ) -> str:
         """Build the synthetic continuation instruction for the next pass."""
         previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
@@ -347,7 +348,7 @@ class AutoContinueService:
                 f"{handoff}\n"
                 "Use this as continuity context only. It does not satisfy missing verification, review, evidence, or quality requirements."
             )
-        source_context = _existing_web_source_context(execution_result)
+        source_context = source_context_override if source_context_override is not None else _existing_web_source_context(execution_result)
         source_section = existing_web_source_section(source_context, allow_tools=allow_tools)
         quality_instruction = _quality_follow_up_instruction(completion_result, execution_result)
         profile_instruction = _profile_follow_up_instruction(harness_profile)
@@ -560,30 +561,44 @@ def _existing_web_source_context(execution_result: ExecutionResult | None) -> st
     if execution_result is None:
         return ""
 
-    lines: list[str] = []
+    sources: list[dict[str, object]] = []
     seen_urls: set[str] = set()
     for artifact in execution_result.task_artifacts:
         if not artifact.ok or not is_web_source_artifact_kind(artifact.kind):
             continue
-        sources = artifact.metadata.get("sources")
-        if not isinstance(sources, list):
+        raw_sources = artifact.metadata.get("sources")
+        if not isinstance(raw_sources, list):
             continue
-        for source in sources:
+        for source in raw_sources:
             if not isinstance(source, dict):
                 continue
             url = str(source.get("url") or "").strip()
             if not url or url in seen_urls:
                 continue
             seen_urls.add(url)
-            title = str(source.get("title") or "").strip()
-            snippet = _source_context_detail(source)
-            label = title or url
-            line = f"- {label}: {url}"
-            if snippet:
-                line += f" - {snippet}"
-            lines.append(line)
-            if len(lines) >= 6:
-                return "\n".join(lines)
+            sources.append(source)
+    return format_web_source_context(sources)
+
+
+def format_web_source_context(sources: list[dict[str, object]]) -> str:
+    lines: list[str] = []
+    seen_urls: set[str] = set()
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        url = str(source.get("url") or "").strip()
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        title = str(source.get("title") or "").strip()
+        snippet = _source_context_detail(source)
+        label = title or url
+        line = f"- {label}: {url}"
+        if snippet:
+            line += f" - {snippet}"
+        lines.append(line)
+        if len(lines) >= 6:
+            return "\n".join(lines)
     return "\n".join(lines)
 
 

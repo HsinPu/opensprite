@@ -33,7 +33,7 @@ from ..runs.events import (
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .audio_input import AudioInputPreprocessor
-from .auto_continue import AutoContinueService
+from .auto_continue import AutoContinueService, format_web_source_context
 from .completion_blocker_policy import CompletionBlockerMessages, completion_blocker_response
 from .completion_gate import (
     COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
@@ -920,7 +920,8 @@ class AgentTurnRunner:
             break
 
         ran_source_finalization = False
-        if _source_finalization_available(completion_result, aggregate_result):
+        source_finalization_sources = _source_finalization_sources(completion_result, aggregate_result)
+        if source_finalization_sources:
             finalization_prompt = self.auto_continue.build_prompt(
                 task_intent=task_intent,
                 completion_result=completion_result,
@@ -929,6 +930,7 @@ class AgentTurnRunner:
                 harness_profile=harness_profile,
                 execution_result=aggregate_result,
                 allow_tools=False,
+                source_context_override=format_web_source_context(source_finalization_sources),
             )
             finalization_result = await self._call_llm(
                 turn.session_id,
