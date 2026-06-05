@@ -15,6 +15,7 @@ from opensprite.agent.turn_runner import (
 
 SOURCE_FALLBACK_MESSAGES = SourceFallbackMessages(
     intro="TEST SOURCE FALLBACK INTRO",
+    answer_header="TEST ANSWER",
     details_header="TEST DETAILS",
     sources_header="TEST SOURCES",
 )
@@ -178,7 +179,7 @@ def test_blocked_web_research_empty_response_uses_gathered_source_fallback():
     assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
-def test_source_fallback_sanitizes_stale_incomplete_intro():
+def test_source_fallback_uses_configured_intro_without_text_marker_policy():
     response = _final_response_after_exhausted_continuation(
         response="Sorry, I did not produce a displayable reply.",
         completion_result=CompletionGateResult(
@@ -188,7 +189,8 @@ def test_source_fallback_sanitizes_stale_incomplete_intro():
         ),
         auto_continue_attempts=0,
         source_fallback_messages=SourceFallbackMessages(
-            intro="我已取得部分來源資料，但最終回答沒有完整整理完成。以下是目前可用的重點資料。",
+            intro="TEST CONFIG INTRO",
+            answer_header="TEST ANSWER",
             details_header="TEST DETAILS",
             sources_header="TEST SOURCES",
         ),
@@ -220,8 +222,7 @@ def test_source_fallback_sanitizes_stale_incomplete_intro():
         ),
     )
 
-    assert "沒有完整整理完成" not in response
-    assert "根據已取得來源" in response
+    assert "TEST CONFIG INTRO" in response
     assert "https://example.com/agent-trends" in response
 
 
@@ -262,7 +263,7 @@ def test_exhausted_continuation_uses_search_snippet_when_it_contains_missing_evi
         ),
     )
 
-    assert "重點答案" in response
+    assert "TEST ANSWER" in response
     assert "https://openrouter.ai/api/v1" in response
     assert "https://openrouter.ai/api/v1 (source: https://dlthub.com/context/source/openrouter)" in response
     assert "https://dlthub.com/context/source/openrouter" in response
@@ -307,7 +308,7 @@ def test_exhausted_continuation_extracts_base_url_from_source_when_missing_evide
         ),
     )
 
-    assert "重點答案" in response
+    assert "TEST ANSWER" in response
     assert "https://openrouter.ai/api/v1" in response
     assert "https://openrouter.ai/api/v1 (source: https://dlthub.com/context/source/openrouter)" in response
     assert "https://openrouter.apify.actor/api/v1" not in response

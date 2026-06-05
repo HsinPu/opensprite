@@ -120,20 +120,9 @@ class TurnPassEvaluation:
 @dataclass(frozen=True)
 class SourceFallbackMessages:
     intro: str
+    answer_header: str
     details_header: str
     sources_header: str
-
-
-SOURCE_FALLBACK_ANSWER_HEADER = "重點答案："
-SOURCE_FALLBACK_COMPLETE_INTRO = "根據已取得來源，以下是可交付的重點整理。"
-SOURCE_FALLBACK_INCOMPLETE_MARKERS = (
-    "沒有完整",
-    "未完整",
-    "沒有產生",
-    "not complete",
-    "incomplete",
-    "did not produce",
-)
 
 
 class AgentTurnRunner:
@@ -1580,11 +1569,11 @@ def _source_fallback_response(
     sections = []
     if answer_lines:
         sections.append(
-            f"{SOURCE_FALLBACK_ANSWER_HEADER}\n"
+            f"{messages.answer_header}\n"
             + "\n".join(f"{index}. {line}" for index, line in enumerate(answer_lines, start=1))
         )
     else:
-        sections.append(_source_fallback_intro(messages))
+        sections.append(messages.intro)
     sections.extend(
         [
             f"{messages.details_header}\n" + "\n".join(detail_lines),
@@ -1592,14 +1581,6 @@ def _source_fallback_response(
         ]
     )
     return "\n\n".join(sections)
-
-
-def _source_fallback_intro(messages: SourceFallbackMessages) -> str:
-    intro = str(messages.intro or "").strip()
-    lowered = intro.lower()
-    if not intro or any(marker in intro or marker in lowered for marker in SOURCE_FALLBACK_INCOMPLETE_MARKERS):
-        return SOURCE_FALLBACK_COMPLETE_INTRO
-    return intro
 
 
 def _substantive_web_sources(execution_result: ExecutionResult) -> list[dict[str, Any]]:

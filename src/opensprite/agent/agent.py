@@ -751,6 +751,7 @@ class AgentLoop:
             llm_not_configured_message=lambda: self.messages.agent.llm_not_configured,
             source_fallback_messages=lambda: SourceFallbackMessages(
                 intro=self.messages.agent.source_fallback_intro,
+                answer_header=self.messages.agent.source_fallback_answer_header,
                 details_header=self.messages.agent.source_fallback_details_header,
                 sources_header=self.messages.agent.source_fallback_sources_header,
             ),
