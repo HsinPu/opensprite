@@ -5,6 +5,7 @@ import pytest
 from opensprite.agent.harness_profile import (
     CONTRACT_MEDIA_PROFILE_REASON,
     CONTRACT_OPERATIONS_PROFILE_REASON,
+    CONTRACT_PLANNING_PROFILE_REASON,
     CONTRACT_PURE_ANSWER_PROFILE_REASON,
     CONTRACT_WEB_RESEARCH_PROFILE_REASON,
     CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON,
@@ -72,6 +73,7 @@ def test_harness_profile_contract_selection_reasons_are_stable():
     assert CONTRACT_MEDIA_PROFILE_REASON == "task contract requires media evidence"
     assert CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON == "task contract requires workspace changes"
     assert CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON == "task contract requires workspace evidence"
+    assert CONTRACT_PLANNING_PROFILE_REASON == "task contract selected planning mode"
     assert CONTRACT_PURE_ANSWER_PROFILE_REASON == "task contract does not require tool-backed evidence"
     assert DEFAULT_CHAT_PROFILE_REASON == "no task contract available; defaulting to neutral chat profile"
 
@@ -96,6 +98,20 @@ def test_harness_profile_derives_workspace_analysis_from_contract():
     assert profile.name == "coding"
     assert profile.task_type == "workspace_analysis"
     assert profile.required_tool_groups == ("workspace_read",)
+
+
+def test_harness_profile_derives_planning_from_contract_before_tool_groups():
+    contract = _contract(
+        "planning",
+        EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),
+    )
+
+    profile = HarnessProfileService().from_contract(contract)
+
+    assert profile.name == "chat"
+    assert profile.task_type == "planning"
+    assert profile.required_tool_groups == ()
+    assert profile.selection_signals == ("contract:planning",)
 
 
 def test_harness_profile_derives_workspace_change_from_contract():

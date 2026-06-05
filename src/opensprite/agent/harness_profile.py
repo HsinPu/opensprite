@@ -36,6 +36,7 @@ CONTRACT_WEB_RESEARCH_PROFILE_REASON = "task contract requires web research evid
 CONTRACT_MEDIA_PROFILE_REASON = "task contract requires media evidence"
 CONTRACT_WORKSPACE_CHANGE_PROFILE_REASON = "task contract requires workspace changes"
 CONTRACT_WORKSPACE_EVIDENCE_PROFILE_REASON = "task contract requires workspace evidence"
+CONTRACT_PLANNING_PROFILE_REASON = "task contract selected planning mode"
 CONTRACT_PURE_ANSWER_PROFILE_REASON = "task contract does not require tool-backed evidence"
 DEFAULT_CHAT_PROFILE_REASON = "no task contract available; defaulting to neutral chat profile"
 PREVIEW_CHAT_PROFILE_REASON = "preview profile for low-risk chat turns"
@@ -90,6 +91,15 @@ class HarnessProfileService:
         task_type = str(getattr(task_contract, "task_type", "") or "")
         tool_groups = _contract_tool_groups(task_contract)
         requirement_kinds = _contract_requirement_kinds(task_contract)
+        if is_planning_task_type(task_type):
+            return HarnessProfile(
+                name=CHAT_PROFILE_NAME,
+                task_type=PLANNING_TASK_TYPE,
+                verification_policy="none",
+                continuation_policy="minimal",
+                reason=CONTRACT_PLANNING_PROFILE_REASON,
+                selection_signals=("contract:planning",),
+            )
         if task_type == OPERATIONS_TASK_TYPE:
             required_tool_groups = tuple(sorted({WORKSPACE_READ_TOOL_GROUP, *tool_groups}))
             return HarnessProfile(
