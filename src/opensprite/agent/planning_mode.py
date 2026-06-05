@@ -74,15 +74,12 @@ This planning-mode restriction overrides normal workspace autonomy for this turn
 
 
 def resolve_planning_mode(
-    text: str | None,
     *,
     base_registry: "ToolRegistry | None" = None,
     task_contract: "TaskContract | None" = None,
 ) -> PlanningModeState:
     """Resolve the full planning-mode state for one user turn."""
-    if not _contract_requests_planning_mode(task_contract) and not (
-        task_contract is None and _text_requests_planning_mode(text)
-    ):
+    if not _contract_requests_planning_mode(task_contract):
         return PlanningModeState()
     return PlanningModeState(
         enabled=True,
@@ -112,25 +109,3 @@ def _contract_requests_planning_mode(task_contract: "TaskContract | None") -> bo
     if task_contract is None:
         return False
     return is_planning_task_type(getattr(task_contract, "task_type", None))
-
-
-def _text_requests_planning_mode(text: str | None) -> bool:
-    normalized = str(text or "").strip().lower()
-    if not normalized:
-        return False
-    plan_markers = (
-        "plan only",
-        "planning only",
-        "only plan",
-        "do not implement",
-        "don't implement",
-        "do not edit",
-        "don't edit",
-        "no changes yet",
-        "先規劃",
-        "只規劃",
-        "不要動手",
-        "不要修改",
-        "先不要改",
-    )
-    return any(marker in normalized for marker in plan_markers)

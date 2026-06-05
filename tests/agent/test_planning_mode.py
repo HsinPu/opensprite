@@ -4,7 +4,6 @@ from opensprite.agent.task_contract import TaskContract
 
 def test_planning_mode_uses_task_contract_task_type():
     state = resolve_planning_mode(
-        "please inspect the project and propose the next cleanup slice",
         task_contract=TaskContract(
             objective="Propose the next cleanup slice.",
             task_type="planning",
@@ -17,7 +16,6 @@ def test_planning_mode_uses_task_contract_task_type():
 
 def test_planning_mode_does_not_enable_for_non_planning_contract_without_explicit_request():
     state = resolve_planning_mode(
-        "please inspect the project and propose the next cleanup slice",
         task_contract=TaskContract(
             objective="Inspect the project.",
             task_type="workspace_read",

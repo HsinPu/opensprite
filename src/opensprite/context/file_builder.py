@@ -28,7 +28,6 @@ from .paths import (
     load_bootstrap_files,
 )
 from .runtime import RUNTIME_CONTEXT_TAG, build_runtime_context
-from ..agent.planning_mode import resolve_planning_mode
 from ..documents.memory import MemoryStore
 from ..documents.recent_summary import RecentSummaryStore
 from ..documents.user_profile import create_user_profile_store
@@ -528,9 +527,6 @@ Be conservative only for actions with external side effects or boundaries outsid
         retrieval_guidance = self._build_retrieval_guidance(current_message)
         if retrieval_guidance:
             messages.append({"role": "system", "content": retrieval_guidance})
-        planning_mode_guidance = resolve_planning_mode(current_message).overlay
-        if planning_mode_guidance:
-            messages.append({"role": "system", "content": planning_mode_guidance})
         relevant_user_overlay = self._build_relevant_user_overlay_context(session_id, current_message)
         if relevant_user_overlay:
             messages.append({"role": "system", "content": relevant_user_overlay})

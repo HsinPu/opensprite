@@ -24,18 +24,18 @@ class _NamedTool(Tool):
 
 
 def test_resolve_planning_mode_returns_disabled_state_without_planning_contract():
-    state = resolve_planning_mode("Please fix the failing test.")
+    state = resolve_planning_mode()
 
     assert state.enabled is False
     assert state.overlay == ""
     assert state.tool_registry is None
 
 
-def test_resolve_planning_mode_supports_explicit_plan_only_text_without_contract():
-    state = resolve_planning_mode("先規劃不要動手，幫我整理修復方案")
+def test_resolve_planning_mode_does_not_use_text_without_contract():
+    state = resolve_planning_mode()
 
-    assert state.enabled is True
-    assert state.overlay.startswith("# Planning Mode")
+    assert state.enabled is False
+    assert state.overlay == ""
     assert state.tool_registry is None
 
 
@@ -48,7 +48,6 @@ def test_resolve_planning_mode_returns_overlay_and_restricted_registry_from_cont
     registry.register(_NamedTool("batch"))
 
     state = resolve_planning_mode(
-        "Please propose the next step.",
         base_registry=registry,
         task_contract=TaskContract(
             objective="Propose the next step.",

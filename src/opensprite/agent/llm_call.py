@@ -433,7 +433,6 @@ class LlmCallService:
                 f"allow_no_tool_final={task_contract.allow_no_tool_final}"
             )
         planning_mode = resolve_planning_mode(
-            effective_current_message,
             base_registry=harness_tool_registry or base_tool_registry,
             task_contract=task_contract,
         )
