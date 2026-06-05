@@ -38,7 +38,7 @@ class CapturingProvider:
         self.calls: list[list] = []
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         return LLMResponse(content="done", model="fake-model")
@@ -51,7 +51,7 @@ class TaskContextDecisionProvider(CapturingProvider):
     """Returns a task-context JSON decision before the main assistant response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
@@ -81,7 +81,7 @@ class AmbiguousBoundaryDecisionProvider(CapturingProvider):
     """Returns an ambiguous boundary decision before the main assistant response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
@@ -103,7 +103,7 @@ class BoundaryConfirmationProvider(CapturingProvider):
     """Returns task-boundary confirmation and objective JSON before the main response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
@@ -134,7 +134,7 @@ class TaskObjectiveDecisionProvider(CapturingProvider):
     """Returns task-context and objective JSON decisions before the main response."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
@@ -166,7 +166,7 @@ class HistoryRetrievalContextProvider(CapturingProvider):
     """Returns a task-context decision that asks for prior chat retrieval."""
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
-        if _is_task_contract_planner_call(messages):
+        if _is_task_planner_call(messages):
             return _task_contract_response(messages)
         self.calls.append(list(messages))
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
@@ -193,9 +193,9 @@ class HistoryRetrievalContextProvider(CapturingProvider):
         return LLMResponse(content="done", model="fake-model")
 
 
-def _is_task_contract_planner_call(messages) -> bool:
+def _is_task_planner_call(messages) -> bool:
     system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "OpenSprite task-contract planner" in system_text
+    return "OpenSprite task planner" in system_text
 
 
 def _task_contract_response(messages) -> LLMResponse:
@@ -203,12 +203,19 @@ def _task_contract_response(messages) -> LLMResponse:
     prompt_lower = prompt_text.lower()
     if "please update readme" in prompt_lower or "tests/test_app.py" in prompt_text or "refactor the agent" in prompt_lower:
         content = (
-            '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
+            '{"objective":"Apply the requested workspace change","task_type":"workspace_change",'
+            '"required_tool_groups":["workspace_read","workspace_write"],'
             '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner workspace change"}'
+        )
+    elif "00981t" in prompt_lower or "web sources" in prompt_lower:
+        content = (
+            '{"objective":"Research 00981T ETF price and basic public information using web sources.",'
+            '"task_type":"web_research","required_tool_groups":["web_research"],'
+            '"final_answer_required":true,"allow_no_tool_final":false,"reason":"test planner web research"}'
         )
     else:
         content = (
-            '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
+            '{"objective":"Answer the user directly","task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
             '"allow_no_tool_final":true,"reason":"test planner contract"}'
         )
     return LLMResponse(

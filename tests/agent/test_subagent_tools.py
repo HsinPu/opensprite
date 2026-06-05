@@ -149,7 +149,7 @@ class FakeProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task-contract planner" in system_text:
+        if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
                     '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'
@@ -737,7 +737,7 @@ class ModelRoutingProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task-contract planner" in system_text:
+        if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
                     '{"task_type":"workspace_change","required_tool_groups":["workspace_read","workspace_write"],'

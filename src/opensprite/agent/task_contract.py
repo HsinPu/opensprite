@@ -58,9 +58,9 @@ LLM_PLANNER_CONTRACT_SOURCES = (LLM_PLANNER_CONTRACT_SOURCE,)
 MISSING_RUNTIME_CONTRACT_SOURCE = "missing_runtime_contract"
 MISSING_RUNTIME_CONTRACT_SOURCES = (MISSING_RUNTIME_CONTRACT_SOURCE,)
 MISSING_RUNTIME_CONTRACT_REASON = "execution result did not include a task contract"
-PLANNER_UNAVAILABLE_REASON = "task contract planner unavailable: llm not configured"
-PLANNER_INVALID_JSON_REASON = "task contract planner returned invalid JSON"
-PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task contract planner returned an unsupported or missing task_type"
+PLANNER_UNAVAILABLE_REASON = "task planner unavailable: llm not configured"
+PLANNER_INVALID_JSON_REASON = "task planner returned invalid JSON"
+PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or missing task_type"
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
@@ -121,15 +121,15 @@ _TASK_TYPE_REQUIRED_TOOL_GROUPS = {
     MEDIA_EXTRACTION_TASK_TYPE: (MEDIA_TOOL_GROUP,),
     HISTORY_RETRIEVAL_TASK_TYPE: (HISTORY_RETRIEVAL_TOOL_GROUP,),
 }
-_PLANNER_CONTRACT_SYSTEM_PROMPT = (
-    "You are the OpenSprite task-contract planner. Decide what tool evidence the latest user turn needs "
+_TASK_PLANNER_SYSTEM_PROMPT = (
+    "You are the OpenSprite task planner. Decide what tool evidence the latest user turn needs "
     "before the main assistant sees tools. Return only one JSON object. Do not include markdown. "
     "Choose the smallest necessary set from the available runtime capabilities supplied in the user prompt. "
     "If no tool-backed evidence is needed, use pure_answer and an empty required_tool_groups array. "
-    "The JSON keys are: task_type, required_tool_groups, final_answer_required, allow_no_tool_final, reason."
+    "The JSON keys are: objective, task_type, required_tool_groups, final_answer_required, allow_no_tool_final, reason."
 )
 _PLANNER_REPAIR_SYSTEM_PROMPT = (
-    "You repair OpenSprite task-contract planner output. Convert the invalid planner response into exactly one "
+    "You repair OpenSprite task planner output. Convert the invalid planner response into exactly one "
     "valid JSON object for the same schema. Return JSON only, no markdown, no explanation."
 )
 @dataclass(frozen=True)
@@ -224,7 +224,7 @@ def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | Non
     )
 
 
-class TaskContractPlanner:
+class TaskPlanner:
     """LLM-backed planner that produces the authoritative per-turn task contract."""
 
     def __init__(self, llm_config: DocumentLlmConfig):
@@ -236,7 +236,7 @@ class TaskContractPlanner:
         provider: Any,
         model: str | None,
         tool_registry: Any | None = None,
-        task_intent: TaskIntent,
+        task_intent: TaskIntent | None,
         current_message: str,
         history: list[dict[str, Any]] | None,
         current_image_files: list[str] | None = None,
@@ -246,14 +246,13 @@ class TaskContractPlanner:
     ) -> TaskContract:
         if is_unconfigured_llm(provider, model):
             return _planner_blocked_contract(
-                objective=str(task_intent.objective or current_message or "").strip(),
+                objective=_fallback_objective(task_intent, current_message),
                 reason=PLANNER_UNAVAILABLE_REASON,
             )
         capability_catalog = build_planner_capability_catalog(tool_registry)
-        planner_prompt = _build_planner_contract_prompt(
+        planner_prompt = _build_task_planner_prompt(
             current_message=current_message,
             history=history or [],
-            task_intent=task_intent,
             current_image_files=current_image_files,
             current_audio_files=current_audio_files,
             current_video_files=current_video_files,
@@ -263,7 +262,7 @@ class TaskContractPlanner:
         try:
             response = await provider.chat(
                 [
-                    ChatMessage(role="system", content=_PLANNER_CONTRACT_SYSTEM_PROMPT),
+                    ChatMessage(role="system", content=_TASK_PLANNER_SYSTEM_PROMPT),
                     ChatMessage(role="user", content=planner_prompt),
                 ],
                 model=model,
@@ -271,7 +270,7 @@ class TaskContractPlanner:
             )
         except Exception as exc:
             return _planner_blocked_contract(
-                objective=str(task_intent.objective or current_message or "").strip(),
+                objective=_fallback_objective(task_intent, current_message),
                 reason=_planner_exception_reason(exc),
             )
         response_text = str(getattr(response, "content", "") or "")
@@ -297,7 +296,7 @@ class TaskContractPlanner:
                 )
             except Exception as exc:
                 return _planner_blocked_contract(
-                    objective=str(task_intent.objective or current_message or "").strip(),
+                    objective=_fallback_objective(task_intent, current_message),
                     reason=_planner_exception_reason(exc),
                     raw_response_preview=_truncate(response_text, max_chars=400),
                 )
@@ -307,12 +306,12 @@ class TaskContractPlanner:
                 response_text = repair_text or response_text
         if not payload:
             return _planner_blocked_contract(
-                objective=str(task_intent.objective or current_message or "").strip(),
+                objective=_fallback_objective(task_intent, current_message),
                 status=PLANNER_INVALID_STATUS,
                 reason=PLANNER_INVALID_JSON_REASON,
                 raw_response_preview=_truncate(response_text, max_chars=240),
             )
-        return _contract_from_planner_payload(
+        return _contract_from_task_planner_payload(
             payload,
             task_intent=task_intent,
             current_message=current_message,
@@ -527,11 +526,10 @@ def _append_acceptance_criteria(
     return existing
 
 
-def _build_planner_contract_prompt(
+def _build_task_planner_prompt(
     *,
     current_message: str,
     history: list[dict[str, Any]],
-    task_intent: TaskIntent,
     current_image_files: list[str] | None,
     current_audio_files: list[str] | None,
     current_video_files: list[str] | None,
@@ -541,7 +539,6 @@ def _build_planner_contract_prompt(
     catalog = capability_catalog or build_planner_capability_catalog()
     context = {
         "current_message": _truncate_middle(current_message, max_chars=1200),
-        "task_intent": task_intent.to_metadata(),
         "recent_history": _recent_history(history),
         "attachments": {
             "image_files": list(current_image_files or []),
@@ -561,6 +558,7 @@ def _build_planner_contract_prompt(
         "beyond the selected capabilities.\n"
         "Return JSON only with this shape:\n"
         "{\n"
+        '  "objective": "short task objective in the user language",\n'
         f'  "task_type": "{_schema_union(catalog.task_types)}",\n'
         f'  "required_tool_groups": ["{_schema_union(catalog.tool_group_ids)}"],\n'
         f'  "quality_checks": ["{_schema_union(_ALLOWED_PLANNER_QUALITY_CHECKS)}"],\n'
@@ -627,14 +625,27 @@ def _planner_exception_reason(exc: Exception) -> str:
     error_type = exc.__class__.__name__
     message = str(exc).strip()
     if message:
-        return f"task contract planner LLM call failed: {error_type}: {message}"
-    return f"task contract planner LLM call failed: {error_type}"
+        return f"task planner LLM call failed: {error_type}: {message}"
+    return f"task planner LLM call failed: {error_type}"
 
 
-def _contract_from_planner_payload(
+def _fallback_objective(task_intent: TaskIntent | None, current_message: str | None) -> str:
+    return str(getattr(task_intent, "objective", "") or current_message or "").strip()
+
+
+def _planner_objective(
+    payload: dict[str, Any],
+    task_intent: TaskIntent | None,
+    current_message: str | None,
+) -> str:
+    objective = _compact(payload.get("objective"))
+    return objective or _fallback_objective(task_intent, current_message)
+
+
+def _contract_from_task_planner_payload(
     payload: dict[str, Any],
     *,
-    task_intent: TaskIntent,
+    task_intent: TaskIntent | None,
     current_message: str,
     history: list[dict[str, Any]] | None,
     current_image_files: list[str] | None,
@@ -644,7 +655,7 @@ def _contract_from_planner_payload(
     capability_catalog: PlannerCapabilityCatalog | None = None,
 ) -> TaskContract:
     catalog = capability_catalog or build_planner_capability_catalog()
-    objective = str(task_intent.objective or current_message or "").strip()
+    objective = _planner_objective(payload, task_intent, current_message)
     resource_index = ResourceIndex.from_turn_and_history(
         current_message=current_message,
         history=history,

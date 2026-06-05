@@ -114,7 +114,7 @@ def _is_planner_call(messages, tools=None) -> bool:
     if tools:
         return False
     first = str(getattr(messages[0], "content", "") or "") if messages else ""
-    return "task-contract planner" in first
+    return "task planner" in first
 
 
 def _is_completion_judge_call(messages, tools=None) -> bool:

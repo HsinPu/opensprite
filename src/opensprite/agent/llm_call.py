@@ -341,7 +341,7 @@ class LlmCallService:
                     )
                     validation_event_type = (
                         TASK_CONTRACT_VALIDATED_EVENT
-                        if _task_contract_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
+                        if _task_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
                         else TASK_CONTRACT_VALIDATION_FAILED_EVENT
                     )
                     await self._emit_run_event(
@@ -763,7 +763,7 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     return criterion.description or criterion.kind
 
 
-def _task_contract_planner_status(contract: TaskContract | None) -> str:
+def _task_planner_status(contract: TaskContract | None) -> str:
     metadata = getattr(contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
         return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()

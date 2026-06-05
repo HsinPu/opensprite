@@ -1,4 +1,4 @@
-"""Runtime capability catalog used by the task-contract planner."""
+"""Runtime capability catalog used by the task planner."""
 
 from __future__ import annotations
 

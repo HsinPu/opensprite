@@ -34,7 +34,7 @@ class RecordingProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_prompt = str(messages[0].content)
-        if "OpenSprite task-contract planner" in system_prompt:
+        if "OpenSprite task planner" in system_prompt:
             return LLMResponse(
                 content=(
                     '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'

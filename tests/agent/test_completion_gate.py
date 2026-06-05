@@ -81,7 +81,7 @@ from opensprite.agent.task_contract import (
     SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
     TaskContract,
     WORKSPACE_LOCATION_CRITERION_KIND,
-    _contract_from_planner_payload,
+    _contract_from_task_planner_payload,
 )
 from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
 from opensprite.agent.workspace_grounding_policy import (
@@ -1661,7 +1661,7 @@ def test_task_contract_requires_history_retrieval_for_prior_context_lookup():
 def test_task_contract_keeps_history_retrieval_when_planner_requires_it_for_follow_up():
     intent = TaskIntentService().classify("延續上一題，請用一句話說明你剛剛用了哪些來源類型，不要重新查。")
 
-    contract = _contract_from_planner_payload(
+    contract = _contract_from_task_planner_payload(
         {
             "task_type": "history_retrieval",
             "required_tool_groups": ["history_retrieval"],
@@ -1695,7 +1695,7 @@ def test_task_contract_history_retrieval_drops_extra_web_research_group():
         "Which two previous questions in this session were about OpenRouter or TSMC?"
     )
 
-    contract = _contract_from_planner_payload(
+    contract = _contract_from_task_planner_payload(
         {
             "task_type": "history_retrieval",
             "required_tool_groups": ["history_retrieval", "web_research"],
@@ -3419,7 +3419,7 @@ def test_completion_gate_uses_contract_for_no_tool_final_response():
 def test_task_contract_trusts_task_context_inherited_tool_group_without_message_override():
     intent = TaskIntentService().classify("剛剛那些來源可靠嗎？請根據你看到的來源說明，不要重新搜尋。")
 
-    contract = _contract_from_planner_payload(
+    contract = _contract_from_task_planner_payload(
         {
             "task_type": "pure_answer",
             "required_tool_groups": [],

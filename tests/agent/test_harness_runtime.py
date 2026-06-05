@@ -74,7 +74,7 @@ class RecordingProvider:
         )
         if "completion judge" in first_message:
             content = '{"status":"complete","reason":"test judge accepted response","active_task_status":"done"}'
-        elif self.planner_content is not None and first_message.startswith("You are the OpenSprite task-contract planner"):
+        elif self.planner_content is not None and first_message.startswith("You are the OpenSprite task planner"):
             content = self.planner_content
         else:
             content = self.contents.pop(0) if self.contents else "Harness runtime reply."

@@ -12,8 +12,8 @@ from opensprite.agent.task_contract import (
     TaskContract,
     VERIFICATION_OR_GAP_CRITERION_KIND,
     WORKSPACE_LOCATION_CRITERION_KIND,
-    _build_planner_contract_prompt,
-    _contract_from_planner_payload,
+    _build_task_planner_prompt,
+    _contract_from_task_planner_payload,
     _ensure_task_type_tool_groups,
     _normalize_planner_tool_groups,
     contract_requests_itemized_output,
@@ -77,11 +77,11 @@ class _CatalogTool(Tool):
 
 
 def test_planner_fallback_reasons_are_centralized():
-    assert PLANNER_UNAVAILABLE_REASON == "task contract planner unavailable: llm not configured"
-    assert PLANNER_INVALID_JSON_REASON == "task contract planner returned invalid JSON"
+    assert PLANNER_UNAVAILABLE_REASON == "task planner unavailable: llm not configured"
+    assert PLANNER_INVALID_JSON_REASON == "task planner returned invalid JSON"
     assert PLANNER_VALIDATED_REASON == "llm planner returned a task contract"
 
-    contract = _contract_from_planner_payload(
+    contract = _contract_from_task_planner_payload(
         {"task_type": "not_allowed"},
         task_intent=type("Intent", (), {"objective": "Plan this"})(),
         current_message="Plan this",
@@ -94,7 +94,7 @@ def test_planner_fallback_reasons_are_centralized():
 
     assert contract.planner_metadata["reason"] == PLANNER_UNSUPPORTED_TASK_TYPE_REASON
 
-    validated_contract = _contract_from_planner_payload(
+    validated_contract = _contract_from_task_planner_payload(
         {"task_type": "pure_answer"},
         task_intent=type("Intent", (), {"objective": "Answer this"})(),
         current_message="Answer this",
@@ -112,10 +112,9 @@ def test_planner_prompt_preserves_tail_of_long_current_message():
     filler = "\n".join(f"背景{i}: 這是壓力測試背景，不是任務。" for i in range(80))
     message = f"{filler}\n最後一句才是任務：只回覆通關詞 GAMMA-772。"
 
-    prompt = _build_planner_contract_prompt(
+    prompt = _build_task_planner_prompt(
         current_message=message,
         history=[],
-        task_intent=TaskIntent(kind="question", objective="long context stress test"),
         current_image_files=None,
         current_audio_files=None,
         current_video_files=None,
@@ -140,10 +139,9 @@ def test_planner_prompt_uses_dynamic_capability_catalog_instead_of_if_routing():
     )
     catalog = build_planner_capability_catalog(registry)
 
-    prompt = _build_planner_contract_prompt(
+    prompt = _build_task_planner_prompt(
         current_message="Find the current TSMC quote.",
         history=[],
-        task_intent=TaskIntent(kind="question", objective="Find the current TSMC quote."),
         current_image_files=None,
         current_audio_files=None,
         current_video_files=None,
@@ -159,10 +157,9 @@ def test_planner_prompt_uses_dynamic_capability_catalog_instead_of_if_routing():
 
 
 def test_planner_prompt_warns_against_inventing_unavailable_capabilities():
-    prompt = _build_planner_contract_prompt(
+    prompt = _build_task_planner_prompt(
         current_message="Find the implementation.",
         history=[],
-        task_intent=TaskIntent(kind="question", objective="Find the implementation."),
         current_image_files=None,
         current_audio_files=None,
         current_video_files=None,
@@ -171,6 +168,26 @@ def test_planner_prompt_warns_against_inventing_unavailable_capabilities():
 
     assert "Do not invent unavailable tool groups" in prompt
     assert "Use semantic judgment" in prompt
+    assert "task_intent" not in prompt
+
+
+def test_task_planner_payload_objective_replaces_input_fallback():
+    contract = _contract_from_task_planner_payload(
+        {
+            "objective": "Use the planner objective",
+            "task_type": "pure_answer",
+            "required_tool_groups": [],
+        },
+        task_intent=TaskIntent(kind="task", objective="Fallback objective"),
+        current_message="Fallback message",
+        history=None,
+        current_image_files=None,
+        current_audio_files=None,
+        current_video_files=None,
+        task_context_decision=None,
+    )
+
+    assert contract.objective == "Use the planner objective"
 
 
 def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata():
@@ -184,7 +201,7 @@ def test_dynamic_capability_group_is_accepted_and_checked_by_evidence_metadata()
     )
     catalog = build_planner_capability_catalog(registry)
 
-    contract = _contract_from_planner_payload(
+    contract = _contract_from_task_planner_payload(
         {
             "task_type": "task",
             "required_tool_groups": ["market_data"],

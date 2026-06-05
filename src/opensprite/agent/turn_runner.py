@@ -1474,7 +1474,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if (
                     result.task_contract is not None
-                    and _task_contract_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
+                    and _task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
                 )
             ),
             None,
@@ -1487,7 +1487,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if (
                     result.task_contract is not None
-                    and _task_contract_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
+                    and _task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
                     and _is_tool_backed_task_contract(result.task_contract)
                 )
             ),
@@ -1873,7 +1873,7 @@ def _harness_trace_health(
     }
 
 
-def _task_contract_planner_status(task_contract: Any) -> str:
+def _task_planner_status(task_contract: Any) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
         return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()

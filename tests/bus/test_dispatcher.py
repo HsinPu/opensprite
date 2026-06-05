@@ -40,7 +40,7 @@ class FakeAgent:
 class ReplyProvider:
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task-contract planner" in system_text:
+        if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
                     '{"task_type":"pure_answer","required_tool_groups":[],"final_answer_required":true,'
@@ -72,7 +72,7 @@ class ToolReplyProvider:
 
     async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
-        if "OpenSprite task-contract planner" in system_text:
+        if "OpenSprite task planner" in system_text:
             return LLMResponse(
                 content=(
                     '{"task_type":"task","required_tool_groups":[],"final_answer_required":true,'

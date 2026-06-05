@@ -73,8 +73,8 @@ def test_task_contract_satisfied_reason_is_stable():
     assert TASK_CONTRACT_SATISFIED_REASON == "task contract was satisfied"
 
 
-def test_task_contract_planner_unvalidated_reason_is_stable():
-    assert TASK_CONTRACT_PLANNER_UNVALIDATED_REASON == "task contract planner did not produce a validated contract"
+def test_task_planner_unvalidated_reason_is_stable():
+    assert TASK_CONTRACT_PLANNER_UNVALIDATED_REASON == "task planner did not produce a validated contract"
 
 
 def test_delegated_review_completion_reason_reflects_review_attempt():

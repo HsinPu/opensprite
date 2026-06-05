@@ -112,7 +112,7 @@ from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .completion_blocker_policy import CompletionBlockerMessages
-from .task_contract import TaskContractPlanner
+from .task_contract import TaskPlanner
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver
 from .tool_registration import (
@@ -710,7 +710,7 @@ class AgentLoop:
         self.harness_policies = HarnessPolicyService()
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
-        self.task_contract_planner = TaskContractPlanner(self.config.task_contract_llm)
+        self.task_planner = TaskPlanner(self.config.task_contract_llm)
         self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
@@ -965,7 +965,7 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            plan_task_contract=lambda **kwargs: self.task_contract_planner.plan(
+            plan_task_contract=lambda **kwargs: self.task_planner.plan(
                 provider=self.provider,
                 model=self.provider.get_default_model(),
                 **kwargs,
@@ -1439,7 +1439,7 @@ class AgentLoop:
         self.llm_configured = config.is_llm_configured
         self.task_context_resolver.llm_config = config.agent.task_context_llm
         self.task_objective_resolver.llm_config = config.agent.task_objective_llm
-        self.task_contract_planner.llm_config = config.agent.task_contract_llm
+        self.task_planner.llm_config = config.agent.task_contract_llm
         self.completion_gate.llm_config = config.agent.completion_judge_llm
 
         self.prompt_budget.provider = provider
