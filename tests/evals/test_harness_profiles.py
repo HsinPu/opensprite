@@ -30,7 +30,7 @@ def test_harness_profile_eval_covers_profile_contract_and_policy_expectations():
     cases = {case["id"]: case for case in run_harness_profile_eval()["cases"]}
 
     assert cases["chat_question"]["profile"]["name"] == "chat"
-    assert cases["chat_question"]["policy"]["name"] == "chat_read_policy"
+    assert cases["chat_question"]["policy"]["name"] == "chat_guidance_policy"
     assert cases["chat_question"]["contract"]["allow_no_tool_final"] is True
     assert any(check["id"] == "scenario" and check["ok"] for check in cases["chat_question"]["checks"])
 
@@ -38,7 +38,7 @@ def test_harness_profile_eval_covers_profile_contract_and_policy_expectations():
     assert cases["research_sources"]["contract"]["task_type"] == "web_research"
     assert any(item["kind"] == "source_reference" for item in cases["research_sources"]["contract"]["acceptance_criteria"])
 
-    assert cases["coding_change"]["policy"]["name"] == "workspace_change_policy"
+    assert cases["coding_change"]["policy"]["name"] == "workspace_change_guidance_policy"
     assert "configuration" in cases["coding_change"]["policy"]["approval_required_risk_levels"]
     assert any(item["kind"] == "verification_or_gap" for item in cases["coding_change"]["contract"]["acceptance_criteria"])
 

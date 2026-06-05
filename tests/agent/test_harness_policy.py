@@ -65,24 +65,24 @@ def _policy_for_contract(task_type: str, *requirements: EvidenceRequirement):
 def test_harness_policy_reasons_are_stable():
     assert (
         RESEARCH_HARNESS_POLICY_REASON
-        == "research turns may inspect local context and web sources but cannot mutate workspace or external state"
+        == "research turns should gather source evidence first while using any tools allowed by user permissions"
     )
     assert (
         WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON
-        == "workspace analysis turns can inspect and delegate review but should not mutate or execute"
+        == "workspace analysis turns should inspect context first and avoid unnecessary mutation"
     )
     assert (
         WORKSPACE_CHANGE_HARNESS_POLICY_REASON
-        == "workspace change turns may edit and verify but require approval for configuration or external side effects"
+        == "workspace change turns should edit carefully and verify while preserving configured approval gates"
     )
     assert (
         MEDIA_HARNESS_POLICY_REASON
-        == "media turns use media extraction tools and may send produced artifacts without broad workspace mutation"
+        == "media turns should use relevant media extraction tools before finalizing"
     )
     assert OPERATIONS_HARNESS_POLICY_REASON == (
-        "operations turns must ask approval before configuration, MCP, or external side effects"
+        "operations turns should preserve approval gates for configuration, MCP, or external side effects"
     )
-    assert CHAT_HARNESS_POLICY_REASON == "chat turns default to read-only local context and avoid external side effects"
+    assert CHAT_HARNESS_POLICY_REASON == "chat turns should answer directly unless tools are useful and allowed"
     assert POLICY_RESOLUTION_METADATA_REASON == (
         "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
     )
@@ -91,11 +91,11 @@ def test_harness_policy_reasons_are_stable():
     )
 
 
-def test_chat_harness_policy_is_read_only():
+def test_chat_harness_policy_guidance_is_read_first():
     policy = _policy("為什麼 Harness 會讓 AI 更穩？")
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "chat_read_policy"
+    assert policy.name == "chat_guidance_policy"
     assert permission_policy.is_tool_exposed("read_file") is True
     assert permission_policy.is_tool_exposed("web_search") is False
     assert permission_policy.is_tool_exposed("edit_file") is False
@@ -214,7 +214,7 @@ def test_research_harness_policy_allows_web_without_workspace_mutation():
     policy = _policy_for_contract("web_research", EvidenceRequirement(kind="tool_group", tool_group="web_research"))
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "research_source_policy"
+    assert policy.name == "research_source_guidance_policy"
     assert "max_tool_iterations" not in policy.to_metadata()
     assert permission_policy.is_tool_exposed("web_search") is True
     assert permission_policy.is_tool_exposed("web_fetch") is True
@@ -226,7 +226,7 @@ def test_coding_change_policy_requires_approval_for_configuration_tools():
     policy = _policy_for_contract("code_change", EvidenceRequirement(kind="tool_group", tool_group="workspace_write"))
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "workspace_change_policy"
+    assert policy.name == "workspace_change_guidance_policy"
     assert permission_policy.is_tool_exposed("edit_file") is True
     assert permission_policy.is_tool_exposed("verify") is True
     decision = permission_policy.check("configure_skill", {})
@@ -238,7 +238,7 @@ def test_coding_analysis_policy_blocks_write_and_execute_tools():
     policy = _policy_for_contract("workspace_read", EvidenceRequirement(kind="tool_group", tool_group="workspace_read"))
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "workspace_analysis_policy"
+    assert policy.name == "workspace_analysis_guidance_policy"
     assert permission_policy.is_tool_exposed("read_file") is True
     assert permission_policy.is_tool_exposed("edit_file") is False
     assert permission_policy.is_tool_exposed("verify") is False
@@ -248,7 +248,7 @@ def test_ops_policy_requires_approval_for_external_side_effects_and_mcp():
     policy = _policy_for_contract("operations")
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "operations_approval_policy"
+    assert policy.name == "operations_approval_guidance_policy"
     assert permission_policy.is_tool_exposed("credential_store") is True
     mcp_decision = permission_policy.check("mcp_example_tool", {})
     assert mcp_decision.allowed is False
@@ -262,7 +262,7 @@ def test_media_policy_allows_media_tools_without_workspace_writes():
     policy = _policy_for_contract("media_extraction", EvidenceRequirement(kind="tool_group", tool_group="media"))
     permission_policy = policy.to_permission_policy()
 
-    assert policy.name == "media_artifact_policy"
+    assert policy.name == "media_artifact_guidance_policy"
     assert permission_policy.is_tool_exposed("analyze_image") is True
     assert permission_policy.is_tool_exposed("ocr_image") is True
     assert permission_policy.is_tool_exposed("edit_file") is False
@@ -330,7 +330,7 @@ def test_harness_policy_resolution_metadata_explains_protected_approval_requirem
     assert metadata is not None
     assert metadata["global_policy"]["approval_mode"] == "auto"
     assert metadata["profile_override"]["approval_mode"] == "auto"
-    assert metadata["harness_policy"]["name"] == "operations_approval_policy"
+    assert metadata["harness_policy"]["name"] == "operations_approval_guidance_policy"
     assert metadata["effective_policy"]["kind"] == "composite"
     assert metadata["reason"] == POLICY_RESOLUTION_METADATA_REASON
     assert "profile permission override" in metadata["constraints_applied"]

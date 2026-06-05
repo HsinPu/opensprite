@@ -12,12 +12,12 @@ def test_harness_inventory_uses_representative_profiles_and_policies():
         "media:media_extraction",
         "ops:operations",
     }
-    assert items["chat:conversation"].policy_name == "chat_read_policy"
-    assert items["research:web_research"].policy_name == "research_source_policy"
-    assert items["coding:workspace_analysis"].policy_name == "workspace_analysis_policy"
-    assert items["coding:workspace_change"].policy_name == "workspace_change_policy"
-    assert items["media:media_extraction"].policy_name == "media_artifact_policy"
-    assert items["ops:operations"].policy_name == "operations_approval_policy"
+    assert items["chat:conversation"].policy_name == "chat_guidance_policy"
+    assert items["research:web_research"].policy_name == "research_source_guidance_policy"
+    assert items["coding:workspace_analysis"].policy_name == "workspace_analysis_guidance_policy"
+    assert items["coding:workspace_change"].policy_name == "workspace_change_guidance_policy"
+    assert items["media:media_extraction"].policy_name == "media_artifact_guidance_policy"
+    assert items["ops:operations"].policy_name == "operations_approval_guidance_policy"
 
 
 def test_harness_inventory_declares_expected_sensor_ids():

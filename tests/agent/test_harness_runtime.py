@@ -149,11 +149,11 @@ def test_harness_runtime_applies_chat_policy_and_records_checkpoint(tmp_path):
     assert effective_profile.payload["name"] == "chat"
     assert effective_profile.payload["selection_phase"] == "contract"
     assert checkpoint.payload["harness_profile"]["name"] == "chat"
-    assert checkpoint.payload["harness_policy"]["name"] == "chat_read_policy"
+    assert checkpoint.payload["harness_policy"]["name"] == "chat_guidance_policy"
     assert checkpoint.payload["completion"]["status"] == "complete"
     assert checkpoint.payload["next_action"] == "finalize"
     assert scorecard.payload["profile"]["name"] == "chat"
-    assert scorecard.payload["permissions"]["harness_policy"]["name"] == "chat_read_policy"
+    assert scorecard.payload["permissions"]["harness_policy"]["name"] == "chat_guidance_policy"
     assert scorecard.payload["trace_health"]["status"] == "pass"
     assert scorecard.payload["trace_health"]["sensor_counts"]["pass"] == 2
     assert [sensor["sensor_id"] for sensor in scorecard.payload["sensors"]] == [
@@ -217,11 +217,11 @@ def test_harness_runtime_applies_research_policy_to_llm_tools(tmp_path):
 
     result, tool_names_by_call = asyncio.run(scenario())
 
-    assert tool_names_by_call == [[], ["read_file", "web_search", "web_fetch"]]
+    assert tool_names_by_call == [[], ["read_file", "web_search", "web_fetch", "edit_file", "verify", "save_memory"]]
     assert result.task_contract is not None
     assert result.task_contract.task_type == "web_research"
     assert result.harness_policy is not None
-    assert result.harness_policy["name"] == "research_source_policy"
+    assert result.harness_policy["name"] == "research_source_guidance_policy"
 
 
 def test_harness_runtime_keeps_tool_schemas_disabled_when_contract_exists(tmp_path):
@@ -253,4 +253,4 @@ def test_harness_runtime_keeps_tool_schemas_disabled_when_contract_exists(tmp_pa
     assert result.task_contract is not None
     assert result.task_contract.task_type == "history_retrieval"
     assert result.harness_policy is not None
-    assert result.harness_policy["name"] == "chat_read_policy"
+    assert result.harness_policy["name"] == "chat_guidance_policy"

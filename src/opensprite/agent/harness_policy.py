@@ -54,21 +54,21 @@ _RESEARCH_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK)
 _MEDIA_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK, RISK_LEVEL_EXTERNAL_SIDE_EFFECT)
 _WORKSPACE_ANALYSIS_RISKS = (RISK_LEVEL_READ, RISK_LEVEL_NETWORK, RISK_LEVEL_DELEGATION)
 RESEARCH_HARNESS_POLICY_REASON = (
-    "research turns may inspect local context and web sources but cannot mutate workspace or external state"
+    "research turns should gather source evidence first while using any tools allowed by user permissions"
 )
 WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON = (
-    "workspace analysis turns can inspect and delegate review but should not mutate or execute"
+    "workspace analysis turns should inspect context first and avoid unnecessary mutation"
 )
 WORKSPACE_CHANGE_HARNESS_POLICY_REASON = (
-    "workspace change turns may edit and verify but require approval for configuration or external side effects"
+    "workspace change turns should edit carefully and verify while preserving configured approval gates"
 )
 MEDIA_HARNESS_POLICY_REASON = (
-    "media turns use media extraction tools and may send produced artifacts without broad workspace mutation"
+    "media turns should use relevant media extraction tools before finalizing"
 )
 OPERATIONS_HARNESS_POLICY_REASON = (
-    "operations turns must ask approval before configuration, MCP, or external side effects"
+    "operations turns should preserve approval gates for configuration, MCP, or external side effects"
 )
-CHAT_HARNESS_POLICY_REASON = "chat turns default to read-only local context and avoid external side effects"
+CHAT_HARNESS_POLICY_REASON = "chat turns should answer directly unless tools are useful and allowed"
 POLICY_RESOLUTION_METADATA_REASON = (
     "effective policy is the ordered intersection of global permissions, profile override, and harness executable policy"
 )
@@ -142,7 +142,7 @@ class HarnessPolicyService:
         profile_name = harness_profile.name
         if is_research_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
-                name="research_source_policy",
+                name="research_source_guidance_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=_WEB_RESEARCH_TOOLS,
                 allowed_risk_levels=_RESEARCH_RISKS,
@@ -152,7 +152,7 @@ class HarnessPolicyService:
         if is_coding_profile_name(profile_name):
             if harness_profile.task_type == WORKSPACE_ANALYSIS_TASK_TYPE:
                 return _with_profile_denied_tools(HarnessPolicy(
-                    name="workspace_analysis_policy",
+                    name="workspace_analysis_guidance_policy",
                     harness_profile_name=profile_name,
                     allowed_tools=("*",),
                     allowed_risk_levels=_WORKSPACE_ANALYSIS_RISKS,
@@ -160,7 +160,7 @@ class HarnessPolicyService:
                     reason=WORKSPACE_ANALYSIS_HARNESS_POLICY_REASON,
                 ), harness_profile)
             return _with_profile_denied_tools(HarnessPolicy(
-                name="workspace_change_policy",
+                name="workspace_change_guidance_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=("*",),
                 allowed_risk_levels=tuple(risk for risk in ALL_RISK_LEVELS_ORDER if risk != RISK_LEVEL_MCP),
@@ -170,7 +170,7 @@ class HarnessPolicyService:
             ), harness_profile)
         if is_media_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
-                name="media_artifact_policy",
+                name="media_artifact_guidance_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=_MEDIA_TOOLS,
                 allowed_risk_levels=_MEDIA_RISKS,
@@ -178,7 +178,7 @@ class HarnessPolicyService:
             ), harness_profile)
         if is_ops_profile_name(profile_name):
             return _with_profile_denied_tools(HarnessPolicy(
-                name="operations_approval_policy",
+                name="operations_approval_guidance_policy",
                 harness_profile_name=profile_name,
                 allowed_tools=("*",),
                 allowed_risk_levels=ALL_RISK_LEVELS_ORDER,
@@ -186,7 +186,7 @@ class HarnessPolicyService:
                 reason=OPERATIONS_HARNESS_POLICY_REASON,
             ), harness_profile)
         return _with_profile_denied_tools(HarnessPolicy(
-            name="chat_read_policy",
+            name="chat_guidance_policy",
             harness_profile_name=profile_name,
             allowed_tools=("*",),
             allowed_risk_levels=_CHAT_RISKS,

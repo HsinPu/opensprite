@@ -979,14 +979,14 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert preview["schema_version"] == 1
                 assert preview["user_permissions"]["approval_mode"] == "auto"
                 policies = {row["policy"]["name"]: row for row in preview["rows"]}
-                assert "chat_read_policy" in policies
-                assert "workspace_change_policy" in policies
-                assert policies["chat_read_policy"]["profile_override"] == {}
-                assert set(policies["chat_read_policy"]["user"]["allowed_risk_levels"]) >= {"read", "network", "write"}
-                assert set(policies["chat_read_policy"]["effective"]["allowed_risk_levels"]) >= {"read", "network", "write"}
-                assert policies["workspace_change_policy"]["effective"]["denied_risk_levels"] == []
-                assert policies["operations_approval_policy"]["profile_override"] == {}
-                assert "mcp" in policies["operations_approval_policy"]["policy"]["approval_required_risk_levels"]
+                assert "chat_guidance_policy" in policies
+                assert "workspace_change_guidance_policy" in policies
+                assert policies["chat_guidance_policy"]["profile_override"] == {}
+                assert set(policies["chat_guidance_policy"]["user"]["allowed_risk_levels"]) >= {"read", "network", "write"}
+                assert set(policies["chat_guidance_policy"]["effective"]["allowed_risk_levels"]) >= {"read", "network", "write"}
+                assert policies["workspace_change_guidance_policy"]["effective"]["denied_risk_levels"] == []
+                assert policies["operations_approval_guidance_policy"]["profile_override"] == {}
+                assert "mcp" in policies["operations_approval_guidance_policy"]["policy"]["approval_required_risk_levels"]
 
             async with session.put(
                 f"http://127.0.0.1:{port}/api/settings/permissions",
@@ -1029,12 +1029,12 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 assert resp.status == 200
                 payload = await resp.json()
                 policies = {row["policy"]["name"]: row for row in payload["harness_policy_preview"]["rows"]}
-                assert policies["operations_approval_policy"]["effective"]["user_approval_mode"] == "ask"
-                assert "configuration" in policies["operations_approval_policy"]["effective"]["approval_required_risk_levels"]
-                assert "mcp" in policies["operations_approval_policy"]["effective"]["denied_risk_levels"]
-                assert policies["research_source_policy"]["user"]["allowed_risk_levels"] == ["read"]
-                assert "network" in policies["research_source_policy"]["user"]["denied_risk_levels"]
-                assert policies["research_source_policy"]["effective"]["allowed_risk_levels"] == ["read"]
+                assert policies["operations_approval_guidance_policy"]["effective"]["user_approval_mode"] == "ask"
+                assert "configuration" in policies["operations_approval_guidance_policy"]["effective"]["approval_required_risk_levels"]
+                assert "mcp" in policies["operations_approval_guidance_policy"]["effective"]["denied_risk_levels"]
+                assert policies["research_source_guidance_policy"]["user"]["allowed_risk_levels"] == ["read"]
+                assert "network" in policies["research_source_guidance_policy"]["user"]["denied_risk_levels"]
+                assert policies["research_source_guidance_policy"]["effective"]["allowed_risk_levels"] == ["read"]
 
         loaded = Config.load(config_path)
         assert loaded.tools.permissions.approval_mode == "ask"

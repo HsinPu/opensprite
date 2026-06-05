@@ -46,7 +46,7 @@ def test_tool_access_resolver_returns_constrained_registry_and_metadata():
     assert resolution.registry.tool_names == ["read_file", "web_search", "apply_patch", "task_update", "batch"]
     assert resolution.registry.permission_policy is resolution.effective_policy
     assert resolution.registry.permission_resolution_metadata == resolution.metadata
-    assert resolution.metadata["harness_policy"]["name"] == "chat_read_policy"
+    assert resolution.metadata["harness_policy"]["name"] == "chat_guidance_policy"
     assert resolution.metadata["effective_policy"]["kind"] == "composite"
     assert resolution.metadata["harness_guidance_policy"]["allowed_risk_levels"] == ["read"]
     assert set(resolution.metadata["harness_executable_policy"]["allowed_risk_levels"]) >= {"read", "network", "write"}

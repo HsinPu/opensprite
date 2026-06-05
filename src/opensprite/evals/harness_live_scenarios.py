@@ -1,7 +1,7 @@
 """Controlled harness scenario evaluations.
 
-These cases exercise the profile -> policy -> tool exposure path without calling
-an external LLM or live web service.
+These cases exercise profile guidance, executable permissions, and approval
+metadata without calling an external LLM or live web service.
 """
 
 from __future__ import annotations
@@ -42,11 +42,11 @@ class _ScenarioTool(Tool):
 
 
 CONTROLLED_HARNESS_SCENARIOS: tuple[dict[str, Any], ...] = (
-    {"id": "chat_read_only", "task_type": "conversation", "expected_profile": "chat", "blocked_tools": ("edit_file", "exec"), "visible_tools": ("read_file",)},
-    {"id": "research_sources", "task_type": "web_research", "tool_groups": ("web_research",), "expected_profile": "research", "visible_tools": ("web_search", "web_fetch"), "blocked_tools": ("edit_file",)},
-    {"id": "coding_analysis", "task_type": "workspace_read", "tool_groups": ("workspace_read",), "expected_profile": "coding", "visible_tools": ("read_file",), "blocked_tools": ("edit_file", "exec")},
-    {"id": "coding_change", "task_type": "code_change", "tool_groups": ("workspace_read", "workspace_write"), "require_file_change": True, "expected_profile": "coding", "visible_tools": ("edit_file", "verify"), "blocked_tools": ("mcp_config",)},
-    {"id": "ops_approval", "task_type": "operations", "expected_profile": "ops", "visible_tools": ("credential_store",), "approval_tools": ("mcp_example_tool", "browser_click")},
+    {"id": "chat_guidance", "task_type": "conversation", "expected_profile": "chat", "visible_tools": ("read_file", "edit_file", "verify")},
+    {"id": "research_sources", "task_type": "web_research", "tool_groups": ("web_research",), "expected_profile": "research", "visible_tools": ("web_search", "web_fetch", "edit_file")},
+    {"id": "coding_analysis", "task_type": "workspace_read", "tool_groups": ("workspace_read",), "expected_profile": "coding", "visible_tools": ("read_file", "edit_file", "verify")},
+    {"id": "coding_change", "task_type": "code_change", "tool_groups": ("workspace_read", "workspace_write"), "require_file_change": True, "expected_profile": "coding", "visible_tools": ("edit_file", "verify", "mcp_config")},
+    {"id": "ops_approval", "task_type": "operations", "expected_profile": "ops", "visible_tools": ("credential_store", "mcp_example_tool", "browser_click"), "approval_tools": ("mcp_example_tool", "browser_click")},
 )
 
 

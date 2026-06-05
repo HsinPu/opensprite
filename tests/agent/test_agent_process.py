@@ -859,7 +859,7 @@ def test_agent_process_emits_run_lifecycle_events(tmp_path):
                     contract_sources=("test",),
                     harness_profile={"name": "chat", "task_type": "pure_answer"},
                 ),
-                harness_policy={"name": "chat_read_policy"},
+                harness_policy={"name": "chat_guidance_policy"},
                 context_compactions=1,
                 context_compaction_events=[
                     ContextCompactionEvent(
@@ -1886,7 +1886,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
                         contract_sources=("test",),
                         harness_profile={"name": "coding", "task_type": "workspace_change"},
                     ),
-                    harness_policy={"name": "workspace_change_policy"},
+                    harness_policy={"name": "workspace_change_guidance_policy"},
                 )
             return ExecutionResult(
                 content="Verification passed and the refactor is complete.",
@@ -1906,7 +1906,7 @@ def test_agent_process_auto_continues_once_when_code_changes_are_missing(tmp_pat
                     contract_sources=("test",),
                     harness_profile={"name": "coding", "task_type": "workspace_change"},
                 ),
-                harness_policy={"name": "workspace_change_policy"},
+                harness_policy={"name": "workspace_change_guidance_policy"},
             )
 
         agent.call_llm = fake_call_llm
@@ -2837,7 +2837,7 @@ def test_agent_process_updates_active_task_with_verification_step_when_work_rema
                     contract_sources=("test",),
                     harness_profile={"name": "coding", "task_type": "workspace_change"},
                 ),
-                harness_policy={"name": "workspace_change_policy"},
+                harness_policy={"name": "workspace_change_guidance_policy"},
             )
 
         agent.call_llm = fake_call_llm
