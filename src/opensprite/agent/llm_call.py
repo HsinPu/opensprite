@@ -82,7 +82,7 @@ class LlmCallService:
         read_active_task_snapshot: Callable[[str], str],
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
-        plan_task_contract: Callable[..., Awaitable[TaskContract]],
+        plan_task: Callable[..., Awaitable[TaskContract]],
         select_harness_profile: Callable[[TaskContract], HarnessProfile],
         select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
         build_harness_tool_registry: Callable[[ToolRegistry, HarnessProfile, HarnessPolicy], ToolRegistry],
@@ -118,7 +118,7 @@ class LlmCallService:
         self._read_active_task_snapshot = read_active_task_snapshot
         self._resolve_task_context = resolve_task_context
         self._resolve_task_objective = resolve_task_objective
-        self._plan_task_contract = plan_task_contract
+        self._plan_task = plan_task
         self._select_harness_profile = select_harness_profile
         self._select_harness_policy = select_harness_policy
         self._build_harness_tool_registry = build_harness_tool_registry
@@ -320,7 +320,7 @@ class LlmCallService:
                         channel=channel,
                         external_chat_id=external_chat_id,
                     )
-                task_contract = await self._plan_task_contract(
+                task_contract = await self._plan_task(
                     tool_registry=base_tool_registry,
                     fallback_objective=getattr(effective_task_intent, "objective", ""),
                     current_message=prompt_message,

@@ -965,7 +965,7 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            plan_task_contract=lambda **kwargs: self.task_planner.plan(
+            plan_task=lambda **kwargs: self.task_planner.plan(
                 provider=self.provider,
                 model=self.provider.get_default_model(),
                 **kwargs,
