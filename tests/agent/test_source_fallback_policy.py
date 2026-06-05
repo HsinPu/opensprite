@@ -8,7 +8,7 @@ from opensprite.agent.source_fallback_policy import (
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 
 
-def test_source_fallback_policy_requires_incomplete_web_contract():
+def test_source_fallback_policy_requires_nonfinal_web_contract():
     web_contract = TaskContract(objective="Find sources.", task_type="web_research")
     plain_contract = TaskContract(objective="Answer plainly.", task_type="pure_answer")
 
@@ -16,8 +16,20 @@ def test_source_fallback_policy_requires_incomplete_web_contract():
         CompletionGateResult(status="incomplete", reason="needs sources"),
         ExecutionResult(content="", task_contract=web_contract),
     )
+    assert source_fallback_allowed(
+        CompletionGateResult(status="blocked", reason="empty final answer"),
+        ExecutionResult(content="", task_contract=web_contract),
+    )
+    assert source_fallback_allowed(
+        CompletionGateResult(status="needs_review", reason="ungrounded citation"),
+        ExecutionResult(content="", task_contract=web_contract),
+    )
     assert not source_fallback_allowed(
         CompletionGateResult(status="complete", reason="answered"),
+        ExecutionResult(content="", task_contract=web_contract),
+    )
+    assert not source_fallback_allowed(
+        CompletionGateResult(status="waiting_user", reason="need user input"),
         ExecutionResult(content="", task_contract=web_contract),
     )
     assert not source_fallback_allowed(

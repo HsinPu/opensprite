@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any, TYPE_CHECKING
 
-from .completion_status import is_incomplete_completion_status
+from .completion_status import (
+    BLOCKED_COMPLETION_STATUS,
+    is_incomplete_completion_status,
+    needs_review_completion_status,
+    normalize_completion_status,
+)
 from .task_contract import is_tool_group_requirement
 from .web_source_policy import (
     is_source_acceptance_criterion_kind,
@@ -19,7 +24,11 @@ if TYPE_CHECKING:
 
 
 def source_fallback_allowed(completion_result: CompletionGateResult, execution_result: ExecutionResult) -> bool:
-    if not is_incomplete_completion_status(completion_result.status):
+    if not (
+        is_incomplete_completion_status(completion_result.status)
+        or normalize_completion_status(completion_result.status) == BLOCKED_COMPLETION_STATUS
+        or needs_review_completion_status(completion_result.status)
+    ):
         return False
     return task_contract_requires_web_sources(execution_result.task_contract)
 
