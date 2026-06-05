@@ -136,7 +136,7 @@ def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
             profile.task_type,
             case.get("expected_profile_task_type"),
         ),
-        _expect_equal("policy", "Harness policy matches", policy.name, case.get("expected_policy")),
+        _expect_equal("policy", "Harness guidance policy matches", policy.name, case.get("expected_policy")),
         _expect_equal(
             "verification_policy",
             "Verification policy matches",

@@ -1149,7 +1149,7 @@
                 </div>
               </div>
               <div class="settings-policy-preview">
-                <span>{{ copy.settings.permissions.harnessPreview.harnessAllowed(row.harnessAllowed) }}</span>
+                <span>{{ copy.settings.permissions.harnessPreview.guidanceAllowed(row.guidanceAllowed) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.userAllowed(row.userAllowed) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.effectiveAllowed(row.effectiveAllowed) }}</span>
                 <span>{{ copy.settings.permissions.harnessPreview.denied(row.denied) }}</span>
@@ -3849,7 +3849,7 @@ const harnessPolicyPreviewRows = computed(() => {
       title: props.copy.settings.permissions.harnessPreview.rowTitle(profileName, taskType),
       policy: policy.name || "policy",
       description: policy.reason || profile.reason || "",
-      harnessAllowed: formatRiskList(policy.allowed_risk_levels),
+      guidanceAllowed: formatRiskList(policy.allowed_risk_levels),
       userAllowed: formatRiskList(user.allowed_risk_levels || userPermissions.allowed_risk_levels),
       effectiveAllowed: formatRiskList(effective.allowed_risk_levels),
       denied: formatRiskList(effective.denied_risk_levels),

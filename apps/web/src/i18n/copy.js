@@ -1054,7 +1054,7 @@ export const DISPLAY_COPY = {
         title: "工具權限",
         enabled: {
           title: "啟用權限檢查",
-          description: "關閉後不會套用使用者設定的 tool permission policy；Harness policy 仍會限制高風險行為。",
+          description: "工具可用性跟隨使用者權限設定；Harness guidance 只保留已設定的核准要求。",
         },
         approvalMode: {
           title: "預設核准模式",
@@ -1111,11 +1111,11 @@ export const DISPLAY_COPY = {
         summary: (enabled, mode, approvalCount) => `${enabled ? "已啟用" : "已停用"} · ${mode} · ${approvalCount} 個核准規則`,
         save: "儲存權限設定",
         harnessPreview: {
-          title: "Harness policy preview",
-          loading: "讀取 Harness policy preview 中...",
-          effectiveTitle: "Effective policy = 使用者設定 + Harness policy",
-          effectiveDescription: "使用者權限設定不能放寬目前任務 profile 的 Harness 限制；實際執行時會套用兩者交集。",
-          harnessAllowed: (value) => `Harness 允許：${value}`,
+          title: "Harness guidance preview",
+          loading: "讀取 Harness guidance preview 中...",
+          effectiveTitle: "Effective policy = 使用者權限 + profile override + approval guidance",
+          effectiveDescription: "工具可用性由使用者權限設定控制；Harness profile 只提供任務 guidance 與需要保留的核准要求。",
+          guidanceAllowed: (value) => `Guidance 風險：${value}`,
           userAllowed: (value) => `使用者允許：${value}`,
           effectiveAllowed: (value) => `實際允許：${value}`,
           denied: (value) => `拒絕：${value}`,
@@ -2781,7 +2781,7 @@ export const DISPLAY_COPY = {
         title: "Tool permissions",
         enabled: {
           title: "Enable permission checks",
-          description: "When off, user-configured tool permission policy is skipped. Harness policy still limits high-risk behavior.",
+          description: "Tool availability follows user permission settings; Harness guidance only preserves configured approval requirements.",
         },
         approvalMode: {
           title: "Default approval mode",
@@ -2838,11 +2838,11 @@ export const DISPLAY_COPY = {
         summary: (enabled, mode, approvalCount) => `${enabled ? "Enabled" : "Disabled"} · ${mode} · ${approvalCount} approval rule${approvalCount === 1 ? "" : "s"}`,
         save: "Save permission settings",
         harnessPreview: {
-          title: "Harness policy preview",
-          loading: "Loading Harness policy preview...",
-          effectiveTitle: "Effective policy = user settings + Harness policy",
-          effectiveDescription: "User permission settings cannot loosen the current task profile's Harness limits. Runtime applies the intersection of both policies.",
-          harnessAllowed: (value) => `Harness allowed: ${value}`,
+          title: "Harness guidance preview",
+          loading: "Loading Harness guidance preview...",
+          effectiveTitle: "Effective policy = user permissions + profile override + approval guidance",
+          effectiveDescription: "Tool availability is controlled by user permission settings. Harness profiles provide task guidance and approval requirements to preserve.",
+          guidanceAllowed: (value) => `Guidance risks: ${value}`,
           userAllowed: (value) => `User allowed: ${value}`,
           effectiveAllowed: (value) => `Effective allowed: ${value}`,
           denied: (value) => `Denied: ${value}`,
