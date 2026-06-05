@@ -771,10 +771,17 @@ def _completion_result_from_judge_verdict(
         contract_expects_file_change(execution_result.task_contract)
         and execution_result.file_change_count <= 0
     )
+    status = verdict.status
+    active_task_status = verdict.active_task_status
+    should_update_active_task = bool(active_task_status)
+    if verdict.review_required and not verdict.review_passed and is_complete_completion_status(status):
+        status = NEEDS_REVIEW_COMPLETION_STATUS
+        active_task_status = None
+        should_update_active_task = False
     return CompletionGateResult(
-        status=verdict.status,
+        status=status,
         reason=verdict.reason,
-        active_task_status=verdict.active_task_status,
+        active_task_status=active_task_status,
         active_task_detail=verdict.active_task_detail,
         follow_up_workflow=verdict.follow_up_workflow,
         follow_up_step_id=verdict.follow_up_step_id,
@@ -783,7 +790,7 @@ def _completion_result_from_judge_verdict(
         verification_action=verdict.verification_action,
         verification_path=verdict.verification_path,
         verification_pytest_args=verdict.verification_pytest_args,
-        should_update_active_task=bool(verdict.active_task_status),
+        should_update_active_task=should_update_active_task,
         verification_required=verdict.verification_required,
         verification_attempted=verdict.verification_attempted,
         verification_passed=verdict.verification_passed,

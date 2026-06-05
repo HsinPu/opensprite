@@ -143,6 +143,51 @@ async def _evaluate_with_static_judge(
     )
 
 
+@pytest.mark.anyio
+async def test_completion_gate_downgrades_complete_judge_verdict_when_review_fails():
+    intent = TaskIntentService().classify("Research the latest AI agent market trends.")
+    response = "The answer cites domains but the review found unsupported source claims."
+    judge = StaticCompletionJudge(
+        CompletionJudgeVerdict(
+            status="complete",
+            reason="judge accepted answer",
+            active_task_status="done",
+            review_required=True,
+            review_attempted=True,
+            review_passed=False,
+            review_summary="response cited sources that were not gathered",
+            review_finding_count=1,
+        )
+    )
+    service = CompletionGateService(
+        llm_config=DocumentLlmConfig(
+            pass_decoding_params=False,
+            temperature=0,
+            max_tokens=700,
+            top_p=None,
+            frequency_penalty=None,
+            presence_penalty=None,
+        ),
+        judge_service=judge,
+    )
+
+    result = await service.evaluate_with_judge(
+        task_intent=intent,
+        response_text=response,
+        execution_result=ExecutionResult(content=response),
+        provider=object(),
+        model="test-model",
+    )
+
+    assert result.status == "needs_review"
+    assert result.active_task_status is None
+    assert result.should_update_active_task is False
+    assert result.review_required is True
+    assert result.review_attempted is True
+    assert result.review_passed is False
+    assert result.review_finding_count == 1
+
+
 def _web_source_artifact() -> TaskArtifact:
     return TaskArtifact(
         kind="web_source",
