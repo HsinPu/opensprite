@@ -68,6 +68,30 @@ def test_list_run_file_changes_tool_scans_recent_runs():
     assert [entry["path"] for entry in payload["file_changes"]] == ["new.txt", "old.txt"]
 
 
+def test_list_run_file_changes_tool_keeps_default_scan_floor():
+    async def scenario():
+        storage = MemoryStorage()
+        for index in range(1, 11):
+            await storage.create_run("chat-1", f"run-{index}", created_at=float(index))
+        await storage.add_run_file_change(
+            "chat-1",
+            "run-3",
+            "write_file",
+            "older.txt",
+            "add",
+            created_at=3.1,
+        )
+        tool = ListRunFileChangesTool(storage=storage, get_session_id=lambda: "chat-1")
+        return await tool.execute(run_limit=5, change_limit=1)
+
+    payload = json.loads(asyncio.run(scenario()))
+
+    assert payload["scanned_runs"] > 5
+    assert payload["count"] == 1
+    assert payload["file_changes"][0]["run_id"] == "run-3"
+    assert payload["file_changes"][0]["path"] == "older.txt"
+
+
 def test_preview_run_file_change_revert_tool_delegates_with_current_session():
     calls = []
 

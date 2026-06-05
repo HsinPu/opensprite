@@ -96,7 +96,11 @@ class ListRunFileChangesTool(Tool):
                     "type": "integer",
                     "minimum": 1,
                     "maximum": _MAX_RUN_LIMIT,
-                    "description": f"Optional. Number of recent runs to scan when run_id is omitted. Defaults to {_DEFAULT_RUN_LIMIT}.",
+                    "description": (
+                        "Optional. Number of recent runs to scan when run_id is omitted. "
+                        f"Defaults to {_DEFAULT_RUN_LIMIT}; values below {_DEFAULT_RUN_LIMIT} are raised to the default "
+                        "so natural-language requests for earlier session changes do not miss recent history."
+                    ),
                 },
                 "change_limit": {
                     "type": "integer",
@@ -134,7 +138,7 @@ class ListRunFileChangesTool(Tool):
                 }
             )
 
-        run_limit = min(max(int(kwargs.get("run_limit") or _DEFAULT_RUN_LIMIT), 1), _MAX_RUN_LIMIT)
+        run_limit = min(max(int(kwargs.get("run_limit") or _DEFAULT_RUN_LIMIT), _DEFAULT_RUN_LIMIT), _MAX_RUN_LIMIT)
         runs = await self.storage.get_runs(session_id, limit=run_limit)
         collected: list[dict[str, Any]] = []
         scanned_runs = 0
