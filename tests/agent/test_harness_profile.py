@@ -226,7 +226,7 @@ class _FailingPlannerProvider:
 
 @pytest.mark.anyio
 async def test_task_planner_builds_web_contract_from_llm_json():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider(
         {
@@ -255,7 +255,7 @@ async def test_task_planner_builds_web_contract_from_llm_json():
 
 @pytest.mark.anyio
 async def test_task_planner_builds_workspace_change_contract_from_llm_json():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Fix the failing test")
     provider = _FakePlannerProvider(
         {
@@ -281,7 +281,7 @@ async def test_task_planner_builds_workspace_change_contract_from_llm_json():
 
 @pytest.mark.anyio
 async def test_task_planner_builds_scheduling_contract_from_llm_json():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Remind me tomorrow morning to check the report.")
     provider = _FakePlannerProvider(
         {
@@ -308,7 +308,7 @@ async def test_task_planner_builds_scheduling_contract_from_llm_json():
 
 @pytest.mark.anyio
 async def test_task_planner_builds_execution_contract_from_llm_json():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Check whether git is installed and report the version.")
     provider = _FakePlannerProvider(
         {
@@ -335,7 +335,7 @@ async def test_task_planner_builds_execution_contract_from_llm_json():
 
 @pytest.mark.anyio
 async def test_task_planner_honors_pure_answer_for_command_version_payload():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("確認這台目前 git 版本，只回答版本號。")
     provider = _FakePlannerProvider(
         {
@@ -362,7 +362,7 @@ async def test_task_planner_honors_pure_answer_for_command_version_payload():
 
 @pytest.mark.anyio
 async def test_task_planner_honors_workspace_read_for_repository_status_payload():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     message = "幫我看目前 repo 是否有未提交的 source 改動，忽略 .tmp 這類測試暫存。"
     intent = TaskIntentService().classify(message)
     provider = _FakePlannerProvider(
@@ -393,7 +393,7 @@ async def test_task_planner_honors_workspace_read_for_repository_status_payload(
 
 @pytest.mark.anyio
 async def test_task_planner_keeps_current_cli_usage_with_workspace_when_reading_allowed():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     message = "我想了解目前 OpenSprite 的 trace CLI 怎麼用，先不要改檔案，只給我測試指令與用途。"
     intent = TaskIntentService().classify(message)
     provider = _FakePlannerProvider(
@@ -421,7 +421,7 @@ async def test_task_planner_keeps_current_cli_usage_with_workspace_when_reading_
 
 @pytest.mark.anyio
 async def test_task_planner_keeps_workspace_read_when_planner_requires_it():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     message = "我想了解 trace CLI 怎麼用，不要讀檔，只給我一般測試指令與用途。"
     intent = TaskIntentService().classify(message)
     provider = _FakePlannerProvider(
@@ -449,7 +449,7 @@ async def test_task_planner_keeps_workspace_read_when_planner_requires_it():
 
 @pytest.mark.anyio
 async def test_task_planner_does_not_override_workspace_change_for_command_usage_text():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     message = "Without reading the repo, explain how to change the opensprite trace CLI implementation."
     intent = TaskIntentService().classify(message)
     provider = _FakePlannerProvider(
@@ -477,7 +477,7 @@ async def test_task_planner_does_not_override_workspace_change_for_command_usage
 
 @pytest.mark.anyio
 async def test_task_planner_blocks_web_request_when_planner_json_is_invalid():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Find the latest stock price for TSMC")
     provider = _FakePlannerProvider("I think this needs web research, but this is not JSON.")
 
@@ -498,7 +498,7 @@ async def test_task_planner_blocks_web_request_when_planner_json_is_invalid():
 
 @pytest.mark.anyio
 async def test_task_planner_blocks_when_llm_call_fails():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Find current OpenRouter API parameter docs and cite sources")
 
     contract = await planner.plan(
@@ -518,7 +518,7 @@ async def test_task_planner_blocks_when_llm_call_fails():
 
 @pytest.mark.anyio
 async def test_task_planner_blocks_workspace_request_when_planner_json_is_invalid():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("請看目前工作區，找出 CLI chat 相關測試檔案有哪些。")
     provider = _FakePlannerProvider("I should inspect files, but this is not JSON.")
 
@@ -539,7 +539,7 @@ async def test_task_planner_blocks_workspace_request_when_planner_json_is_invali
 
 @pytest.mark.anyio
 async def test_task_planner_repairs_invalid_json_with_second_llm_call():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
     provider = _FakePlannerProvider(
         [
@@ -570,7 +570,7 @@ async def test_task_planner_repairs_invalid_json_with_second_llm_call():
 
 @pytest.mark.anyio
 async def test_task_planner_blocks_plain_request_when_planner_json_is_invalid():
-    planner = TaskPlanner(Config.load_agent_template_config().task_contract_llm)
+    planner = TaskPlanner(Config.load_agent_template_config().task_planner_llm)
     intent = TaskIntentService().classify("Plan a 30 minute Python study session without web.")
     provider = _FakePlannerProvider("This is a simple planning answer, no tools needed.")
 

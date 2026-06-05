@@ -710,7 +710,7 @@ class AgentLoop:
         self.harness_policies = HarnessPolicyService()
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
-        self.task_planner = TaskPlanner(self.config.task_contract_llm)
+        self.task_planner = TaskPlanner(self.config.task_planner_llm)
         self.completion_gate = CompletionGateService(llm_config=self.config.completion_judge_llm)
         self.auto_continue = AutoContinueService(
             max_auto_continues=self.config.auto_continue_default_budget,
@@ -1439,7 +1439,7 @@ class AgentLoop:
         self.llm_configured = config.is_llm_configured
         self.task_context_resolver.llm_config = config.agent.task_context_llm
         self.task_objective_resolver.llm_config = config.agent.task_objective_llm
-        self.task_planner.llm_config = config.agent.task_contract_llm
+        self.task_planner.llm_config = config.agent.task_planner_llm
         self.completion_gate.llm_config = config.agent.completion_judge_llm
 
         self.prompt_budget.provider = provider
