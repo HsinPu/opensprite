@@ -178,6 +178,53 @@ def test_blocked_web_research_empty_response_uses_gathered_source_fallback():
     assert "TEST COMPLETION BLOCKER INTRO" not in response
 
 
+def test_source_fallback_sanitizes_stale_incomplete_intro():
+    response = _final_response_after_exhausted_continuation(
+        response="Sorry, I did not produce a displayable reply.",
+        completion_result=CompletionGateResult(
+            status="blocked",
+            reason="Web research succeeded but no final answer was delivered.",
+            missing_evidence=("Substantive final answer with source references",),
+        ),
+        auto_continue_attempts=0,
+        source_fallback_messages=SourceFallbackMessages(
+            intro="我已取得部分來源資料，但最終回答沒有完整整理完成。以下是目前可用的重點資料。",
+            details_header="TEST DETAILS",
+            sources_header="TEST SOURCES",
+        ),
+        execution_result=ExecutionResult(
+            content="Sorry, I did not produce a displayable reply.",
+            task_contract=TaskContract(
+                objective="Find 2026 AI agent tools market trends and cite sources.",
+                task_type="web_research",
+            ),
+            task_artifacts=(
+                TaskArtifact(
+                    kind="web_source",
+                    source_tool="web_research",
+                    metadata={
+                        "sources": [
+                            {
+                                "tool_name": "web_fetch",
+                                "url": "https://example.com/agent-trends",
+                                "title": "AI Agent Trends",
+                                "snippet": "Agent tools are moving from pilots into governed production workflows.",
+                                "content_chars": 1200,
+                                "has_main_content": True,
+                                "is_too_short": False,
+                            }
+                        ]
+                    },
+                ),
+            ),
+        ),
+    )
+
+    assert "沒有完整整理完成" not in response
+    assert "根據已取得來源" in response
+    assert "https://example.com/agent-trends" in response
+
+
 def test_exhausted_continuation_uses_search_snippet_when_it_contains_missing_evidence_url():
     response = _final_response_after_exhausted_continuation(
         response="抱歉，我剛剛沒有產生可顯示的回覆，請再試一次。",
