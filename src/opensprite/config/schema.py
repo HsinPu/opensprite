@@ -532,24 +532,6 @@ class ToolPermissionProfileOverrideConfig(BaseModel):
     approval_required_risk_levels: list[str] = Field(default_factory=list)
 
 
-def _default_permission_profile_overrides() -> dict[str, ToolPermissionProfileOverrideConfig]:
-    return {
-        "chat": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read"]),
-        "research": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read", "network"]),
-        "coding": ToolPermissionProfileOverrideConfig(allowed_risk_levels=[
-            "read",
-            "write",
-            "execute",
-            "network",
-            "external_side_effect",
-            "configuration",
-            "delegation",
-            "memory",
-        ], denied_risk_levels=["mcp"]),
-        "media": ToolPermissionProfileOverrideConfig(allowed_risk_levels=["read", "network", "external_side_effect"]),
-    }
-
-
 class ToolPermissionsConfig(BaseModel):
     """Centralized tool exposure and execution policy."""
 
@@ -562,7 +544,7 @@ class ToolPermissionsConfig(BaseModel):
     denied_risk_levels: list[str] = Field(default_factory=list)
     approval_required_tools: list[str] = Field(default_factory=list)
     approval_required_risk_levels: list[str] = Field(default_factory=list)
-    profile_overrides: dict[str, ToolPermissionProfileOverrideConfig] = Field(default_factory=_default_permission_profile_overrides)
+    profile_overrides: dict[str, ToolPermissionProfileOverrideConfig] = Field(default_factory=dict)
 
 
 class ToolsConfig(BaseModel):

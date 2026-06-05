@@ -970,8 +970,7 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                     "mcp",
                 ]
                 assert payload["permissions"]["approval_mode_options"] == ["auto", "ask", "block"]
-                assert payload["permissions"]["profile_overrides"]["chat"]["allowed_risk_levels"] == ["read"]
-                assert "ops" not in payload["permissions"]["profile_overrides"]
+                assert payload["permissions"]["profile_overrides"] == {}
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/harness-policy-preview") as resp:
                 assert resp.status == 200
@@ -982,9 +981,10 @@ async def _run_web_permission_settings_roundtrip(tmp_path: Path):
                 policies = {row["policy"]["name"]: row for row in preview["rows"]}
                 assert "chat_read_policy" in policies
                 assert "workspace_change_policy" in policies
-                assert policies["chat_read_policy"]["user"]["allowed_risk_levels"] == ["read"]
-                assert policies["chat_read_policy"]["effective"]["allowed_risk_levels"] == ["read"]
-                assert "mcp" in policies["workspace_change_policy"]["effective"]["denied_risk_levels"]
+                assert policies["chat_read_policy"]["profile_override"] == {}
+                assert set(policies["chat_read_policy"]["user"]["allowed_risk_levels"]) >= {"read", "network", "write"}
+                assert set(policies["chat_read_policy"]["effective"]["allowed_risk_levels"]) >= {"read", "network", "write"}
+                assert policies["workspace_change_policy"]["effective"]["denied_risk_levels"] == []
                 assert policies["operations_approval_policy"]["profile_override"] == {}
                 assert "mcp" in policies["operations_approval_policy"]["policy"]["approval_required_risk_levels"]
 

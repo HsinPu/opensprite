@@ -389,8 +389,7 @@ def test_tools_config_provides_typed_tool_defaults():
     assert config.permissions.denied_risk_levels == []
     assert config.permissions.approval_required_tools == []
     assert config.permissions.approval_required_risk_levels == []
-    assert config.permissions.profile_overrides["chat"].allowed_risk_levels == ["read"]
-    assert "ops" not in config.permissions.profile_overrides
+    assert config.permissions.profile_overrides == {}
     assert config.mcp_servers_file == "mcp_servers.json"
 
 

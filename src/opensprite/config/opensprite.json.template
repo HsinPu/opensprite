@@ -81,12 +81,7 @@
       "denied_risk_levels": [],
       "approval_required_tools": [],
       "approval_required_risk_levels": [],
-      "profile_overrides": {
-        "chat": {"allowed_risk_levels": ["read"]},
-        "research": {"allowed_risk_levels": ["read", "network"]},
-        "coding": {"allowed_risk_levels": ["read", "write", "execute", "network", "external_side_effect", "configuration", "delegation", "memory"], "denied_risk_levels": ["mcp"]},
-        "media": {"allowed_risk_levels": ["read", "network", "external_side_effect"]}
-      }
+      "profile_overrides": {}
     },
     "mcp_servers_file": "mcp_servers.json"
   },
