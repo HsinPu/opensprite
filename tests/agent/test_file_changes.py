@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 from pathlib import Path
 
-from opensprite.agent.file_changes import RunFileChangeService
+from opensprite.agent.run_trace import RunFileChangeService
 from opensprite.runs.events import (
     FILE_REVERT_APPLIED_EVENT,
     FILE_REVERT_PREVIEWED_EVENT,

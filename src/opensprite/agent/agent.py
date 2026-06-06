@@ -97,7 +97,6 @@ from .curator import (
     fingerprint_text_directory,
 )
 from .execution import ExecutionEngine, ExecutionResult
-from .file_changes import RunFileChangeService
 from .harness_policy import HarnessPolicyService
 from .harness_profile import HarnessProfileService
 from .learning_ledger import LearningLedger
@@ -108,7 +107,7 @@ from .mcp_lifecycle import McpLifecycleService
 from .tool_access import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
-from .run_trace import RunTraceRecorder
+from .run_trace import RunFileChangeService, RunTraceRecorder
 from .run_hooks import AgentRunStateService, RunHookService
 from .subagents import SubagentRunService
 from .task_resolver import TaskContextDecision, TaskContextResolver, TaskObjectiveDecision, TaskObjectiveResolver
