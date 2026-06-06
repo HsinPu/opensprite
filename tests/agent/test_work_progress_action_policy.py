@@ -11,10 +11,13 @@ from opensprite.agent.turn_runner import (
     is_review_follow_up_next_action,
     is_review_phase_next_action,
     is_verification_next_action,
+    normalize_next_action,
 )
 
 
 def test_work_progress_action_policy_classifies_core_next_actions():
+    assert normalize_next_action(f" {NEXT_ACTION_CONTINUE_WORK} ") == NEXT_ACTION_CONTINUE_WORK
+    assert normalize_next_action(None) == ""
     assert is_verification_next_action(NEXT_ACTION_CONTINUE_VERIFICATION) is True
     assert is_verification_next_action(NEXT_ACTION_CONTINUE_WORK) is False
     assert is_continue_work_next_action(NEXT_ACTION_CONTINUE_WORK) is True

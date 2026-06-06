@@ -407,8 +407,12 @@ def metadata_requests_direct_verification(metadata: dict[str, Any]) -> bool:
     return _metadata_value_matches(metadata, QUICK_ACTION_METADATA_KEY, RUN_VERIFICATION_QUICK_ACTION)
 
 
+def _normalized_policy_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
 def _metadata_value_matches(metadata: dict[str, Any], key: str, expected: str) -> bool:
-    return str(metadata.get(key) or "").strip() == expected
+    return _normalized_policy_text(metadata.get(key)) == expected
 
 
 @dataclass(frozen=True)
@@ -2493,7 +2497,7 @@ WORK_STEP_NOT_SET = "not set"
 
 
 def normalize_next_action(value: str | None) -> str:
-    return str(value or "").strip()
+    return _normalized_policy_text(value)
 
 
 def is_verification_next_action(value: str | None) -> bool:
