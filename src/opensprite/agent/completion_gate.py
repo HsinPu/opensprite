@@ -3101,7 +3101,7 @@ class AutoContinueService:
         source_context_override: str | None = None,
     ) -> str:
         """Build the synthetic continuation instruction for the next pass."""
-        previous = _auto_continue_truncate(previous_response, max_chars=1200) or "(no previous visible response)"
+        previous = _truncate(previous_response, max_chars=1200) or "(no previous visible response)"
         follow_up_detail = str(completion_result.active_task_detail or "").strip()
         workflow_target = _workflow_follow_up_target(completion_result)
         follow_up_instruction = ""
@@ -3159,7 +3159,7 @@ class AutoContinueService:
             )
         if execution_result.assistant_internal_only_response:
             incomplete_instruction += internal_only_response_follow_up_instruction(allow_tools=allow_tools)
-        handoff = _auto_continue_truncate(compaction_handoff or "", max_chars=2400).strip()
+        handoff = _truncate(compaction_handoff or "", max_chars=2400).strip()
         handoff_section = ""
         if handoff:
             handoff_section = (
@@ -3202,8 +3202,8 @@ class AutoContinueService:
         previous_response: str,
         workflow_result: str,
     ) -> str:
-        previous = _auto_continue_truncate(previous_response, max_chars=800) or "(no previous visible response)"
-        workflow_output = _auto_continue_truncate(workflow_result, max_chars=2000) or "(workflow returned no visible result)"
+        previous = _truncate(previous_response, max_chars=800) or "(no previous visible response)"
+        workflow_output = _truncate(workflow_result, max_chars=2000) or "(workflow returned no visible result)"
         workflow_target = _workflow_follow_up_target(completion_result)
         return (
             "The runtime already resumed the workflow follow-up step for you. Continue from that result instead of rerunning the same step unless you find a concrete reason.\n"
@@ -3285,13 +3285,6 @@ class AutoContinueService:
         ):
             return None, None, ()
         return action, path, pytest_args
-
-
-def _auto_continue_truncate(text: str, *, max_chars: int) -> str:
-    compact = str(text or "").strip()
-    if len(compact) <= max_chars:
-        return compact
-    return compact[: max_chars - 3].rstrip() + "..."
 
 
 def _should_answer_from_existing_web_sources(
