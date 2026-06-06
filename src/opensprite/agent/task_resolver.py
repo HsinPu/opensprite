@@ -10,7 +10,7 @@ from typing import Any
 from ..config.schema import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..utils.log import logger
-from .active_task_status import has_current_active_task
+from ..documents.active_task import has_current_active_task
 from .harness_profile import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,

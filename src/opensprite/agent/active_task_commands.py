@@ -8,32 +8,30 @@ from typing import Any, Callable
 
 from ..config import TaskMessagesConfig
 from ..documents.active_task import (
+    ACTIVE_ACTIVE_TASK_STATUS,
+    BLOCKED_ACTIVE_TASK_STATUS,
+    BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
+    DONE_ACTIVE_TASK_STATUS,
     TASK_BOUNDARY_CONFIRMATION_EVENT,
     TASK_BOUNDARY_CONFIRMATION_RESOLVED_EVENT,
+    WAITING_USER_ACTIVE_TASK_STATUS,
+    WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     _extract_task_field,
     build_task_block_from_intent_fields,
     build_task_block_from_text,
+    clear_open_questions,
+    clears_active_task_open_questions,
     create_active_task_store,
+    is_current_active_task_status,
+    is_current_or_done_active_task_status,
+    is_inactive_active_task_status,
+    is_terminal_active_task_status,
 )
 from ..storage import StorageProvider
 from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..runs.events import ACTIVE_TASK_SEEDED_EVENT
 from ..utils.log import logger
-from .active_task_status import (
-    ACTIVE_ACTIVE_TASK_STATUS,
-    BLOCKED_ACTIVE_TASK_STATUS,
-    BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
-    DONE_ACTIVE_TASK_STATUS,
-    WAITING_USER_ACTIVE_TASK_STATUS,
-    WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
-    clear_open_questions,
-    clears_active_task_open_questions,
-    is_current_active_task_status,
-    is_current_or_done_active_task_status,
-    is_inactive_active_task_status,
-    is_terminal_active_task_status,
-)
 from .completion_gate import CompletionGateResult
 from .completion_status import is_blocking_completion_status
 from .task_resolver import (

@@ -11,7 +11,7 @@ from ..config import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import BATCH_TOOL_NAME
-from .active_task_status import (
+from ..documents.active_task import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_STATUS,
     DONE_ACTIVE_TASK_STATUS,

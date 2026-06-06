@@ -27,7 +27,7 @@ from ..runs.events import (
 )
 from ..tools import ToolRegistry
 from ..utils.log import logger
-from .active_task_status import has_current_active_task
+from ..documents.active_task import has_current_active_task
 from .execution import ExecutionResult
 from .harness_policy import HarnessPolicy
 from .harness_profile import (

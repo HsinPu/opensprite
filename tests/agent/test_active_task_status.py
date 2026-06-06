@@ -1,4 +1,4 @@
-from opensprite.agent.active_task_status import (
+from opensprite.documents.active_task import (
     BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     active_task_status,

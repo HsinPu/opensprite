@@ -8,8 +8,8 @@ from ..documents.active_task import (
     ActiveTaskStore,
     _extract_task_field,
     build_task_block_from_text,
+    normalize_open_questions,
 )
-from ..agent.active_task_status import normalize_open_questions
 from .base import Tool
 from .result_status import tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN

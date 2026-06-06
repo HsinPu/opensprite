@@ -32,7 +32,7 @@ from ..llms import LLMProvider, ChatMessage
 from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..storage import StorageProvider, StoredDelegatedTask
 from ..storage.base import get_storage_message_count
-from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store
+from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store, is_current_active_task_status
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
 from ..context.paths import (
@@ -85,7 +85,6 @@ from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
 from .active_task_commands import ActiveTaskCommandService
-from .active_task_status import is_current_active_task_status
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
 from .curator import (
