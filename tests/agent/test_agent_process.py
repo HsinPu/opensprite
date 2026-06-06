@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 from opensprite.agent.agent import AgentLoop, _verification_result_is_tool_error
-from opensprite.agent.auto_continue import (
+from opensprite.agent.completion_gate import (
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     REVIEW_EVIDENCE_STILL_MISSING_REASON,
 )

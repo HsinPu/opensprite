@@ -58,7 +58,7 @@ from opensprite.tools.evidence import (
     is_web_source_artifact_kind,
     is_web_source_evidence_tool,
 )
-from opensprite.agent.auto_continue import AutoContinueService
+from opensprite.agent.completion_gate import AutoContinueService
 from opensprite.agent.execution import ExecutionResult, is_max_tool_iterations_stop_reason
 from opensprite.context.message_history import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
 from opensprite.agent.completion_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON

@@ -1,5 +1,5 @@
-from opensprite.agent.auto_continue import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService, format_web_source_context
-from opensprite.agent.auto_continue import (
+from opensprite.agent.completion_gate import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService, format_web_source_context
+from opensprite.agent.completion_gate import (
     MAX_AUTO_CONTINUES_REACHED_REASON,
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
