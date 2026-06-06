@@ -816,7 +816,7 @@ def task_review_findings_follow_up_detail() -> str:
 
 
 def _workflow_id(workflow_id: str | None) -> str:
-    return str(workflow_id or "").strip()
+    return _coerce_text(workflow_id)
 
 
 def is_research_then_outline_workflow(workflow_id: str | None) -> bool:
@@ -2139,7 +2139,7 @@ def response_references_workspace_path(path: str, normalized_response: str) -> b
 
 
 def _operation_policy_value(value: str | None) -> str:
-    return str(value or "").strip()
+    return _coerce_text(value)
 
 
 def is_operations_task_type(task_type: str | None) -> bool:
