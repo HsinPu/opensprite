@@ -119,7 +119,7 @@ from .tool_registration import (
 from .turn import TurnContextService, TurnInputPreparer
 from .turn_runner import AgentTurnRunner
 from ..tools.evidence import VERIFICATION_TOOL_NAME
-from .workflow_status import is_workflow_failed_status
+from .workflows import is_workflow_failed_status
 from .worktree import WorktreeSandboxInspector
 from .workflows import SubagentWorkflowService
 from .work_progress import WorkProgressService, WorkProgressUpdate

@@ -64,7 +64,7 @@ from .run_hooks import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
 from .subagent_profiles import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_registry, profile_for_subagent
 from .subagent_output import SUBAGENT_PROMPT_TYPE_LABEL, SUBAGENT_TASK_ID_LABEL, subagent_result_line
-from .workflow_status import (
+from .workflows import (
     WORKFLOW_CANCELLED_STATUS,
     WORKFLOW_COMPLETED_STATUS,
     WORKFLOW_ERROR_STATUS,

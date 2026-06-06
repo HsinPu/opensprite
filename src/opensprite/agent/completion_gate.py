@@ -80,12 +80,6 @@ from ..tools.evidence import (
     is_verification_tool_name,
     required_verification_completion_reason,
 )
-from .workflow_status import (
-    is_workflow_cancelled_status,
-    is_workflow_completed_status,
-    is_workflow_failed_status,
-    is_workflow_unsuccessful_status,
-)
 from .workflows import (
     BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
@@ -105,6 +99,10 @@ from .workflows import (
     WORKFLOW_SUMMARY_FIELD,
     WORKFLOW_VERIFICATION_ATTEMPTED_FIELD,
     WORKFLOW_VERIFICATION_PASSED_FIELD,
+    is_workflow_cancelled_status,
+    is_workflow_completed_status,
+    is_workflow_failed_status,
+    is_workflow_unsuccessful_status,
 )
 
 COMPLETION_JUDGE_STATUSES = frozenset(

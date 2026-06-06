@@ -44,7 +44,7 @@ from .task_resolver import (
     TaskContextDecision,
 )
 from .task_intent import TaskIntent, intent_supports_default_work_plan
-from .workflow_status import is_workflow_failed_status
+from .workflows import is_workflow_failed_status
 
 
 NEXT_ACTION_FINALIZE = "finalize"

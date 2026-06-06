@@ -86,7 +86,7 @@ from ..tools.evidence import (
     is_web_fetch_source_record_tool,
     is_web_source_artifact_kind,
 )
-from .workflow_status import is_workflow_failed_status
+from .workflows import is_workflow_failed_status
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from .worktree import WorktreeSandboxInspector
 

@@ -50,7 +50,7 @@ from ..tools.evidence import (
     is_web_source_artifact_kind,
     is_web_source_evidence_tool,
 )
-from .workflow_status import WORKFLOW_COMPLETED_STATUS
+from .workflows import WORKFLOW_COMPLETED_STATUS
 
 
 LLM_STEP_COMPLETED_STATUS = "completed"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable
 from uuid import uuid4
 
 from ..runs.events import (
@@ -18,7 +18,6 @@ from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
 from .run_hooks import RunCancelledError
-from .subagents import SubagentTaskOutcome
 from .subagent_output import (
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
     STRUCTURED_SUBAGENT_ITEMS_FIELD,
@@ -27,19 +26,47 @@ from .subagent_output import (
     STRUCTURED_SUBAGENT_SECTIONS_FIELD,
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
+    SUBAGENT_TASK_ID_LABEL,
     is_clean_structured_subagent_status,
+    subagent_result_line,
 )
 from .subagent_profiles import CODE_REVIEWER_PROMPT_TYPE, REVIEW_PROMPT_TYPES
-from .subagent_output import SUBAGENT_TASK_ID_LABEL, subagent_result_line
-from .workflow_status import (
-    WORKFLOW_CANCELLED_STATUS,
-    WORKFLOW_COMPLETED_STATUS,
-    WORKFLOW_FAILED_STATUS,
-    WORKFLOW_RUNNING_STATUS,
-    is_workflow_completed_status,
-    is_workflow_failed_status,
-    is_workflow_unsuccessful_status,
-)
+
+if TYPE_CHECKING:
+    from .subagents import SubagentTaskOutcome
+
+WORKFLOW_COMPLETED_STATUS = "completed"
+WORKFLOW_FAILED_STATUS = "failed"
+WORKFLOW_ERROR_STATUS = "error"
+WORKFLOW_CANCELLED_STATUS = "cancelled"
+WORKFLOW_RUNNING_STATUS = "running"
+WORKFLOW_FAILURE_STATUSES = frozenset({WORKFLOW_FAILED_STATUS, WORKFLOW_ERROR_STATUS})
+WORKFLOW_UNSUCCESSFUL_STATUSES = WORKFLOW_FAILURE_STATUSES | frozenset({WORKFLOW_CANCELLED_STATUS})
+
+
+def is_workflow_running_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status is running."""
+    return str(status or "").strip().lower() == WORKFLOW_RUNNING_STATUS
+
+
+def is_workflow_completed_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status is completed."""
+    return str(status or "").strip().lower() == WORKFLOW_COMPLETED_STATUS
+
+
+def is_workflow_failed_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status represents failure."""
+    return str(status or "").strip().lower() in WORKFLOW_FAILURE_STATUSES
+
+
+def is_workflow_cancelled_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status represents cancellation."""
+    return str(status or "").strip().lower() == WORKFLOW_CANCELLED_STATUS
+
+
+def is_workflow_unsuccessful_status(status: str | None) -> bool:
+    """Return whether a workflow/subtask status is failed, errored, or cancelled."""
+    return str(status or "").strip().lower() in WORKFLOW_UNSUCCESSFUL_STATUSES
 
 IMPLEMENT_THEN_REVIEW_WORKFLOW_ID = "implement_then_review"
 RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
