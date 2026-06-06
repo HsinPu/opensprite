@@ -1,4 +1,4 @@
-from opensprite.agent.change_path_policy import (
+from opensprite.agent.completion_gate import (
     common_verification_path,
     is_python_file_path,
     is_python_test_path,
