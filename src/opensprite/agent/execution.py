@@ -124,7 +124,6 @@ from ..harness import (
     is_chat_profile_name,
 )
 from .task_contract import (
-    PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     TaskContextDecision,
     TaskContract,
@@ -140,6 +139,7 @@ from .task_contract import (
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
     resolve_planning_mode,
+    task_planner_status,
 )
 from ..tools.access import ToolAccessResolver
 from ..tools.loop_guardrail import (
@@ -2758,7 +2758,7 @@ class LlmCallService:
                     )
                     validation_event_type = (
                         TASK_CONTRACT_VALIDATED_EVENT
-                        if _task_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
+                        if task_planner_status(task_contract) == PLANNER_VALIDATED_STATUS
                         else TASK_CONTRACT_VALIDATION_FAILED_EVENT
                     )
                     await self._emit_run_event(
@@ -3177,13 +3177,6 @@ def _format_acceptance_criterion(criterion: Any) -> str:
     if is_operation_report_criterion(criterion):
         return "Report approval, validation, rollback, blocker, or residual risk for the operation."
     return criterion.description or criterion.kind
-
-
-def _task_planner_status(contract: TaskContract | None) -> str:
-    metadata = getattr(contract, "planner_metadata", None) or {}
-    if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
-    return ""
 
 
 # Delegated subagent task runner and workflows.

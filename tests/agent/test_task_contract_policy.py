@@ -4,6 +4,8 @@ from opensprite.agent.task_contract import (
     ITEMIZED_OUTPUT_CRITERION_KIND,
     MEDIA_ARTIFACT_CRITERION_KIND,
     OPERATION_REPORT_CRITERION_KIND,
+    PLANNER_METADATA_REASON_FIELD,
+    PLANNER_METADATA_STATUS_FIELD,
     PLANNER_INVALID_JSON_REASON,
     PLANNER_UNAVAILABLE_REASON,
     PLANNER_UNSUPPORTED_TASK_TYPE_REASON,
@@ -31,6 +33,8 @@ from opensprite.agent.task_contract import (
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
     missing_evidence,
+    task_planner_reason,
+    task_planner_status,
 )
 from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
@@ -73,6 +77,22 @@ class _CatalogTool(Tool):
 
     async def _execute(self, **kwargs) -> str:
         return "ok"
+
+
+def test_task_planner_metadata_helpers_normalize_values():
+    contract = TaskContract(
+        objective="x",
+        task_type="pure_answer",
+        planner_metadata={
+            PLANNER_METADATA_STATUS_FIELD: " validated ",
+            PLANNER_METADATA_REASON_FIELD: " planner ok ",
+        },
+    )
+
+    assert task_planner_status(contract) == "validated"
+    assert task_planner_reason(contract) == "planner ok"
+    assert task_planner_status(object()) == ""
+    assert task_planner_reason(object()) == ""
 
 
 def test_planner_fallback_reasons_are_centralized():

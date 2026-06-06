@@ -1733,6 +1733,22 @@ class TaskContract:
         return payload
 
 
+def task_planner_status(task_contract: Any) -> str:
+    """Return the normalized planner status from a task contract."""
+    metadata = getattr(task_contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
+    return ""
+
+
+def task_planner_reason(task_contract: Any) -> str:
+    """Return the normalized planner reason from a task contract."""
+    metadata = getattr(task_contract, "planner_metadata", None) or {}
+    if isinstance(metadata, dict):
+        return str(metadata.get(PLANNER_METADATA_REASON_FIELD) or "").strip()
+    return ""
+
+
 def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | None = None) -> TaskContract:
     """Return a no-tool fallback when a caller bypasses the planner path."""
     objective = str(getattr(task_intent, "objective", "") or current_message or "").strip()

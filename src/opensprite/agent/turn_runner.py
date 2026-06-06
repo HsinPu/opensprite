@@ -129,7 +129,6 @@ from .task_contract import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
-    PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     PLANNING_ERROR_TASK_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
@@ -138,6 +137,7 @@ from .task_contract import (
     is_current_task_replacement_type,
     intent_supports_default_work_plan,
     is_tool_group_requirement,
+    task_planner_status,
 )
 from .task_contract import TaskContextDecision, TaskContextResolver, TaskIntent, TaskIntentService, TaskObjectiveDecision
 from ..tools.evidence import (
@@ -2021,7 +2021,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if (
                     result.task_contract is not None
-                    and _task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
+                    and task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
                 )
             ),
             None,
@@ -2034,7 +2034,7 @@ class AgentTurnRunner:
                 for result in reversed(results)
                 if (
                     result.task_contract is not None
-                    and _task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
+                    and task_planner_status(result.task_contract) == PLANNER_VALIDATED_STATUS
                     and _is_tool_backed_task_contract(result.task_contract)
                 )
             ),
@@ -2418,13 +2418,6 @@ def _harness_trace_health(
             "not_applicable": sensor_statuses.count("not_applicable"),
         },
     }
-
-
-def _task_planner_status(task_contract: Any) -> str:
-    metadata = getattr(task_contract, "planner_metadata", None) or {}
-    if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
-    return ""
 
 
 def _is_tool_backed_task_contract(task_contract: Any) -> bool:

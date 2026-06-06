@@ -61,7 +61,6 @@ from .task_contract import (
     PLANNER_BLOCKED_STATUS,
     PLANNER_INVALID_STATUS,
     PLANNER_METADATA_REASON_FIELD,
-    PLANNER_METADATA_STATUS_FIELD,
     ResourceIndex,
     TaskContract,
     contract_expects_file_change,
@@ -80,6 +79,8 @@ from .task_contract import (
     is_workspace_location_criterion,
     missing_evidence,
     neutral_task_contract,
+    task_planner_reason,
+    task_planner_status,
 )
 from ..context.message_history import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
@@ -1114,10 +1115,10 @@ class CompletionGateService:
                 file_change_required=True,
             )
 
-        planner_status = _task_planner_status(execution_result.task_contract)
+        planner_status = task_planner_status(execution_result.task_contract)
         if _is_blocking_planner_status(planner_status):
             reason = TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
-            detail = _task_planner_reason(execution_result.task_contract) or reason
+            detail = task_planner_reason(execution_result.task_contract) or reason
             return CompletionGateResult(
                 status=BLOCKED_COMPLETION_STATUS,
                 reason=reason,
@@ -1699,22 +1700,8 @@ def _is_read_only_blocking_tool_group(tool_group: str | None) -> bool:
     return is_read_only_blocking_tool_group(tool_group)
 
 
-def _task_planner_status(task_contract: Any) -> str:
-    metadata = getattr(task_contract, "planner_metadata", None) or {}
-    if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_STATUS_FIELD) or "").strip()
-    return ""
-
-
 def _is_blocking_planner_status(status: str | None) -> bool:
     return str(status or "").strip().lower() in _BLOCKING_PLANNER_STATUSES
-
-
-def _task_planner_reason(task_contract: Any) -> str:
-    metadata = getattr(task_contract, "planner_metadata", None) or {}
-    if isinstance(metadata, dict):
-        return str(metadata.get(PLANNER_METADATA_REASON_FIELD) or "").strip()
-    return ""
 
 
 def has_only_optional_web_discovery_failures(execution_result: ExecutionResult) -> bool:
