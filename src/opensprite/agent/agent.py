@@ -84,7 +84,6 @@ from ..tool_names import (
 from ..utils.log import logger
 from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchConfig, UserProfileConfig, ActiveTaskConfig, RecentSummaryConfig, MessagesConfig, Config
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
-from .active_task_commands import ActiveTaskCommandService
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
 from .curator import (
@@ -124,7 +123,7 @@ from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextSer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflows import is_workflow_failed_status
 from .workflows import SubagentWorkflowService
-from .work_progress import WorkProgressService, WorkProgressUpdate
+from .work_progress import ActiveTaskCommandService, WorkProgressService, WorkProgressUpdate
 
 
 def _tool_approval_event_type(event_type: str, request: PermissionRequest) -> str | None:
