@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..agent.tool_access import HarnessPolicyService, HarnessProfileService, expected_sensor_ids_for_task_type
+from ..agent.tool_access import HarnessPolicyService, HarnessProfileService
 from ..agent.task_contract import EvidenceRequirement, TaskContract
+from ..harness import expected_sensor_ids_for_task_type
 from ..tools.base import Tool
 from ..tools.registry import ToolRegistry
 

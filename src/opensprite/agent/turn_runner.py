@@ -56,6 +56,7 @@ from ..documents.active_task import (
     is_inactive_active_task_status,
     is_terminal_active_task_status,
 )
+from ..harness import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .completion_gate import AutoContinueService, format_web_source_context
@@ -99,9 +100,6 @@ from .tool_access import (
     WORKSPACE_WRITE_TOOL_GROUP,
     HarnessProfile,
     HarnessProfileService,
-    HarnessScorecard,
-    HarnessSensorResult,
-    evaluate_harness_sensors,
     is_chat_profile_name,
     is_coding_profile_name,
     is_media_profile_name,
