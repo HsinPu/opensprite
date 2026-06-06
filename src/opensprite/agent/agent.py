@@ -100,8 +100,7 @@ from .media import AgentMediaService
 from .message_history import MessageHistoryService
 from .mcp_lifecycle import McpLifecycleService
 from .permission_flow import AgentPermissionService, PermissionEventRecorder
-from .prompt_budget import PromptBudgetService
-from .prompt_logging import PromptLoggingService
+from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
