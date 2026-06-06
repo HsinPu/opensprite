@@ -2612,12 +2612,12 @@ def test_agent_process_metadata_resume_follow_up_runs_workflow_before_llm(tmp_pa
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 metadata={
-                    "quick_action": "resume_follow_up",
-                    "follow_up_workflow": "implement_then_review",
-                    "follow_up_step_id": "review",
-                    "follow_up_step_label": "Code review",
-                    "follow_up_prompt_type": "code-reviewer",
-                    "active_task_detail": "Resume with the Code review step in implement_then_review.",
+                    "quick_action": " resume_follow_up ",
+                    "follow_up_workflow": " implement_then_review ",
+                    "follow_up_step_id": " review ",
+                    "follow_up_step_label": " Code review ",
+                    "follow_up_prompt_type": " code-reviewer ",
+                    "active_task_detail": " Resume with the Code review step in implement_then_review. ",
                 },
             )
         )
@@ -2675,10 +2675,10 @@ def test_agent_process_metadata_run_verification_runs_verify_before_llm(tmp_path
                 external_chat_id="browser-1",
                 session_id="web:browser-1",
                 metadata={
-                    "quick_action": "run_verification",
-                    "verification_action": "pytest",
-                    "verification_path": ".",
-                    "verification_pytest_args": ["tests/test_ui.py::test_card"],
+                    "quick_action": " run_verification ",
+                    "verification_action": " pytest ",
+                    "verification_path": " . ",
+                    "verification_pytest_args": [" tests/test_ui.py::test_card "],
                 },
             )
         )

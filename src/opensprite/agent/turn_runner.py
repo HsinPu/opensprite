@@ -411,8 +411,12 @@ def _normalized_policy_text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _metadata_text(metadata: dict[str, Any], key: str, default: Any = "") -> str:
+    return _normalized_policy_text(metadata.get(key) or default)
+
+
 def _metadata_value_matches(metadata: dict[str, Any], key: str, expected: str) -> bool:
-    return _normalized_policy_text(metadata.get(key)) == expected
+    return _metadata_text(metadata, key) == expected
 
 
 @dataclass(frozen=True)
@@ -1742,16 +1746,16 @@ class AgentTurnRunner:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
         if not metadata_requests_follow_up_resume(payload):
             return None
-        workflow = str(payload.get(COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD) or "").strip()
-        start_step = str(payload.get(COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD) or "").strip()
+        workflow = _metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_WORKFLOW_FIELD)
+        start_step = _metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_STEP_ID_FIELD)
         if not workflow or not start_step:
             return None
         return {
             "workflow": workflow,
             "start_step": start_step,
-            "step_label": str(payload.get(COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD) or start_step).strip() or start_step,
-            "prompt_type": str(payload.get(COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD) or "").strip(),
-            "detail": str(payload.get(COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD) or "").strip(),
+            "step_label": _metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_STEP_LABEL_FIELD, start_step) or start_step,
+            "prompt_type": _metadata_text(payload, COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD),
+            "detail": _metadata_text(payload, COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD),
             "previous_response": "continue",
         }
 
@@ -1760,10 +1764,10 @@ class AgentTurnRunner:
         payload = dict(metadata or {}) if isinstance(metadata, dict) else {}
         if not metadata_requests_direct_verification(payload):
             return None
-        action = str(payload.get(COMPLETION_RESULT_VERIFICATION_ACTION_FIELD) or "").strip()
+        action = _metadata_text(payload, COMPLETION_RESULT_VERIFICATION_ACTION_FIELD)
         if not action:
             return None
-        path = str(payload.get(COMPLETION_RESULT_VERIFICATION_PATH_FIELD) or ".").strip() or "."
+        path = _metadata_text(payload, COMPLETION_RESULT_VERIFICATION_PATH_FIELD, ".") or "."
         pytest_args = tuple(
             str(item or "").strip()
             for item in (payload.get(COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD) or payload.get("verificationPytestArgs") or ())
