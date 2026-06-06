@@ -566,7 +566,7 @@ class HarnessPolicyService:
     def build_tool_registry(self, base_registry: ToolRegistry, harness_policy: HarnessPolicy, profile_permission_policy: ToolPermissionPolicy | None = None) -> ToolRegistry:
         """Return a registry constrained by the selected harness policy."""
 
-        from .agent.tool_access import ToolAccessResolver
+        from .tools.access import ToolAccessResolver
 
         return ToolAccessResolver(harness_policies=self).resolve(
             base_registry,

@@ -25,7 +25,7 @@ from ..tool_names import (
     READ_SKILL_TOOL_NAME,
     TRANSCRIBE_AUDIO_TOOL_NAME,
 )
-from .tool_access import (
+from ..harness import (
     ANALYSIS_TASK_TYPE,
     CODE_CHANGE_TASK_TYPE,
     FILE_CHANGE_REQUIREMENT_KIND,
@@ -1527,7 +1527,7 @@ def resolve_planning_mode(
 
 def build_planning_mode_tool_registry(base_registry: ToolRegistry) -> ToolRegistry:
     """Return a read-only registry used for plan-only turns."""
-    from .tool_access import ToolAccessResolver, planning_mode_permission_policy
+    from ..tools.access import ToolAccessResolver, planning_mode_permission_policy
 
     resolution = ToolAccessResolver().resolve_overlay(
         base_registry,

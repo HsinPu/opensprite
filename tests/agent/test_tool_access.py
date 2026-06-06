@@ -1,6 +1,6 @@
 from opensprite.agent import tool_access
-from opensprite.agent.tool_access import ToolAccessResolver
 from opensprite.harness import HarnessPolicyService, HarnessProfile
+from opensprite.tools.access import ToolAccessResolver
 from opensprite.tools.base import Tool
 from opensprite.tools.permissions import ToolPermissionPolicy
 from opensprite.tools.registry import ToolRegistry
@@ -58,6 +58,7 @@ def test_tool_access_resolver_returns_constrained_registry_and_metadata():
 def test_tool_access_keeps_harness_compatibility_exports():
     assert tool_access.HarnessProfile is HarnessProfile
     assert tool_access.HarnessPolicyService is HarnessPolicyService
+    assert tool_access.ToolAccessResolver is ToolAccessResolver
 
 
 def test_tool_access_resolver_composes_profile_override_with_harness_policy():

@@ -141,7 +141,7 @@ from .task_contract import (
     is_workspace_location_criterion,
     resolve_planning_mode,
 )
-from .tool_access import ToolAccessResolver
+from ..tools.access import ToolAccessResolver
 from ..tools.loop_guardrail import (
     ToolLoopGuardrail,
     append_toolguard_guidance,
