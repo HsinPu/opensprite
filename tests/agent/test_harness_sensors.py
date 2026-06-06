@@ -1,6 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult, TaskArtifact
-from opensprite.agent.tool_access import evaluate_harness_sensors
+from opensprite.harness import evaluate_harness_sensors
 from opensprite.tools.evidence import ToolEvidence
 
 

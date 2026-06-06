@@ -18,8 +18,7 @@ from ..documents.active_task import (
     WAITING_USER_ACTIVE_TASK_STATUS,
 )
 from ..subagent_prompts.profiles import REVIEW_PROMPT_TYPES
-from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
-from .tool_access import (
+from ..harness import (
     OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
     VERIFICATION_TOOL_GROUP,
@@ -31,6 +30,7 @@ from .tool_access import (
     is_ops_profile_name,
     is_research_profile_name,
 )
+from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
 from .task_contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,

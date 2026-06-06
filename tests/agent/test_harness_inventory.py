@@ -1,4 +1,4 @@
-from opensprite.agent.tool_access import build_harness_inventory, expected_sensor_ids_for_task_type, harness_inventory_payload
+from opensprite.harness import build_harness_inventory, expected_sensor_ids_for_task_type, harness_inventory_payload
 
 
 def test_harness_inventory_uses_representative_profiles_and_policies():

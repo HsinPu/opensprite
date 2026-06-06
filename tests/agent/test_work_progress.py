@@ -1,11 +1,11 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.tool_access import HarnessProfile, HarnessProfileService
 from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_contract import TaskContextDecision
 from opensprite.agent.task_contract import TaskIntentService
 from opensprite.agent.turn_runner import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from opensprite.agent.turn_runner import VERIFICATION_REQUIRED_RESUME_HINT
+from opensprite.harness import HarnessProfile, HarnessProfileService
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 

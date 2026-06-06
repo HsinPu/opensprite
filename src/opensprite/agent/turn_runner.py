@@ -56,7 +56,28 @@ from ..documents.active_task import (
     is_inactive_active_task_status,
     is_terminal_active_task_status,
 )
-from ..harness import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
+from ..harness import (
+    ANALYSIS_TASK_TYPE,
+    CODE_CHANGE_TASK_TYPE,
+    FILE_CHANGE_REQUIREMENT_KIND,
+    GENERIC_TASK_TYPE,
+    PURE_ANSWER_TASK_TYPE,
+    VERIFICATION_REQUIREMENT_KIND,
+    VERIFICATION_TOOL_GROUP,
+    WORKSPACE_CHANGE_TASK_TYPE,
+    WORKSPACE_WRITE_TOOL_GROUP,
+    HarnessProfile,
+    HarnessProfileService,
+    HarnessScorecard,
+    HarnessSensorResult,
+    evaluate_harness_sensors,
+    is_chat_profile_name,
+    is_coding_profile_name,
+    is_media_profile_name,
+    is_ops_profile_name,
+    is_research_profile_name,
+    normalize_profile_name,
+)
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .completion_gate import AutoContinueService, format_web_source_context
@@ -88,25 +109,6 @@ from .completion_gate import (
     normalize_completion_status,
 )
 from .execution import ExecutionResult, MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
-from .tool_access import (
-    ANALYSIS_TASK_TYPE,
-    CODE_CHANGE_TASK_TYPE,
-    FILE_CHANGE_REQUIREMENT_KIND,
-    GENERIC_TASK_TYPE,
-    PURE_ANSWER_TASK_TYPE,
-    VERIFICATION_REQUIREMENT_KIND,
-    VERIFICATION_TOOL_GROUP,
-    WORKSPACE_CHANGE_TASK_TYPE,
-    WORKSPACE_WRITE_TOOL_GROUP,
-    HarnessProfile,
-    HarnessProfileService,
-    is_chat_profile_name,
-    is_coding_profile_name,
-    is_media_profile_name,
-    is_ops_profile_name,
-    is_research_profile_name,
-    normalize_profile_name,
-)
 from ..media import (
     AgentMediaService,
     AudioInputPreprocessor,

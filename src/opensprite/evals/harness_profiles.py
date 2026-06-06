@@ -114,7 +114,7 @@ def run_harness_profile_eval(cases: Sequence[Mapping[str, Any]] | None = None) -
 
 def evaluate_harness_profile_case(case: Mapping[str, Any]) -> dict[str, Any]:
     """Evaluate one deterministic harness profile case."""
-    from ..agent.tool_access import HarnessPolicyService, HarnessProfileService
+    from ..harness import HarnessPolicyService, HarnessProfileService
 
     prompt = _string(case.get("prompt"))
     images = _string_sequence(case.get("images"))

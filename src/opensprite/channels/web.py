@@ -25,12 +25,11 @@ from aiohttp import WSMsgType, web
 from pydantic import ValidationError
 
 from .identity import build_session_id, normalize_identifier
-from ..agent.tool_access import (
+from ..agent.tool_access import ToolAccessResolver, summarize_effective_risks
+from ..harness import (
     HarnessPolicyService,
     HarnessProfile,
-    ToolAccessResolver,
     preview_harness_profiles,
-    summarize_effective_risks,
 )
 from ..auth.credentials import (
     CredentialNotFoundError,

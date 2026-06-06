@@ -116,6 +116,13 @@ from ..utils import (
 from ..utils.log import logger
 from ..utils.log_redaction import redact_log_preview
 from ..runs.trace import RunCancelledError, RunHookService, RunTraceRecorder, mcp_tool_names as list_mcp_tool_names
+from ..harness import (
+    HISTORY_RETRIEVAL_TASK_TYPE,
+    HISTORY_RETRIEVAL_TOOL_GROUP,
+    HarnessPolicy,
+    HarnessProfile,
+    is_chat_profile_name,
+)
 from .task_contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
@@ -134,14 +141,7 @@ from .task_contract import (
     is_workspace_location_criterion,
     resolve_planning_mode,
 )
-from .tool_access import (
-    ToolAccessResolver,
-    HISTORY_RETRIEVAL_TASK_TYPE,
-    HISTORY_RETRIEVAL_TOOL_GROUP,
-    HarnessPolicy,
-    HarnessProfile,
-    is_chat_profile_name,
-)
+from .tool_access import ToolAccessResolver
 from ..tools.loop_guardrail import (
     ToolLoopGuardrail,
     append_toolguard_guidance,
