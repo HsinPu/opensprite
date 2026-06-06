@@ -21,7 +21,7 @@ from opensprite.agent.task_contract import (
     SOURCE_REFERENCE_CRITERION_KIND,
     TaskContract,
 )
-from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_resolver import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService
 from opensprite.tools.result_status import tool_error_result
 

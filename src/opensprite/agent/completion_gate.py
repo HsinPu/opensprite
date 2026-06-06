@@ -29,7 +29,7 @@ from .completion_status import (
     needs_verification_completion_status,
 )
 from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP, WORKSPACE_DISCOVERY_TOOLS
-from .task_intent import (
+from .task_resolver import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
     accepts_final_response_task_type,

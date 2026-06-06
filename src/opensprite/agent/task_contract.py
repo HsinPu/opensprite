@@ -49,7 +49,7 @@ from .harness_profile import (
 from .media import MEDIA_ONLY_HISTORY_MARKER
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .task_resolver import TaskContextDecision, TaskContextResolver
-from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
+from .task_resolver import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from ..tools.evidence import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,

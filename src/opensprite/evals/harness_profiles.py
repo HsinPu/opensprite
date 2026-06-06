@@ -8,7 +8,7 @@ from typing import Any
 from ..agent.harness_policy import HarnessPolicyService, expected_sensor_ids_for_task_type
 from ..agent.harness_profile import HarnessProfileService
 from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, ResourceRef, TaskContract
-from ..agent.task_intent import TaskIntentService
+from ..agent.task_resolver import TaskIntentService
 
 
 HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
@@ -51,7 +51,7 @@ HARNESS_PROFILE_EVAL_CASES: tuple[dict[str, Any], ...] = (
     {
         "id": "coding_change",
         "label": "Workspace code change",
-        "prompt": "Please fix the failing pytest in src/opensprite/agent/task_intent.py and run tests.",
+        "prompt": "Please fix the failing pytest in src/opensprite/agent/task_resolver.py and run tests.",
         "expected_profile": "coding",
         "expected_profile_task_type": "workspace_change",
         "expected_policy": "workspace_change_guidance_policy",

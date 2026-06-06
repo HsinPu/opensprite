@@ -1,4 +1,4 @@
-﻿"""Response quality checks for one agent turn."""
+"""Response quality checks for one agent turn."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from ..tool_names import EXECUTION_TOOL_NAMES
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
-from .task_intent import (
+from .task_resolver import (
     TaskIntent,
     is_history_retrieval_task_type,
     is_media_extraction_task_type,

@@ -41,8 +41,9 @@ from .task_resolver import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
     TaskContextDecision,
+    TaskIntent,
+    intent_supports_default_work_plan,
 )
-from .task_intent import TaskIntent, intent_supports_default_work_plan
 from .workflows import is_workflow_failed_status
 
 

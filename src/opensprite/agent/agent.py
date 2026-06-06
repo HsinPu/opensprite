@@ -110,9 +110,15 @@ from .retrieval import ProactiveRetrievalService
 from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from .run_hooks import AgentRunStateService, RunHookService
 from .subagents import SubagentRunService
-from .task_resolver import TaskContextDecision, TaskContextResolver, TaskObjectiveDecision, TaskObjectiveResolver
 from .task_contract import TaskPlanner
-from .task_intent import TaskIntent, TaskIntentService
+from .task_resolver import (
+    TaskContextDecision,
+    TaskContextResolver,
+    TaskIntent,
+    TaskIntentService,
+    TaskObjectiveDecision,
+    TaskObjectiveResolver,
+)
 from .tool_registration import (
     BROWSER_TOOL_NAMES,
     register_browser_tools,

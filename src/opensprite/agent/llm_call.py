@@ -53,7 +53,7 @@ from .task_contract import (
     resolve_planning_mode,
 )
 from .task_resolver import TaskContextDecision, TaskObjectiveDecision
-from .task_intent import TaskIntent
+from .task_resolver import TaskIntent
 
 
 class LlmCallService:

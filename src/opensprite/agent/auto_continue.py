@@ -41,7 +41,7 @@ from .task_contract import (
     contract_requests_source_reference,
     contract_requests_substantive_final_answer,
 )
-from .task_intent import TaskIntent
+from .task_resolver import TaskIntent
 from ..tools.evidence import is_web_source_artifact_kind
 from .work_progress import WorkProgressUpdate
 

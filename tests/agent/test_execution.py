@@ -10,7 +10,7 @@ from opensprite.agent.execution import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.prompt import PromptLoggingService
 from opensprite.tools.evidence import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_resolver import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig
 from opensprite.llms.base import ChatMessage, LLMResponse, ToolCall
 from opensprite.tools.base import Tool

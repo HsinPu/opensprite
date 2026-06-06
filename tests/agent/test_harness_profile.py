@@ -40,7 +40,7 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     WORKSPACE_LOCATION_QUALITY_CHECK,
 )
-from opensprite.agent.task_intent import TaskIntentService
+from opensprite.agent.task_resolver import TaskIntentService
 from opensprite.config import Config
 
 

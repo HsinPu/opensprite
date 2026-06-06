@@ -7,7 +7,7 @@ from typing import Any
 
 from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, ResourceIndex, TaskContract
 from opensprite.agent.task_resolver import TaskContextDecision, TaskContextResolver
-from opensprite.agent.task_intent import TaskIntent
+from opensprite.agent.task_resolver import TaskIntent
 
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)

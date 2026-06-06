@@ -1,6 +1,6 @@
 import asyncio
 
-from opensprite.agent.task_intent import TaskIntent, TaskIntentService
+from opensprite.agent.task_resolver import TaskIntent, TaskIntentService
 from opensprite.agent.task_resolver import (
     DETERMINISTIC_OBJECTIVE_METHOD,
     LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON,

@@ -81,8 +81,7 @@ from .task_contract import (
     PLANNING_ERROR_TASK_TYPE,
     is_tool_group_requirement,
 )
-from .task_intent import TaskIntent, TaskIntentService
-from .task_resolver import TaskContextDecision, TaskContextResolver
+from .task_resolver import TaskContextDecision, TaskContextResolver, TaskIntent, TaskIntentService
 from ..tools.evidence import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
