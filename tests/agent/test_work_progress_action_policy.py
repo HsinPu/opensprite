@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from opensprite.agent.turn_runner import (
     NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
     NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
@@ -11,6 +13,7 @@ from opensprite.agent.turn_runner import (
     is_review_follow_up_next_action,
     is_review_phase_next_action,
     is_verification_next_action,
+    is_verification_work_progress,
     normalize_next_action,
 )
 
@@ -22,6 +25,7 @@ def test_work_progress_action_policy_classifies_core_next_actions():
     assert is_verification_next_action(NEXT_ACTION_CONTINUE_WORK) is False
     assert is_continue_work_next_action(NEXT_ACTION_CONTINUE_WORK) is True
     assert is_continue_work_next_action(NEXT_ACTION_CONTINUE_VERIFICATION) is False
+    assert is_verification_work_progress(SimpleNamespace(next_action="", status=" verifying ")) is True
 
 
 def test_work_progress_action_policy_distinguishes_review_phase_and_follow_up_actions():

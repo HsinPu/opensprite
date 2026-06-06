@@ -130,6 +130,7 @@ def test_work_progress_verification_targets_do_not_depend_on_done_criteria_marke
 
     assert state is not None
     assert metadata_is_work_progress_source(state.metadata)
+    assert metadata_is_work_progress_source({"source": " work_progress "})
     workboard = service.extract_workboard(state)
     assert workboard.verification_targets == (
         "relevant tests or checks pass, or the verification gap is stated",

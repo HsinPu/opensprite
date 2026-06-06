@@ -2569,7 +2569,7 @@ def is_verification_work_progress(progress: Any) -> bool:
     """Return whether a structured progress update is in the verification phase."""
     return (
         is_verification_next_action(getattr(progress, "next_action", None))
-        or str(getattr(progress, "status", "") or "").strip() == _WORK_PROGRESS_VERIFYING_STATUS
+        or _normalized_policy_text(getattr(progress, "status", "")) == _WORK_PROGRESS_VERIFYING_STATUS
     )
 
 
@@ -2580,7 +2580,7 @@ def is_continue_work_progress(progress: Any) -> bool:
 
 def metadata_is_work_progress_source(metadata: dict[str, Any]) -> bool:
     """Return whether metadata was created by the structured work-progress service."""
-    return str(metadata.get(WORK_PROGRESS_METADATA_SOURCE_KEY) or "").strip() == WORK_PROGRESS_METADATA_SOURCE
+    return _normalized_policy_text(metadata.get(WORK_PROGRESS_METADATA_SOURCE_KEY)) == WORK_PROGRESS_METADATA_SOURCE
 
 
 def _delegated_tasks_for_state(state: StoredWorkState | None) -> tuple[StoredDelegatedTask, ...]:
