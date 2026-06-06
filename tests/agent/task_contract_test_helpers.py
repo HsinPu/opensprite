@@ -5,8 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from opensprite.agent.resource_index import ResourceIndex
-from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task_contract import AcceptanceCriterion, EvidenceRequirement, ResourceIndex, TaskContract
 from opensprite.agent.task_resolver import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task_intent import TaskIntent
 

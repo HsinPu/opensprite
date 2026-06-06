@@ -7,8 +7,7 @@ from typing import Any
 
 from ..agent.harness_policy import HarnessPolicyService, expected_sensor_ids_for_task_type
 from ..agent.harness_profile import HarnessProfileService
-from ..agent.resource_index import ResourceRef
-from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from ..agent.task_contract import AcceptanceCriterion, EvidenceRequirement, ResourceRef, TaskContract
 from ..agent.task_intent import TaskIntentService
 
 

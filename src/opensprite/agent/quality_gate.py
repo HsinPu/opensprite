@@ -22,11 +22,11 @@ from .retrieval import (
     is_history_retrieval_tool_name,
 )
 from .media import count_media_artifacts, is_media_artifact_kind
-from .resource_index import ResourceIndex
 from .task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
+    ResourceIndex,
     TaskContract,
     is_itemized_output_criterion,
     is_media_artifact_criterion,
