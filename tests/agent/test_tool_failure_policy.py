@@ -5,12 +5,11 @@ from opensprite.agent.completion_gate import (
     has_only_optional_web_discovery_failures,
     has_only_optional_workspace_discovery_failures,
     has_successful_fetched_web_source_artifact,
-    is_optional_web_discovery_failure_tool,
-    is_optional_web_fetch_failure_tool,
     is_optional_workspace_batch_failure_tool,
     tool_failure_is_non_exposed_permission_block,
 )
 from opensprite.tools.evidence import ToolEvidence
+from opensprite.tools.evidence import is_web_discovery_tool, is_web_fetch_source_record_tool
 
 
 def _evidence(name: str, *, ok: bool, metadata: dict | None = None) -> ToolEvidence:
@@ -18,9 +17,9 @@ def _evidence(name: str, *, ok: bool, metadata: dict | None = None) -> ToolEvide
 
 
 def test_tool_failure_policy_classifies_optional_failure_tools():
-    assert is_optional_web_discovery_failure_tool("web_search") is True
-    assert is_optional_web_discovery_failure_tool("web_fetch") is False
-    assert is_optional_web_fetch_failure_tool("web_fetch") is True
+    assert is_web_discovery_tool("web_search") is True
+    assert is_web_discovery_tool("web_fetch") is False
+    assert is_web_fetch_source_record_tool("web_fetch") is True
     assert is_optional_workspace_batch_failure_tool("batch") is True
     assert is_optional_workspace_batch_failure_tool("read_file") is False
 

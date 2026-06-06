@@ -1665,9 +1665,9 @@ def has_only_optional_web_discovery_failures(execution_result: ExecutionResult) 
         return False
     has_successful_fetch_sources = has_successful_fetched_web_source_artifact(execution_result)
     for item in failed_evidence:
-        if is_optional_web_discovery_failure_tool(item.name):
+        if is_web_discovery_tool(item.name):
             continue
-        if is_optional_web_fetch_failure_tool(item.name) and has_successful_fetch_sources:
+        if is_web_fetch_source_record_tool(item.name) and has_successful_fetch_sources:
             continue
         if tool_failure_is_non_exposed_permission_block(item.metadata):
             continue
@@ -1731,20 +1731,8 @@ def tool_failure_is_non_exposed_permission_block(metadata: Any) -> bool:
     )
 
 
-def is_optional_web_discovery_failure_tool(tool_name: str | None) -> bool:
-    return is_web_discovery_tool(tool_name)
-
-
-def is_optional_web_fetch_failure_tool(tool_name: str | None) -> bool:
-    return is_web_fetch_source_record_tool(tool_name)
-
-
 def is_optional_workspace_batch_failure_tool(tool_name: str | None) -> bool:
     return str(tool_name or "").strip() == OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL
-
-
-def is_history_retrieval_failure_tool(tool_name: str | None) -> bool:
-    return is_history_retrieval_tool_name(tool_name)
 
 
 def web_research_artifact_has_successful_fetch(artifact: TaskArtifact) -> bool:
