@@ -98,7 +98,7 @@ from ..documents.curator import (
 )
 from .execution import ExecutionEngine, ExecutionResult
 from .tool_access import HarnessPolicyService, HarnessProfileService
-from .llm_call import LlmCallService, PromptBudgetService, PromptLoggingService
+from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from .tool_access import (
     AgentPermissionService,

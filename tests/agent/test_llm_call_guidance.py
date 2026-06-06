@@ -1,4 +1,4 @@
-from opensprite.agent.llm_call import _format_acceptance_criterion
+from opensprite.agent.execution import _format_acceptance_criterion
 from opensprite.agent.task_contract import (
     AcceptanceCriterion,
     ITEMIZED_OUTPUT_CRITERION_KIND,
