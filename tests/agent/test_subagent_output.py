@@ -1,6 +1,10 @@
 import json
 
-from opensprite.agent.execution import format_review_finding, parse_structured_subagent_output
+from opensprite.agent.execution import (
+    first_structured_review_finding,
+    format_review_finding,
+    parse_structured_subagent_output,
+)
 
 
 def test_format_review_finding_prefers_fix_detail():
@@ -16,6 +20,23 @@ def test_format_review_finding_prefers_fix_detail():
         == "src/foo.py: Race condition: Guard writes with one lock."
     )
     assert format_review_finding({"path": "src/foo.py", "why": "Needs review."}) == "src/foo.py: Needs review."
+
+
+def test_first_structured_review_finding_prefers_first_nonempty_detail():
+    structured_output = {
+        "sections": [
+            {"items": [{"title": "", "path": ""}, {"path": "src/a.py", "fix": "Use one shared helper."}]},
+            {"items": ["Fallback finding."]},
+        ]
+    }
+
+    assert first_structured_review_finding(structured_output) == "src/a.py: Use one shared helper."
+
+
+def test_first_structured_review_finding_accepts_plain_string_items():
+    structured_output = {"sections": [{"items": ["  Plain finding.  "]}]}
+
+    assert first_structured_review_finding(structured_output) == "Plain finding."
 
 
 def test_parse_structured_subagent_output_extracts_trailing_json_block():

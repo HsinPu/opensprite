@@ -49,11 +49,9 @@ from .task_contract import (
 )
 from .execution import (
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
-    STRUCTURED_SUBAGENT_ITEMS_FIELD,
-    STRUCTURED_SUBAGENT_SECTIONS_FIELD,
     STRUCTURED_SUBAGENT_STATUS_FIELD,
     STRUCTURED_SUBAGENT_SUMMARY_FIELD,
-    format_review_finding,
+    first_structured_review_finding,
     is_clean_structured_subagent_status,
 )
 from .task_contract import (
@@ -1837,7 +1835,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         if task_summary and not summary:
             summary = task_summary
         if not first_finding:
-            first_finding = _first_review_finding(structured)
+            first_finding = first_structured_review_finding(structured)
         if _is_clean_structured_review_status(structured_status) and task_findings == 0:
             clean_review_recorded = True
             continue
@@ -2007,26 +2005,6 @@ def _is_completed_delegated_review_status(status: str | None) -> bool:
 
 def _is_clean_structured_review_status(status: str | None) -> bool:
     return is_clean_structured_subagent_status(status)
-
-
-def _first_review_finding(structured_output: Any) -> str:
-    sections = structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD) if isinstance(structured_output, dict) else None
-    if not isinstance(sections, list):
-        return ""
-    for section in sections:
-        if not isinstance(section, dict):
-            continue
-        items = section.get(STRUCTURED_SUBAGENT_ITEMS_FIELD)
-        if not isinstance(items, list):
-            continue
-        for item in items:
-            if isinstance(item, dict):
-                detail = format_review_finding(item)
-                if detail:
-                    return detail
-            elif isinstance(item, str) and item.strip():
-                return item.strip()
-    return ""
 
 
 def _review_follow_up_detail(review: dict[str, Any]) -> str | None:

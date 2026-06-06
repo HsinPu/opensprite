@@ -4917,7 +4917,7 @@ def format_review_finding(item: dict[str, Any]) -> str:
     return subject
 
 
-def _first_structured_review_finding(structured_output: dict[str, Any] | None) -> str:
+def first_structured_review_finding(structured_output: dict[str, Any] | None) -> str:
     sections = structured_output.get(STRUCTURED_SUBAGENT_SECTIONS_FIELD) if isinstance(structured_output, dict) else None
     if not isinstance(sections, list):
         return ""
@@ -5325,7 +5325,7 @@ class SubagentWorkflowService:
             if outcome.summary and not summary:
                 summary = outcome.summary
             if not first_finding:
-                first_finding = _first_structured_review_finding(outcome.structured_output)
+                first_finding = first_structured_review_finding(outcome.structured_output)
             if not is_workflow_completed_status(outcome.status):
                 continue
             structured = outcome.structured_output or {}
