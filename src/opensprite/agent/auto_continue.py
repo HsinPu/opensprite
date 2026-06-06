@@ -27,12 +27,12 @@ from .harness_profile import (
 from .media import media_artifact_gap_follow_up_instruction
 from .quality_gate import (
     contract_requests_quality_check,
+    itemized_output_follow_up_instruction,
     media_artifact_gap_detail,
     source_artifact_traceability_gap_detail,
     source_material_gap_detail,
     source_material_satisfies_contract,
 )
-from .response_shape_policy import itemized_output_follow_up_instruction
 from .stop_reasons import is_max_tool_iterations_stop_reason
 from .task_contract import (
     COMMAND_VERSION_QUALITY_CHECK,

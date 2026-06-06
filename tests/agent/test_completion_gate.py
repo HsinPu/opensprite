@@ -61,10 +61,10 @@ from opensprite.agent.auto_continue import AutoContinueService
 from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.history_retrieval_policy import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
-from opensprite.agent.operation_report_policy import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
+from opensprite.agent.quality_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.completion_gate_policy import TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
 from opensprite.agent.quality_gate import QualityGateService
-from opensprite.agent.response_shape_policy import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
+from opensprite.agent.quality_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
@@ -84,7 +84,7 @@ from opensprite.agent.task_contract import (
     _contract_from_task_planner_payload,
 )
 from opensprite.agent.verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON, VERIFICATION_STATUS_METADATA_FIELD
-from opensprite.agent.workspace_grounding_policy import (
+from opensprite.agent.quality_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
 )

@@ -1,4 +1,4 @@
-from opensprite.agent.workspace_grounding_policy import (
+from opensprite.agent.quality_gate import (
     WORKSPACE_CONTEXT_REFERENCE_MISSING_REASON,
     WORKSPACE_LOCATION_MISSING_REASON,
     contains_workspace_location_clue,

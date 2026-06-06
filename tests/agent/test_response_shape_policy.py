@@ -1,4 +1,4 @@
-from opensprite.agent.response_shape_policy import (
+from opensprite.agent.quality_gate import (
     ITEMIZED_OUTPUT_MISSING_REASON,
     TERSE_FINAL_ANSWER_REASON,
     itemized_output_follow_up_instruction,

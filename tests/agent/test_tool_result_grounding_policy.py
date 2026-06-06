@@ -1,4 +1,4 @@
-from opensprite.agent.tool_result_grounding_policy import response_reports_tool_result_preview
+from opensprite.agent.quality_gate import response_reports_tool_result_preview
 
 
 def test_response_reports_tool_result_preview_accepts_exact_preview():
