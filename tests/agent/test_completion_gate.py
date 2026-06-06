@@ -4619,6 +4619,8 @@ def test_completion_gate_marks_blocked_when_workflow_fails():
     assert result.status == "blocked"
     assert result.reason == "workflow implement_then_review did not complete successfully"
     assert result.active_task_detail == "Resolve the Code review step failure in implement_then_review: review step failed"
+    assert result.follow_up_step_id == "review"
+    assert result.follow_up_step_label == "Code review"
     assert result.follow_up_prompt_type == "code-reviewer"
 
 

@@ -851,6 +851,15 @@ def _workflow_step_fields(step_fields: dict[str, dict[str, str]], workflow_id: s
     return dict(step_fields.get(_workflow_id(workflow_id), {}))
 
 
+def _workflow_next_step_metadata(workflow: dict[str, Any]) -> dict[str, str]:
+    fields = {
+        WORKFLOW_NEXT_STEP_ID_FIELD: _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD)),
+        WORKFLOW_NEXT_STEP_LABEL_FIELD: _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
+        WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
+    }
+    return fields if any(fields.values()) else {}
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1872,9 +1881,6 @@ def _workflow_gate_outcome(
     workflow_review_summary = _coerce_text(workflow.get(WORKFLOW_REVIEW_SUMMARY_FIELD))
     workflow_review_first_finding = _coerce_text(workflow.get(WORKFLOW_REVIEW_FIRST_FINDING_FIELD))
     workflow_summary = _coerce_text(workflow.get(WORKFLOW_SUMMARY_FIELD))
-    next_step_id = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD))
-    next_step_label = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD))
-    next_step_prompt_type = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD))
     metadata = {
         WORKFLOW_ID_FIELD: workflow_id,
         WORKFLOW_REVIEW_ATTEMPTED_FIELD: review_attempted,
@@ -1883,15 +1889,7 @@ def _workflow_gate_outcome(
         WORKFLOW_REVIEW_SUMMARY_FIELD: workflow_review_summary,
         WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: workflow_verification_attempted,
         WORKFLOW_VERIFICATION_PASSED_FIELD: workflow_verification_passed,
-        **(
-            {
-                WORKFLOW_NEXT_STEP_ID_FIELD: next_step_id,
-                WORKFLOW_NEXT_STEP_LABEL_FIELD: next_step_label,
-                WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD: next_step_prompt_type,
-            }
-            if next_step_id or next_step_label or next_step_prompt_type
-            else {}
-        ),
+        **_workflow_next_step_metadata(workflow),
     }
 
     if is_workflow_unsuccessful_status(workflow_status):
