@@ -26,7 +26,7 @@ from ..runs.events import (
 )
 from ..utils import json_safe_payload
 from ..tools.result_status import classify_tool_result_status
-from .mcp_tool_policy import (
+from .mcp_lifecycle import (
     is_mcp_tool_name,
     mcp_tool_display_name,
     tool_warrants_progress_notice as policy_tool_warrants_progress_notice,

@@ -4,15 +4,50 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Iterable
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
 from ..config import Config, ToolsConfig
 from ..runs.events import MCP_CONNECTED_EVENT, MCP_CONNECTION_FAILED_EVENT
+from ..tool_names import (
+    DELEGATE_MANY_TOOL_NAME,
+    DELEGATE_TOOL_NAME,
+    READ_SKILL_TOOL_NAME,
+    RUN_WORKFLOW_TOOL_NAME,
+)
 from ..tools import ToolRegistry
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
+
+
+MCP_TOOL_NAME_PREFIX = "mcp_"
+PROGRESS_NOTICE_TOOL_NAMES = frozenset(
+    {
+        READ_SKILL_TOOL_NAME,
+        DELEGATE_TOOL_NAME,
+        DELEGATE_MANY_TOOL_NAME,
+        RUN_WORKFLOW_TOOL_NAME,
+    }
+)
+
+
+def is_mcp_tool_name(tool_name: str | None) -> bool:
+    return str(tool_name or "").startswith(MCP_TOOL_NAME_PREFIX)
+
+
+def mcp_tool_display_name(tool_name: str | None) -> str:
+    text = str(tool_name or "")
+    return text[len(MCP_TOOL_NAME_PREFIX) :] if is_mcp_tool_name(text) else text
+
+
+def mcp_tool_names(tool_names: Iterable[str]) -> list[str]:
+    return sorted(name for name in tool_names if is_mcp_tool_name(name))
+
+
+def tool_warrants_progress_notice(tool_name: str | None) -> bool:
+    return str(tool_name or "").strip() in PROGRESS_NOTICE_TOOL_NAMES or is_mcp_tool_name(tool_name)
 
 
 def _mcp_lifecycle_error_result(message: str, *, category: str) -> str:
@@ -85,7 +120,7 @@ class McpLifecycleService:
                 (tool.name, tool.description)
                 for tool_name in self.tools.tool_names
                 for tool in [self.tools.get(tool_name)]
-                if tool is not None and tool.name.startswith("mcp_")
+                if tool is not None and is_mcp_tool_name(tool.name)
             ],
             key=lambda item: item[0],
         )
@@ -117,7 +152,7 @@ class McpLifecycleService:
                 self.retry_after = 0.0
                 self.tool_names = {
                     name for name in self.tools.tool_names
-                    if name.startswith("mcp_") and name not in preexisting_tool_names
+                    if is_mcp_tool_name(name) and name not in preexisting_tool_names
                 }
                 self.sync_runtime_tools_context()
                 await self._emit_event(
@@ -131,7 +166,7 @@ class McpLifecycleService:
                 logger.info("agent.{} | tools={}", MCP_CONNECTED_EVENT, ", ".join(self.tools.tool_names))
             except BaseException as exc:
                 for name in list(self.tools.tool_names):
-                    if name.startswith("mcp_") and name not in preexisting_tool_names:
+                    if is_mcp_tool_name(name) and name not in preexisting_tool_names:
                         self.tools.unregister(name)
                 self.connected = False
                 self.tool_names.clear()

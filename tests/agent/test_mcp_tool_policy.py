@@ -1,4 +1,4 @@
-from opensprite.agent.mcp_tool_policy import (
+from opensprite.agent.mcp_lifecycle import (
     is_mcp_tool_name,
     mcp_tool_display_name,
     mcp_tool_names,
