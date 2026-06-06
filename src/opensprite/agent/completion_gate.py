@@ -3174,7 +3174,9 @@ class AutoContinueService:
         source_context = source_context_override if source_context_override is not None else _existing_web_source_context(execution_result)
         source_section = existing_web_source_section(source_context, allow_tools=allow_tools)
         quality_instruction = _quality_follow_up_instruction(completion_result, execution_result)
-        profile_instruction = _profile_follow_up_instruction(harness_profile)
+        profile_instruction = harness_profile_follow_up_instruction(
+            harness_profile.name if harness_profile is not None else None
+        )
 
         return (
             "Continue the current task without asking the user unless you are blocked.\n"
@@ -3499,12 +3501,6 @@ def _quality_follow_up_instruction(
     if execution_result is not None and _task_contract_requires_evidence(execution_result):
         return missing_tool_evidence_follow_up_instruction()
     return ""
-
-
-def _profile_follow_up_instruction(harness_profile: HarnessProfile | None) -> str:
-    if harness_profile is None:
-        return ""
-    return harness_profile_follow_up_instruction(harness_profile.name)
 
 
 def _workflow_follow_up_target(completion_result: CompletionGateResult) -> str:

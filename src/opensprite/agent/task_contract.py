@@ -620,7 +620,7 @@ class TaskContextResolver:
         llm_decision = _merge_with_deterministic(
             deterministic,
             llm_decision,
-            has_active_task=_has_active_task(active_task),
+            has_active_task=has_current_active_task(active_task),
         )
         if llm_decision.confidence < 0.55:
             return _unresolved_llm_decision(llm_low_confidence_reason(llm_decision.confidence, TASK_CONTEXT_RESOLUTION_PURPOSE))
@@ -686,7 +686,7 @@ class TaskContextResolver:
             **self.llm_config.decoding_kwargs(),
         )
         payload = _resolver_parse_json_object(str(getattr(response, "content", "") or ""))
-        return _task_context_decision_from_payload(payload, has_active_task=_has_active_task(active_task))
+        return _task_context_decision_from_payload(payload, has_active_task=has_current_active_task(active_task))
 
 
 class TaskObjectiveResolver:
@@ -805,13 +805,13 @@ def _should_consult_llm(
         return True
     if decision.confidence >= 0.7:
         return False
-    if _has_active_task(active_task):
+    if has_current_active_task(active_task):
         return True
     if len(current) > 80:
         return False
     if decision.is_follow_up:
         return True
-    if not _has_active_task(active_task):
+    if not has_current_active_task(active_task):
         return _has_recent_task_context(history, work_state_summary) and _is_context_dependent_short_turn(current)
     if decision.should_inherit_active_task:
         return True
@@ -1128,7 +1128,7 @@ def _continuation_type_from_payload(
 
 
 def _has_recent_task_context(history: list[dict[str, Any]] | None, work_state_summary: str | None) -> bool:
-    if _has_active_task(work_state_summary):
+    if has_current_active_task(work_state_summary):
         return True
     return any(
         _resolver_compact(str(message.get("content") or ""))
@@ -1146,7 +1146,7 @@ def _has_recent_objective_context(
     active_task: str | None,
     work_state_summary: str | None,
 ) -> bool:
-    if _has_active_task(active_task) or _resolver_compact(work_state_summary):
+    if has_current_active_task(active_task) or _resolver_compact(work_state_summary):
         return True
     return any(_resolver_compact(str(message.get("content") or "")) for message in (history or [])[-6:])
 
@@ -1182,10 +1182,6 @@ def _resolver_coerce_confidence(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return min(1.0, max(0.0, confidence))
-
-
-def _has_active_task(active_task: str | None) -> bool:
-    return has_current_active_task(active_task)
 
 
 def _resolver_compact(value: str | None) -> str:
