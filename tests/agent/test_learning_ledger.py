@@ -2,7 +2,7 @@ import asyncio
 import json
 
 from agent_test_helpers import make_agent_loop
-from opensprite.agent.learning_ledger import LearningLedger
+from opensprite.agent.message_history import LearningLedger
 from opensprite.context.paths import get_session_learning_state_file
 
 
