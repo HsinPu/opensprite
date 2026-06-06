@@ -13,21 +13,21 @@ from opensprite.agent.completion_gate import (
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
-    _is_review_workflow,
-    _is_workflow_completion_intent_kind,
     _requires_verification,
-    _workflow_fix_follow_up_fields,
     is_complete_completion_status,
     is_history_retrieval_failure_tool,
     is_research_then_outline_workflow,
+    is_review_workflow,
     needs_verification_completion_status,
     is_optional_web_discovery_failure_tool,
     is_optional_web_fetch_failure_tool,
     is_optional_workspace_batch_failure_tool,
     path_requires_delegated_review,
+    workflow_fix_follow_up_fields,
 )
 from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.task_contract import (
+    WORKFLOW_COMPLETION_INTENT_KINDS,
     accepts_final_response_task_type,
     is_analysis_response_intent_kind,
     is_generic_task_response_intent_kind,
@@ -301,8 +301,8 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert is_analysis_response_intent_kind("task") is False
     assert is_generic_task_response_intent_kind("task") is True
     assert is_generic_task_response_intent_kind("analysis") is False
-    assert _is_workflow_completion_intent_kind("review") is True
-    assert _is_workflow_completion_intent_kind("task") is False
+    assert "review" in WORKFLOW_COMPLETION_INTENT_KINDS
+    assert "task" not in WORKFLOW_COMPLETION_INTENT_KINDS
     assert accepts_final_response_task_type("planning") is True
     assert accepts_final_response_task_type("web_research") is False
     assert is_read_only_blocking_requirement_kind("file_change") is True
@@ -337,8 +337,8 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
 
 
 def test_completion_gate_workflow_policy_helpers_are_centralized():
-    assert _is_review_workflow("implement_then_review") is True
-    assert _is_review_workflow("research_then_outline") is False
+    assert is_review_workflow("implement_then_review") is True
+    assert is_review_workflow("research_then_outline") is False
     assert is_research_then_outline_workflow("research_then_outline") is True
     assert is_research_then_outline_workflow("implement_then_review") is False
     assert is_workflow_failed_status("failed") is True
@@ -355,12 +355,12 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert is_workflow_completed_status("failed") is False
     assert is_clean_structured_subagent_status("ok") is True
     assert is_clean_structured_subagent_status("error") is False
-    assert _workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
+    assert workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
         "next_step_id": "bugfix",
         "next_step_label": "Bug fix",
         "next_step_prompt_type": "bug-fixer",
     }
-    assert _workflow_fix_follow_up_fields("research_then_outline") == {}
+    assert workflow_fix_follow_up_fields("research_then_outline") == {}
 
 
 def test_completion_gate_review_path_policy_helper_is_centralized():

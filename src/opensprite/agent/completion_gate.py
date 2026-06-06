@@ -658,7 +658,6 @@ TASK_REVIEW_FINDINGS_FOLLOW_UP_DETAIL = (
 )
 OPTIONAL_WORKSPACE_BATCH_FAILURE_TOOL = BATCH_TOOL_NAME
 _WEB_APP_ROOT_PATH = WEB_APP_ROOT_PATH
-_WORKFLOW_COMPLETION_INTENT_KINDS = WORKFLOW_COMPLETION_INTENT_KINDS
 COMPLETION_RESULT_SCHEMA_VERSION_FIELD = "schema_version"
 COMPLETION_RESULT_STATUS_FIELD = "status"
 COMPLETION_RESULT_REASON_FIELD = "reason"
@@ -1902,9 +1901,9 @@ def _workflow_gate_outcome(
             COMPLETION_RESULT_REASON_FIELD: workflow_completed_all_steps_reason(workflow_id),
         }
 
-    if _is_review_workflow(workflow_id):
+    if is_review_workflow(workflow_id):
         if not review_attempted:
-            review_step = _workflow_review_follow_up_fields(workflow_id)
+            review_step = workflow_review_follow_up_fields(workflow_id)
             return {
                 **metadata,
                 COMPLETION_RESULT_STATUS_FIELD: NEEDS_REVIEW_COMPLETION_STATUS,
@@ -1913,7 +1912,7 @@ def _workflow_gate_outcome(
                 **review_step,
             }
         if not review_passed or review_finding_count > 0:
-            fix_step = _workflow_fix_follow_up_fields(workflow_id)
+            fix_step = workflow_fix_follow_up_fields(workflow_id)
             return {
                 **metadata,
                 COMPLETION_RESULT_STATUS_FIELD: NEEDS_REVIEW_COMPLETION_STATUS,
@@ -1944,7 +1943,7 @@ def _workflow_gate_outcome(
             "detail": str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip(),
         }
 
-    if _is_workflow_completion_intent_kind(task_intent.kind):
+    if str(task_intent.kind or "").strip() in WORKFLOW_COMPLETION_INTENT_KINDS:
         return {
             **metadata,
             COMPLETION_RESULT_STATUS_FIELD: COMPLETE_COMPLETION_STATUS,
@@ -1952,10 +1951,6 @@ def _workflow_gate_outcome(
         }
 
     return None
-
-
-def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() in _WORKFLOW_COMPLETION_INTENT_KINDS
 
 
 def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) -> str:
@@ -1988,18 +1983,6 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
     if step_label:
         return f"Resolve the {step_label} step failure in {workflow_id}."
     return error or summary
-
-
-def _workflow_review_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    return workflow_review_follow_up_fields(workflow_id)
-
-
-def _workflow_fix_follow_up_fields(workflow_id: str) -> dict[str, str]:
-    return workflow_fix_follow_up_fields(workflow_id)
-
-
-def _is_review_workflow(workflow_id: str | None) -> bool:
-    return is_review_workflow(workflow_id)
 
 
 def _string_or_none(value: Any) -> str | None:
