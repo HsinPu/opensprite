@@ -1,7 +1,7 @@
-﻿import asyncio
+import asyncio
 from pathlib import Path
 
-from opensprite.agent.tool_registration import register_default_tools
+from opensprite.agent.tool_access import register_default_tools
 from opensprite.config.schema import SearchConfig, ToolsConfig
 from opensprite.skills import SkillsLoader
 from opensprite.storage import MemoryStorage

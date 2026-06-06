@@ -100,7 +100,14 @@ from .harness_policy import HarnessPolicyService, HarnessProfileService
 from .llm_call import LlmCallService, PromptBudgetService, PromptLoggingService
 from .media import AgentMediaService
 from .message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
-from .tool_access import AgentPermissionService, PermissionEventRecorder
+from .tool_access import (
+    AgentPermissionService,
+    BROWSER_TOOL_NAMES,
+    PermissionEventRecorder,
+    register_browser_tools,
+    register_default_tools,
+    register_memory_tool,
+)
 from .run_trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from .run_trace import AgentRunStateService, McpLifecycleService, RunHookService
 from .subagents import SubagentRunService
@@ -112,12 +119,6 @@ from .task_resolver import (
     TaskIntentService,
     TaskObjectiveDecision,
     TaskObjectiveResolver,
-)
-from .tool_registration import (
-    BROWSER_TOOL_NAMES,
-    register_browser_tools,
-    register_default_tools,
-    register_memory_tool,
 )
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME

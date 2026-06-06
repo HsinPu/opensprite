@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from opensprite.agent.tool_registration import register_browser_tools
+from opensprite.agent.tool_access import register_browser_tools
 from opensprite.agent.execution import build_task_artifact
 from opensprite.config.schema import BrowserToolConfig, ToolsConfig
 from opensprite.tools.browser import (
