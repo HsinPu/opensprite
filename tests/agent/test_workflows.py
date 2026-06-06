@@ -3,14 +3,18 @@ import json
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import SubagentTaskOutcome
+from opensprite.agent.execution import SubagentTaskOutcome, WorkflowStepSpec
 from opensprite.agent.execution import (
     SubagentWorkflowService,
+    WORKFLOW_COMPLETED_STATUS,
+    WORKFLOW_ERROR_FIELD,
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_REVIEW_ATTEMPTED_FIELD,
     WORKFLOW_REVIEW_FINDING_COUNT_FIELD,
     WORKFLOW_REVIEW_PASSED_FIELD,
+    WORKFLOW_STATUS_FIELD,
+    WORKFLOW_SUMMARY_FIELD,
 )
 from opensprite.config.schema import Config, LogConfig, MemoryConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.llms.base import LLMResponse
@@ -127,6 +131,52 @@ def test_workflow_review_outcome_requires_structured_clean_review():
     assert result[WORKFLOW_REVIEW_ATTEMPTED_FIELD] is True
     assert result[WORKFLOW_REVIEW_PASSED_FIELD] is False
     assert result[WORKFLOW_REVIEW_FINDING_COUNT_FIELD] == 0
+
+
+def test_workflow_payloads_share_outcome_fields():
+    step = WorkflowStepSpec(
+        step_id="implement",
+        label="Implement",
+        prompt_type="implementer",
+        task_builder=lambda task, outcomes: task,
+    )
+    outcome = SubagentTaskOutcome(
+        task_id="task_implement",
+        prompt_type="implementer",
+        child_session_id="session_implement",
+        child_run_id="run_implement",
+        status=WORKFLOW_COMPLETED_STATUS,
+        summary="Implemented safely.",
+    )
+
+    step_payload = SubagentWorkflowService._step_payload(
+        workflow_run_id="workflow_123",
+        workflow_id="implement_then_review",
+        spec=step,
+        step_index=1,
+        total_steps=1,
+        outcome=outcome,
+    )
+    workflow_payload = SubagentWorkflowService._workflow_payload(
+        workflow_run_id="workflow_123",
+        workflow_id="implement_then_review",
+        task_preview="Implement safely",
+        steps=(step,),
+        outcomes=[outcome],
+        status=WORKFLOW_COMPLETED_STATUS,
+    )
+
+    expected = {
+        WORKFLOW_STATUS_FIELD: WORKFLOW_COMPLETED_STATUS,
+        "task_id": "task_implement",
+        "child_session_id": "session_implement",
+        "child_run_id": "run_implement",
+        WORKFLOW_SUMMARY_FIELD: "Implemented safely.",
+        WORKFLOW_ERROR_FIELD: "",
+    }
+    for key, value in expected.items():
+        assert step_payload[key] == value
+        assert workflow_payload["steps"][0][key] == value
 
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):

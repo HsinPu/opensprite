@@ -4934,6 +4934,17 @@ def _result_summary(outcome: SubagentTaskOutcome) -> str:
     return outcome.content
 
 
+def _workflow_outcome_payload(outcome: SubagentTaskOutcome) -> dict[str, Any]:
+    return {
+        WORKFLOW_STATUS_FIELD: outcome.status,
+        "task_id": outcome.task_id,
+        "child_session_id": outcome.child_session_id,
+        "child_run_id": outcome.child_run_id,
+        WORKFLOW_SUMMARY_FIELD: outcome.summary,
+        WORKFLOW_ERROR_FIELD: outcome.error,
+    }
+
+
 def format_review_finding(item: dict[str, Any]) -> str:
     title = str(item.get("title") or "").strip()
     path = str(item.get("path") or "").strip()
@@ -5227,16 +5238,7 @@ class SubagentWorkflowService:
             "task_preview": task_preview,
         }
         if outcome is not None:
-            payload.update(
-                {
-                    WORKFLOW_STATUS_FIELD: outcome.status,
-                    "task_id": outcome.task_id,
-                    "child_session_id": outcome.child_session_id,
-                    "child_run_id": outcome.child_run_id,
-                    WORKFLOW_SUMMARY_FIELD: outcome.summary,
-                    WORKFLOW_ERROR_FIELD: outcome.error,
-                }
-            )
+            payload.update(_workflow_outcome_payload(outcome))
             if outcome.structured_output is not None:
                 payload["structured_output"] = {
                     STRUCTURED_SUBAGENT_STATUS_FIELD: outcome.structured_output.get(STRUCTURED_SUBAGENT_STATUS_FIELD),
@@ -5282,12 +5284,7 @@ class SubagentWorkflowService:
                     "step_id": spec.step_id,
                     "label": spec.label,
                     "prompt_type": spec.prompt_type,
-                    WORKFLOW_STATUS_FIELD: outcome.status,
-                    "task_id": outcome.task_id,
-                    "child_session_id": outcome.child_session_id,
-                    "child_run_id": outcome.child_run_id,
-                    WORKFLOW_SUMMARY_FIELD: outcome.summary,
-                    WORKFLOW_ERROR_FIELD: outcome.error,
+                    **_workflow_outcome_payload(outcome),
                 }
                 for spec, outcome in zip(steps[start_index:], outcomes)
             ],
