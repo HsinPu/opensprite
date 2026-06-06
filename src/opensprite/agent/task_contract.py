@@ -1767,12 +1767,8 @@ def task_planner_reason(task_contract: Any) -> str:
 def _planner_metadata_value(task_contract: Any, field: str) -> str:
     metadata = getattr(task_contract, "planner_metadata", None) or {}
     if isinstance(metadata, dict):
-        return _planner_payload_text(metadata.get(field))
+        return _policy_value(metadata.get(field))
     return ""
-
-
-def _planner_payload_text(value: Any) -> str:
-    return str(value or "").strip()
 
 
 def neutral_task_contract(task_intent: TaskIntent, *, current_message: str | None = None) -> TaskContract:
@@ -2314,7 +2310,7 @@ def _normalize_planner_tool_groups(
     raw_values = value if isinstance(value, list) else []
     groups: list[str] = []
     for item in raw_values:
-        text = _planner_payload_text(item)
+        text = _policy_value(item)
         text = _PLANNER_TOOL_GROUP_ALIASES.get(text, text)
         if text in allowed and text not in groups:
             groups.append(text)
@@ -2325,7 +2321,7 @@ def _normalize_planner_quality_checks(value: Any) -> list[str]:
     raw_values = value if isinstance(value, list) else []
     checks: list[str] = []
     for item in raw_values:
-        text = _planner_payload_text(item).lower()
+        text = _policy_value(item).lower()
         if text in _ALLOWED_PLANNER_QUALITY_CHECKS and text not in checks:
             checks.append(text)
     return checks
