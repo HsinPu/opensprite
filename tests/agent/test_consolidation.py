@@ -1,7 +1,7 @@
 import asyncio
 
-import opensprite.agent.curator as curator_module
-from opensprite.agent.curator import MemoryConsolidationService
+import opensprite.documents.curator as curator_module
+from opensprite.documents.curator import MemoryConsolidationService
 from opensprite.config.schema import Config, DocumentLlmConfig
 from opensprite.storage.base import StoredMessage
 

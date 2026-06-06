@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from opensprite.agent.curator import CuratorService
+from opensprite.documents.curator import CuratorService
 from opensprite.context.paths import get_session_curator_state_file
 from opensprite.agent.execution import ExecutionResult
 

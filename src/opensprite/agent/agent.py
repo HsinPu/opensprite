@@ -87,7 +87,7 @@ from ..config import AgentConfig, MemoryConfig, ToolsConfig, LogConfig, SearchCo
 from ..storage.base import clear_storage_work_state, get_storage_work_state, upsert_storage_work_state
 from .auto_continue import AutoContinueService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
-from .curator import (
+from ..documents.curator import (
     ActiveTaskUpdateService,
     CuratorService,
     MemoryConsolidationService,

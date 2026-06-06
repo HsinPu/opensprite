@@ -32,7 +32,7 @@ from .session_commands import (
     resolve_session_command,
 )
 from .session_status import SessionStatusService, SessionStatusType
-from ..agent.curator import CURATOR_SCOPE_CHOICES
+from ..documents.curator import CURATOR_SCOPE_CHOICES
 from ..config import MessagesConfig
 from ..cron.presentation import render_cron_jobs
 from ..cron.types import CronSchedule

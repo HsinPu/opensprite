@@ -11,12 +11,9 @@ from collections.abc import Hashable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Generic, Sequence, TypeVar
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Generic, Sequence, TypeVar
 
 from ..config.schema import DocumentLlmConfig
-from ..documents.active_task import ActiveTaskConsolidator
-from ..documents.memory import MemoryStore, consolidate
-from ..documents.user_profile import UserProfileConsolidator
 from ..llms import ChatMessage
 from ..llms import LLMProvider
 from ..runs.events import (
@@ -34,14 +31,19 @@ from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils import count_messages_tokens
 from ..utils.log import logger
-from .execution import ExecutionResult
+from .active_task import ActiveTaskConsolidator
+from .memory import MemoryStore, consolidate
+from .user_profile import UserProfileConsolidator
+
+if TYPE_CHECKING:
+    from ..agent.execution import ExecutionResult
 
 
 K = TypeVar("K", bound=Hashable)
 SnapshotReader = Callable[[str], str]
 SessionRunner = Callable[[str], Awaitable[Any]]
 RunEventEmitter = Callable[[str, str, str, dict[str, Any], str | None, str | None], Awaitable[None]]
-SkillReviewDecider = Callable[[ExecutionResult], bool]
+SkillReviewDecider = Callable[["ExecutionResult"], bool]
 LearningRecorder = Callable[[str, str, str, str, str | None, dict[str, Any] | None], None]
 CURATOR_STATE_SCHEMA_VERSION = 1
 CURATOR_HISTORY_LIMIT = 20

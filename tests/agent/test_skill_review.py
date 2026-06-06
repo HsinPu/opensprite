@@ -3,7 +3,7 @@ import json
 
 from agent_test_helpers import make_agent_loop
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.curator import build_skill_review_user_content, format_stored_messages_for_transcript
+from opensprite.documents.curator import build_skill_review_user_content, format_stored_messages_for_transcript
 from opensprite.storage.base import StoredMessage
 
 
@@ -46,7 +46,7 @@ def test_skill_review_collects_configured_skill_metadata():
             "Updated skill 'pytest-helper'.",
         )
 
-    from opensprite.agent.curator import SkillReviewService
+    from opensprite.documents.curator import SkillReviewService
 
     service = SkillReviewService(
         storage=Storage(),
@@ -87,7 +87,7 @@ def test_skill_review_ignores_structured_configure_skill_failure():
             json.dumps({"ok": False, "error": "skill body was invalid"}),
         )
 
-    from opensprite.agent.curator import SkillReviewService
+    from opensprite.documents.curator import SkillReviewService
 
     service = SkillReviewService(
         storage=Storage(),
