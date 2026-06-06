@@ -1,6 +1,6 @@
 from opensprite.agent.completion_gate import CompletionBlockerMessages, CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.quality_gate import TERSE_FINAL_ANSWER_REASON
+from opensprite.agent.completion_gate import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.execution import TaskArtifact
 from opensprite.agent.task_contract import TaskContract
 from opensprite.agent.turn_runner import (

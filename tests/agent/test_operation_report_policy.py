@@ -1,5 +1,5 @@
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.quality_gate import (
+from opensprite.agent.completion_gate import (
     OPERATION_VALIDATION_OR_RISK_MISSING_REASON,
     execution_confuses_command_version_with_repo_state,
     execution_has_failed_command_evidence,

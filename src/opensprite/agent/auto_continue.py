@@ -24,7 +24,7 @@ from .harness_policy import (
     is_research_profile_name,
 )
 from .media import media_artifact_gap_follow_up_instruction
-from .quality_gate import (
+from .completion_gate import (
     command_version_follow_up_instruction,
     contract_requests_quality_check,
     itemized_output_follow_up_instruction,

@@ -1,4 +1,4 @@
-from opensprite.agent.quality_gate import (
+from opensprite.agent.completion_gate import (
     COMMAND_VERSION_MISSING_REASON,
     command_inspects_git_repository_state,
     command_version_follow_up_instruction,

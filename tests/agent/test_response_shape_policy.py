@@ -1,4 +1,4 @@
-from opensprite.agent.quality_gate import (
+from opensprite.agent.completion_gate import (
     ITEMIZED_OUTPUT_MISSING_REASON,
     TERSE_FINAL_ANSWER_REASON,
     itemized_output_follow_up_instruction,
