@@ -61,8 +61,11 @@ from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
-from .source_finalization_policy import source_finalization_allowed
-from .source_finalization_ranking import rank_web_sources_for_objective, web_source_relevance_score
+from .source_finalization_ranking import (
+    rank_web_sources_for_objective,
+    source_finalization_allowed,
+    web_source_relevance_score,
+)
 from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import selected_delegated_task
 from .task_contract import (

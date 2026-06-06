@@ -1,4 +1,4 @@
-from opensprite.agent.llm_resolution_policy import (
+from opensprite.agent.task_context_policy import (
     TASK_CONTEXT_RESOLUTION_PURPOSE,
     TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     llm_failed_reason,

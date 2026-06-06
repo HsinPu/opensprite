@@ -19,7 +19,7 @@ from .task_context_policy import (
 from .task_context_resolver import TaskContextDecision
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
 from .task_context_policy import task_text_tokens
-from .llm_resolution_policy import (
+from .task_context_policy import (
     TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     llm_failed_reason,
     llm_low_confidence_reason,

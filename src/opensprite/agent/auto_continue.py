@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
     allows_workflow_resume,
@@ -26,6 +25,7 @@ from .harness_profile import (
 )
 from .media import media_artifact_gap_follow_up_instruction
 from .quality_gate import (
+    command_version_follow_up_instruction,
     contract_requests_quality_check,
     itemized_output_follow_up_instruction,
     media_artifact_gap_detail,

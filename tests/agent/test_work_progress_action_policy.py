@@ -1,4 +1,4 @@
-from opensprite.agent.work_progress_action_policy import (
+from opensprite.agent.work_progress import (
     NEXT_ACTION_ADDRESS_REVIEW_FINDINGS,
     NEXT_ACTION_COLLECT_REVIEW_EVIDENCE,
     NEXT_ACTION_CONTINUE_REVIEW,

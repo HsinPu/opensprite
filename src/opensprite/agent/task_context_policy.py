@@ -21,6 +21,11 @@ BOUNDARY_SWITCH_REPLY_COMMAND = "switch"
 BOUNDARY_CONTINUE_REPLY_COMMAND = "continue"
 LLM_EMPTY_VALUE_SENTINELS = frozenset({NONE_CONTINUATION_TYPE, "null", "n/a"})
 TASK_TEXT_TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+")
+LLM_UNAVAILABLE_REASON_PREFIX = "llm unavailable"
+LLM_FAILED_REASON_PREFIX = "llm failed"
+LLM_LOW_CONFIDENCE_REASON_PREFIX = "llm confidence too low"
+TASK_CONTEXT_RESOLUTION_PURPOSE = "task context was not inferred"
+TASK_OBJECTIVE_RESOLUTION_PURPOSE = "objective was not enriched"
 
 FOLLOW_UP_CONTINUATION_TYPES = frozenset(
     {
@@ -80,6 +85,22 @@ def llm_string_or_none(value: object) -> str | None:
 def task_text_tokens(text: str | None) -> tuple[str, ...]:
     """Return coarse language-neutral tokens for short follow-up heuristics."""
     return tuple(TASK_TEXT_TOKEN_RE.findall(str(text or "")))
+
+
+def llm_unavailable_reason(purpose: str) -> str:
+    return _resolution_reason(LLM_UNAVAILABLE_REASON_PREFIX, purpose)
+
+
+def llm_failed_reason(purpose: str) -> str:
+    return _resolution_reason(LLM_FAILED_REASON_PREFIX, purpose)
+
+
+def llm_low_confidence_reason(confidence: float, purpose: str) -> str:
+    return f"{LLM_LOW_CONFIDENCE_REASON_PREFIX} ({confidence:.2f}); {purpose}"
+
+
+def _resolution_reason(prefix: str, purpose: str) -> str:
+    return f"{prefix}; {purpose}"
 
 
 def is_follow_up_continuation_type(value: str | None) -> bool:

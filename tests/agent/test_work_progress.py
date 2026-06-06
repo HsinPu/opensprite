@@ -5,7 +5,7 @@ from opensprite.agent.task_contract import EvidenceRequirement, TaskContract
 from opensprite.agent.task_context_resolver import TaskContextDecision
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.agent.work_progress import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
-from opensprite.agent.work_progress_action_policy import VERIFICATION_REQUIRED_RESUME_HINT
+from opensprite.agent.work_progress import VERIFICATION_REQUIRED_RESUME_HINT
 from opensprite.storage import StoredDelegatedTask, StoredWorkState
 
 

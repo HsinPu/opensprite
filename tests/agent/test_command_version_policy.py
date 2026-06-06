@@ -1,4 +1,4 @@
-from opensprite.agent.command_version_policy import (
+from opensprite.agent.quality_gate import (
     COMMAND_VERSION_MISSING_REASON,
     command_inspects_git_repository_state,
     command_version_follow_up_instruction,
