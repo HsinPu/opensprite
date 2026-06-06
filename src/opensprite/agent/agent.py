@@ -98,7 +98,7 @@ from .llm_call import LlmCallService
 from .media import AgentMediaService
 from .message_history import HistoryResetService, MessageHistoryService
 from .mcp_lifecycle import McpLifecycleService
-from .permission_flow import AgentPermissionService, PermissionEventRecorder
+from .tool_access import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
 from .response_finalizer import AgentResponseFinalizer
