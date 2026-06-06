@@ -55,8 +55,8 @@ from .completion_status import (
     is_complete_completion_status,
 )
 from .execution import ExecutionResult
+from .harness_policy import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
 from .harness_profile import HarnessProfile, HarnessProfileService, PURE_ANSWER_TASK_TYPE
-from .harness_sensors import HarnessScorecard, HarnessSensorResult, evaluate_harness_sensors
 from .media import AgentMediaService
 from .response_finalizer import AgentResponseFinalizer
 from .run_hooks import AgentRunStateService

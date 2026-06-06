@@ -1,4 +1,4 @@
-from opensprite.agent.harness_sensors import HarnessScorecard, HarnessSensorResult
+from opensprite.agent.harness_policy import HarnessScorecard, HarnessSensorResult
 from opensprite.agent.turn_runner import _harness_trace_health
 
 
