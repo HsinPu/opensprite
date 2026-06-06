@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 from ..tool_names import EXECUTION_TOOL_NAMES
 from .completion_status import COMPLETE_COMPLETION_STATUS, INCOMPLETE_COMPLETION_STATUS, NEEDS_VERIFICATION_COMPLETION_STATUS
-from .completion_task_policy import (
+from .task_intent import (
+    TaskIntent,
     is_history_retrieval_task_type,
     is_media_extraction_task_type,
     is_workspace_read_task_type,
@@ -38,7 +39,6 @@ from .task_contract import (
     is_workspace_location_criterion,
     neutral_task_contract,
 )
-from .task_intent import TaskIntent
 from .verification_policy import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
 from .web_source_policy import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,

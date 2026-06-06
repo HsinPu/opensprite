@@ -28,7 +28,9 @@ from .completion_status import (
     needs_verification_completion_status,
 )
 from .harness_profile import VERIFICATION_REQUIREMENT_KIND, VERIFICATION_TOOL_GROUP
-from .completion_task_policy import (
+from .task_intent import (
+    WORKFLOW_COMPLETION_INTENT_KINDS,
+    TaskIntent,
     accepts_final_response_task_type,
     intent_supports_fallback_active_task_update,
     is_analysis_response_intent_kind,
@@ -56,10 +58,6 @@ from .task_contract import (
     PLANNER_METADATA_REASON_FIELD,
     PLANNER_METADATA_STATUS_FIELD,
     contract_expects_file_change,
-)
-from .task_intent import (
-    WORKFLOW_COMPLETION_INTENT_KINDS,
-    TaskIntent,
 )
 from .history_retrieval_policy import is_history_retrieval_tool_name
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS

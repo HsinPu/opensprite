@@ -1,4 +1,4 @@
-from opensprite.agent.completion_task_policy import (
+from opensprite.agent.task_intent import (
     accepts_final_response_task_type,
     intent_supports_default_work_plan,
     intent_supports_fallback_active_task_update,

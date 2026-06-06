@@ -31,7 +31,7 @@ from .harness_profile import (
 from .planner_capabilities import PlannerCapabilityCatalog, build_planner_capability_catalog
 from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
-from .task_intent import TaskIntent
+from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS, TOOL_GROUPS
 from .web_source_policy import (
     SOURCE_ARTIFACT_CRITERION_KIND,
@@ -64,7 +64,6 @@ PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or 
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
-PLANNING_ERROR_TASK_TYPE = "planning_error"
 TOOL_GROUP_REQUIREMENT_KIND = "tool_group"
 RESOURCE_COVERAGE_REQUIREMENT_KIND = "resource_coverage"
 ALL_RESOURCE_COVERAGE = "all"

@@ -10,7 +10,6 @@ from ..storage import StoredDelegatedTask, StoredWorkState
 from ..storage.base import coerce_stored_delegated_tasks, legacy_delegated_tasks, selected_delegated_task
 from .active_task_status import is_current_active_task_status
 from .completion_gate import CompletionGateResult
-from .completion_task_policy import intent_supports_default_work_plan
 from .completion_status import (
     is_complete_completion_status,
     is_blocking_completion_status,
@@ -44,7 +43,7 @@ from .task_context_policy import (
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
 )
 from .task_context_resolver import TaskContextDecision
-from .task_intent import TaskIntent
+from .task_intent import TaskIntent, intent_supports_default_work_plan
 from .workflow_status import is_workflow_failed_status
 
 
