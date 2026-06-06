@@ -20,7 +20,6 @@ from ..storage.base import StoredWorkState
 from ..storage.base import get_storage_message_count
 from ..runs.events import ACTIVE_TASK_SEEDED_EVENT
 from ..utils.log import logger
-from .active_task_open_questions import clear_open_questions
 from .active_task_status import (
     ACTIVE_ACTIVE_TASK_STATUS,
     BLOCKED_ACTIVE_TASK_STATUS,
@@ -28,6 +27,7 @@ from .active_task_status import (
     DONE_ACTIVE_TASK_STATUS,
     WAITING_USER_ACTIVE_TASK_STATUS,
     WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
+    clear_open_questions,
     clears_active_task_open_questions,
     is_current_active_task_status,
     is_current_or_done_active_task_status,

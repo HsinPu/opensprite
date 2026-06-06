@@ -2,9 +2,11 @@ from opensprite.agent.active_task_status import (
     BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION,
     active_task_status,
+    clear_open_questions,
     has_current_active_task,
     is_current_active_task_status,
     is_current_or_done_active_task_status,
+    normalize_open_questions,
 )
 
 
@@ -30,3 +32,15 @@ def test_active_task_status_helpers_normalize_stored_status_values():
 def test_active_task_default_open_questions_are_stable():
     assert WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION == "need user input"
     assert BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION == "blocked"
+
+
+def test_clear_open_questions_returns_sentinel_list():
+    assert clear_open_questions() == ["none"]
+
+
+def test_normalize_open_questions_trims_and_preserves_questions():
+    assert normalize_open_questions([" first ", "", "second"]) == ["first", "second"]
+
+
+def test_normalize_open_questions_accepts_clear_sentinel():
+    assert normalize_open_questions(["blocked", "NONE"]) == ["none"]

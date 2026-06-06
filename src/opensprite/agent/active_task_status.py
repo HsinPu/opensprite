@@ -1,4 +1,4 @@
-"""Shared parsing for rendered ACTIVE_TASK status blocks."""
+"""Shared ACTIVE_TASK status and open-question state helpers."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ DONE_ACTIVE_TASK_STATUS = "done"
 CANCELLED_ACTIVE_TASK_STATUS = "cancelled"
 WAITING_USER_ACTIVE_TASK_DEFAULT_OPEN_QUESTION = "need user input"
 BLOCKED_ACTIVE_TASK_DEFAULT_OPEN_QUESTION = "blocked"
+OPEN_QUESTIONS_CLEAR_SENTINEL = "none"
 CURRENT_ACTIVE_TASK_STATUSES = frozenset(
     {ACTIVE_ACTIVE_TASK_STATUS, BLOCKED_ACTIVE_TASK_STATUS, WAITING_USER_ACTIVE_TASK_STATUS}
 )
@@ -60,3 +61,16 @@ def is_terminal_active_task_status(status: str | None) -> bool:
 def clears_active_task_open_questions(status: str | None) -> bool:
     """Return whether open questions should be cleared for this status."""
     return str(status or "").strip().lower() in OPEN_QUESTION_CLEAR_ACTIVE_TASK_STATUSES
+
+
+def clear_open_questions() -> list[str]:
+    return [OPEN_QUESTIONS_CLEAR_SENTINEL]
+
+
+def normalize_open_questions(values: list[object] | tuple[object, ...] | None) -> list[str] | None:
+    if values is None:
+        return None
+    questions = [str(item).strip() for item in values if str(item).strip()]
+    if any(item.lower() == OPEN_QUESTIONS_CLEAR_SENTINEL for item in questions):
+        return clear_open_questions()
+    return questions
