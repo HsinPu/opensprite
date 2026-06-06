@@ -3426,17 +3426,12 @@ def _source_context_detail(source: dict[str, object]) -> str:
     max_chars = 260
     if tool_name == "web_fetch":
         prefix = "fetched content"
-        try:
-            char_count = int(source.get("content_chars") or 0)
-        except (TypeError, ValueError):
-            char_count = 0
+        char_count = _coerce_int(source.get("content_chars"), default=0)
         if char_count > 0:
             prefix += f" ({char_count} chars)"
         prefix += ": "
         max_chars = 900
-    if len(detail) > max_chars:
-        detail = detail[: max_chars - 3].rstrip() + "..."
-    return f"{prefix}{detail}"
+    return f"{prefix}{_truncate(detail, max_chars=max_chars)}"
 
 
 def _quality_follow_up_instruction(

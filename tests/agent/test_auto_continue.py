@@ -802,6 +802,24 @@ def test_auto_continue_includes_fetched_source_detail_for_finalization():
     assert "software development" in (decision.prompt or "")
 
 
+def test_format_web_source_context_normalizes_fetched_detail():
+    context = format_web_source_context(
+        [
+            {
+                "tool_name": "web_fetch",
+                "title": "Long source",
+                "url": "https://example.com/long",
+                "content": " ".join(["source-detail"] * 120),
+                "content_chars": "unknown",
+            }
+        ]
+    )
+
+    assert "fetched content:" in context
+    assert "unknown chars" not in context
+    assert context.endswith("...")
+
+
 def test_auto_continue_build_prompt_uses_explicit_source_context_override():
     intent = TaskIntentService().classify("Please summarize the current AI agent market.")
     completion = CompletionGateResult(status="incomplete", reason="needs final source answer")
