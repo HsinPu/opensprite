@@ -1,7 +1,6 @@
 import asyncio
 from pathlib import Path
 
-from opensprite.agent.tool_access import register_default_tools
 from opensprite.config.schema import SearchConfig, ToolsConfig
 from opensprite.skills import SkillsLoader
 from opensprite.storage import MemoryStorage
@@ -20,6 +19,7 @@ from opensprite.tools.web_search import WebSearchTool
 from opensprite.tools.web_research import WebResearchTool
 from opensprite.tools.outbound_media import SendMediaTool
 from opensprite.tools.registry import ToolRegistry
+from opensprite.tools.registration import register_default_tools
 from opensprite.tools.run_trace import ListRunFileChangesTool, PreviewRunFileChangeRevertTool
 
 

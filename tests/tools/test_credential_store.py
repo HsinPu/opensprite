@@ -1,9 +1,9 @@
 import json
 import asyncio
 
-from opensprite.agent.tool_access import register_config_tools
 from opensprite.tools import ToolRegistry
 from opensprite.tools.credential_store import CredentialStoreTool
+from opensprite.tools.registration import register_config_tools
 from opensprite.tools.result_status import classify_tool_result_status
 
 

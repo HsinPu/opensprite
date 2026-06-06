@@ -101,7 +101,7 @@ from ..harness import HarnessPolicyService, HarnessProfileService
 from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from ..tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
-from .tool_access import (
+from ..tools.registration import (
     BROWSER_TOOL_NAMES,
     register_browser_tools,
     register_default_tools,

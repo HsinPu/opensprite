@@ -4,7 +4,6 @@ import json
 import httpx
 import pytest
 
-from opensprite.agent.tool_access import register_browser_tools
 from opensprite.agent.execution import build_task_artifact
 from opensprite.config.schema import BrowserToolConfig, ToolsConfig
 from opensprite.tools.browser import (
@@ -24,6 +23,7 @@ from opensprite.tools.browser_runtime import (
     cloud_provider_from_config,
 )
 from opensprite.tools.evidence import build_tool_evidence
+from opensprite.tools.registration import register_browser_tools
 from opensprite.tools.registry import ToolRegistry
 
 

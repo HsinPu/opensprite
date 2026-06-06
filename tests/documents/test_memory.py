@@ -3,8 +3,8 @@ import asyncio
 from opensprite.config.schema import Config, DocumentLlmConfig
 from opensprite.context.paths import get_session_memory_file
 from opensprite.documents import memory as memory_module
-from opensprite.agent.tool_access import SaveMemoryTool
 from opensprite.llms.base import LLMResponse, ToolCall
+from opensprite.tools.memory import SaveMemoryTool
 from opensprite.tools.result_status import classify_tool_result_status
 
 
