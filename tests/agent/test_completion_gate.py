@@ -54,6 +54,7 @@ from opensprite.agent.execution import (
     is_workflow_cancelled_status,
     is_workflow_completed_status,
     is_workflow_failed_status,
+    is_workflow_running_status,
     is_workflow_unsuccessful_status,
 )
 from opensprite.context.message_history import (
@@ -338,9 +339,11 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert is_review_workflow("research_then_outline") is False
     assert is_research_then_outline_workflow("research_then_outline") is True
     assert is_research_then_outline_workflow("implement_then_review") is False
-    assert is_workflow_failed_status("failed") is True
+    assert is_workflow_running_status(" RUNNING ") is True
+    assert is_workflow_running_status("completed") is False
+    assert is_workflow_failed_status(" FAILED ") is True
     assert is_workflow_failed_status("cancelled") is False
-    assert is_workflow_cancelled_status("cancelled") is True
+    assert is_workflow_cancelled_status(" CANCELLED ") is True
     assert is_workflow_cancelled_status("failed") is False
     assert _completion_status_for_unsuccessful_workflow("failed") == "blocked"
     assert _completion_status_for_unsuccessful_workflow("cancelled") == "incomplete"
@@ -348,7 +351,7 @@ def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert is_complete_completion_status("needs_review") is False
     assert needs_verification_completion_status("needs_verification") is True
     assert needs_verification_completion_status("complete") is False
-    assert is_workflow_completed_status("completed") is True
+    assert is_workflow_completed_status(" COMPLETED ") is True
     assert is_workflow_completed_status("failed") is False
     assert is_clean_structured_subagent_status("ok") is True
     assert is_clean_structured_subagent_status("error") is False

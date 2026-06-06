@@ -4797,29 +4797,33 @@ WORKFLOW_FAILURE_STATUSES = frozenset({WORKFLOW_FAILED_STATUS, WORKFLOW_ERROR_ST
 WORKFLOW_UNSUCCESSFUL_STATUSES = WORKFLOW_FAILURE_STATUSES | frozenset({WORKFLOW_CANCELLED_STATUS})
 
 
+def _normalize_workflow_status(status: str | None) -> str:
+    return str(status or "").strip().lower()
+
+
 def is_workflow_running_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status is running."""
-    return str(status or "").strip().lower() == WORKFLOW_RUNNING_STATUS
+    return _normalize_workflow_status(status) == WORKFLOW_RUNNING_STATUS
 
 
 def is_workflow_completed_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status is completed."""
-    return str(status or "").strip().lower() == WORKFLOW_COMPLETED_STATUS
+    return _normalize_workflow_status(status) == WORKFLOW_COMPLETED_STATUS
 
 
 def is_workflow_failed_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status represents failure."""
-    return str(status or "").strip().lower() in WORKFLOW_FAILURE_STATUSES
+    return _normalize_workflow_status(status) in WORKFLOW_FAILURE_STATUSES
 
 
 def is_workflow_cancelled_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status represents cancellation."""
-    return str(status or "").strip().lower() == WORKFLOW_CANCELLED_STATUS
+    return _normalize_workflow_status(status) == WORKFLOW_CANCELLED_STATUS
 
 
 def is_workflow_unsuccessful_status(status: str | None) -> bool:
     """Return whether a workflow/subtask status is failed, errored, or cancelled."""
-    return str(status or "").strip().lower() in WORKFLOW_UNSUCCESSFUL_STATUSES
+    return _normalize_workflow_status(status) in WORKFLOW_UNSUCCESSFUL_STATUSES
 
 IMPLEMENT_THEN_REVIEW_WORKFLOW_ID = "implement_then_review"
 RESEARCH_THEN_OUTLINE_WORKFLOW_ID = "research_then_outline"
