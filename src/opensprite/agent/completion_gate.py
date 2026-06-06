@@ -561,12 +561,16 @@ def _truncate(text: str, *, max_chars: int) -> str:
     return value[: max_chars - 3].rstrip() + "..."
 
 
-def _coerce_bool(value: Any) -> bool:
+_DEFAULT_TRUE_VALUES = frozenset({"1", "true", "yes", "y"})
+_QUALITY_TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
+
+
+def _coerce_bool(value: Any, *, truthy_values: frozenset[str] = _DEFAULT_TRUE_VALUES) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)):
         return bool(value)
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+    return str(value or "").strip().lower() in truthy_values
 
 
 def _coerce_non_negative_int(value: Any) -> int:
@@ -2760,11 +2764,7 @@ def _history_itemized_min_count(contract: TaskContract) -> int:
 
 
 def _truthy(value: object) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return value != 0
-    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+    return _coerce_bool(value, truthy_values=_QUALITY_TRUE_VALUES)
 
 
 def _coerce_int(value: object, *, default: int) -> int:

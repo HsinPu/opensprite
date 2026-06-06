@@ -8,9 +8,11 @@ from opensprite.agent.completion_gate import (
     CompletionGateService,
     EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
+    _coerce_bool,
     _completion_status_for_unsuccessful_workflow,
     _contract_requires_verification,
     _is_blocking_planner_status,
+    _truthy,
     is_complete_completion_status,
     is_research_then_outline_workflow,
     is_review_workflow,
@@ -283,6 +285,13 @@ def test_completion_gate_status_helpers_normalize_policy_values():
     assert is_max_tool_iterations_stop_reason("stop") is False
     assert is_workflow_unsuccessful_status("CANCELLED") is True
     assert is_workflow_unsuccessful_status("complete") is False
+
+
+def test_completion_gate_bool_helpers_keep_context_specific_truthy_values():
+    assert _coerce_bool(" y ") is True
+    assert _coerce_bool(" on ") is False
+    assert _truthy(" on ") is True
+    assert _truthy(" y ") is False
 
 
 def test_completion_gate_task_type_policy_helpers_are_centralized():
