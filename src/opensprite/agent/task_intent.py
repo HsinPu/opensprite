@@ -21,7 +21,7 @@ from .harness_profile import (
     WORKSPACE_WRITE_TOOL_GROUP,
 )
 from .tool_groups import OPERATION_TOOL_GROUPS
-from .web_source_policy import is_web_research_task_type
+from ..tools.evidence import is_web_research_task_type
 
 
 ANALYSIS_INTENT_KIND = "analysis"

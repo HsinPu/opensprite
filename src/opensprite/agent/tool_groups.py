@@ -16,7 +16,7 @@ from .harness_profile import (
 )
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from ..tools.evidence import VERIFICATION_TOOL_NAME
-from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
+from ..tools.evidence import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_ARTIFACT_TOOLS
 from ..tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,
     ANALYZE_VIDEO_TOOL_NAME,

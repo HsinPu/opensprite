@@ -12,7 +12,7 @@ from .completion_status import (
     normalize_completion_status,
 )
 from .task_contract import is_tool_group_requirement
-from .web_source_policy import (
+from ..tools.evidence import (
     is_source_acceptance_criterion_kind,
     is_web_research_task_type,
     is_web_research_tool_group,

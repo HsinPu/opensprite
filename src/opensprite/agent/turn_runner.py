@@ -83,7 +83,7 @@ from .turn_quick_actions import (
     metadata_requests_direct_verification,
     metadata_requests_follow_up_resume,
 )
-from .web_source_policy import (
+from ..tools.evidence import (
     is_web_fetch_source_record_tool,
     is_web_source_artifact_kind,
 )

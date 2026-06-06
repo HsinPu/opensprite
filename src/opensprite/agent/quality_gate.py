@@ -40,7 +40,7 @@ from .task_contract import (
     neutral_task_contract,
 )
 from ..tools.evidence import VERIFICATION_OUTCOME_OR_GAP_MISSING_REASON
-from .web_source_policy import (
+from ..tools.evidence import (
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,

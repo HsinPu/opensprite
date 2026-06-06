@@ -45,7 +45,7 @@ from .subagent_output import (
 from .stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from .tool_guardrails import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
 from ..tools.evidence import is_verification_tool_name
-from .web_source_policy import (
+from ..tools.evidence import (
     is_web_research_source_artifact_tool,
     is_web_source_artifact_kind,
     is_web_source_evidence_tool,

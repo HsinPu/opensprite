@@ -31,7 +31,7 @@ from .harness_scorecard import (
     HarnessSensorResult,
 )
 from .media import count_media_artifacts
-from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
+from ..tools.evidence import is_web_source_artifact_kind, is_web_source_evidence_tool
 
 if TYPE_CHECKING:
     from .completion_gate import CompletionGateResult

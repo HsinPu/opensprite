@@ -43,7 +43,7 @@ from opensprite.agent.completion_gate import (
     _workflow_gate_needs_verification,
 )
 from opensprite.agent.task_contract import LLM_PLANNER_CONTRACT_SOURCES
-from opensprite.agent.web_source_policy import (
+from opensprite.tools.evidence import (
     GATHERED_SOURCE_REFERENCE_MISSING_REASON,
     SOURCE_ARTIFACTS_NOT_TRACEABLE_REASON,
     SOURCE_MATERIAL_INSUFFICIENT_REASON,
@@ -354,7 +354,7 @@ def test_completion_gate_review_path_policy_helper_is_centralized():
     assert _is_python_test_path("src/opensprite/runtime.py") is False
 
 
-def test_completion_gate_web_source_policy_helpers_are_centralized():
+def test_completion_gate_web_source_evidence_helpers_are_centralized():
     assert _is_optional_web_discovery_failure_tool("web_search") is True
     assert _is_optional_web_discovery_failure_tool("web_fetch") is False
     assert _is_optional_web_fetch_failure_tool("web_fetch") is True

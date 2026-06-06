@@ -23,7 +23,7 @@ from ..tool_names import (
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
 from ..tools.evidence import VERIFICATION_TOOL_NAME
-from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
+from ..tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
 
 
 IDEMPOTENT_TOOL_NAMES = frozenset(

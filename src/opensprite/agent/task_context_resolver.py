@@ -26,7 +26,7 @@ from .harness_profile import (
     WORKSPACE_WRITE_TOOL_GROUP,
 )
 from .task_intent import CONVERSATION_INTENT_KIND, TaskIntent
-from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
+from ..tools.evidence import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP
 
 
 ACK_CONTINUATION_TYPE = "ack"

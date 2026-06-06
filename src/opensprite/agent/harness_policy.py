@@ -36,7 +36,7 @@ from .harness_profile import (
 )
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
-from .web_source_policy import WEB_HARNESS_RESEARCH_TOOLS
+from ..tools.evidence import WEB_HARNESS_RESEARCH_TOOLS
 
 
 _READ_ONLY_TOOLS = (

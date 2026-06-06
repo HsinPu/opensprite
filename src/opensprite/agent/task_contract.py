@@ -33,7 +33,7 @@ from .resource_index import ResourceIndex, ResourceRef
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from .tool_groups import OPERATION_TOOL_GROUPS, TOOL_GROUPS
-from .web_source_policy import (
+from ..tools.evidence import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,
     SOURCE_REFERENCE_CRITERION_KIND,

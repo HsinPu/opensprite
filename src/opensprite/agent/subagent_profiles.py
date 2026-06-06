@@ -24,7 +24,7 @@ from ..tools.permissions import PermissionDecision, ToolPermissionPolicy
 from ..tools.registry import ToolRegistry
 from .retrieval import HISTORY_SEARCH_TOOL_NAME
 from .tool_access import ToolAccessResolver
-from .web_source_policy import WEB_SOURCE_EVIDENCE_TOOLS
+from ..tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
 
 
 TOOL_PROFILE_METADATA_FIELD = "tool_profile"

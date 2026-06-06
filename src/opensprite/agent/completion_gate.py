@@ -61,7 +61,7 @@ from .task_contract import (
 )
 from .retrieval import is_history_retrieval_tool_name
 from .tool_groups import WORKSPACE_DISCOVERY_TOOLS
-from .web_source_policy import (
+from ..tools.evidence import (
     is_fetched_web_source_artifact_tool,
     is_web_discovery_tool,
     is_web_fetch_source_record_tool,

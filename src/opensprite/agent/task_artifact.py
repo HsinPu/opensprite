@@ -13,7 +13,7 @@ from ..tool_names import (
     TRANSCRIBE_AUDIO_TOOL_NAME,
 )
 from ..tools.evidence import ToolEvidence
-from .web_source_policy import (
+from ..tools.evidence import (
     WEB_SOURCE_ARTIFACT_KIND,
     WEB_SOURCE_ARTIFACT_TOOLS,
     is_web_source_artifact_kind,

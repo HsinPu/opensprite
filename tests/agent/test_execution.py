@@ -9,7 +9,7 @@ from opensprite.agent.execution import ExecutionEngine, LLM_STEP_COMPLETED_STATU
 from opensprite.agent.prompt_logging import PromptLoggingService
 from opensprite.agent.stop_reasons import MAX_TOOL_ITERATIONS_STOP_REASON
 from opensprite.agent.task_artifact import TaskArtifact
-from opensprite.agent.web_source_policy import SOURCE_MATERIAL_INSUFFICIENT_REASON
+from opensprite.tools.evidence import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task_intent import TaskIntentService
 from opensprite.config.schema import Config, ToolsConfig, WebSearchToolConfig

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .web_source_policy import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_REQUIRED_EVIDENCE
+from ..tools.evidence import WEB_RESEARCH_TASK_TYPE, WEB_RESEARCH_TOOL_GROUP, WEB_SOURCE_REQUIRED_EVIDENCE
 
 OPS_PROFILE_NAME = "ops"
 MEDIA_PROFILE_NAME = "media"
