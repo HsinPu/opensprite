@@ -6,8 +6,7 @@ from opensprite.agent.auto_continue import (
     REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON,
     completion_gate_continue_reason,
 )
-from opensprite.agent.completion_gate import CompletionGateResult
-from opensprite.agent.completion_gate_policy import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON
+from opensprite.agent.completion_gate import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON, CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.harness_profile import HarnessProfileService
 from opensprite.agent.resource_index import ResourceRef

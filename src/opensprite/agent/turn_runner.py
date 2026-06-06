@@ -34,7 +34,6 @@ from ..utils.log import logger
 from ..utils.url import join_url_path
 from .audio_input import AudioInputPreprocessor
 from .auto_continue import AutoContinueService, format_web_source_context
-from .completion_blocker_policy import CompletionBlockerMessages, completion_blocker_response
 from .completion_gate import (
     COMPLETION_RESULT_ACTIVE_TASK_DETAIL_FIELD,
     COMPLETION_RESULT_FOLLOW_UP_PROMPT_TYPE_FIELD,
@@ -44,8 +43,10 @@ from .completion_gate import (
     COMPLETION_RESULT_VERIFICATION_ACTION_FIELD,
     COMPLETION_RESULT_VERIFICATION_PATH_FIELD,
     COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD,
+    CompletionBlockerMessages,
     CompletionGateResult,
     CompletionGateService,
+    completion_blocker_response,
 )
 from .completion_status import (
     INCOMPLETE_COMPLETION_STATUS,

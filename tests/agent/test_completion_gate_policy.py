@@ -1,4 +1,4 @@
-from opensprite.agent.completion_gate_policy import (
+from opensprite.agent.completion_gate import (
     ANALYSIS_TASK_COMPLETE_REASON,
     ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
     DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON,

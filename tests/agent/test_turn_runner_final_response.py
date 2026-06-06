@@ -1,5 +1,4 @@
-from opensprite.agent.completion_blocker_policy import CompletionBlockerMessages
-from opensprite.agent.completion_gate import CompletionGateResult
+from opensprite.agent.completion_gate import CompletionBlockerMessages, CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.quality_gate import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact import TaskArtifact

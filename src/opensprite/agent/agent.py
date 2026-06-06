@@ -86,7 +86,7 @@ from .active_task_commands import ActiveTaskCommandService
 from .active_task_status import is_current_active_task_status
 from .auto_continue import AutoContinueService
 from .background_notifications import BackgroundSessionNotificationService
-from .completion_gate import CompletionGateResult, CompletionGateService
+from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
 from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
 from .curator import CuratorService, fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
@@ -111,7 +111,6 @@ from .run_hooks import RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
-from .completion_blocker_policy import CompletionBlockerMessages
 from .task_contract import TaskPlanner
 from .task_intent import TaskIntent, TaskIntentService
 from .task_objective_resolver import TaskObjectiveDecision, TaskObjectiveResolver

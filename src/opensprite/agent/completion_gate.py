@@ -8,23 +8,6 @@ from typing import Any
 from ..config import DocumentLlmConfig
 from ..storage.base import StoredDelegatedTask
 from .active_task_status import BLOCKED_ACTIVE_TASK_STATUS, DONE_ACTIVE_TASK_STATUS
-from .completion_gate_policy import (
-    ANALYSIS_TASK_COMPLETE_REASON,
-    ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON,
-    EXPECTED_CODE_CHANGES_MISSING_REASON,
-    GENERIC_TASK_COMPLETE_REASON,
-    INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON,
-    MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL,
-    MAX_TOOL_ITERATIONS_INCOMPLETE_REASON,
-    PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
-    REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON,
-    TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON,
-    TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
-    TASK_CONTRACT_SATISFIED_REASON,
-    TOOL_ERROR_WITHOUT_BLOCKER_REASON,
-    delegated_review_completion_reason,
-    one_turn_completion_reason,
-)
 from .evidence_gate import EvidenceGateService
 from .execution import ExecutionResult
 from .completion_judge import (
@@ -187,6 +170,43 @@ REVIEW_EVIDENCE_SUMMARY_FIELD = "summary"
 REVIEW_EVIDENCE_PROMPT_TYPES_FIELD = "prompt_types"
 REVIEW_EVIDENCE_FINDING_COUNT_FIELD = "finding_count"
 REVIEW_EVIDENCE_FIRST_FINDING_FIELD = "first_finding"
+MAX_TOOL_ITERATIONS_INCOMPLETE_REASON = "max tool iterations exhausted before completion"
+MAX_TOOL_ITERATIONS_ACTIVE_TASK_DETAIL = (
+    "The execution loop hit the configured max_tool_iterations limit and needs another bounded continuation pass."
+)
+INTERNAL_ONLY_RESPONSE_INCOMPLETE_REASON = "assistant only emitted internal control text"
+TOOL_ERROR_WITHOUT_BLOCKER_REASON = "tool execution reported an error without a clear blocker handoff"
+PLAIN_ANSWER_CONTRACT_COMPLETE_REASON = "plain-answer contract received a response"
+TASK_CONTRACT_ACCEPTED_FINAL_RESPONSE_REASON = "task contract accepted final response"
+REQUIRED_FILE_CHANGES_AND_EVIDENCE_RECORDED_REASON = "required file changes and evidence were recorded"
+ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON = "assistant response did not explicitly complete the task"
+GENERIC_TASK_COMPLETE_REASON = "generic task returned a response"
+ANALYSIS_TASK_COMPLETE_REASON = "analysis-style task returned a substantive response"
+EXPECTED_CODE_CHANGES_MISSING_REASON = "expected code changes were not recorded"
+ONE_TURN_RESPONSE_COMPLETE_REASON = "one-turn intent received a response"
+EMPTY_ASSISTANT_RESPONSE_REASON = "assistant response was empty"
+TASK_CONTRACT_SATISFIED_REASON = "task contract was satisfied"
+TASK_CONTRACT_PLANNER_UNVALIDATED_REASON = "task planner did not produce a validated contract"
+DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON = "delegated review reported findings that require follow-up"
+DELEGATED_REVIEW_NOT_RECORDED_REASON = "delegated review was not recorded for code changes"
+COMPLETION_GATE_DID_NOT_PASS_REASON = "completion gate did not pass"
+
+
+def one_turn_completion_reason(*, has_response: bool) -> str:
+    return ONE_TURN_RESPONSE_COMPLETE_REASON if has_response else EMPTY_ASSISTANT_RESPONSE_REASON
+
+
+def delegated_review_completion_reason(*, review_attempted: bool) -> str:
+    return DELEGATED_REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON if review_attempted else DELEGATED_REVIEW_NOT_RECORDED_REASON
+
+
+@dataclass(frozen=True)
+class CompletionBlockerMessages:
+    intro: str
+    reason_prefix: str
+    detail_header: str
+    missing_evidence_header: str
+    stop_notice: str
 
 
 @dataclass(frozen=True)
@@ -260,6 +280,27 @@ class CompletionGateResult:
         if self.judge_metadata:
             payload[COMPLETION_RESULT_JUDGE_FIELD] = dict(self.judge_metadata)
         return payload
+
+
+def completion_blocker_response(
+    completion_result: CompletionGateResult,
+    messages: CompletionBlockerMessages,
+) -> str:
+    reason = (completion_result.reason or completion_result.status or COMPLETION_GATE_DID_NOT_PASS_REASON).strip()
+    detail = (completion_result.active_task_detail or "").strip()
+    missing = [item.strip() for item in completion_result.missing_evidence if str(item).strip()]
+    sections = [
+        messages.intro,
+        f"{messages.reason_prefix}{reason}",
+    ]
+    if detail:
+        detail_lines = [line.strip("- ").strip() for line in detail.splitlines() if line.strip()]
+        if detail_lines:
+            sections.append(f"{messages.detail_header}\n" + "\n".join(f"- {line}" for line in detail_lines))
+    if missing:
+        sections.append(f"{messages.missing_evidence_header}\n" + "\n".join(f"- {item}" for item in missing))
+    sections.append(messages.stop_notice)
+    return "\n\n".join(sections)
 
 
 class CompletionGateService:

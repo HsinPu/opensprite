@@ -6,6 +6,7 @@ import pytest
 from opensprite.agent.completion_judge import CompletionJudgeVerdict
 from opensprite.agent.completion_gate import (
     CompletionGateService,
+    TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _accepts_final_response_task_type,
     _completion_status_for_unsuccessful_workflow,
     _intent_supports_fallback_active_task_update,
@@ -62,7 +63,6 @@ from opensprite.agent.evidence_gate import EvidenceGateService
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.history_retrieval_policy import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
 from opensprite.agent.quality_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
-from opensprite.agent.completion_gate_policy import TASK_CONTRACT_PLANNER_UNVALIDATED_REASON
 from opensprite.agent.quality_gate import QualityGateService
 from opensprite.agent.quality_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON

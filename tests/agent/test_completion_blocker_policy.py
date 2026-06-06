@@ -1,9 +1,9 @@
-from opensprite.agent.completion_blocker_policy import (
+from opensprite.agent.completion_gate import (
     COMPLETION_GATE_DID_NOT_PASS_REASON,
     CompletionBlockerMessages,
+    CompletionGateResult,
     completion_blocker_response,
 )
-from opensprite.agent.completion_gate import CompletionGateResult
 
 
 MESSAGES = CompletionBlockerMessages(
