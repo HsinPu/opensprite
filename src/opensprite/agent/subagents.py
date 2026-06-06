@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +28,7 @@ from ..runs.events import (
 )
 from ..runs.lifecycle import RUN_STARTED_EVENT
 from ..skills import SkillsLoader
-from ..storage import StorageProvider
+from ..storage import StorageProvider, StoredMessage
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import DELEGATE_MANY_TOOL_NAME, DELEGATE_TOOL_NAME
 from .subagent_output import (
@@ -51,12 +52,6 @@ from .subagent_output import (
     parse_structured_subagent_output,
 )
 from ..subagent_prompts import get_all_subagents, load_metadata, load_prompt
-from .subagent_session import (
-    build_child_subagent_session_id,
-    extract_subagent_prompt_type,
-    new_subagent_task_id,
-    validate_subagent_task_id,
-)
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
@@ -79,6 +74,40 @@ from .workflows import (
 DEFAULT_MAX_PARALLEL_SUBAGENTS = 2
 MAX_PARALLEL_SUBAGENTS = 4
 DEFAULT_SUBAGENT_MAX_TOOL_ITERATIONS = 100
+SUBAGENT_TASK_ID_PATTERN = r"^task_[A-Za-z0-9_-]{8,64}$"
+_TASK_ID_RE = re.compile(SUBAGENT_TASK_ID_PATTERN)
+
+
+def new_subagent_task_id() -> str:
+    """Return a compact id that can be shown to the model/user and reused later."""
+    return f"task_{uuid4().hex[:12]}"
+
+
+def validate_subagent_task_id(task_id: str) -> str | None:
+    """Return an error message when a task id is malformed."""
+    value = str(task_id or "").strip()
+    if _TASK_ID_RE.fullmatch(value):
+        return None
+    return "task_id must match pattern task_[A-Za-z0-9_-]{8,64}."
+
+
+def build_child_subagent_session_id(parent_session_id: str, task_id: str) -> str:
+    """Build the storage session id for one child subagent task session."""
+    return f"{parent_session_id}:subagent:{task_id}"
+
+
+def extract_subagent_prompt_type(messages: list[StoredMessage]) -> str | None:
+    """Return the prompt type stored on the first child task message, if available."""
+    for message in messages:
+        metadata = getattr(message, "metadata", {}) or {}
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("kind") != "subagent_task":
+            continue
+        prompt_type = metadata.get("prompt_type")
+        if isinstance(prompt_type, str) and prompt_type.strip():
+            return prompt_type.strip()
+    return None
 
 
 class SubagentMessageBuilder:
