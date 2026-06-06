@@ -49,7 +49,7 @@ from .harness_policy import (
     is_planning_task_type,
 )
 from ..media import MEDIA_ONLY_HISTORY_MARKER
-from .message_history import HISTORY_SEARCH_TOOL_NAME
+from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
 from ..tools.evidence import (
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,

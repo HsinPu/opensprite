@@ -61,7 +61,7 @@ from ..tools.registry import ToolRegistry
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.json_safe import json_safe_value
 from ..utils.log import logger
-from .message_history import HISTORY_SEARCH_TOOL_NAME
+from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
 from .run_trace import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
 from .tool_access import ToolAccessResolver

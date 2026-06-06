@@ -34,7 +34,7 @@ from ..documents.user_profile import create_user_profile_store
 from ..documents.user_overlay import UserOverlayIndexStore, UserOverlayRetrievalPlanner, UserOverlayStore
 from ..skills import SkillsLoader
 from ..subagent_prompts import get_all_subagents
-from ..agent.message_history import LearningLedger
+from .message_history import LearningLedger
 
 
 class FileContextBuilder:

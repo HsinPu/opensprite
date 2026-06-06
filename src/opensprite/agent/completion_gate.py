@@ -66,7 +66,7 @@ from .task_contract import (
     missing_evidence,
     neutral_task_contract,
 )
-from .message_history import (
+from ..context.message_history import (
     HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON,
     history_retrieval_metadata_has_results,
     history_retrieval_metadata_reports_empty,

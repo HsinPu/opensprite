@@ -1,4 +1,4 @@
-from opensprite.agent.message_history import LearningLedger
+from opensprite.context.message_history import LearningLedger
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 

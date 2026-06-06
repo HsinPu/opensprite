@@ -99,7 +99,7 @@ from ..documents.curator import (
 from .execution import ExecutionEngine, ExecutionResult
 from .harness_policy import HarnessPolicyService, HarnessProfileService
 from .llm_call import LlmCallService, PromptBudgetService, PromptLoggingService
-from .message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
+from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from .tool_access import (
     AgentPermissionService,
     BROWSER_TOOL_NAMES,

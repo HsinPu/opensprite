@@ -91,7 +91,7 @@ from ..tools.workflow import RunWorkflowTool
 from ..utils import json_safe_value
 from .harness_policy import HarnessPolicy, HarnessPolicyService, WORKSPACE_DISCOVERY_TOOLS
 from ..media import outbound_media_error_result
-from .message_history import HISTORY_SEARCH_TOOL_NAME
+from ..context.message_history import HISTORY_SEARCH_TOOL_NAME
 
 
 _RISK_PROBE_TOOLS = {

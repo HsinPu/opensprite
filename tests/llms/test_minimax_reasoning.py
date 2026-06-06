@@ -1,7 +1,7 @@
 import asyncio
 from types import SimpleNamespace
 
-from opensprite.agent.message_history import MessageHistoryService
+from opensprite.context.message_history import MessageHistoryService
 from opensprite.llms import ChatMessage
 from opensprite.llms import minimax as minimax_module
 from opensprite.llms.minimax import MiniMaxLLM, _is_minimax_overloaded_error
