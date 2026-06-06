@@ -1,4 +1,4 @@
-from opensprite.agent.run_state import AgentRunStateService, RunBusyError
+from opensprite.agent.run_hooks import AgentRunStateService, RunBusyError
 
 
 def test_run_state_prevents_overlapping_runs_for_same_session():

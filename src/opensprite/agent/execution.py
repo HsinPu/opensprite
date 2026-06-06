@@ -34,7 +34,7 @@ from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import count_messages_tokens, count_text_tokens
 from ..utils.log import logger
-from .run_state import RunCancelledError
+from .run_hooks import RunCancelledError
 from .task_artifact import TaskArtifact, build_task_artifact
 from .task_contract import TaskContract
 from .subagent_output import (

@@ -15,7 +15,7 @@ from opensprite.agent.auto_continue import (
 )
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
-from opensprite.agent.run_state import RunBusyError
+from opensprite.agent.run_hooks import RunBusyError
 from opensprite.agent.task_artifact import TaskArtifact
 from opensprite.agent.task_contract import (
     EvidenceRequirement,

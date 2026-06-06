@@ -56,8 +56,7 @@ from .subagent_session import (
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..utils.log import logger
-from .run_hooks import RunHookService
-from .run_state import RunCancelledError
+from .run_hooks import RunCancelledError, RunHookService
 from .run_trace import RunTraceRecorder
 from .subagent_builder import SubagentMessageBuilder
 from .subagent_profiles import PARALLEL_SAFE_PROFILE_NAMES, build_subagent_tool_registry, profile_for_subagent

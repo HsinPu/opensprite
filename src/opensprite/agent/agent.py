@@ -103,9 +103,8 @@ from .permission_flow import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
 from .retrieval import ProactiveRetrievalService
 from .response_finalizer import AgentResponseFinalizer
-from .run_state import AgentRunStateService
 from .run_trace import RunTraceRecorder
-from .run_hooks import RunHookService
+from .run_hooks import AgentRunStateService, RunHookService
 from .skill_review import SkillReviewService
 from .subagents import SubagentRunService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver

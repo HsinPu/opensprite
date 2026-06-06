@@ -17,7 +17,7 @@ from ..runs.events import (
 from ..tool_names import RUN_WORKFLOW_TOOL_NAME
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
-from .run_state import RunCancelledError
+from .run_hooks import RunCancelledError
 from .subagents import SubagentTaskOutcome
 from .subagent_output import (
     STRUCTURED_SUBAGENT_FINDING_COUNT_FIELD,
