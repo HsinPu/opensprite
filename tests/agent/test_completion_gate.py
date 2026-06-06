@@ -4506,13 +4506,13 @@ def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_t
             workflow_outcomes=(
                 {
                     "workflow_run_id": "workflow_abc123",
-                    "workflow": "implement_then_review",
-                    "status": "completed",
+                    "workflow": " implement_then_review ",
+                    "status": " completed ",
                     "review_attempted": True,
                     "review_passed": False,
                     "review_finding_count": 1,
-                    "review_summary": "One high-risk bug found.",
-                    "review_first_finding": "src/foo.py: Null handling bug: Guard the null path before dereference.",
+                    "review_summary": " One high-risk bug found. ",
+                    "review_first_finding": " src/foo.py: Null handling bug: Guard the null path before dereference. ",
                     "verification_attempted": False,
                     "verification_passed": False,
                 },

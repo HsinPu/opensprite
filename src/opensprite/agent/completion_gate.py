@@ -1216,7 +1216,9 @@ class CompletionGateService:
             workflow_verification_passed = bool(workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed))
             workflow_review_attempted = bool(workflow_gate.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD, review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
             workflow_review_passed = bool(workflow_gate.get(WORKFLOW_REVIEW_PASSED_FIELD, review[REVIEW_EVIDENCE_PASSED_FIELD]))
-            workflow_review_summary = str(workflow_gate.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or review[REVIEW_EVIDENCE_SUMMARY_FIELD] or "").strip()
+            workflow_review_summary = _coerce_text(
+                workflow_gate.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or review[REVIEW_EVIDENCE_SUMMARY_FIELD]
+            )
             workflow_review_finding_count = int(workflow_gate.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD, review[REVIEW_EVIDENCE_FINDING_COUNT_FIELD]))
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
@@ -1845,23 +1847,24 @@ def _workflow_gate_outcome(
     relevant_outcomes = [
         outcome
         for outcome in workflow_outcomes
-        if isinstance(outcome, dict) and str(outcome.get(WORKFLOW_ID_FIELD) or "").strip()
+        if isinstance(outcome, dict) and _coerce_text(outcome.get(WORKFLOW_ID_FIELD))
     ]
     if not relevant_outcomes:
         return None
     workflow = relevant_outcomes[-1]
-    workflow_id = str(workflow.get(WORKFLOW_ID_FIELD) or "").strip()
-    workflow_status = str(workflow.get(WORKFLOW_STATUS_FIELD) or "").strip()
+    workflow_id = _coerce_text(workflow.get(WORKFLOW_ID_FIELD))
+    workflow_status = _coerce_text(workflow.get(WORKFLOW_STATUS_FIELD))
     review_attempted = bool(workflow.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD))
     review_passed = bool(workflow.get(WORKFLOW_REVIEW_PASSED_FIELD))
     review_finding_count = int(workflow.get(WORKFLOW_REVIEW_FINDING_COUNT_FIELD) or 0)
     workflow_verification_attempted = bool(workflow.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD))
     workflow_verification_passed = bool(workflow.get(WORKFLOW_VERIFICATION_PASSED_FIELD))
-    workflow_review_summary = str(workflow.get(WORKFLOW_REVIEW_SUMMARY_FIELD) or "").strip()
-    workflow_review_first_finding = str(workflow.get(WORKFLOW_REVIEW_FIRST_FINDING_FIELD) or "").strip()
-    next_step_id = str(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
-    next_step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or "").strip()
-    next_step_prompt_type = str(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD) or "").strip()
+    workflow_review_summary = _coerce_text(workflow.get(WORKFLOW_REVIEW_SUMMARY_FIELD))
+    workflow_review_first_finding = _coerce_text(workflow.get(WORKFLOW_REVIEW_FIRST_FINDING_FIELD))
+    workflow_summary = _coerce_text(workflow.get(WORKFLOW_SUMMARY_FIELD))
+    next_step_id = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD))
+    next_step_label = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD))
+    next_step_prompt_type = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD))
     metadata = {
         WORKFLOW_ID_FIELD: workflow_id,
         WORKFLOW_REVIEW_ATTEMPTED_FIELD: review_attempted,
@@ -1913,9 +1916,7 @@ def _workflow_gate_outcome(
                 **metadata,
                 COMPLETION_RESULT_STATUS_FIELD: NEEDS_REVIEW_COMPLETION_STATUS,
                 COMPLETION_RESULT_REASON_FIELD: workflow_review_findings_follow_up_reason(workflow_id),
-                "detail": workflow_review_first_finding
-                or workflow_review_summary
-                or str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip(),
+                "detail": workflow_review_first_finding or workflow_review_summary or workflow_summary,
                 **fix_step,
             }
         if verification_required and not (verification_passed or workflow_verification_passed):
@@ -1923,7 +1924,7 @@ def _workflow_gate_outcome(
                 **metadata,
                 COMPLETION_RESULT_STATUS_FIELD: NEEDS_VERIFICATION_COMPLETION_STATUS,
                 COMPLETION_RESULT_REASON_FIELD: WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
-                "detail": str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip(),
+                "detail": workflow_summary,
             }
         return {
             **metadata,
@@ -1936,10 +1937,10 @@ def _workflow_gate_outcome(
             **metadata,
             COMPLETION_RESULT_STATUS_FIELD: NEEDS_VERIFICATION_COMPLETION_STATUS,
             COMPLETION_RESULT_REASON_FIELD: WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
-            "detail": str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip(),
+            "detail": workflow_summary,
         }
 
-    if str(task_intent.kind or "").strip() in WORKFLOW_COMPLETION_INTENT_KINDS:
+    if _coerce_text(task_intent.kind) in WORKFLOW_COMPLETION_INTENT_KINDS:
         return {
             **metadata,
             COMPLETION_RESULT_STATUS_FIELD: COMPLETE_COMPLETION_STATUS,
@@ -1958,14 +1959,14 @@ def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) ->
 def _review_follow_up_detail(review: dict[str, Any]) -> str | None:
     if not review.get("attempted"):
         return task_review_evidence_missing_detail()
-    detail = str(review.get("first_finding") or review.get("summary") or "").strip()
+    detail = _coerce_text(review.get("first_finding") or review.get("summary"))
     return detail or task_review_findings_follow_up_detail()
 
 
 def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow: dict[str, Any]) -> str:
-    step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
-    error = str(workflow.get(WORKFLOW_ERROR_FIELD) or "").strip()
-    summary = str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip()
+    step_label = _coerce_text(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD))
+    error = _coerce_text(workflow.get(WORKFLOW_ERROR_FIELD))
+    summary = _coerce_text(workflow.get(WORKFLOW_SUMMARY_FIELD))
     if is_workflow_cancelled_status(workflow_status):
         if step_label and summary:
             return f"Resume with the {step_label} step in {workflow_id}. {summary}"
