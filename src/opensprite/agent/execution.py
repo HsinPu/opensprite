@@ -4972,16 +4972,11 @@ def _workflow_progress_fields(
     return payload
 
 
-def _completed_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
-    return sum(1 for outcome in outcomes if is_workflow_completed_status(outcome.status))
-
-
-def _failed_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
-    return sum(1 for outcome in outcomes if is_workflow_failed_status(outcome.status))
-
-
-def _unsuccessful_outcome_count(outcomes: list[SubagentTaskOutcome]) -> int:
-    return sum(1 for outcome in outcomes if is_workflow_unsuccessful_status(outcome.status))
+def _workflow_outcome_count(
+    outcomes: list[SubagentTaskOutcome],
+    status_matches: Callable[[str | None], bool],
+) -> int:
+    return sum(1 for outcome in outcomes if status_matches(outcome.status))
 
 
 def _resolve_start_index(spec: WorkflowSpec, start_step: str | None) -> tuple[int, WorkflowStepSpec | None, str | None]:
@@ -5236,8 +5231,8 @@ class SubagentWorkflowService:
         start_index: int = 0,
         error: str = "",
     ) -> dict[str, Any]:
-        completed_steps = start_index + _completed_outcome_count(outcomes)
-        failed_steps = _failed_outcome_count(outcomes)
+        completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
+        failed_steps = _workflow_outcome_count(outcomes, is_workflow_failed_status)
         summary = (
             f"Completed {completed_steps}/{len(steps)} workflow step(s)."
             if is_workflow_completed_status(status)
@@ -5362,7 +5357,7 @@ class SubagentWorkflowService:
     ) -> dict[str, Any]:
         review = self._review_outcome(outcomes)
         verification = self._verification_outcome(outcomes)
-        completed_steps = start_index + _completed_outcome_count(outcomes)
+        completed_steps = start_index + _workflow_outcome_count(outcomes, is_workflow_completed_status)
         return {
             "workflow_run_id": workflow_run_id,
             WORKFLOW_ID_FIELD: spec.workflow_id,
@@ -5370,7 +5365,7 @@ class SubagentWorkflowService:
             "task_preview": task_preview,
             "total_steps": len(spec.steps),
             "completed_steps": completed_steps,
-            "failed_steps": _unsuccessful_outcome_count(outcomes),
+            "failed_steps": _workflow_outcome_count(outcomes, is_workflow_unsuccessful_status),
             WORKFLOW_SUMMARY_FIELD: (
                 f"Completed {completed_steps}/{len(spec.steps)} workflow step(s)."
                 if is_workflow_completed_status(status)
