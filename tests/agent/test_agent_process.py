@@ -463,6 +463,22 @@ def test_aggregate_execution_results_keeps_planning_error_when_no_valid_contract
     assert aggregate.task_contract is planning_error
 
 
+def test_merge_workflow_outcomes_normalizes_workflow_run_ids():
+    merged = AgentTurnRunner._merge_workflow_outcomes(
+        (
+            {"workflow_run_id": " workflow_review ", "status": "initial"},
+            {"workflow_run_id": "", "status": "ignored"},
+            {"status": "missing_id"},
+        ),
+        (
+            {"workflow_run_id": "workflow_fix", "status": "new"},
+            {"workflow_run_id": " workflow_review ", "status": "updated"},
+        ),
+    )
+
+    assert [item["status"] for item in merged] == ["new", "updated"]
+
+
 class WorkflowAuthorityProvider:
     def __init__(self):
         self.calls = []

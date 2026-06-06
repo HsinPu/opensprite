@@ -419,6 +419,10 @@ def _metadata_value_matches(metadata: dict[str, Any], key: str, expected: str) -
     return _metadata_text(metadata, key) == expected
 
 
+def _workflow_run_id(outcome: dict[str, Any]) -> str:
+    return _metadata_text(outcome, "workflow_run_id")
+
+
 @dataclass(frozen=True)
 class PreparedTurnInput:
     """Resolved user turn data used by process orchestration."""
@@ -1901,19 +1905,19 @@ class AgentTurnRunner:
         updates: tuple[dict[str, Any], ...],
     ) -> tuple[dict[str, Any], ...]:
         by_id = {
-            str(item.get("workflow_run_id") or "").strip(): dict(item)
+            _workflow_run_id(item): dict(item)
             for item in existing
-            if isinstance(item, dict) and str(item.get("workflow_run_id") or "").strip()
+            if isinstance(item, dict) and _workflow_run_id(item)
         }
         order = [
-            str(item.get("workflow_run_id") or "").strip()
+            _workflow_run_id(item)
             for item in existing
-            if isinstance(item, dict) and str(item.get("workflow_run_id") or "").strip()
+            if isinstance(item, dict) and _workflow_run_id(item)
         ]
         for update in updates:
             if not isinstance(update, dict):
                 continue
-            workflow_run_id = str(update.get("workflow_run_id") or "").strip()
+            workflow_run_id = _workflow_run_id(update)
             if not workflow_run_id:
                 continue
             if workflow_run_id in order:
