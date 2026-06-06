@@ -1123,7 +1123,7 @@ class CompletionGateService:
                 reason=reason,
                 active_task_status=BLOCKED_ACTIVE_TASK_STATUS,
                 active_task_detail=detail,
-                should_update_active_task=_intent_supports_fallback_active_task_update(
+                should_update_active_task=intent_supports_fallback_active_task_update(
                     task_intent,
                     execution_result.task_contract,
                 ),
@@ -1212,7 +1212,7 @@ class CompletionGateService:
                 follow_up_step_label=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
                 follow_up_prompt_type=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
                 should_update_active_task=workflow_gate_complete
-                and _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
+                and intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
                 verification_attempted=workflow_verification_attempted,
                 verification_passed=workflow_verification_passed,
@@ -1241,10 +1241,10 @@ class CompletionGateService:
                 reason=PLAIN_ANSWER_CONTRACT_COMPLETE_REASON,
                 active_task_status=(
                     DONE_ACTIVE_TASK_STATUS
-                    if _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract)
+                    if intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract)
                     else None
                 ),
-                should_update_active_task=_intent_supports_fallback_active_task_update(
+                should_update_active_task=intent_supports_fallback_active_task_update(
                     task_intent,
                     execution_result.task_contract,
                 ),
@@ -1392,7 +1392,7 @@ class CompletionGateService:
                 status=COMPLETE_COMPLETION_STATUS,
                 reason=ANALYSIS_TASK_COMPLETE_REASON,
                 active_task_status=DONE_ACTIVE_TASK_STATUS,
-                should_update_active_task=_intent_supports_fallback_active_task_update(
+                should_update_active_task=intent_supports_fallback_active_task_update(
                     task_intent,
                     evidence_result.task_contract,
                 ),
@@ -1413,10 +1413,10 @@ class CompletionGateService:
                 reason=GENERIC_TASK_COMPLETE_REASON,
                 active_task_status=(
                     DONE_ACTIVE_TASK_STATUS
-                    if _intent_supports_fallback_active_task_update(task_intent, evidence_result.task_contract)
+                    if intent_supports_fallback_active_task_update(task_intent, evidence_result.task_contract)
                     else None
                 ),
-                should_update_active_task=_intent_supports_fallback_active_task_update(
+                should_update_active_task=intent_supports_fallback_active_task_update(
                     task_intent,
                     evidence_result.task_contract,
                 ),
@@ -1432,7 +1432,7 @@ class CompletionGateService:
             )
 
         if _contract_has_completion_criteria(evidence_result.task_contract) and response_text.strip():
-            should_update_active_task = _intent_supports_fallback_active_task_update(
+            should_update_active_task = intent_supports_fallback_active_task_update(
                 task_intent,
                 evidence_result.task_contract,
             )
@@ -1588,10 +1588,6 @@ def _completion_gate_blocked_result(reason: str) -> CompletionGateResult:
     )
 
 
-def _intent_supports_fallback_active_task_update(task_intent: TaskIntent, task_contract: Any) -> bool:
-    return intent_supports_fallback_active_task_update(task_intent, task_contract)
-
-
 def _requires_verification(task_contract: Any) -> bool:
     if _contract_requires_verification(task_contract):
         return True
@@ -1640,8 +1636,8 @@ def _requires_delegated_review(touched_paths: tuple[str, ...]) -> bool:
 
 def _contract_requires_verification(task_contract: Any) -> bool:
     return any(
-        _is_verification_requirement_kind(str(getattr(requirement, "kind", "") or ""))
-        or _is_verification_tool_group(str(getattr(requirement, "tool_group", "") or ""))
+        str(getattr(requirement, "kind", "") or "").strip() == VERIFICATION_REQUIREMENT_KIND
+        or str(getattr(requirement, "tool_group", "") or "").strip() == VERIFICATION_TOOL_GROUP
         for requirement in getattr(task_contract, "requirements", ()) or ()
     )
 
@@ -1787,14 +1783,6 @@ def _requires_web_research_evidence(task_contract: Any) -> bool:
         is_web_research_tool_group(getattr(requirement, "tool_group", None))
         for requirement in getattr(task_contract, "requirements", ())
     )
-
-
-def _is_verification_requirement_kind(kind: str | None) -> bool:
-    return str(kind or "").strip() == VERIFICATION_REQUIREMENT_KIND
-
-
-def _is_verification_tool_group(tool_group: str | None) -> bool:
-    return str(tool_group or "").strip() == VERIFICATION_TOOL_GROUP
 
 
 def _contract_has_completion_criteria(task_contract: Any) -> bool:

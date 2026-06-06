@@ -9,15 +9,13 @@ from opensprite.agent.completion_gate import (
     EvidenceGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _completion_status_for_unsuccessful_workflow,
-    _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
-    _is_verification_requirement_kind,
-    _is_verification_tool_group,
     _is_review_workflow,
     _is_workflow_completion_intent_kind,
+    _requires_verification,
     _workflow_fix_follow_up_fields,
     is_complete_completion_status,
     is_history_retrieval_failure_tool,
@@ -33,6 +31,7 @@ from opensprite.agent.task_contract import (
     accepts_final_response_task_type,
     is_analysis_response_intent_kind,
     is_generic_task_response_intent_kind,
+    intent_supports_fallback_active_task_update,
     is_one_turn_intent_kind,
     is_plain_answer_task_type,
     is_read_only_blocking_requirement_kind,
@@ -294,8 +293,8 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert is_read_only_task_type("code_change") is False
     assert is_plain_answer_task_type("pure_answer") is True
     assert is_plain_answer_task_type("web_research") is False
-    assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
-    assert _intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
+    assert intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="web_research")) is True
+    assert intent_supports_fallback_active_task_update(intent, TaskContract(objective="x", task_type="pure_answer")) is False
     assert is_one_turn_intent_kind("command") is True
     assert is_one_turn_intent_kind("task") is False
     assert is_analysis_response_intent_kind("analysis") is True
@@ -310,10 +309,27 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
     assert is_read_only_blocking_requirement_kind("tool_group") is False
     assert is_read_only_blocking_tool_group("execution") is True
     assert is_read_only_blocking_tool_group("workspace_read") is False
-    assert _is_verification_requirement_kind("verification") is True
-    assert _is_verification_requirement_kind("tool_group") is False
-    assert _is_verification_tool_group("verification") is True
-    assert _is_verification_tool_group("workspace_read") is False
+    assert _requires_verification(
+        TaskContract(
+            objective="x",
+            task_type="code_change",
+            requirements=(EvidenceRequirement(kind="verification"),),
+        )
+    ) is True
+    assert _requires_verification(
+        TaskContract(
+            objective="x",
+            task_type="code_change",
+            requirements=(EvidenceRequirement(kind="tool_group", tool_group="verification"),),
+        )
+    ) is True
+    assert _requires_verification(
+        TaskContract(
+            objective="x",
+            task_type="code_change",
+            requirements=(EvidenceRequirement(kind="tool_group", tool_group="workspace_read"),),
+        )
+    ) is False
     assert is_verification_result_artifact_kind("verification_result") is True
     assert is_verification_result_artifact_kind("web_source") is False
     assert is_verification_tool_name("verify") is True
