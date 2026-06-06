@@ -19,7 +19,7 @@ from .history_retrieval_policy import (
     history_retrieval_metadata_reports_empty,
     is_history_retrieval_tool_name,
 )
-from .media_artifact_policy import count_media_artifacts, is_media_artifact_kind
+from .media import count_media_artifacts, is_media_artifact_kind
 from .operation_report_policy import (
     OPERATION_VALIDATION_OR_RISK_MISSING_REASON,
     execution_confuses_command_version_with_repo_state,
@@ -27,7 +27,7 @@ from .operation_report_policy import (
     is_operations_task_type,
 )
 from .resource_index import ResourceIndex
-from .task_artifact_policy import TASK_ARTIFACTS_NOT_PRODUCED_REASON
+from .task_artifact import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from .task_contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,

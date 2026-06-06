@@ -5,27 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .auto_continue_prompt_policy import (
-    existing_web_source_section,
-    internal_only_response_follow_up_instruction,
-    insufficient_source_detail_follow_up_instruction,
-    missing_source_citation_follow_up_instruction,
-    missing_tool_evidence_follow_up_instruction,
-    source_traceability_follow_up_instruction,
-    terse_final_answer_follow_up_instruction,
-    web_research_coverage_gap_follow_up_instruction,
-)
-from .auto_continue_reason_policy import (
-    COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON,
-    COMPLETION_GATE_TERMINAL_STATUS_REASON,
-    MAX_AUTO_CONTINUES_REACHED_REASON,
-    MAX_DETERMINISTIC_ACTIONS_REACHED_REASON,
-    NO_PROGRESS_DURING_CONTINUATION_REASON,
-    NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
-    TOOL_ERROR_REQUIRES_BLOCKER_OR_USER_HANDOFF_REASON,
-    completion_gate_continue_reason,
-    review_follow_up_skip_reason,
-)
 from .command_version_policy import command_version_follow_up_instruction
 from .completion_gate import CompletionGateResult
 from .completion_status import (
@@ -45,7 +24,7 @@ from .harness_profile import (
     is_ops_profile_name,
     is_research_profile_name,
 )
-from .media_artifact_policy import media_artifact_gap_follow_up_instruction
+from .media import media_artifact_gap_follow_up_instruction
 from .quality_gate import (
     contract_requests_quality_check,
     media_artifact_gap_detail,
@@ -68,6 +47,20 @@ from .web_source_policy import is_web_source_artifact_kind
 from .work_progress import WorkProgressUpdate
 
 
+NO_TOOL_EXISTING_SOURCE_FINAL_ANSWER_INSTRUCTION = (
+    "\nDo not reply with another progress-only promise or tool-use plan. "
+    "Write the final answer now from these gathered sources."
+)
+COMPLETION_GATE_TERMINAL_STATUS_REASON = "completion_gate_terminal_status"
+COMPLETION_GATE_STATUS_NOT_CONTINUABLE_REASON = "completion_gate_status_not_continuable"
+MAX_DETERMINISTIC_ACTIONS_REACHED_REASON = "max_deterministic_actions_reached"
+NO_PROGRESS_DURING_CONTINUATION_REASON = "no_progress_during_continuation"
+MAX_AUTO_CONTINUES_REACHED_REASON = "max_auto_continues_reached"
+TOOL_ERROR_REQUIRES_BLOCKER_OR_USER_HANDOFF_REASON = "tool_error_requires_blocker_or_user_handoff"
+NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON = "no_tool_progress_after_incomplete_response"
+REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON = "review_findings_require_follow_up"
+REVIEW_EVIDENCE_STILL_MISSING_REASON = "review_evidence_still_missing"
+COMPLETION_GATE_CONTINUE_REASON_PREFIX = "completion_gate"
 AUTO_CONTINUE_SCHEMA_VERSION_FIELD = "schema_version"
 AUTO_CONTINUE_REASON_FIELD = "reason"
 AUTO_CONTINUE_ATTEMPT_FIELD = "attempt"
@@ -81,6 +74,92 @@ AUTO_CONTINUE_DIRECT_VERIFY_PATH_FIELD = "direct_verify_path"
 AUTO_CONTINUE_DIRECT_VERIFY_PYTEST_ARGS_FIELD = "direct_verify_pytest_args"
 AUTO_CONTINUE_HARNESS_PROFILE_FIELD = "harness_profile"
 AUTO_CONTINUE_ALLOW_TOOLS_FIELD = "allow_tools"
+
+
+def existing_web_source_section(source_context: str, *, allow_tools: bool) -> str:
+    source_context = source_context.strip()
+    if not source_context:
+        return ""
+    no_tool_instruction = "" if allow_tools else NO_TOOL_EXISTING_SOURCE_FINAL_ANSWER_INSTRUCTION
+    return (
+        "\n\nExisting gathered web sources from the previous pass:\n"
+        f"{source_context}\n"
+        "Use these sources for the final answer instead of repeating web research unless they are clearly insufficient."
+        f"{no_tool_instruction}"
+    )
+
+
+def terse_final_answer_follow_up_instruction() -> str:
+    return (
+        "\n- Quality follow-up: the previous final answer was too terse. "
+        "Do not reply with only a short acknowledgement, completion marker, or plan. "
+        "Use the available tool/artifact results to write a substantive final answer that covers each requested resource and deliverable."
+    )
+
+
+def missing_tool_evidence_follow_up_instruction() -> str:
+    return (
+        "\n- Evidence follow-up: required tool evidence is missing. "
+        "Call the appropriate tools for the requested resources or external information before giving the final answer."
+    )
+
+
+def source_traceability_follow_up_instruction(traceability_gap: str) -> str:
+    return (
+        "\n- Source follow-up: the previous pass produced a source artifact without traceable source metadata. "
+        "Use `web_research`, `web_search`, or `web_fetch` again so the result includes at least one source with a URL plus title or snippet. "
+        "Do not finalize from an untraceable source artifact.\n"
+        f"{traceability_gap}"
+    )
+
+
+def web_research_coverage_gap_follow_up_instruction(coverage_gap: str) -> str:
+    return (
+        "\n- Source follow-up: `web_research` reported coverage gaps. "
+        "Retry `web_research` with focused `queries` for the missing angles, prefer alternate URLs/domains for too-short or blocked pages, "
+        "and do not finalize until the coverage target is met or a concrete fetch blocker is stated.\n"
+        f"{coverage_gap}"
+    )
+
+
+def insufficient_source_detail_follow_up_instruction() -> str:
+    return (
+        "\n- Source follow-up: the previous pass did not inspect enough source material. "
+        "Use `web_research` or `web_fetch` on promising search results, fetch at least one substantial page from a reliable source, "
+        "and switch to another URL or browser tools if a page extracts too little content. Do not finalize from search snippets alone."
+    )
+
+
+def missing_source_citation_follow_up_instruction() -> str:
+    return (
+        "\n- Source follow-up: gathered sources are available, but the previous final answer did not cite them. "
+        "Do not rerun tools unless the sources are insufficient. Write the final answer using the gathered results and reference at least one source by URL, domain, or title."
+    )
+
+
+def internal_only_response_follow_up_instruction(*, allow_tools: bool) -> str:
+    instruction = (
+        "\n- The previous response only contained internal control text and no user-visible work. "
+        "Do not repeat internal tags such as <system-reminder> or <think>. "
+        "Continue the user's task by calling tools when needed, or provide a clear blocker if you cannot proceed."
+    )
+    if not allow_tools:
+        instruction += (
+            "\n- Do not call tools again in this continuation. The runtime already gathered traceable sources; "
+            "answer directly using those sources."
+        )
+    return instruction
+
+
+def review_follow_up_skip_reason(*, review_attempted: bool) -> str:
+    """Return the stable skip reason for a review completion gate."""
+    return REVIEW_FINDINGS_REQUIRE_FOLLOW_UP_REASON if review_attempted else REVIEW_EVIDENCE_STILL_MISSING_REASON
+
+
+def completion_gate_continue_reason(status: str) -> str:
+    """Return the stable continuation reason for a completion gate status."""
+    normalized = str(status or "").strip() or "unknown"
+    return f"{COMPLETION_GATE_CONTINUE_REASON_PREFIX}_{normalized}"
 
 
 @dataclass(frozen=True)

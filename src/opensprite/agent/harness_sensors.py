@@ -30,7 +30,7 @@ from .harness_scorecard import (
     HARNESS_SENSOR_WARN_STATUS,
     HarnessSensorResult,
 )
-from .media_artifact_policy import count_media_artifacts
+from .media import count_media_artifacts
 from .web_source_policy import is_web_source_artifact_kind, is_web_source_evidence_tool
 
 if TYPE_CHECKING:

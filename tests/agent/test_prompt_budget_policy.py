@@ -1,4 +1,4 @@
-from opensprite.agent.prompt_budget_policy import (
+from opensprite.agent.prompt_budget import (
     PROMPT_TRIM_BASE_EXCEEDS_BUDGET_REASON,
     PROMPT_TRIM_FIRST_MESSAGE_EXCEEDS_BUDGET_REASON,
     prompt_trim_base_exceeds_budget_reason,

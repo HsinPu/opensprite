@@ -1,4 +1,4 @@
-from opensprite.agent.auto_continue_prompt_policy import (
+from opensprite.agent.auto_continue import (
     existing_web_source_section,
     internal_only_response_follow_up_instruction,
     insufficient_source_detail_follow_up_instruction,

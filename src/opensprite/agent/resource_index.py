@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .media_history_policy import MEDIA_ONLY_HISTORY_MARKER
+from .media import MEDIA_ONLY_HISTORY_MARKER
 
 
 _MEDIA_HISTORY_RE = re.compile(r"^(Images|Audios|Videos):\s*(?P<paths>.+)$", re.IGNORECASE | re.MULTILINE)

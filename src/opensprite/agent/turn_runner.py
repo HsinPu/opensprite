@@ -74,11 +74,6 @@ from .task_intent import TaskIntent, TaskIntentService
 from .task_context_resolver import TaskContextDecision, TaskContextResolver
 from .turn_context import TurnContextService
 from .turn_input import PreparedTurnInput
-from .turn_runner_policy import (
-    LLM_NOT_CONFIGURED_LOG_REASON,
-    LLM_NOT_CONFIGURED_TURN_REASON,
-    MEDIA_ONLY_TURN_REASON,
-)
 from .turn_quick_actions import (
     metadata_is_cli_via_web,
     metadata_requests_direct_verification,
@@ -104,6 +99,9 @@ TURN_METADATA_TASK_ARTIFACTS_FIELD = "task_artifacts"
 TURN_METADATA_DELEGATED_TASKS_FIELD = "delegated_tasks"
 TURN_METADATA_ACTIVE_DELEGATE_TASK_ID_FIELD = "active_delegate_task_id"
 TURN_METADATA_ACTIVE_DELEGATE_PROMPT_TYPE_FIELD = "active_delegate_prompt_type"
+MEDIA_ONLY_TURN_REASON = "media_only"
+LLM_NOT_CONFIGURED_TURN_REASON = "llm_not_configured"
+LLM_NOT_CONFIGURED_LOG_REASON = "llm-not-configured"
 
 
 @dataclass(frozen=True)

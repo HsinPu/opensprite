@@ -21,6 +21,7 @@ from .web_source_policy import (
 from .verification_policy import VERIFICATION_RESULT_ARTIFACT_KIND, VERIFICATION_TOOL_NAME
 
 
+TASK_ARTIFACTS_NOT_PRODUCED_REASON = "required task artifacts were not produced"
 _TOOL_ARTIFACT_KINDS: dict[str, str] = {
     OCR_IMAGE_TOOL_NAME: "image_text",
     ANALYZE_IMAGE_TOOL_NAME: "image_analysis",

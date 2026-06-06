@@ -10,7 +10,8 @@ from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, READ_SKILL_TOOL_NAME, SKILL_
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
 from ..utils.log import logger
-from .skill_review_policy import SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON
+
+SKILL_REVIEW_TRANSCRIPT_TOO_SHORT_REASON = "transcript-too-short"
 
 SKILL_REVIEW_SYSTEM = f"""You are OpenSprite's background skill curator. The main assistant already replied to the user; your work is invisible to them.
 

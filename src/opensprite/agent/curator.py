@@ -21,7 +21,6 @@ from ..runs.events import (
 )
 from ..utils.log import logger
 from .background_tasks import CoalescingTaskScheduler
-from .curator_policy import CURATOR_NO_RUNNING_EVENT_LOOP_REASON
 from .execution import ExecutionResult
 
 
@@ -34,6 +33,7 @@ CURATOR_STATE_SCHEMA_VERSION = 1
 CURATOR_HISTORY_LIMIT = 20
 CURATOR_MAINTENANCE_JOB_KEYS = ("memory", "recent_summary", "user_profile", "active_task")
 CURATOR_SCOPE_CHOICES = ("maintenance", "skills", *CURATOR_MAINTENANCE_JOB_KEYS)
+CURATOR_NO_RUNNING_EVENT_LOOP_REASON = "no-running-event-loop"
 
 
 def _ordered_maintenance_job_keys(job_keys: tuple[str, ...] | list[str] | set[str]) -> tuple[str, ...]:

@@ -7,14 +7,16 @@ import binascii
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Protocol
 
 from ..context.paths import get_session_workspace
 from ..tools.result_status import tool_error_result
 from ..utils.log import logger
-from .media_history_policy import MEDIA_ONLY_HISTORY_MARKER
-from .media_inbound_policy import INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON
 
+
+MEDIA_ARTIFACT_KINDS = frozenset({"image_text", "image_analysis", "audio_transcript", "video_analysis"})
+MEDIA_ONLY_HISTORY_MARKER = "[Media-only message saved to workspace]"
+INBOUND_MEDIA_UNSUPPORTED_PAYLOAD_REASON = "unsupported-payload"
 
 OUTBOUND_MEDIA_KEYS = {
     "image": "images",
@@ -22,6 +24,28 @@ OUTBOUND_MEDIA_KEYS = {
     "audio": "audios",
     "video": "videos",
 }
+
+
+class MediaArtifactLike(Protocol):
+    kind: str
+    ok: bool
+
+
+def is_media_artifact_kind(kind: str | None) -> bool:
+    return str(kind or "").strip() in MEDIA_ARTIFACT_KINDS
+
+
+def count_media_artifacts(artifacts: Iterable[MediaArtifactLike]) -> int:
+    return sum(1 for artifact in artifacts if artifact.ok and is_media_artifact_kind(artifact.kind))
+
+
+def media_artifact_gap_follow_up_instruction(media_gap: str) -> str:
+    return (
+        "\n- Quality follow-up: the previous pass did not produce typed artifacts for every required resource. "
+        "Use the relevant media/source tools for each missing resource before finalizing. "
+        "Do not claim completion until each required resource has a concrete tool-derived result.\n"
+        f"{media_gap}"
+    )
 
 
 def outbound_media_error_result(
