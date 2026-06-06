@@ -56,7 +56,7 @@ from .subagent_profiles import (
     parse_subagent_result_line,
 )
 from .tool_access import ToolLoopGuardrail, append_toolguard_guidance, build_toolguard_synthetic_result
-from .workflows import WORKFLOW_COMPLETED_STATUS
+from .subagents import WORKFLOW_COMPLETED_STATUS
 
 
 LLM_STEP_COMPLETED_STATUS = "completed"

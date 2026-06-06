@@ -1,4 +1,4 @@
-from opensprite.agent.workflows import (
+from opensprite.agent.subagents import (
     WORKFLOW_NEXT_STEP_ID_FIELD,
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,

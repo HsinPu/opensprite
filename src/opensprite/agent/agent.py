@@ -121,8 +121,8 @@ from .tool_registration import (
 )
 from .turn_runner import AgentResponseFinalizer, AgentTurnRunner, TurnContextService, TurnInputPreparer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
-from .workflows import is_workflow_failed_status
-from .workflows import SubagentWorkflowService
+from .subagents import is_workflow_failed_status
+from .subagents import SubagentWorkflowService
 from .work_progress import ActiveTaskCommandService, WorkProgressService, WorkProgressUpdate
 
 

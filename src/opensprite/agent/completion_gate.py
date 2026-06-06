@@ -80,7 +80,7 @@ from ..tools.evidence import (
     is_verification_tool_name,
     required_verification_completion_reason,
 )
-from .workflows import (
+from .subagents import (
     BUGFIX_THEN_TEST_THEN_REVIEW_WORKFLOW_ID,
     IMPLEMENT_THEN_REVIEW_WORKFLOW_ID,
     RESEARCH_THEN_OUTLINE_WORKFLOW_ID,

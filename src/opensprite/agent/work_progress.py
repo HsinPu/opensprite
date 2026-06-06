@@ -79,7 +79,7 @@ from .task_resolver import (
     is_current_task_replacement_type,
     intent_supports_default_work_plan,
 )
-from .workflows import is_workflow_failed_status
+from .subagents import is_workflow_failed_status
 
 
 NEXT_ACTION_FINALIZE = "finalize"

@@ -95,7 +95,7 @@ from ..tools.evidence import (
     is_web_research_tool_group,
     is_web_source_artifact_kind,
 )
-from .workflows import is_workflow_failed_status
+from .subagents import is_workflow_failed_status
 from .work_progress import WorkPlan, WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 
 
