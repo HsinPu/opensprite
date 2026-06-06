@@ -21,12 +21,14 @@ from opensprite.agent.task_contract import (
     _compact,
     _contract_from_task_planner_payload,
     _coerce_bool,
+    _coerce_confidence,
     _ensure_task_type_tool_groups,
     _normalize_planner_quality_checks,
     _normalize_planner_tool_groups,
     _parse_json_object,
     _resolver_compact,
     _resolver_coerce_bool,
+    _resolver_coerce_confidence,
     _resolver_parse_json_object,
     _resolver_truncate,
     _resolver_truncate_middle,
@@ -170,6 +172,13 @@ def test_policy_bool_helpers_keep_context_specific_truthy_values():
     assert _resolver_coerce_bool(" yes ") is True
     assert _resolver_coerce_bool(" 是 ") is False
     assert _coerce_bool(" 是 ") is True
+
+
+def test_policy_confidence_helpers_share_bounds():
+    assert _resolver_coerce_confidence("0.75") == _coerce_confidence("0.75") == 0.75
+    assert _resolver_coerce_confidence("1.5") == _coerce_confidence("1.5") == 1.0
+    assert _resolver_coerce_confidence("-0.2") == _coerce_confidence("-0.2") == 0.0
+    assert _resolver_coerce_confidence("not-a-number") == _coerce_confidence("not-a-number") == 0.0
 
 
 def test_text_helpers_share_compact_and_truncate_policy():

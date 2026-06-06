@@ -260,6 +260,14 @@ def _coerce_policy_bool(
     return _policy_value(value).lower() in truthy_values
 
 
+def _coerce_policy_confidence(value: object) -> float:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, confidence))
+
+
 def intent_supports_fallback_active_task_update(task_intent: Any, task_contract: Any) -> bool:
     if getattr(task_intent, "needs_clarification", False):
         return False
@@ -1210,11 +1218,7 @@ def _resolver_coerce_bool(value: Any) -> bool:
 
 
 def _resolver_coerce_confidence(value: Any) -> float:
-    try:
-        confidence = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return min(1.0, max(0.0, confidence))
+    return _coerce_policy_confidence(value)
 
 
 def _resolver_compact(value: str | None) -> str:
@@ -2623,8 +2627,4 @@ def _coerce_bool(value: Any) -> bool:
 
 
 def _coerce_confidence(value: Any) -> float:
-    try:
-        confidence = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, confidence))
+    return _coerce_policy_confidence(value)
