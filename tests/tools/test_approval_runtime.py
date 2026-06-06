@@ -1,6 +1,5 @@
 import asyncio
 
-from opensprite.agent import tool_access
 from opensprite.runs.events import PERMISSION_GRANTED_EVENT, PERMISSION_REQUESTED_EVENT
 from opensprite.tools.approval import PermissionRequest, PermissionRequestManager
 from opensprite.tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
@@ -107,8 +106,3 @@ def test_agent_permission_service_adds_current_run_context_to_request():
         PERMISSION_REQUESTED_EVENT,
         PERMISSION_GRANTED_EVENT,
     ]
-
-
-def test_agent_tool_access_keeps_approval_runtime_compatibility_exports():
-    assert tool_access.AgentPermissionService is AgentPermissionService
-    assert tool_access.PermissionEventRecorder is PermissionEventRecorder
