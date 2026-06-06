@@ -11,23 +11,18 @@ from opensprite.agent.completion_gate import (
     _completion_status_for_unsuccessful_workflow,
     _intent_supports_fallback_active_task_update,
     _is_blocking_planner_status,
-    _is_clean_structured_review_status,
-    _is_completed_delegated_review_status,
-    _is_cancelled_workflow_status,
-    _is_failed_workflow_status,
     _is_python_file_path,
     _is_python_test_path,
     _is_web_app_path,
-    _is_research_then_outline_workflow,
     _is_verification_requirement_kind,
     _is_verification_tool_group,
     _is_review_workflow,
-    _is_unsuccessful_workflow_status,
     _is_workflow_completion_intent_kind,
     _workflow_fix_follow_up_fields,
-    _workflow_gate_is_complete,
-    _workflow_gate_needs_verification,
+    is_complete_completion_status,
     is_history_retrieval_failure_tool,
+    is_research_then_outline_workflow,
+    needs_verification_completion_status,
     is_optional_web_discovery_failure_tool,
     is_optional_web_fetch_failure_tool,
     is_optional_workspace_batch_failure_tool,
@@ -59,7 +54,15 @@ from opensprite.tools.evidence import (
     is_web_source_evidence_tool,
 )
 from opensprite.agent.completion_gate import AutoContinueService
-from opensprite.agent.execution import ExecutionResult, is_max_tool_iterations_stop_reason
+from opensprite.agent.execution import (
+    ExecutionResult,
+    is_clean_structured_subagent_status,
+    is_max_tool_iterations_stop_reason,
+    is_workflow_cancelled_status,
+    is_workflow_completed_status,
+    is_workflow_failed_status,
+    is_workflow_unsuccessful_status,
+)
 from opensprite.context.message_history import HISTORY_RECALLED_ITEMS_INSUFFICIENT_REASON
 from opensprite.agent.completion_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.completion_gate import QualityGateService
@@ -281,8 +284,8 @@ def test_completion_gate_status_helpers_normalize_policy_values():
     assert _is_blocking_planner_status("ready") is False
     assert is_max_tool_iterations_stop_reason("max_tool_iterations") is True
     assert is_max_tool_iterations_stop_reason("stop") is False
-    assert _is_unsuccessful_workflow_status("CANCELLED") is True
-    assert _is_unsuccessful_workflow_status("complete") is False
+    assert is_workflow_unsuccessful_status("CANCELLED") is True
+    assert is_workflow_unsuccessful_status("complete") is False
 
 
 def test_completion_gate_task_type_policy_helpers_are_centralized():
@@ -320,22 +323,22 @@ def test_completion_gate_task_type_policy_helpers_are_centralized():
 def test_completion_gate_workflow_policy_helpers_are_centralized():
     assert _is_review_workflow("implement_then_review") is True
     assert _is_review_workflow("research_then_outline") is False
-    assert _is_research_then_outline_workflow("research_then_outline") is True
-    assert _is_research_then_outline_workflow("implement_then_review") is False
-    assert _is_failed_workflow_status("failed") is True
-    assert _is_failed_workflow_status("cancelled") is False
-    assert _is_cancelled_workflow_status("cancelled") is True
-    assert _is_cancelled_workflow_status("failed") is False
+    assert is_research_then_outline_workflow("research_then_outline") is True
+    assert is_research_then_outline_workflow("implement_then_review") is False
+    assert is_workflow_failed_status("failed") is True
+    assert is_workflow_failed_status("cancelled") is False
+    assert is_workflow_cancelled_status("cancelled") is True
+    assert is_workflow_cancelled_status("failed") is False
     assert _completion_status_for_unsuccessful_workflow("failed") == "blocked"
     assert _completion_status_for_unsuccessful_workflow("cancelled") == "incomplete"
-    assert _workflow_gate_is_complete({"status": "complete"}) is True
-    assert _workflow_gate_is_complete({"status": "needs_review"}) is False
-    assert _workflow_gate_needs_verification({"status": "needs_verification"}) is True
-    assert _workflow_gate_needs_verification({"status": "complete"}) is False
-    assert _is_completed_delegated_review_status("completed") is True
-    assert _is_completed_delegated_review_status("failed") is False
-    assert _is_clean_structured_review_status("ok") is True
-    assert _is_clean_structured_review_status("error") is False
+    assert is_complete_completion_status("complete") is True
+    assert is_complete_completion_status("needs_review") is False
+    assert needs_verification_completion_status("needs_verification") is True
+    assert needs_verification_completion_status("complete") is False
+    assert is_workflow_completed_status("completed") is True
+    assert is_workflow_completed_status("failed") is False
+    assert is_clean_structured_subagent_status("ok") is True
+    assert is_clean_structured_subagent_status("error") is False
     assert _workflow_fix_follow_up_fields("bugfix_then_test_then_review") == {
         "next_step_id": "bugfix",
         "next_step_label": "Bug fix",

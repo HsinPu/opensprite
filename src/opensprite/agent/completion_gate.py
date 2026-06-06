@@ -1193,6 +1193,9 @@ class CompletionGateService:
                 )
 
         if workflow_gate is not None:
+            workflow_gate_status = workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD)
+            workflow_gate_complete = is_complete_completion_status(workflow_gate_status)
+            workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
             workflow_verification_attempted = bool(workflow_gate.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD, verification_attempted))
             workflow_verification_passed = bool(workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed))
             workflow_review_attempted = bool(workflow_gate.get(WORKFLOW_REVIEW_ATTEMPTED_FIELD, review[REVIEW_EVIDENCE_ATTEMPTED_FIELD]))
@@ -1202,25 +1205,23 @@ class CompletionGateService:
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
                 reason=workflow_gate[COMPLETION_RESULT_REASON_FIELD],
-                active_task_status=DONE_ACTIVE_TASK_STATUS if _workflow_gate_is_complete(workflow_gate) else None,
+                active_task_status=DONE_ACTIVE_TASK_STATUS if workflow_gate_complete else None,
                 active_task_detail=workflow_gate.get("detail") or None,
                 follow_up_workflow=_string_or_none(workflow_gate.get(WORKFLOW_ID_FIELD)),
                 follow_up_step_id=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_ID_FIELD)),
                 follow_up_step_label=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_LABEL_FIELD)),
                 follow_up_prompt_type=_string_or_none(workflow_gate.get(WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD)),
-                should_update_active_task=_workflow_gate_is_complete(workflow_gate)
+                should_update_active_task=workflow_gate_complete
                 and _intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
                 verification_attempted=workflow_verification_attempted,
                 verification_passed=workflow_verification_passed,
                 verification_action=verification_follow_up["action"]
-                if _workflow_gate_needs_verification(workflow_gate)
+                if workflow_gate_needs_verification
                 else None,
-                verification_path=verification_follow_up["path"]
-                if _workflow_gate_needs_verification(workflow_gate)
-                else None,
+                verification_path=verification_follow_up["path"] if workflow_gate_needs_verification else None,
                 verification_pytest_args=verification_follow_up["pytest_args"]
-                if _workflow_gate_needs_verification(workflow_gate)
+                if workflow_gate_needs_verification
                 else (),
                 review_required=review_required,
                 review_attempted=workflow_review_attempted,
@@ -1824,7 +1825,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
         if prompt_type not in _REVIEW_PROMPT_TYPES:
             continue
         prompt_types.append(prompt_type)
-        if not _is_completed_delegated_review_status(task.status):
+        if not is_workflow_completed_status(task.status):
             continue
         attempted = True
         structured = task.metadata.get("structured_output") if isinstance(task.metadata, dict) else None
@@ -1836,7 +1837,7 @@ def _review_evidence(delegated_tasks: tuple[StoredDelegatedTask, ...]) -> dict[s
             summary = task_summary
         if not first_finding:
             first_finding = first_structured_review_finding(structured)
-        if _is_clean_structured_review_status(structured_status) and task_findings == 0:
+        if is_clean_structured_subagent_status(structured_status) and task_findings == 0:
             clean_review_recorded = True
             continue
         problematic_review_recorded = True
@@ -1897,7 +1898,7 @@ def _workflow_gate_outcome(
         ),
     }
 
-    if _is_unsuccessful_workflow_status(workflow_status):
+    if is_workflow_unsuccessful_status(workflow_status):
         detail = _workflow_follow_up_detail(workflow_id, workflow_status, workflow)
         return {
             **metadata,
@@ -1906,7 +1907,7 @@ def _workflow_gate_outcome(
             "detail": detail,
         }
 
-    if _is_research_then_outline_workflow(workflow_id):
+    if is_research_then_outline_workflow(workflow_id):
         return {
             **metadata,
             COMPLETION_RESULT_STATUS_FIELD: COMPLETE_COMPLETION_STATUS,
@@ -1965,46 +1966,14 @@ def _workflow_gate_outcome(
     return None
 
 
-def _is_unsuccessful_workflow_status(status: str | None) -> bool:
-    return is_workflow_unsuccessful_status(status)
-
-
 def _is_workflow_completion_intent_kind(kind: str | None) -> bool:
     return str(kind or "").strip() in _WORKFLOW_COMPLETION_INTENT_KINDS
 
 
 def _completion_status_for_unsuccessful_workflow(workflow_status: str | None) -> str:
-    if _is_failed_workflow_status(workflow_status):
+    if is_workflow_failed_status(workflow_status):
         return BLOCKED_COMPLETION_STATUS
     return INCOMPLETE_COMPLETION_STATUS
-
-
-def _is_failed_workflow_status(status: str | None) -> bool:
-    return is_workflow_failed_status(status)
-
-
-def _is_cancelled_workflow_status(status: str | None) -> bool:
-    return is_workflow_cancelled_status(status)
-
-
-def _is_research_then_outline_workflow(workflow_id: str | None) -> bool:
-    return is_research_then_outline_workflow(workflow_id)
-
-
-def _workflow_gate_is_complete(workflow_gate: dict[str, Any]) -> bool:
-    return is_complete_completion_status(workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD))
-
-
-def _workflow_gate_needs_verification(workflow_gate: dict[str, Any]) -> bool:
-    return needs_verification_completion_status(workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD))
-
-
-def _is_completed_delegated_review_status(status: str | None) -> bool:
-    return is_workflow_completed_status(status)
-
-
-def _is_clean_structured_review_status(status: str | None) -> bool:
-    return is_clean_structured_subagent_status(status)
 
 
 def _review_follow_up_detail(review: dict[str, Any]) -> str | None:
@@ -2018,7 +1987,7 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
     step_label = str(workflow.get(WORKFLOW_NEXT_STEP_LABEL_FIELD) or workflow.get(WORKFLOW_NEXT_STEP_ID_FIELD) or "").strip()
     error = str(workflow.get(WORKFLOW_ERROR_FIELD) or "").strip()
     summary = str(workflow.get(WORKFLOW_SUMMARY_FIELD) or "").strip()
-    if _is_cancelled_workflow_status(workflow_status):
+    if is_workflow_cancelled_status(workflow_status):
         if step_label and summary:
             return f"Resume with the {step_label} step in {workflow_id}. {summary}"
         if step_label:
