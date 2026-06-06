@@ -17,9 +17,11 @@ from opensprite.agent.task_contract import (
     WORKSPACE_LOCATION_CRITERION_KIND,
     _build_task_planner_prompt,
     _contract_from_task_planner_payload,
+    _coerce_bool,
     _ensure_task_type_tool_groups,
     _normalize_planner_quality_checks,
     _normalize_planner_tool_groups,
+    _resolver_coerce_bool,
     build_planner_capability_catalog,
     contract_expects_file_change,
     contract_requests_itemized_output,
@@ -152,6 +154,12 @@ def test_planner_payload_task_type_is_allowed_after_trim():
 
     assert contract.task_type == "pure_answer"
     assert contract.planner_metadata["raw_task_type"] == "pure_answer"
+
+
+def test_policy_bool_helpers_keep_context_specific_truthy_values():
+    assert _resolver_coerce_bool(" yes ") is True
+    assert _resolver_coerce_bool(" 是 ") is False
+    assert _coerce_bool(" 是 ") is True
 
 
 def test_planner_prompt_preserves_tail_of_long_current_message():

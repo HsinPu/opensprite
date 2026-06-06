@@ -219,9 +219,25 @@ def _policy_value(value: object) -> str:
     return str(value or "").strip()
 
 
+_DEFAULT_TRUE_VALUES = frozenset({"1", "true", "yes", "y"})
+_PLANNER_TRUE_VALUES = _DEFAULT_TRUE_VALUES | frozenset({"是"})
+
+
 def _allowed_policy_value(value: object, allowed: frozenset[str]) -> str | None:
     normalized = _policy_value(value)
     return normalized if normalized in allowed else None
+
+
+def _coerce_policy_bool(
+    value: object,
+    *,
+    truthy_values: frozenset[str] = _DEFAULT_TRUE_VALUES,
+) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return _policy_value(value).lower() in truthy_values
 
 
 def intent_supports_fallback_active_task_update(task_intent: Any, task_contract: Any) -> bool:
@@ -1176,11 +1192,7 @@ def _is_useful_objective(resolved_objective: str, original_message: str) -> bool
 
 
 def _resolver_coerce_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
+    return _coerce_policy_bool(value)
 
 
 def _resolver_coerce_confidence(value: Any) -> float:
@@ -2612,11 +2624,7 @@ def _allowed_string(value: Any, allowed: frozenset[str]) -> str | None:
 
 
 def _coerce_bool(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        return bool(value)
-    return str(value or "").strip().lower() in {"1", "true", "yes", "y", "是"}
+    return _coerce_policy_bool(value, truthy_values=_PLANNER_TRUE_VALUES)
 
 
 def _coerce_confidence(value: Any) -> float:
