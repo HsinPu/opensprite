@@ -28,7 +28,7 @@ from .harness_profile import (
     WORKSPACE_READ_TASK_TYPE,
     WORKSPACE_READ_TOOL_GROUP,
 )
-from .planner_capabilities import PlannerCapabilityCatalog, build_planner_capability_catalog
+from .planning import PlannerCapabilityCatalog, build_planner_capability_catalog
 from .resource_index import ResourceIndex, ResourceRef
 from .task_resolver import TaskContextDecision, TaskContextResolver
 from .task_intent import PLANNING_ERROR_TASK_TYPE, TaskIntent

@@ -31,7 +31,7 @@ from opensprite.agent.task_contract import (
     is_workspace_location_criterion,
     missing_evidence,
 )
-from opensprite.agent.planner_capabilities import build_planner_capability_catalog
+from opensprite.agent.planning import build_planner_capability_catalog
 from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.registry import ToolRegistry
