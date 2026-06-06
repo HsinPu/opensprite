@@ -239,6 +239,10 @@ def _web_source_text(source: dict[str, Any], key: str) -> str:
     return str(source.get(key) or "")
 
 
+def _web_source_body_text(source: dict[str, Any]) -> str:
+    return _web_source_text(source, "snippet") or _web_source_text(source, "content")
+
+
 def _objective_keywords(objective: str) -> set[str]:
     text = str(objective or "").lower()
     keywords: set[str] = set()
@@ -2274,7 +2278,7 @@ def _web_sources_matching_evidence_urls(
             url = _web_source_url(raw_source)
             if not url or url in seen_urls:
                 continue
-            haystack = str(raw_source.get("snippet") or raw_source.get("content") or "")
+            haystack = _web_source_body_text(raw_source)
             if any(evidence_url in haystack for evidence_url in evidence_urls):
                 seen_urls.add(url)
                 sources.append(raw_source)
@@ -2315,7 +2319,7 @@ def _objective_requests_base_url(objective: str) -> bool:
 def _source_base_url_candidates(sources: list[dict[str, Any]]) -> list[str]:
     candidates: list[str] = []
     for source in sources:
-        text = str(source.get("snippet") or source.get("content") or "")
+        text = _web_source_body_text(source)
         for match in re.finditer(r"https?://\S+", text):
             start = max(0, match.start() - 100)
             end = min(len(text), match.end() + 100)

@@ -124,6 +124,44 @@ def test_source_finalization_available_for_traceable_web_sources():
     )
 
 
+def test_source_finalization_uses_content_when_snippet_is_blank_for_evidence_urls():
+    result = ExecutionResult(
+        content="Let me keep checking that.",
+        task_contract=TaskContract(
+            objective="Find 2026 AI agent tools market trends and cite sources.",
+            task_type="web_research",
+        ),
+        task_artifacts=(
+            TaskArtifact(
+                kind="web_source",
+                source_tool="web_research",
+                metadata={
+                    "sources": [
+                        {
+                            "tool_name": "web_fetch",
+                            "url": "https://example.com/agent-trends",
+                            "title": "AI Agent Trends",
+                            "snippet": "",
+                            "content": "Evidence page: https://example.com/evidence.",
+                            "content_chars": 20,
+                            "has_main_content": False,
+                            "is_too_short": True,
+                        }
+                    ]
+                },
+            ),
+        ),
+    )
+
+    assert _source_finalization_available(
+        CompletionGateResult(
+            status="incomplete",
+            reason="Need cite https://example.com/evidence.",
+        ),
+        result,
+    )
+
+
 def test_source_finalization_not_available_without_traceable_sources():
     result = ExecutionResult(
         content="Let me keep checking that.",
