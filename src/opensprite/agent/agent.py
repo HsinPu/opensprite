@@ -87,8 +87,15 @@ from .active_task_status import is_current_active_task_status
 from .auto_continue import AutoContinueService
 from .background import BackgroundSessionNotificationService
 from .completion_gate import CompletionBlockerMessages, CompletionGateResult, CompletionGateService
-from .consolidation import MemoryConsolidationService, RecentSummaryUpdateService, UserProfileUpdateService, ActiveTaskUpdateService
-from .curator import CuratorService, SkillReviewService, fingerprint_text_directory
+from .curator import (
+    ActiveTaskUpdateService,
+    CuratorService,
+    MemoryConsolidationService,
+    RecentSummaryUpdateService,
+    SkillReviewService,
+    UserProfileUpdateService,
+    fingerprint_text_directory,
+)
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
 from .harness_policy import HarnessPolicyService

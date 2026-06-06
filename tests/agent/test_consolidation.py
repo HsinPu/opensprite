@@ -1,7 +1,7 @@
 import asyncio
 
-from opensprite.agent import consolidation as consolidation_module
-from opensprite.agent.consolidation import MemoryConsolidationService
+import opensprite.agent.curator as curator_module
+from opensprite.agent.curator import MemoryConsolidationService
 from opensprite.config.schema import Config, DocumentLlmConfig
 from opensprite.storage.base import StoredMessage
 
@@ -39,7 +39,7 @@ def test_memory_consolidation_skips_when_threshold_not_reached(monkeypatch):
         called = True
         return True
 
-    monkeypatch.setattr(consolidation_module, "consolidate", fake_consolidate)
+    monkeypatch.setattr(curator_module, "consolidate", fake_consolidate)
 
     storage = FakeStorage(
         [
@@ -70,7 +70,7 @@ def test_memory_consolidation_updates_index_after_success(monkeypatch):
         captured.update(kwargs)
         return True
 
-    monkeypatch.setattr(consolidation_module, "consolidate", fake_consolidate)
+    monkeypatch.setattr(curator_module, "consolidate", fake_consolidate)
 
     storage = FakeStorage(
         [
@@ -107,8 +107,8 @@ def test_memory_consolidation_triggers_when_token_threshold_reached(monkeypatch)
         captured.update(kwargs)
         return True
 
-    monkeypatch.setattr(consolidation_module, "consolidate", fake_consolidate)
-    monkeypatch.setattr(consolidation_module, "count_messages_tokens", lambda messages, model=None, encoding_name=None: 250)
+    monkeypatch.setattr(curator_module, "consolidate", fake_consolidate)
+    monkeypatch.setattr(curator_module, "count_messages_tokens", lambda messages, model=None, encoding_name=None: 250)
 
     storage = FakeStorage(
         [
@@ -139,7 +139,7 @@ def test_memory_consolidation_uses_full_history_for_processed_index(monkeypatch)
         captured.update(kwargs)
         return True
 
-    monkeypatch.setattr(consolidation_module, "consolidate", fake_consolidate)
+    monkeypatch.setattr(curator_module, "consolidate", fake_consolidate)
 
     messages = [StoredMessage(role="user", content=f"m{i}", timestamp=float(i)) for i in range(1005)]
     storage = FakeStorage(messages, consolidated_index=1000)

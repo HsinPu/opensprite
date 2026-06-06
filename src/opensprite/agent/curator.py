@@ -11,7 +11,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Sequence
 
+from ..config.schema import DocumentLlmConfig
+from ..documents.active_task import ActiveTaskConsolidator
+from ..documents.memory import MemoryStore, consolidate
+from ..documents.user_profile import UserProfileConsolidator
 from ..llms import ChatMessage
+from ..llms import LLMProvider
 from ..runs.events import (
     CURATOR_COMPLETED_EVENT,
     CURATOR_FAILED_EVENT,
@@ -20,10 +25,12 @@ from ..runs.events import (
     CURATOR_JOB_STARTED_EVENT,
     CURATOR_STARTED_EVENT,
 )
-from ..storage import StorageProvider
+from ..storage import StorageProvider, StoredMessage
+from ..storage.base import get_storage_message_count, get_storage_messages_slice
 from ..tool_names import CONFIGURE_SKILL_TOOL_NAME, READ_SKILL_TOOL_NAME, SKILL_REVIEW_TOOL_NAMES
 from ..tools import ToolRegistry
 from ..tools.result_status import classify_tool_result_status
+from ..utils import count_messages_tokens
 from ..utils.log import logger
 from .background import CoalescingTaskScheduler
 from .execution import ExecutionResult
@@ -224,6 +231,135 @@ class SkillReviewService:
         )
         logger.info("[%s] skill.review.done", session_id)
         return touched_skills
+
+
+class MemoryConsolidationService:
+    """Coordinate incremental long-term memory consolidation."""
+
+    def __init__(
+        self,
+        *,
+        storage: StorageProvider,
+        memory_store: MemoryStore,
+        provider: LLMProvider,
+        threshold: int,
+        token_threshold: int,
+        memory_llm: DocumentLlmConfig,
+    ):
+        self.storage = storage
+        self.memory_store = memory_store
+        self.provider = provider
+        self.threshold = threshold
+        self.token_threshold = token_threshold
+        self.memory_llm = memory_llm
+
+    @staticmethod
+    def _to_message_dicts(messages: list[StoredMessage | dict[str, Any]]) -> list[dict[str, str]]:
+        """Normalize stored messages for the memory consolidation prompt."""
+        normalized: list[dict[str, str]] = []
+        for message in messages:
+            if isinstance(message, dict):
+                normalized.append({
+                    "role": message.get("role", "?"),
+                    "content": message.get("content", ""),
+                })
+                continue
+
+            normalized.append({
+                "role": message.role,
+                "content": message.content,
+            })
+        return normalized
+
+    async def maybe_consolidate(self, session_id: str) -> None:
+        """Consolidate pending session history into long-term memory when needed."""
+        message_count = await get_storage_message_count(self.storage, session_id)
+        last_consolidated = await self.storage.get_consolidated_index(session_id)
+        if last_consolidated > message_count:
+            await self.storage.set_consolidated_index(session_id, message_count)
+            return
+        pending_messages = self._to_message_dicts(
+            await get_storage_messages_slice(
+                self.storage,
+                session_id,
+                start_index=last_consolidated,
+            )
+        )
+        unconsolidated = len(pending_messages)
+        pending_tokens = count_messages_tokens(pending_messages, model=self.provider.get_default_model()) if pending_messages else 0
+
+        should_consolidate_by_count = self.threshold > 0 and unconsolidated >= self.threshold
+        should_consolidate_by_tokens = self.token_threshold > 0 and pending_tokens >= self.token_threshold
+        if not should_consolidate_by_count and not should_consolidate_by_tokens:
+            return
+
+        logger.info(
+            f"[{session_id}] memory.consolidate | pending_messages={unconsolidated} pending_tokens={pending_tokens} "
+            f"threshold={self.threshold} token_threshold={self.token_threshold}"
+        )
+        try:
+            success = await consolidate(
+                memory_store=self.memory_store,
+                session_id=session_id,
+                messages=pending_messages,
+                provider=self.provider,
+                model=self.provider.get_default_model(),
+                memory_llm=self.memory_llm,
+            )
+            if success:
+                await self.storage.set_consolidated_index(session_id, message_count)
+                logger.info(f"[{session_id}] memory.consolidated | total_messages={message_count}")
+        except Exception as exc:
+            logger.error(f"[{session_id}] memory.consolidate.error | error={exc}")
+
+
+class UserProfileUpdateService:
+    """Wrap optional USER.md profile updates behind a stable interface."""
+
+    def __init__(self, consolidator: UserProfileConsolidator | None = None):
+        self.consolidator = consolidator
+
+    async def maybe_update(self, session_id: str) -> None:
+        """Refresh this session's USER.md managed block when enough new history exists."""
+        if self.consolidator is None:
+            return
+
+        try:
+            await self.consolidator.maybe_update(session_id)
+        except Exception as exc:
+            logger.error(f"[{session_id}] profile.update.error | error={exc}")
+
+
+class RecentSummaryUpdateService:
+    """Wrap optional RECENT_SUMMARY.md updates behind a stable interface."""
+
+    def __init__(self, consolidator: Any | None = None):
+        self.consolidator = consolidator
+
+    async def maybe_update(self, session_id: str) -> None:
+        if self.consolidator is None:
+            return
+
+        try:
+            await self.consolidator.maybe_update(session_id)
+        except Exception as exc:
+            logger.error(f"[{session_id}] recent_summary.update.error | error={exc}")
+
+
+class ActiveTaskUpdateService:
+    """Wrap optional ACTIVE_TASK.md updates behind a stable interface."""
+
+    def __init__(self, consolidator: ActiveTaskConsolidator | None = None):
+        self.consolidator = consolidator
+
+    async def maybe_update(self, session_id: str) -> None:
+        if self.consolidator is None:
+            return
+
+        try:
+            await self.consolidator.maybe_update(session_id)
+        except Exception as exc:
+            logger.error(f"[{session_id}] active_task.update.error | error={exc}")
 
 
 class CuratorService:
