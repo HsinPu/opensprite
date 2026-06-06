@@ -4945,6 +4945,14 @@ def _workflow_outcome_payload(outcome: SubagentTaskOutcome) -> dict[str, Any]:
     }
 
 
+def _workflow_step_spec_payload(spec: WorkflowStepSpec) -> dict[str, str]:
+    return {
+        "step_id": spec.step_id,
+        "label": spec.label,
+        "prompt_type": spec.prompt_type,
+    }
+
+
 def format_review_finding(item: dict[str, Any]) -> str:
     title = str(item.get("title") or "").strip()
     path = str(item.get("path") or "").strip()
@@ -5230,9 +5238,7 @@ class SubagentWorkflowService:
         payload = {
             "workflow_run_id": workflow_run_id,
             WORKFLOW_ID_FIELD: workflow_id,
-            "step_id": spec.step_id,
-            "label": spec.label,
-            "prompt_type": spec.prompt_type,
+            **_workflow_step_spec_payload(spec),
             "step_index": step_index,
             "total_steps": total_steps,
             "task_preview": task_preview,
@@ -5281,9 +5287,7 @@ class SubagentWorkflowService:
             WORKFLOW_SUMMARY_FIELD: summary,
             "steps": [
                 {
-                    "step_id": spec.step_id,
-                    "label": spec.label,
-                    "prompt_type": spec.prompt_type,
+                    **_workflow_step_spec_payload(spec),
                     **_workflow_outcome_payload(outcome),
                 }
                 for spec, outcome in zip(steps[start_index:], outcomes)

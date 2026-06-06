@@ -178,6 +178,15 @@ def test_workflow_payloads_share_outcome_fields():
         assert step_payload[key] == value
         assert workflow_payload["steps"][0][key] == value
 
+    expected_step_fields = {
+        "step_id": "implement",
+        "label": "Implement",
+        "prompt_type": "implementer",
+    }
+    for key, value in expected_step_fields.items():
+        assert step_payload[key] == value
+        assert workflow_payload["steps"][0][key] == value
+
 
 def test_run_workflow_runs_implement_then_review_and_emits_trace(tmp_path):
     async def scenario():
