@@ -573,12 +573,15 @@ def _coerce_bool(value: Any, *, truthy_values: frozenset[str] = _DEFAULT_TRUE_VA
     return str(value or "").strip().lower() in truthy_values
 
 
-def _coerce_non_negative_int(value: Any) -> int:
+def _coerce_int(value: object, *, default: int) -> int:
     try:
-        number = int(value)
+        return int(value)  # type: ignore[arg-type]
     except (TypeError, ValueError):
-        return 0
-    return max(0, number)
+        return default
+
+
+def _coerce_non_negative_int(value: Any) -> int:
+    return max(0, _coerce_int(value, default=0))
 
 
 def _string_list(value: Any, *, max_items: int, max_chars: int) -> list[str]:
@@ -2765,13 +2768,6 @@ def _history_itemized_min_count(contract: TaskContract) -> int:
 
 def _truthy(value: object) -> bool:
     return _coerce_bool(value, truthy_values=_QUALITY_TRUE_VALUES)
-
-
-def _coerce_int(value: object, *, default: int) -> int:
-    try:
-        return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return default
 
 
 def _quality_string_list(value: object) -> list[str]:

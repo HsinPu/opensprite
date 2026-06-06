@@ -105,6 +105,18 @@ def test_normalize_completion_judge_payload_coerces_optional_fields():
     assert verdict.metadata["method"] == "llm"
 
 
+def test_normalize_completion_judge_payload_clamps_negative_review_count():
+    verdict = normalize_completion_judge_payload(
+        {
+            "status": "needs_review",
+            "reason": "review required",
+            "review_finding_count": "-2",
+        }
+    )
+
+    assert verdict.review_finding_count == 0
+
+
 def test_normalize_completion_judge_payload_drops_unsupported_active_task_status():
     verdict = normalize_completion_judge_payload(
         {
