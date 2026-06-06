@@ -91,13 +91,12 @@ from .consolidation import MemoryConsolidationService, RecentSummaryUpdateServic
 from .curator import CuratorService, fingerprint_text_directory
 from .execution import ExecutionEngine, ExecutionResult
 from .file_changes import RunFileChangeService
-from .history_reset import HistoryResetService
 from .harness_policy import HarnessPolicyService
 from .harness_profile import HarnessProfileService
 from .learning_ledger import LearningLedger
 from .llm_call import LlmCallService
 from .media import AgentMediaService
-from .message_history import MessageHistoryService
+from .message_history import HistoryResetService, MessageHistoryService
 from .mcp_lifecycle import McpLifecycleService
 from .permission_flow import AgentPermissionService, PermissionEventRecorder
 from .prompt import PromptBudgetService, PromptLoggingService
