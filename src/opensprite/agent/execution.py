@@ -3697,6 +3697,21 @@ def _agent_tool_error_result(
     )
 
 
+def _agent_tool_validation_error_result(
+    message: str,
+    *,
+    tool_name: str,
+    category: str = "invalid_arguments",
+) -> str:
+    return _agent_tool_error_result(
+        message,
+        tool_name=tool_name,
+        category=category,
+        error_type="ToolValidationError",
+        invalid_arguments=True,
+    )
+
+
 def _subagent_error_result(
     message: str,
     *,
@@ -3715,11 +3730,8 @@ def _subagent_error_result(
 
 
 def _subagent_validation_error(message: str, *, tool_name: str = DELEGATE_TOOL_NAME) -> str:
-    return _subagent_error_result(
+    return _agent_tool_validation_error_result(
         message,
-        category="invalid_arguments",
-        error_type="ToolValidationError",
-        invalid_arguments=True,
         tool_name=tool_name,
     )
 
@@ -4907,11 +4919,10 @@ def _workflow_error_result(
 
 
 def _workflow_validation_error(message: str, *, category: str = "invalid_arguments") -> str:
-    return _workflow_error_result(
+    return _agent_tool_validation_error_result(
         message,
+        tool_name=RUN_WORKFLOW_TOOL_NAME,
         category=category,
-        error_type="ToolValidationError",
-        invalid_arguments=True,
     )
 
 

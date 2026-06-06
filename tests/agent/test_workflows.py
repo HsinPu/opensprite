@@ -228,6 +228,7 @@ def test_run_workflow_returns_validation_error_for_empty_task(tmp_path):
     assert status.category == "invalid_arguments"
     assert status.invalid_arguments is True
     assert "workflow task must be a non-empty string" in status.error
+    assert json.loads(result)["metadata"] == {"tool_name": "run_workflow"}
 
 
 def test_run_workflow_emits_failed_trace_when_step_errors(tmp_path):
