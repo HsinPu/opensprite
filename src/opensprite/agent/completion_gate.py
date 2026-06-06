@@ -538,7 +538,7 @@ def _safe_value(value: Any) -> Any:
     return _truncate(str(value), max_chars=500)
 
 
-def _optional_text(value: Any, *, max_chars: int) -> str | None:
+def _optional_text(value: Any, *, max_chars: int | None = None) -> str | None:
     text = _coerce_text(value, max_chars=max_chars)
     return text or None
 
@@ -550,8 +550,9 @@ def _optional_active_task_status(value: Any) -> str | None:
     return None
 
 
-def _coerce_text(value: Any, *, max_chars: int) -> str:
-    return _truncate(str(value or "").strip(), max_chars=max_chars)
+def _coerce_text(value: Any, *, max_chars: int | None = None) -> str:
+    text = str(value or "").strip()
+    return _truncate(text, max_chars=max_chars) if max_chars is not None else text
 
 
 def _truncate(text: str, *, max_chars: int) -> str:
@@ -1981,8 +1982,7 @@ def _workflow_follow_up_detail(workflow_id: str, workflow_status: str, workflow:
 
 
 def _string_or_none(value: Any) -> str | None:
-    text = str(value or "").strip()
-    return text or None
+    return _optional_text(value)
 
 
 def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
