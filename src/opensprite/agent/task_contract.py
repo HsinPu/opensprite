@@ -2259,7 +2259,10 @@ def _contract_from_task_planner_payload(
         )
 
     if WORKSPACE_LOCATION_QUALITY_CHECK in quality_checks:
-        acceptance_criteria = _append_acceptance_criteria(acceptance_criteria, (_workspace_location_criterion(),))
+        acceptance_criteria = _append_acceptance_criteria(
+            acceptance_criteria,
+            (_acceptance_criterion(_CRITERION_WORKSPACE_LOCATION),),
+        )
 
     planner_reason = _truncate(str(payload.get("reason") or PLANNER_VALIDATED_REASON), max_chars=240)
     metadata = {
@@ -2315,6 +2318,72 @@ def _ensure_task_type_tool_groups(task_type: str, tool_groups: list[str]) -> Non
             tool_groups.append(tool_group)
 
 
+_CRITERION_MEDIA_FINAL_ANSWER = "media_final_answer"
+_CRITERION_MEDIA_ARTIFACT = "media_artifact"
+_CRITERION_WEB_FINAL_ANSWER = "web_final_answer"
+_CRITERION_WEB_SOURCE_REFERENCE = "web_source_reference"
+_CRITERION_WORKSPACE_FINAL_ANSWER = "workspace_final_answer"
+_CRITERION_TOOL_BACKED_FINAL_ANSWER = "tool_backed_final_answer"
+_CRITERION_WORKSPACE_LOCATION = "workspace_location"
+_CRITERION_VERIFICATION_OR_GAP = "verification_or_gap"
+_CRITERION_OPERATION_REPORT = "operation_report"
+_CRITERION_HISTORY_FINAL_ANSWER = "history_final_answer"
+_ACCEPTANCE_CRITERION_SPECS: dict[str, dict[str, Any]] = {
+    _CRITERION_MEDIA_FINAL_ANSWER: {
+        "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        "min_response_chars": 80,
+        "description": "Provide a substantive final answer that uses the inspected media results.",
+    },
+    _CRITERION_MEDIA_ARTIFACT: {
+        "kind": MEDIA_ARTIFACT_CRITERION_KIND,
+        "min_count": 1,
+        "description": "Produce a media artifact for the selected image, audio, or video before finalizing.",
+    },
+    _CRITERION_WEB_FINAL_ANSWER: {
+        "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        "min_response_chars": 100,
+        "description": "Provide a substantive final answer that uses the gathered web source results.",
+    },
+    _CRITERION_WEB_SOURCE_REFERENCE: {
+        "kind": SOURCE_REFERENCE_CRITERION_KIND,
+        "min_count": 1,
+        "description": "Reference at least one gathered web source by URL, domain, or title.",
+    },
+    _CRITERION_WORKSPACE_FINAL_ANSWER: {
+        "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        "min_response_chars": 80,
+        "description": "Provide a substantive final answer that uses the inspected workspace context.",
+    },
+    _CRITERION_TOOL_BACKED_FINAL_ANSWER: {
+        "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        "min_response_chars": 80,
+        "description": "Provide a substantive final answer that uses the gathered tool evidence.",
+    },
+    _CRITERION_WORKSPACE_LOCATION: {
+        "kind": WORKSPACE_LOCATION_CRITERION_KIND,
+        "min_count": 1,
+        "description": "Identify the relevant workspace file path, symbol, or configuration location in the final answer.",
+    },
+    _CRITERION_VERIFICATION_OR_GAP: {
+        "kind": VERIFICATION_OR_GAP_CRITERION_KIND,
+        "description": "After code changes, either record a focused verification attempt or state the verification gap clearly.",
+    },
+    _CRITERION_OPERATION_REPORT: {
+        "kind": OPERATION_REPORT_CRITERION_KIND,
+        "description": "Report approval, validation, rollback, blocker, or residual risk for the operation.",
+    },
+    _CRITERION_HISTORY_FINAL_ANSWER: {
+        "kind": SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
+        "min_response_chars": 80,
+        "description": "Provide a substantive final answer that uses the retrieved prior context.",
+    },
+}
+
+
+def _acceptance_criterion(name: str) -> AcceptanceCriterion:
+    return AcceptanceCriterion(**_ACCEPTANCE_CRITERION_SPECS[name])
+
+
 def _append_tool_group_contract(
     tool_group: str,
     *,
@@ -2339,7 +2408,10 @@ def _append_tool_group_contract(
                     description="Record at least one workspace file change.",
                 )
             )
-        return _append_acceptance_criteria(acceptance_criteria, (_verification_or_gap_criterion(),))
+        return _append_acceptance_criteria(
+            acceptance_criteria,
+            (_acceptance_criterion(_CRITERION_VERIFICATION_OR_GAP),),
+        )
     if tool_group == MEDIA_TOOL_GROUP:
         return _append_media_contract(
             requirements,
@@ -2349,10 +2421,16 @@ def _append_tool_group_contract(
         )
     if tool_group == HISTORY_RETRIEVAL_TOOL_GROUP:
         requirements.append(_tool_group_requirement(HISTORY_RETRIEVAL_TOOL_GROUP))
-        return _append_acceptance_criteria(acceptance_criteria, (_history_final_answer_criterion(),))
+        return _append_acceptance_criteria(
+            acceptance_criteria,
+            (_acceptance_criterion(_CRITERION_HISTORY_FINAL_ANSWER),),
+        )
     if tool_group in OPERATION_TOOL_GROUPS:
         requirements.append(_tool_group_requirement(tool_group))
-        return _append_acceptance_criteria(acceptance_criteria, (_operation_report_criterion(),))
+        return _append_acceptance_criteria(
+            acceptance_criteria,
+            (_acceptance_criterion(_CRITERION_OPERATION_REPORT),),
+        )
     if tool_group == VERIFICATION_TOOL_GROUP:
         requirements.append(
             EvidenceRequirement(
@@ -2364,7 +2442,10 @@ def _append_tool_group_contract(
         )
         return acceptance_criteria
     requirements.append(_tool_group_requirement(tool_group))
-    return _append_acceptance_criteria(acceptance_criteria, (_tool_backed_final_answer_criterion(),))
+    return _append_acceptance_criteria(
+        acceptance_criteria,
+        (_acceptance_criterion(_CRITERION_TOOL_BACKED_FINAL_ANSWER),),
+    )
 
 
 def _append_media_contract(
@@ -2415,7 +2496,10 @@ def _append_media_contract(
         requirements.append(_tool_group_requirement(MEDIA_TOOL_GROUP))
     return _append_acceptance_criteria(
         acceptance_criteria,
-        (_media_artifact_criterion(), _media_final_answer_criterion()),
+        (
+            _acceptance_criterion(_CRITERION_MEDIA_ARTIFACT),
+            _acceptance_criterion(_CRITERION_MEDIA_FINAL_ANSWER),
+        ),
     )
 
 
@@ -2448,8 +2532,8 @@ def _append_web_contract(
                 min_count=1,
                 description="Fetch or inspect at least one source page before finalizing; search snippets alone are not enough.",
             ),
-            _web_final_answer_criterion(),
-            _web_source_reference_criterion(),
+            _acceptance_criterion(_CRITERION_WEB_FINAL_ANSWER),
+            _acceptance_criterion(_CRITERION_WEB_SOURCE_REFERENCE),
         ),
     )
 
@@ -2468,7 +2552,10 @@ def _append_workspace_contract(
                 description="Inspect the relevant workspace files or code context before answering.",
             )
         )
-    acceptance_criteria[:] = _append_acceptance_criteria(acceptance_criteria, (_workspace_final_answer_criterion(),))
+    acceptance_criteria[:] = _append_acceptance_criteria(
+        acceptance_criteria,
+        (_acceptance_criterion(_CRITERION_WORKSPACE_FINAL_ANSWER),),
+    )
 
 
 def _parse_json_object(text: str) -> dict[str, Any]:
@@ -2538,81 +2625,3 @@ def _coerce_confidence(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, confidence))
-
-
-def _media_final_answer_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="substantive_final_answer",
-        min_response_chars=80,
-        description="Provide a substantive final answer that uses the inspected media results.",
-    )
-
-
-def _media_artifact_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="media_artifact",
-        min_count=1,
-        description="Produce a media artifact for the selected image, audio, or video before finalizing.",
-    )
-
-
-def _web_final_answer_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="substantive_final_answer",
-        min_response_chars=100,
-        description="Provide a substantive final answer that uses the gathered web source results.",
-    )
-
-
-def _web_source_reference_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind=SOURCE_REFERENCE_CRITERION_KIND,
-        min_count=1,
-        description="Reference at least one gathered web source by URL, domain, or title.",
-    )
-
-
-def _workspace_final_answer_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="substantive_final_answer",
-        min_response_chars=80,
-        description="Provide a substantive final answer that uses the inspected workspace context.",
-    )
-
-
-def _tool_backed_final_answer_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind=SUBSTANTIVE_FINAL_ANSWER_CRITERION_KIND,
-        min_response_chars=80,
-        description="Provide a substantive final answer that uses the gathered tool evidence.",
-    )
-
-
-def _workspace_location_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="workspace_location",
-        min_count=1,
-        description="Identify the relevant workspace file path, symbol, or configuration location in the final answer.",
-    )
-
-
-def _verification_or_gap_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="verification_or_gap",
-        description="After code changes, either record a focused verification attempt or state the verification gap clearly.",
-    )
-
-
-def _operation_report_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="operation_report",
-        description="Report approval, validation, rollback, blocker, or residual risk for the operation.",
-    )
-
-
-def _history_final_answer_criterion() -> AcceptanceCriterion:
-    return AcceptanceCriterion(
-        kind="substantive_final_answer",
-        min_response_chars=80,
-        description="Provide a substantive final answer that uses the retrieved prior context.",
-    )
