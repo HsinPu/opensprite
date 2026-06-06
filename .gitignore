@@ -22,6 +22,7 @@ AGENTS.md
 # local research notes
 ai-agent-harness-report.md
 tmp/
+.tmp/
 
 # opensprite runtime data (should live in user home)
 ~/.opensprite/
