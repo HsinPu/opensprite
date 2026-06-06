@@ -1,7 +1,7 @@
 from agent_test_helpers import make_agent_loop
 import opensprite.agent.agent as agent_module
-import opensprite.agent.prompt as prompt_module
-from opensprite.agent.prompt import PromptLoggingService
+import opensprite.agent.llm_call as llm_call_module
+from opensprite.agent.llm_call import PromptLoggingService
 
 
 def _make_logging_agent(tmp_path):
@@ -43,7 +43,7 @@ def test_main_prompt_logging_includes_available_subagent_summary(tmp_path, monke
     info_messages: list[str] = []
 
     monkeypatch.setattr(agent_module.logger, "info", lambda message: info_messages.append(message))
-    monkeypatch.setattr(prompt_module.logger, "info", lambda message: info_messages.append(message))
+    monkeypatch.setattr(llm_call_module.logger, "info", lambda message: info_messages.append(message))
 
     agent._log_prepared_messages(
         "telegram:user-a",
