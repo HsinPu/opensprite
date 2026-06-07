@@ -2099,6 +2099,19 @@ def _string_or_none(value: Any) -> str | None:
     return _optional_text(value)
 
 
+def _verification_follow_up_fields(
+    action: str,
+    path: str | None,
+    *,
+    pytest_args: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    return {
+        "action": action,
+        "path": path or ".",
+        "pytest_args": pytest_args,
+    }
+
+
 def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]:
     touched_paths = normalized_touched_paths(execution_result.touched_paths)
     decision_paths = tuple(strip_repo_snapshot_prefix(path) for path in touched_paths)
@@ -2106,26 +2119,14 @@ def _verification_follow_up(execution_result: ExecutionResult) -> dict[str, Any]
     has_web_touched = any(is_web_app_path(path) for path in decision_paths)
     has_python_touched = any(is_python_file_path(path) for path in decision_paths)
     if touched_paths and not has_web_touched and not has_python_touched:
-        return {
-            "action": "auto",
-            "path": common_verification_path(touched_paths) or ".",
-            "pytest_args": (),
-        }
+        return _verification_follow_up_fields("auto", common_verification_path(touched_paths))
     if has_web_touched:
-        return {"action": "web_build", "path": WEB_APP_ROOT_PATH, "pytest_args": ()}
+        return _verification_follow_up_fields("web_build", WEB_APP_ROOT_PATH)
     if test_paths:
-        return {"action": "pytest", "path": ".", "pytest_args": test_paths}
+        return _verification_follow_up_fields("pytest", ".", pytest_args=test_paths)
     if has_python_touched:
-        return {
-            "action": "python_compile",
-            "path": common_verification_path(touched_paths) or ".",
-            "pytest_args": (),
-        }
-    return {
-        "action": "auto",
-        "path": common_verification_path(touched_paths) or ".",
-        "pytest_args": (),
-    }
+        return _verification_follow_up_fields("python_compile", common_verification_path(touched_paths))
+    return _verification_follow_up_fields("auto", common_verification_path(touched_paths))
 
 
 ITEMIZED_RESPONSE_LINE_RE = re.compile(r"^(?:[-*]|\d+[.)]|\|)")

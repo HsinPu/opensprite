@@ -594,6 +594,7 @@ def test_completion_gate_requires_requested_verification_before_completion():
     assert result.should_update_active_task is False
     assert result.verification_action == "python_compile"
     assert result.verification_path == "src"
+    assert result.verification_pytest_args == ()
 
 
 def test_completion_gate_does_not_run_pytest_for_non_code_test_notes():
@@ -1118,6 +1119,7 @@ def test_completion_gate_prefers_web_build_for_web_changes():
     assert result.status == "needs_verification"
     assert result.verification_action == "web_build"
     assert result.verification_path == "apps/web"
+    assert result.verification_pytest_args == ()
 
 
 def test_completion_gate_keeps_verification_status_when_verify_fails_with_tool_error():
@@ -1142,6 +1144,7 @@ def test_completion_gate_keeps_verification_status_when_verify_fails_with_tool_e
     assert result.reason == "required verification did not pass"
     assert result.verification_action == "python_compile"
     assert result.verification_path == "src"
+    assert result.verification_pytest_args == ()
 
 
 def test_completion_gate_does_not_infer_blocker_from_tool_error_text():
