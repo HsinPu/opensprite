@@ -4529,11 +4529,13 @@ def test_completion_gate_sets_workflow_verification_follow_up_after_clean_review
     )
 
     assert result.status == "needs_verification"
+    assert result.verification_required is True
     assert result.verification_attempted is False
     assert result.verification_passed is False
     assert result.verification_action == "python_compile"
     assert result.verification_path == "src"
     assert result.verification_pytest_args == ()
+    assert result.review_required is True
 
 
 def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_tasks():

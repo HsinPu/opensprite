@@ -960,6 +960,45 @@ def _workflow_gate_verification_result_fields(
     }
 
 
+def _workflow_gate_result_fields(
+    workflow_gate: dict[str, Any],
+    *,
+    task_intent: TaskIntent,
+    task_contract: TaskContract,
+    verification_required: bool,
+    verification_attempted: bool,
+    verification_passed: bool,
+    verification_follow_up: dict[str, Any],
+    review_required: bool,
+    review: dict[str, Any],
+) -> dict[str, Any]:
+    workflow_gate_status = workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD)
+    workflow_gate_complete = is_complete_completion_status(workflow_gate_status)
+    workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
+    return {
+        **_workflow_gate_core_result_fields(
+            workflow_gate,
+            verification_required=verification_required,
+            review_required=review_required,
+        ),
+        **_workflow_gate_active_task_result_fields(
+            workflow_gate,
+            workflow_gate_complete=workflow_gate_complete,
+            task_intent=task_intent,
+            task_contract=task_contract,
+        ),
+        **_workflow_gate_follow_up_result_fields(workflow_gate),
+        **_workflow_gate_verification_result_fields(
+            workflow_gate,
+            verification_attempted=verification_attempted,
+            verification_passed=verification_passed,
+            verification_follow_up=verification_follow_up,
+            needs_verification=workflow_gate_needs_verification,
+        ),
+        **_workflow_gate_review_result_fields(workflow_gate, review),
+    }
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1328,35 +1367,18 @@ class CompletionGateService:
                 )
 
         if workflow_gate is not None:
-            workflow_gate_status = workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD)
-            workflow_gate_complete = is_complete_completion_status(workflow_gate_status)
-            workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
-            workflow_core_fields = _workflow_gate_core_result_fields(
-                workflow_gate,
-                verification_required=verification_required,
-                review_required=review_required,
-            )
-            workflow_verification_fields = _workflow_gate_verification_result_fields(
-                workflow_gate,
-                verification_attempted=verification_attempted,
-                verification_passed=verification_passed,
-                verification_follow_up=verification_follow_up,
-                needs_verification=workflow_gate_needs_verification,
-            )
-            workflow_review_fields = _workflow_gate_review_result_fields(workflow_gate, review)
-            workflow_follow_up_fields = _workflow_gate_follow_up_result_fields(workflow_gate)
-            workflow_active_task_fields = _workflow_gate_active_task_result_fields(
-                workflow_gate,
-                workflow_gate_complete=workflow_gate_complete,
-                task_intent=task_intent,
-                task_contract=execution_result.task_contract,
-            )
             return CompletionGateResult(
-                **workflow_core_fields,
-                **workflow_active_task_fields,
-                **workflow_follow_up_fields,
-                **workflow_verification_fields,
-                **workflow_review_fields,
+                **_workflow_gate_result_fields(
+                    workflow_gate,
+                    task_intent=task_intent,
+                    task_contract=execution_result.task_contract,
+                    verification_required=verification_required,
+                    verification_attempted=verification_attempted,
+                    verification_passed=verification_passed,
+                    verification_follow_up=verification_follow_up,
+                    review_required=review_required,
+                    review=review,
+                )
             )
 
         if (
