@@ -109,7 +109,7 @@ from ..tools.registration import (
 )
 from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
 from ..runs.trace import AgentRunStateService, McpLifecycleService, RunHookService
-from .execution import SubagentRunService
+from .subagent_run import SubagentRunService
 from .task_contract import TaskPlanner
 from .task_contract import (
     TaskContextDecision,

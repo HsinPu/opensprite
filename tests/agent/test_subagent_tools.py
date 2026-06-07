@@ -4,12 +4,13 @@ from collections import defaultdict
 from pathlib import Path
 
 from opensprite.agent.agent import AgentLoop
-from opensprite.agent.execution import (
+from opensprite.agent.subagent_run import (
     SubagentRunService,
     _subagent_preparation_error_detail,
     _subagent_validation_error,
+    build_subagent_tool_registry,
 )
-from opensprite.agent.execution import RESEARCH_PROFILE, build_subagent_tool_registry
+from opensprite.subagent_prompts.profiles import RESEARCH_PROFILE
 from opensprite.tools.evidence import WEB_SOURCE_EVIDENCE_TOOLS
 from opensprite.config.schema import AgentConfig, Config, LLMsConfig, LogConfig, MemoryConfig, ProviderConfig, SearchConfig, ToolsConfig, UserProfileConfig
 from opensprite.context.paths import get_session_workspace
@@ -1198,7 +1199,7 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
         assert model == "provider-review-model"
         return routed_provider
 
-    monkeypatch.setattr("opensprite.agent.execution.create_llm", fake_create_llm)
+    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm", fake_create_llm)
 
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
@@ -1266,8 +1267,8 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
         captured["runtime"] = runtime
         return routed_provider
 
-    monkeypatch.setattr("opensprite.agent.execution.create_llm", fail_create_llm)
-    monkeypatch.setattr("opensprite.agent.execution.create_llm_from_runtime", fake_create_llm_from_runtime)
+    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm", fail_create_llm)
+    monkeypatch.setattr("opensprite.agent.subagent_run.create_llm_from_runtime", fake_create_llm_from_runtime)
 
     agent = AgentLoop(
         config=Config.load_agent_template_config(),
