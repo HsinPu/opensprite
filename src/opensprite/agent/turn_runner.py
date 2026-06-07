@@ -139,7 +139,8 @@ from .task_contract import (
     is_tool_group_requirement,
     task_planner_status,
 )
-from .task_contract import TaskContextDecision, TaskContextResolver, TaskIntent, TaskIntentService, TaskObjectiveDecision
+from .task_contract import TaskContextDecision, TaskIntent, TaskIntentService, TaskObjectiveDecision
+from .turn_task_planning import TurnTaskPlanningService
 from ..tools.evidence import (
     is_source_acceptance_criterion_kind,
     is_web_fetch_source_record_tool,
@@ -732,12 +733,17 @@ class AgentTurnRunner:
         self.response_finalizer = response_finalizer
         self.turn_context = turn_context
         self.run_state = run_state
-        self.task_intents = task_intents
         self.harness_profiles = harness_profiles
         self.completion_gate = completion_gate
         self._completion_judge_context = completion_judge_context
         self.auto_continue = auto_continue
         self.work_progress = work_progress
+        self.task_planning = TurnTaskPlanningService(
+            task_intents=task_intents,
+            work_progress=work_progress,
+            read_active_task_snapshot=read_active_task_snapshot,
+            build_runtime_message=_message_with_runtime_context,
+        )
         self._connect_mcp = connect_mcp
         self._save_message = save_message
         self._emit_run_event = emit_run_event
@@ -752,7 +758,6 @@ class AgentTurnRunner:
         self._completion_blocker_messages = completion_blocker_messages
         self._format_log_preview = format_log_preview
         self._set_session_overlay_id = set_session_overlay_id
-        self._read_active_task_snapshot = read_active_task_snapshot
         self._get_work_state = get_work_state
         self._save_work_state = save_work_state
         self._apply_completion_gate_result = apply_completion_gate_result
@@ -799,22 +804,6 @@ class AgentTurnRunner:
             },
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
-        )
-
-    def _resolve_pre_work_task_context(
-        self,
-        *,
-        user_message: UserMessage,
-        turn: PreparedTurnInput,
-        task_intent: TaskIntent,
-        existing_work_state: StoredWorkState | None,
-    ) -> TaskContextDecision:
-        """Resolve deterministic task context needed before work-state setup."""
-        return TaskContextResolver.resolve_deterministic(
-            current_message=_message_with_runtime_context(user_message.text, turn.user_metadata),
-            task_intent=task_intent,
-            active_task=self._read_active_task_snapshot(turn.session_id),
-            work_state_summary=self.work_progress.render_state_summary(existing_work_state),
         )
 
     async def _maybe_record_worktree_sandbox(
@@ -869,28 +858,18 @@ class AgentTurnRunner:
                 {"schema_version": 1, **dict(media_event)},
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
-            )
-        await self._preprocess_audio_only_message(user_message, turn, run_id)
-        task_intent = self.task_intents.classify(
-            user_message.text,
-            images=user_message.images,
-            audios=user_message.audios,
-            videos=user_message.videos,
-            metadata=user_message.metadata,
         )
+        await self._preprocess_audio_only_message(user_message, turn, run_id)
         self._set_session_overlay_id(turn.session_id, user_message.metadata, turn.channel, user_message.sender_id)
         existing_work_state = await self._get_work_state(turn.session_id)
-        pre_work_task_context_decision = self._resolve_pre_work_task_context(
+        task_plan = self.task_planning.plan(
             user_message=user_message,
-            turn=turn,
-            task_intent=task_intent,
+            session_id=turn.session_id,
+            user_metadata=turn.user_metadata,
             existing_work_state=existing_work_state,
         )
-        task_intent = self.work_progress.resolve_intent(
-            task_intent,
-            existing_work_state,
-            task_context_decision=pre_work_task_context_decision,
-        )
+        task_intent = task_plan.task_intent
+        pre_work_task_context_decision = task_plan.task_context_decision
         worktree_sandbox_recorded = await self._maybe_record_worktree_sandbox(
             turn.session_id,
             run_id,
@@ -905,14 +884,8 @@ class AgentTurnRunner:
             channel=turn.channel,
             external_chat_id=turn.external_chat_id,
         )
-        work_plan = self.work_progress.create_plan(task_intent)
-        current_work_state = self.work_progress.build_initial_state(
-            session_id=turn.session_id,
-            task_intent=task_intent,
-            work_plan=work_plan,
-            existing_state=existing_work_state,
-            task_context_decision=pre_work_task_context_decision,
-        )
+        work_plan = task_plan.work_plan
+        current_work_state = task_plan.current_work_state
 
         try:
             if self.is_media_only_message(user_message):
