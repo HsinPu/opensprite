@@ -901,6 +901,27 @@ def _workflow_gate_review_result_fields(workflow_gate: dict[str, Any], review: d
     }
 
 
+def _workflow_gate_verification_result_fields(
+    workflow_gate: dict[str, Any],
+    *,
+    verification_attempted: bool,
+    verification_passed: bool,
+    verification_follow_up: dict[str, Any],
+    needs_verification: bool,
+) -> dict[str, Any]:
+    return {
+        "verification_attempted": bool(
+            workflow_gate.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD, verification_attempted)
+        ),
+        "verification_passed": bool(
+            workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed)
+        ),
+        "verification_action": verification_follow_up["action"] if needs_verification else None,
+        "verification_path": verification_follow_up["path"] if needs_verification else None,
+        "verification_pytest_args": verification_follow_up["pytest_args"] if needs_verification else (),
+    }
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1272,8 +1293,13 @@ class CompletionGateService:
             workflow_gate_status = workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD)
             workflow_gate_complete = is_complete_completion_status(workflow_gate_status)
             workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
-            workflow_verification_attempted = bool(workflow_gate.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD, verification_attempted))
-            workflow_verification_passed = bool(workflow_gate.get(WORKFLOW_VERIFICATION_PASSED_FIELD, verification_passed))
+            workflow_verification_fields = _workflow_gate_verification_result_fields(
+                workflow_gate,
+                verification_attempted=verification_attempted,
+                verification_passed=verification_passed,
+                verification_follow_up=verification_follow_up,
+                needs_verification=workflow_gate_needs_verification,
+            )
             workflow_review_fields = _workflow_gate_review_result_fields(workflow_gate, review)
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
@@ -1287,15 +1313,7 @@ class CompletionGateService:
                 should_update_active_task=workflow_gate_complete
                 and intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
                 verification_required=verification_required,
-                verification_attempted=workflow_verification_attempted,
-                verification_passed=workflow_verification_passed,
-                verification_action=verification_follow_up["action"]
-                if workflow_gate_needs_verification
-                else None,
-                verification_path=verification_follow_up["path"] if workflow_gate_needs_verification else None,
-                verification_pytest_args=verification_follow_up["pytest_args"]
-                if workflow_gate_needs_verification
-                else (),
+                **workflow_verification_fields,
                 review_required=review_required,
                 **workflow_review_fields,
             )

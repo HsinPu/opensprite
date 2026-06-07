@@ -4495,6 +4495,42 @@ def test_completion_gate_allows_workflow_completion_with_clean_review():
     assert result.verification_passed is False
 
 
+def test_completion_gate_sets_workflow_verification_follow_up_after_clean_review():
+    intent = TaskIntentService().classify("Please refactor the agent and run tests.")
+    contract = _verification_contract(intent)
+
+    result = CompletionGateService().evaluate(
+        task_intent=intent,
+        response_text="Workflow: implement_then_review\nStatus: completed",
+        execution_result=ExecutionResult(
+            content="Workflow: implement_then_review\nStatus: completed",
+            file_change_count=1,
+            touched_paths=("src/cleanup.py",),
+            task_contract=contract,
+            workflow_outcomes=(
+                {
+                    "workflow_run_id": "workflow_abc123",
+                    "workflow": "implement_then_review",
+                    "status": "completed",
+                    "review_attempted": True,
+                    "review_passed": True,
+                    "review_finding_count": 0,
+                    "verification_attempted": False,
+                    "verification_passed": False,
+                    "summary": "Completed workflow.",
+                },
+            ),
+        ),
+    )
+
+    assert result.status == "needs_verification"
+    assert result.verification_attempted is False
+    assert result.verification_passed is False
+    assert result.verification_action == "python_compile"
+    assert result.verification_path == "src"
+    assert result.verification_pytest_args == ()
+
+
 def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_tasks():
     intent = TaskIntentService().classify("Please implement the final cleanup.")
 
