@@ -4494,8 +4494,10 @@ def test_completion_gate_allows_workflow_completion_with_clean_review():
     assert result.active_task_status == "done"
     assert result.active_task_detail is None
     assert result.should_update_active_task is False
+    assert result.verification_required is False
     assert result.verification_attempted is False
     assert result.verification_passed is False
+    assert result.review_required is True
 
 
 def test_completion_gate_sets_workflow_verification_follow_up_after_clean_review():

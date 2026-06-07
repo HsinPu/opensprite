@@ -901,6 +901,20 @@ def _workflow_gate_review_result_fields(workflow_gate: dict[str, Any], review: d
     }
 
 
+def _workflow_gate_core_result_fields(
+    workflow_gate: dict[str, Any],
+    *,
+    verification_required: bool,
+    review_required: bool,
+) -> dict[str, Any]:
+    return {
+        "status": workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
+        "reason": workflow_gate[COMPLETION_RESULT_REASON_FIELD],
+        "verification_required": verification_required,
+        "review_required": review_required,
+    }
+
+
 def _workflow_gate_follow_up_result_fields(workflow_gate: dict[str, Any]) -> dict[str, str | None]:
     return {
         "follow_up_workflow": _string_or_none(workflow_gate.get(WORKFLOW_ID_FIELD)),
@@ -1317,6 +1331,11 @@ class CompletionGateService:
             workflow_gate_status = workflow_gate.get(COMPLETION_RESULT_STATUS_FIELD)
             workflow_gate_complete = is_complete_completion_status(workflow_gate_status)
             workflow_gate_needs_verification = needs_verification_completion_status(workflow_gate_status)
+            workflow_core_fields = _workflow_gate_core_result_fields(
+                workflow_gate,
+                verification_required=verification_required,
+                review_required=review_required,
+            )
             workflow_verification_fields = _workflow_gate_verification_result_fields(
                 workflow_gate,
                 verification_attempted=verification_attempted,
@@ -1333,13 +1352,10 @@ class CompletionGateService:
                 task_contract=execution_result.task_contract,
             )
             return CompletionGateResult(
-                status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
-                reason=workflow_gate[COMPLETION_RESULT_REASON_FIELD],
+                **workflow_core_fields,
                 **workflow_active_task_fields,
-                verification_required=verification_required,
                 **workflow_follow_up_fields,
                 **workflow_verification_fields,
-                review_required=review_required,
                 **workflow_review_fields,
             )
 
