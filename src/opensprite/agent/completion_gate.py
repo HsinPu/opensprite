@@ -910,6 +910,21 @@ def _workflow_gate_follow_up_result_fields(workflow_gate: dict[str, Any]) -> dic
     }
 
 
+def _workflow_gate_active_task_result_fields(
+    workflow_gate: dict[str, Any],
+    *,
+    workflow_gate_complete: bool,
+    task_intent: TaskIntent,
+    task_contract: TaskContract,
+) -> dict[str, Any]:
+    return {
+        "active_task_status": DONE_ACTIVE_TASK_STATUS if workflow_gate_complete else None,
+        "active_task_detail": workflow_gate.get("detail") or None,
+        "should_update_active_task": workflow_gate_complete
+        and intent_supports_fallback_active_task_update(task_intent, task_contract),
+    }
+
+
 def _workflow_gate_verification_result_fields(
     workflow_gate: dict[str, Any],
     *,
@@ -1311,13 +1326,16 @@ class CompletionGateService:
             )
             workflow_review_fields = _workflow_gate_review_result_fields(workflow_gate, review)
             workflow_follow_up_fields = _workflow_gate_follow_up_result_fields(workflow_gate)
+            workflow_active_task_fields = _workflow_gate_active_task_result_fields(
+                workflow_gate,
+                workflow_gate_complete=workflow_gate_complete,
+                task_intent=task_intent,
+                task_contract=execution_result.task_contract,
+            )
             return CompletionGateResult(
                 status=workflow_gate[COMPLETION_RESULT_STATUS_FIELD],
                 reason=workflow_gate[COMPLETION_RESULT_REASON_FIELD],
-                active_task_status=DONE_ACTIVE_TASK_STATUS if workflow_gate_complete else None,
-                active_task_detail=workflow_gate.get("detail") or None,
-                should_update_active_task=workflow_gate_complete
-                and intent_supports_fallback_active_task_update(task_intent, execution_result.task_contract),
+                **workflow_active_task_fields,
                 verification_required=verification_required,
                 **workflow_follow_up_fields,
                 **workflow_verification_fields,
