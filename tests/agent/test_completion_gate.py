@@ -4491,6 +4491,8 @@ def test_completion_gate_allows_workflow_completion_with_clean_review():
 
     assert result.status == "complete"
     assert result.reason == "workflow implement_then_review completed with clean review evidence"
+    assert result.verification_attempted is False
+    assert result.verification_passed is False
 
 
 def test_completion_gate_uses_workflow_review_finding_detail_without_delegated_tasks():

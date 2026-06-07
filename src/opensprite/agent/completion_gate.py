@@ -869,6 +869,13 @@ def _workflow_review_metadata(workflow: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _workflow_verification_metadata(workflow: dict[str, Any]) -> dict[str, bool]:
+    return {
+        WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: bool(workflow.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD)),
+        WORKFLOW_VERIFICATION_PASSED_FIELD: bool(workflow.get(WORKFLOW_VERIFICATION_PASSED_FIELD)),
+    }
+
+
 def missing_evidence_active_task_detail(missing_evidence: tuple[str, ...]) -> str | None:
     if not missing_evidence:
         return None
@@ -1886,16 +1893,15 @@ def _workflow_gate_outcome(
     review_attempted = review_metadata[WORKFLOW_REVIEW_ATTEMPTED_FIELD]
     review_passed = review_metadata[WORKFLOW_REVIEW_PASSED_FIELD]
     review_finding_count = review_metadata[WORKFLOW_REVIEW_FINDING_COUNT_FIELD]
-    workflow_verification_attempted = bool(workflow.get(WORKFLOW_VERIFICATION_ATTEMPTED_FIELD))
-    workflow_verification_passed = bool(workflow.get(WORKFLOW_VERIFICATION_PASSED_FIELD))
+    verification_metadata = _workflow_verification_metadata(workflow)
+    workflow_verification_passed = verification_metadata[WORKFLOW_VERIFICATION_PASSED_FIELD]
     workflow_review_summary = review_metadata[WORKFLOW_REVIEW_SUMMARY_FIELD]
     workflow_review_first_finding = _coerce_text(workflow.get(WORKFLOW_REVIEW_FIRST_FINDING_FIELD))
     workflow_summary = _coerce_text(workflow.get(WORKFLOW_SUMMARY_FIELD))
     metadata = {
         WORKFLOW_ID_FIELD: workflow_id,
         **review_metadata,
-        WORKFLOW_VERIFICATION_ATTEMPTED_FIELD: workflow_verification_attempted,
-        WORKFLOW_VERIFICATION_PASSED_FIELD: workflow_verification_passed,
+        **verification_metadata,
         **_workflow_next_step_metadata(workflow),
     }
 
