@@ -68,8 +68,7 @@ from ..runs.trace import RunCancelledError, mcp_tool_names as list_mcp_tool_name
 from ..harness import (
     HISTORY_RETRIEVAL_TASK_TYPE,
     HISTORY_RETRIEVAL_TOOL_GROUP,
-    HarnessPolicy,
-    HarnessProfile,
+    HarnessPlan,
 )
 from .task_contract import (
     TaskContextDecision,
@@ -2539,9 +2538,7 @@ class LlmCallService:
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         plan_task: Callable[..., Awaitable[TaskContract]],
-        select_harness_profile: Callable[[TaskContract], HarnessProfile],
-        select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
-        build_harness_tool_registry: Callable[[ToolRegistry, HarnessProfile, HarnessPolicy], ToolRegistry],
+        plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
         emit_run_event: Callable[..., Awaitable[None]],
         build_proactive_retrieval_context: Callable[..., Awaitable[str]],
         get_tool_registry: Callable[[], ToolRegistry],
@@ -2574,9 +2571,7 @@ class LlmCallService:
             resolve_task_context=resolve_task_context,
             resolve_task_objective=resolve_task_objective,
             plan_task=plan_task,
-            select_harness_profile=select_harness_profile,
-            select_harness_policy=select_harness_policy,
-            build_harness_tool_registry=build_harness_tool_registry,
+            plan_harness=plan_harness,
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,

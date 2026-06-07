@@ -9,6 +9,7 @@ from opensprite.harness import (
     WORKSPACE_CHANGE_HARNESS_POLICY_REASON,
     HarnessProfile,
     HarnessProfileService,
+    HarnessPlanningService,
     HarnessPolicyService,
 )
 from opensprite.agent.task_contract import EvidenceRequirement, LLM_PLANNER_CONTRACT_SOURCES, TaskContract
@@ -89,6 +90,27 @@ def test_harness_policy_reasons_are_stable():
     assert HARNESS_APPROVAL_REQUIREMENT_PROTECTED_REASON == (
         "harness approval requirements remain active in the executable policy"
     )
+
+
+def test_harness_planning_service_builds_profile_policy_and_registry():
+    registry = ToolRegistry()
+    for name in ("read_file", "edit_file", "verify"):
+        registry.register(DummyTool(name))
+    contract = TaskContract(
+        objective="Implement the cleanup.",
+        task_type="code_change",
+        requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
+        allow_no_tool_final=False,
+        contract_sources=LLM_PLANNER_CONTRACT_SOURCES,
+    )
+
+    plan = HarnessPlanningService().plan(contract, registry)
+
+    assert plan.task_contract.harness_profile is not None
+    assert plan.task_contract.harness_profile["name"] == "coding"
+    assert plan.harness_profile.name == "coding"
+    assert plan.harness_policy.name == "workspace_change_guidance_policy"
+    assert "edit_file" in plan.tool_registry.tool_names
 
 
 def test_chat_harness_policy_guidance_is_read_first():

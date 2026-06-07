@@ -6,7 +6,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Awaitable, Callable
 
 from ..documents.active_task import has_current_active_task
-from ..harness import HarnessPolicy, HarnessProfile, is_chat_profile_name
+from ..harness import HarnessPlan, HarnessPolicy, HarnessProfile, is_chat_profile_name
 from ..runs.events import (
     HARNESS_POLICY_MERGE_RESOLVED_EVENT,
     HARNESS_POLICY_SELECTED_EVENT,
@@ -58,9 +58,7 @@ class TurnPlanningService:
         resolve_task_context: Callable[..., Awaitable[TaskContextDecision]],
         resolve_task_objective: Callable[..., Awaitable[TaskObjectiveDecision]],
         plan_task: Callable[..., Awaitable[TaskContract]],
-        select_harness_profile: Callable[[TaskContract], HarnessProfile],
-        select_harness_policy: Callable[[HarnessProfile], HarnessPolicy],
-        build_harness_tool_registry: Callable[[ToolRegistry, HarnessProfile, HarnessPolicy], ToolRegistry],
+        plan_harness: Callable[[TaskContract, ToolRegistry], HarnessPlan],
         maybe_seed_active_task: Callable[..., Awaitable[None]],
         augment_message_for_media: Callable[..., str],
         emit_run_event: RunEventEmitter,
@@ -68,9 +66,7 @@ class TurnPlanningService:
         self._resolve_task_context = resolve_task_context
         self._resolve_task_objective = resolve_task_objective
         self._plan_task = plan_task
-        self._select_harness_profile = select_harness_profile
-        self._select_harness_policy = select_harness_policy
-        self._build_harness_tool_registry = build_harness_tool_registry
+        self._plan_harness = plan_harness
         self._maybe_seed_active_task = maybe_seed_active_task
         self._augment_message_for_media = augment_message_for_media
         self._emit_run_event = emit_run_event
@@ -237,10 +233,11 @@ class TurnPlanningService:
                     channel=channel,
                     external_chat_id=external_chat_id,
                 )
-            harness_profile = self._select_harness_profile(task_contract)
-            task_contract = replace(task_contract, harness_profile=harness_profile.to_metadata())
-            harness_policy = self._select_harness_policy(harness_profile)
-            harness_tool_registry = self._build_harness_tool_registry(base_tool_registry, harness_profile, harness_policy)
+            harness_plan = self._plan_harness(task_contract, base_tool_registry)
+            task_contract = harness_plan.task_contract
+            harness_profile = harness_plan.harness_profile
+            harness_policy = harness_plan.harness_policy
+            harness_tool_registry = harness_plan.tool_registry
             if _should_seed_active_task_for_contract(
                 active_task_snapshot=active_task_snapshot,
                 harness_profile=harness_profile,

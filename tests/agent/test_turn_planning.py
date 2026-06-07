@@ -10,7 +10,7 @@ from opensprite.agent.task_contract import (
     TaskObjectiveDecision,
 )
 from opensprite.agent.turn_planning import TurnPlanningService
-from opensprite.harness import HarnessPolicyService, HarnessProfileService
+from opensprite.harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
 from opensprite.runs.events import (
     HARNESS_POLICY_SELECTED_EVENT,
     HARNESS_PROFILE_SELECTED_EVENT,
@@ -96,12 +96,10 @@ def test_turn_planning_resolves_task_contract_and_harness_policy():
             resolve_task_context=resolve_task_context,
             resolve_task_objective=resolve_task_objective,
             plan_task=plan_task,
-            select_harness_profile=profile_service.from_contract,
-            select_harness_policy=policy_service.select,
-            build_harness_tool_registry=lambda registry, profile, policy: policy_service.build_tool_registry(
-                registry,
-                policy,
-            ),
+            plan_harness=HarnessPlanningService(
+                profile_service=profile_service,
+                policy_service=policy_service,
+            ).plan,
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,

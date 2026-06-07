@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Callable, Literal
 
 from .context.message_history import HISTORY_SEARCH_TOOL_NAME
@@ -614,6 +614,49 @@ class HarnessPolicyService:
             "protected_approval_requirements": _protected_approval_requirements(global_policy, profile_permission_policy, harness_executable_policy),
             "reason": POLICY_RESOLUTION_METADATA_REASON,
         }
+
+
+@dataclass(frozen=True)
+class HarnessPlan:
+    """Concrete harness selection for one planned task contract."""
+
+    task_contract: Any
+    harness_profile: HarnessProfile
+    harness_policy: HarnessPolicy
+    tool_registry: ToolRegistry
+
+
+class HarnessPlanningService:
+    """Plan the executable harness profile, policy, and tool registry."""
+
+    def __init__(
+        self,
+        *,
+        profile_service: HarnessProfileService | None = None,
+        policy_service: HarnessPolicyService | None = None,
+        permissions_config: Any | None = None,
+    ) -> None:
+        self.profile_service = profile_service or HarnessProfileService()
+        self.policy_service = policy_service or HarnessPolicyService()
+        self.permissions_config = permissions_config
+
+    def plan(self, task_contract: Any, base_tool_registry: ToolRegistry) -> HarnessPlan:
+        """Return the harness runtime plan for an authoritative task contract."""
+        harness_profile = self.profile_service.from_contract(task_contract)
+        task_contract = replace(task_contract, harness_profile=harness_profile.to_metadata())
+        harness_policy = self.policy_service.select(harness_profile)
+        tool_registry = self.policy_service.build_tool_registry_for_profile(
+            base_tool_registry,
+            harness_profile,
+            harness_policy,
+            self.permissions_config,
+        )
+        return HarnessPlan(
+            task_contract=task_contract,
+            harness_profile=harness_profile,
+            harness_policy=harness_policy,
+            tool_registry=tool_registry,
+        )
 
 
 def _constraints_applied(profile_permission_policy: ToolPermissionPolicy | None, harness_policy: HarnessPolicy) -> list[str]:

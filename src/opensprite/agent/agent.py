@@ -97,7 +97,7 @@ from ..documents.curator import (
     fingerprint_text_directory,
 )
 from .execution import ExecutionEngine, ExecutionResult
-from ..harness import HarnessPolicyService, HarnessProfileService
+from ..harness import HarnessPlanningService, HarnessPolicyService, HarnessProfileService
 from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from ..tools.approval_runtime import AgentPermissionService, PermissionEventRecorder
@@ -787,6 +787,11 @@ class AgentLoop:
         self.task_intents = TaskIntentService()
         self.harness_profiles = HarnessProfileService()
         self.harness_policies = HarnessPolicyService()
+        self.harness_planning = HarnessPlanningService(
+            profile_service=self.harness_profiles,
+            policy_service=self.harness_policies,
+            permissions_config=self.tools_config.permissions,
+        )
         self.task_context_resolver = TaskContextResolver(self.config.task_context_llm)
         self.task_objective_resolver = TaskObjectiveResolver(self.config.task_objective_llm)
         self.task_planner = TaskPlanner(self.config.task_planner_llm)
@@ -1049,14 +1054,7 @@ class AgentLoop:
                 model=self.provider.get_default_model(),
                 **kwargs,
             ),
-            select_harness_profile=lambda task_contract: self.harness_profiles.from_contract(task_contract),
-            select_harness_policy=lambda harness_profile: self.harness_policies.select(harness_profile),
-            build_harness_tool_registry=lambda registry, profile, policy: self.harness_policies.build_tool_registry_for_profile(
-                registry,
-                profile,
-                policy,
-                self.tools_config.permissions,
-            ),
+            plan_harness=self.harness_planning.plan,
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,
                 run_id,
