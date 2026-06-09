@@ -1,29 +1,18 @@
 import { normalizeMediaSettings } from "./settingsNormalizers";
 
-function normalizeLlmSettings(payload = {}) {
-  const llm = payload?.llm || {};
-  return {
-    effective_request: llm.effective_request && typeof llm.effective_request === "object" ? llm.effective_request : null,
-  };
-}
-
 export function useModelSettingsActions({ settingsState, requestSettingsJson, copy, setSettingsSuccess, loadProviderSettings }) {
   async function loadModelSettings() {
     settingsState.modelsLoading = true;
     settingsState.mediaLoading = true;
-    settingsState.llmLoading = true;
     settingsState.modelsError = "";
     settingsState.mediaError = "";
-    settingsState.llmError = "";
     try {
-      const [models, media, llm] = await Promise.all([
+      const [models, media] = await Promise.all([
         requestSettingsJson("/api/settings/models"),
         requestSettingsJson("/api/settings/media"),
-        requestSettingsJson("/api/settings/llm"),
       ]);
       settingsState.models = models;
       settingsState.media = normalizeMediaSettings(media);
-      settingsState.llm = normalizeLlmSettings(llm);
       const activeProvider = (settingsState.models.providers || []).find((provider) => provider.is_default);
       settingsState.selectedTextProviderId = activeProvider?.id || settingsState.models.providers?.[0]?.id || "";
       for (const provider of settingsState.models.providers || []) {
@@ -43,11 +32,9 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
     } catch (error) {
       settingsState.modelsError = error?.message || copy.value.notices.modelLoadFailed;
       settingsState.mediaError = error?.message || copy.value.notices.mediaModelLoadFailed;
-      settingsState.llmError = error?.message || copy.value.notices.llmSettingsLoadFailed;
     } finally {
       settingsState.modelsLoading = false;
       settingsState.mediaLoading = false;
-      settingsState.llmLoading = false;
     }
   }
 
@@ -78,27 +65,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       settingsState.modelsError = error?.message || copy.value.notices.modelSelectFailed;
     } finally {
       settingsState.modelsLoading = false;
-    }
-  }
-
-  async function saveLlmSettings() {
-    settingsState.llmLoading = true;
-    settingsState.llmError = "";
-    settingsState.llmNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/settings/llm", {
-        method: "PUT",
-        body: JSON.stringify({}),
-      });
-      settingsState.llm = normalizeLlmSettings(payload);
-      setSettingsSuccess(
-        "llmNotice",
-        payload.restart_required ? copy.value.notices.modelRestartRequired : copy.value.notices.llmSettingsSaved,
-      );
-    } catch (error) {
-      settingsState.llmError = error?.message || copy.value.notices.llmSettingsSaveFailed;
-    } finally {
-      settingsState.llmLoading = false;
     }
   }
 
@@ -143,7 +109,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
   return {
     loadModelSettings,
     selectModel,
-    saveLlmSettings,
     saveMediaModel,
   };
 }

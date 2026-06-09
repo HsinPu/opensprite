@@ -7,8 +7,6 @@ from typing import Any, Callable
 
 from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
-from ..config.llm_presets import provider_profile_defaults
-from ..llms.context_window import resolve_context_window_tokens
 
 
 def network_payload(config: Config, *, default_http_proxy: str, default_https_proxy: str, default_no_proxy: str) -> dict[str, Any]:
@@ -72,44 +70,6 @@ def web_search_payload(
         "searxng_categories": coerce_text_list_fn(getattr(search, "searxng_categories", []), field="searxng_categories", default=[]),
         "proxy": str(getattr(search, "proxy", "") or ""),
         "jina_api_key_configured": bool(getattr(search, "jina_api_key", "") or os.environ.get("JINA_API_KEY", "")),
-    }
-
-
-def effective_llm_request_payload(config: Config) -> dict[str, Any]:
-    llm = config.llm
-    provider_id = str(llm.default or "").strip()
-    active = llm.get_active()
-    provider_name = str(getattr(active, "provider", None) or provider_id or "").strip()
-    defaults = provider_profile_defaults(
-        provider_name,
-        auth_type=getattr(active, "auth_type", "api_key"),
-        api_mode=getattr(active, "api_mode", None),
-    )
-    provider_name = defaults.provider_id or provider_name
-    api_mode = str(defaults.api_mode or "chat_completions").strip()
-    model = str(getattr(active, "model", "") or llm.model or "")
-    context_window_tokens = resolve_context_window_tokens(
-        provider_name=provider_name,
-        model=model,
-        base_url=active.base_url,
-        configured_context_window_tokens=active.context_window_tokens,
-    )
-
-    return {
-        "configured": bool(config.is_llm_configured),
-        "provider_id": provider_id,
-        "provider": provider_name,
-        "api_mode": api_mode,
-        "model": model,
-        "context_window_tokens": context_window_tokens,
-    }
-
-
-def llm_payload(
-    config: Config,
-) -> dict[str, Any]:
-    return {
-        "effective_request": effective_llm_request_payload(config),
     }
 
 

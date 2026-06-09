@@ -92,12 +92,6 @@ export function createSettingsState() {
     modelsLoading: false,
     modelsError: "",
     modelsNotice: "",
-    llmLoading: false,
-    llmError: "",
-    llmNotice: "",
-    llm: {
-      effective_request: null,
-    },
     models: {
       default_provider: null,
       active_model: "",

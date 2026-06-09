@@ -11,26 +11,6 @@ from ..cli import update as update_cli
 from ..config import Config
 
 
-async def handle_settings_llm(adapter: Any, request: web.Request) -> web.Response:
-    config = Config.load(adapter._get_config_path())
-    return web.json_response({"llm": adapter._llm_payload(config)})
-
-
-async def handle_settings_llm_update(adapter: Any, request: web.Request) -> web.Response:
-    config_path = adapter._get_config_path()
-    config = Config.load(config_path)
-    config.save(config_path)
-    payload = {"llm": adapter._llm_payload(config), "restart_required": True}
-    payload = adapter._reload_agent_llm_from_config(payload, force=True)
-    agent = adapter._get_agent()
-    if agent is not None:
-        agent.config = config.agent
-        llm_calls = getattr(agent, "llm_calls", None)
-        if llm_calls is not None:
-            llm_calls.config = config.agent
-    return web.json_response(payload)
-
-
 async def handle_settings_media(adapter: Any, request: web.Request) -> web.Response:
     try:
         payload = adapter._get_media_settings().list_media()

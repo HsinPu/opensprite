@@ -177,7 +177,6 @@
     @start-copilot-auth-login="startCopilotAuthLogin"
     @logout-copilot-auth="logoutCopilotAuth"
     @select-model="selectModel"
-    @save-llm-settings="saveLlmSettings"
     @save-log-settings="saveLogSettings"
     @save-media-model="saveMediaModel"
     @begin-mcp-create="beginMcpCreate"
@@ -330,7 +329,6 @@ const {
   startCopilotAuthLogin,
   logoutCopilotAuth,
   selectModel,
-  saveLlmSettings,
   saveLogSettings,
   saveMediaModel,
   beginMcpCreate,

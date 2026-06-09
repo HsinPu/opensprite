@@ -466,14 +466,6 @@ class WebAdapter(MessageAdapter):
         return web_settings_payloads.anthropic_reasoning_budget(effort)
 
     @classmethod
-    def _effective_llm_request_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.effective_llm_request_payload(config)
-
-    @classmethod
-    def _llm_payload(cls, config: Config) -> dict[str, Any]:
-        return web_settings_payloads.llm_payload(config)
-
-    @classmethod
     def _log_payload(cls, config: Config) -> dict[str, Any]:
         return web_settings_payloads.log_payload(config, default_log_level=DEFAULT_LOG_LEVEL, log_levels=cls.LOG_LEVELS)
 
@@ -1054,12 +1046,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_models(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_core.handle_settings_models(self, request)
-
-    async def _handle_settings_llm(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_llm(self, request)
-
-    async def _handle_settings_llm_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_app.handle_settings_llm_update(self, request)
 
     async def _handle_settings_media(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_app.handle_settings_media(self, request)

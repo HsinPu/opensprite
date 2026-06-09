@@ -175,7 +175,6 @@ def test_register_web_routes_keeps_core_entrypoints():
     assert ("GET", "/ws") in routes
     assert ("GET", "/healthz") in routes
     assert ("GET", "/api/runs") in routes
-    assert ("GET", "/api/settings/llm") in routes
     assert ("POST", "/api/settings/update") in routes
     assert ("GET", "/") in routes
 
@@ -798,49 +797,6 @@ async def _run_web_frontend_unavailable_response(tmp_path: Path):
 
 def test_web_adapter_root_explains_missing_frontend(tmp_path):
     asyncio.run(_run_web_frontend_unavailable_response(tmp_path))
-
-
-def test_effective_llm_request_omits_provider_request_options(tmp_path):
-    config_path = tmp_path / "opensprite.json"
-    Config.copy_template(config_path)
-    config = Config.from_json(config_path)
-    config.llm.providers = {
-        "openrouter": ProviderConfig(
-            provider="openrouter",
-            api_key="router-key",
-            model="anthropic/claude-sonnet-4.6",
-            enabled=True,
-        ),
-    }
-
-    config.llm.default = "openrouter"
-    openrouter_payload = WebAdapter._effective_llm_request_payload(config)
-    assert openrouter_payload["provider"] == "openrouter"
-    assert openrouter_payload["model"] == "anthropic/claude-sonnet-4.6"
-    assert "reasoning" not in openrouter_payload
-    assert "provider_options" not in openrouter_payload
-
-
-def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
-    config_path = tmp_path / "opensprite.json"
-    Config.copy_template(config_path)
-    config = Config.from_json(config_path)
-    config.llm.providers = {
-        "minimax": ProviderConfig(
-            provider="minimax",
-            api_key="minimax-key",
-            model="MiniMax-M2.7",
-            enabled=True,
-        )
-    }
-    config.llm.default = "minimax"
-
-    payload = WebAdapter._effective_llm_request_payload(config)
-
-    assert payload["provider"] == "minimax"
-    assert payload["api_mode"] == "anthropic_messages"
-    assert payload["context_window_tokens"] == 204800
-    assert "reasoning" not in payload
 
 
 async def _run_web_network_settings_roundtrip(tmp_path: Path):
@@ -2972,21 +2928,6 @@ async def _run_web_settings_provider_api(tmp_path: Path, monkeypatch):
             assert agent.tools_config.cron.default_timezone == "Asia/Taipei"
             main_config = json.loads(config_path.read_text(encoding="utf-8"))
             assert main_config["tools"]["cron"]["default_timezone"] == "Asia/Taipei"
-
-            async with session.get(f"http://127.0.0.1:{port}/api/settings/llm") as resp:
-                assert resp.status == 200
-                llm_payload = await resp.json()
-
-            assert llm_payload["llm"]["effective_request"]["configured"] is False
-
-            async with session.put(
-                f"http://127.0.0.1:{port}/api/settings/llm",
-                json={},
-            ) as resp:
-                assert resp.status == 200
-                llm_update_payload = await resp.json()
-
-            assert llm_update_payload["llm"]["effective_request"]["configured"] is False
 
             async with session.get(f"http://127.0.0.1:{port}/api/settings/log") as resp:
                 assert resp.status == 200

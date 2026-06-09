@@ -333,10 +333,6 @@
           <p v-if="settingsState.modelsError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.modelsError }}
           </p>
-          <p v-if="settingsState.llmNotice" class="settings-inline-status">{{ settingsState.llmNotice }}</p>
-          <p v-if="settingsState.llmError" class="settings-inline-status settings-inline-status--error">
-            {{ settingsState.llmError }}
-          </p>
           <p v-if="settingsState.mediaError" class="settings-inline-status settings-inline-status--error">
             {{ settingsState.mediaError }}
           </p>
@@ -432,24 +428,6 @@
             </div>
 
           </div>
-
-          <h3>{{ copy.settings.models.effectiveRequest.title }}</h3>
-          <div class="settings-card">
-            <div class="settings-row">
-              <div>
-                <strong>{{ effectiveRequestProviderLabel }}</strong>
-                <span>{{ copy.settings.models.effectiveRequest.description }}</span>
-              </div>
-              <span class="provider-row__badge">{{ effectiveRequestConfiguredLabel }}</span>
-            </div>
-            <div v-for="row in effectiveRequestRows" :key="row.key" class="settings-row">
-              <div>
-                <strong>{{ row.label }}</strong>
-                <span>{{ row.value }}</span>
-              </div>
-            </div>
-          </div>
-
           <h3>{{ copy.settings.models.mediaTitle }}</h3>
           <div v-if="settingsState.media.providers.length === 0" class="settings-card">
             <div class="settings-row">
@@ -3037,40 +3015,6 @@ const selectedTextContextBadge = computed(() => {
     return "";
   }
   return modelContextLabel(selectedTextProvider.value, selectedTextModel.value);
-});
-
-const effectiveRequest = computed(() => props.settingsState.llm?.effective_request || {});
-
-const effectiveRequestProviderLabel = computed(() => {
-  const request = effectiveRequest.value;
-  const provider = request.provider || request.provider_id || props.copy.settings.models.effectiveRequest.noProvider;
-  return request.api_mode ? `${provider} (${request.api_mode})` : provider;
-});
-
-const effectiveRequestConfiguredLabel = computed(() => (
-  effectiveRequest.value.configured
-    ? props.copy.settings.models.effectiveRequest.configured
-    : props.copy.settings.models.effectiveRequest.notConfigured
-));
-
-const effectiveRequestRows = computed(() => {
-  const request = effectiveRequest.value;
-  const labels = props.copy.settings.models.effectiveRequest.labels;
-  const rows = [
-    {
-      key: "model",
-      label: labels.model,
-      value: request.model || props.copy.settings.models.noModel,
-    },
-  ];
-  if (request.context_window_tokens) {
-    rows.splice(1, 0, {
-      key: "context-window",
-      label: labels.contextWindow,
-      value: String(request.context_window_tokens),
-    });
-  }
-  return rows;
 });
 
 function hasConnectedProvider(presetId) {

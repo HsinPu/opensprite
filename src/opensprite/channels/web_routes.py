@@ -66,8 +66,6 @@ def register_web_routes(adapter: Any, *, ws_path: str, health_path: str) -> None
     router.add_post("/api/settings/providers/{provider_id}/disconnect", adapter._handle_settings_provider_disconnect)
     router.add_get("/api/settings/models", adapter._handle_settings_models)
     router.add_post("/api/settings/models/select", adapter._handle_settings_model_select)
-    router.add_get("/api/settings/llm", adapter._handle_settings_llm)
-    router.add_put("/api/settings/llm", adapter._handle_settings_llm_update)
     router.add_get("/api/settings/update", adapter._handle_settings_update_status)
     router.add_post("/api/settings/update", adapter._handle_settings_update_apply)
     router.add_get("/api/settings/media", adapter._handle_settings_media)
