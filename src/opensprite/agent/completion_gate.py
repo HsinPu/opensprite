@@ -26,6 +26,7 @@ from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_m
 from .task.contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,
+    _chat_json_planning_llm,
     accepts_final_response_task_type,
     intent_supports_fallback_active_task_update,
     is_analysis_response_intent_kind,
@@ -301,13 +302,14 @@ class CompletionJudgeService:
         if is_unconfigured_llm(provider, model):
             raise CompletionJudgeError(COMPLETION_JUDGE_LLM_NOT_CONFIGURED_REASON)
         prompt = _build_judge_prompt(facts)
-        response = await provider.chat(
-            [
+        response = await _chat_json_planning_llm(
+            provider=provider,
+            messages=[
                 ChatMessage(role="system", content=COMPLETION_JUDGE_SYSTEM_PROMPT),
                 ChatMessage(role="user", content=prompt),
             ],
             model=model,
-            **self.llm_config.decoding_kwargs(),
+            llm_config=self.llm_config,
         )
         response_text = str(getattr(response, "content", "") or "")
         payload = parse_completion_judge_json(response_text)
@@ -319,10 +321,15 @@ def build_completion_judge_facts(
     task_intent: TaskIntent,
     response_text: str,
     execution_result: ExecutionResult,
+    user_message_text: str = "",
 ) -> dict[str, Any]:
     """Build the structured, language-neutral facts given to the completion judge."""
     return {
         "schema_version": 1,
+        "user_message": {
+            "text": _truncate(user_message_text, max_chars=4000),
+            "char_count": len(str(user_message_text or "")),
+        },
         "task_intent": task_intent.to_metadata(),
         "task_contract": (
             execution_result.task_contract.to_metadata()
@@ -1163,6 +1170,7 @@ class CompletionGateService:
         task_intent: TaskIntent,
         response_text: str,
         execution_result: ExecutionResult,
+        user_message_text: str = "",
         provider: Any,
         model: str | None,
     ) -> CompletionGateResult:
@@ -1174,6 +1182,7 @@ class CompletionGateService:
             task_intent=task_intent,
             response_text=response_text,
             execution_result=execution_result,
+            user_message_text=user_message_text,
         )
         try:
             verdict = await judge.judge(provider=provider, model=model, facts=facts)

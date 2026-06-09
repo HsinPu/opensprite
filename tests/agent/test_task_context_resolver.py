@@ -6,6 +6,7 @@ from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task.contract import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
+    JSON_PLANNING_MIN_OUTPUT_TOKENS,
     TASK_CONTEXT_RESOLUTION_PURPOSE,
     TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX,
@@ -82,12 +83,11 @@ class _JsonProvider:
         self.content = content
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=None, max_tokens=None, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=None, **kwargs):
         self.calls.append(
             {
                 "messages": list(messages),
                 "model": model,
-                "temperature": temperature,
                 "max_tokens": max_tokens,
             }
         )
@@ -170,9 +170,7 @@ def test_task_context_deterministic_reasons_are_stable():
 def test_task_context_does_not_infer_follow_up_when_llm_fails():
     provider = _FailingProvider()
 
-    llm_config = Config.load_agent_template_config().task_context_llm.model_copy(
-        update={"temperature": 0.2, "max_tokens": 321}
-    )
+    llm_config = Config.load_agent_template_config().task_context_llm.model_copy(update={"max_tokens": 321})
     decision = asyncio.run(
         TaskContextResolver(llm_config).resolve(
             current_message="那00981t呢",
@@ -208,8 +206,10 @@ def test_task_context_uses_llm_for_ambiguous_follow_up():
 
     assert len(provider.calls) == 1
     task_context_config = Config.load_agent_template_config().task_context_llm
-    assert provider.calls[0]["temperature"] == task_context_config.temperature
-    assert provider.calls[0]["max_tokens"] == task_context_config.max_tokens
+    assert provider.calls[0]["max_tokens"] == max(
+        task_context_config.max_tokens,
+        JSON_PLANNING_MIN_OUTPUT_TOKENS,
+    )
     assert decision.method == "llm"
     assert decision.is_follow_up is True
     assert decision.inherited_task_type == "web_research"

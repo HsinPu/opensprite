@@ -1,15 +1,33 @@
 {
   "version": 1,
-  "provider_order": ["openrouter", "openai", "openai-codex", "copilot", "ollama", "ollama-cloud", "minimax"],
+  "provider_order": [
+    "openrouter",
+    "openai",
+    "openai-codex",
+    "copilot",
+    "ollama",
+    "ollama-cloud",
+    "minimax"
+  ],
   "providers": {
     "openrouter": {
       "display_name": "OpenRouter",
       "default_base_url": "https://openrouter.ai/api/v1",
-      "capabilities": ["chat", "model_discovery", "media_discovery", "request_options", "model_metadata"],
-      "model_discovery": {"type": "openrouter"},
-      "media_discovery": {"type": "openrouter_image"},
-      "request_options": ["reasoning", "provider_sort", "require_parameters"],
-      "model_metadata_fields": ["context_length"],
+      "capabilities": [
+        "chat",
+        "model_discovery",
+        "media_discovery",
+        "model_metadata"
+      ],
+      "model_discovery": {
+        "type": "openrouter"
+      },
+      "media_discovery": {
+        "type": "openrouter_image"
+      },
+      "model_metadata_fields": [
+        "context_length"
+      ],
       "model_choices": [
         "moonshotai/kimi-k2.6",
         "anthropic/claude-sonnet-4.6",
@@ -60,114 +78,72 @@
         "anthropic/claude-sonnet-4.6": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         },
         "anthropic/claude-opus-4.7": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "high"
-          }
+          "tools": true
         },
         "google/gemini-3-flash-preview": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         },
         "google/gemini-3.1-pro-preview": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "high"
-          }
+          "tools": true
         },
         "google/gemini-3.1-flash-lite-preview": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "low"
-          }
+          "tools": true
         },
         "openai/gpt-5.5": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         },
         "openai/gpt-5.5-pro": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "high"
-          }
+          "tools": true
         },
         "qwen/qwen3.6-flash": {
           "reasoning": true,
           "vision": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "low"
-          }
+          "tools": true
         },
         "qwen/qwen3.6-max-preview": {
           "reasoning": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "high"
-          }
+          "tools": true
         },
         "qwen/qwen3.6-plus": {
           "reasoning": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         },
         "minimax/minimax-m2.7": {
           "reasoning": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         },
         "minimax/minimax-m2.5:free": {
           "reasoning": true,
-          "tools": true,
-          "recommended_options": {
-            "reasoning_enabled": true,
-            "reasoning_effort": "medium"
-          }
+          "tools": true
         }
       }
     },
     "openai": {
       "display_name": "OpenAI",
       "default_base_url": "https://api.openai.com/v1",
-      "capabilities": ["chat", "model_discovery", "media"],
-      "model_discovery": {"type": "openai_compatible"},
+      "capabilities": [
+        "chat",
+        "model_discovery",
+        "media"
+      ],
+      "model_discovery": {
+        "type": "openai_compatible"
+      },
       "model_choices": [
         "gpt-5.5",
         "gpt-5.5-pro",
@@ -204,8 +180,13 @@
       "default_base_url": "https://chatgpt.com/backend-api/codex",
       "auth_type": "openai_codex_oauth",
       "api_mode": "responses",
-      "capabilities": ["chat", "model_discovery"],
-      "model_discovery": {"type": "codex"},
+      "capabilities": [
+        "chat",
+        "model_discovery"
+      ],
+      "model_discovery": {
+        "type": "codex"
+      },
       "model_choices": [
         "gpt-5.1-codex",
         "gpt-5.3-codex"
@@ -215,8 +196,13 @@
       "display_name": "GitHub Copilot",
       "default_base_url": "https://api.githubcopilot.com",
       "auth_type": "github_copilot_oauth",
-      "capabilities": ["chat", "model_discovery"],
-      "model_discovery": {"type": "copilot"},
+      "capabilities": [
+        "chat",
+        "model_discovery"
+      ],
+      "model_discovery": {
+        "type": "copilot"
+      },
       "model_choices": [
         "gpt-5.4",
         "gpt-5.4-mini",
@@ -239,15 +225,25 @@
       "display_name": "Ollama Local",
       "default_base_url": "http://localhost:11434/v1",
       "auth_type": "optional_api_key",
-      "capabilities": ["chat", "model_discovery"],
-      "model_discovery": {"type": "openai_compatible"},
+      "capabilities": [
+        "chat",
+        "model_discovery"
+      ],
+      "model_discovery": {
+        "type": "openai_compatible"
+      },
       "model_choices": []
     },
     "ollama-cloud": {
       "display_name": "Ollama Cloud",
       "default_base_url": "https://ollama.com/v1",
-      "capabilities": ["chat", "model_discovery"],
-      "model_discovery": {"type": "openai_compatible"},
+      "capabilities": [
+        "chat",
+        "model_discovery"
+      ],
+      "model_discovery": {
+        "type": "openai_compatible"
+      },
       "model_choices": [
         "qwen3.5:397b",
         "glm-5",
@@ -259,11 +255,22 @@
       "display_name": "MiniMax",
       "default_base_url": "https://api.minimax.io/anthropic",
       "api_mode": "anthropic_messages",
-      "capabilities": ["chat", "media"],
-      "model_choices": ["MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1"],
+      "capabilities": [
+        "chat",
+        "media"
+      ],
+      "model_choices": [
+        "MiniMax-M2.7",
+        "MiniMax-M2.5",
+        "MiniMax-M2.1"
+      ],
       "media_model_choices": {
-        "vision": ["MiniMax-VL-01"],
-        "ocr": ["MiniMax-VL-01"]
+        "vision": [
+          "MiniMax-VL-01"
+        ],
+        "ocr": [
+          "MiniMax-VL-01"
+        ]
       }
     }
   }

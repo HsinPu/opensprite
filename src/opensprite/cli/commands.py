@@ -302,10 +302,10 @@ def chat_smoke(
         "--timeout",
         help="Maximum seconds to wait for each case.",
     ),
-    external_chat_prefix: str = typer.Option(
-        "cli-trace-smoke",
+    external_chat_prefix: str | None = typer.Option(
+        None,
         "--external-chat-prefix",
-        help="Prefix for generated Web external chat ids.",
+        help="Prefix for generated Web external chat ids. Defaults to a unique smoke run prefix.",
     ),
     db_path: str | None = typer.Option(
         None,

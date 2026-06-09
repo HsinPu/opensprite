@@ -865,52 +865,15 @@ export const DISPLAY_COPY = {
           configured: "已設定",
           notConfigured: "未設定",
           noProvider: "尚未選擇 provider",
-          none: "未送出",
-          omitted: "省略",
-          notSent: "未送出",
-          on: "開啟",
-          off: "關閉",
-          reasoningNone: "這個 provider mode 目前不送出 reasoning/thinking 參數。",
           labels: {
             model: "模型",
             contextWindow: "設定的上下文窗口",
-            reasoning: "Reasoning / thinking",
-            providerOptions: "Provider 專屬選項",
           },
         },
-        providerOptions: {
-          title: "Provider 進階選項",
-          description: "這些設定會隨文字模型請求送出，只影響這個 provider 連線。",
-          showOptions: "展開設定",
-          hideOptions: "收起設定",
-          applyRecommended: "套用建議",
-          save: "儲存 provider 選項",
-          none: "不指定",
-          reasoningEnabled: "啟用 reasoning",
-          reasoningEnabledDescription: "對支援的模型要求 provider reasoning 控制。",
-          reasoningEffort: "Reasoning effort",
-          reasoningMaxTokens: "Reasoning max tokens",
-          reasoningExclude: "不回傳 reasoning",
-          reasoningExcludeDescription: "請 provider 不把 reasoning 區塊回傳給 OpenSprite。",
-          providerSort: "Provider sort",
-          requireParameters: "Require parameters",
-          requireParametersDescription: "只路由到支援所送參數的模型供應商。",
+        modelMetadata: {
           contextLength: (value) => `上下文：${value} tokens`,
           customGroup: "自訂 / 其他",
           otherGroup: "其他",
-          noRecommendation: "預設建議：reasoning / effort: medium",
-          capabilities: {
-            reasoning: "Reasoning",
-            vision: "Vision",
-            tools: "Tools",
-          },
-          recommendedSummary: (options = {}) => {
-            options = options || {};
-            const parts = [];
-            if (options.reasoning_enabled) parts.push("reasoning");
-            if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
-            return parts.length ? `建議：${parts.join(" / ")}` : "預設建議：reasoning / effort: medium";
-          },
         },
         mediaCategories: {
           vision: {
@@ -1515,7 +1478,6 @@ export const DISPLAY_COPY = {
       modelRestartRequired: "已儲存，重啟 opensprite gateway 後生效。",
       modelLoadFailed: "無法載入模型設定。",
       modelSelectFailed: "無法選擇模型。",
-      providerOptionsSaveFailed: "無法儲存提供商選項。",
       updateStatusFailed: "無法檢查更新狀態。",
       updateFailed: "無法完成升級。",
       updateApplied: "升級已套用。",
@@ -2457,52 +2419,15 @@ export const DISPLAY_COPY = {
           configured: "Configured",
           notConfigured: "Not configured",
           noProvider: "No provider selected",
-          none: "Not sent",
-          omitted: "omitted",
-          notSent: "not sent",
-          on: "on",
-          off: "off",
-          reasoningNone: "This provider mode does not currently send reasoning/thinking parameters.",
           labels: {
             model: "Model",
             contextWindow: "Configured context window",
-            reasoning: "Reasoning / thinking",
-            providerOptions: "Provider-specific options",
           },
         },
-        providerOptions: {
-          title: "Provider advanced options",
-          description: "These settings are sent with text model requests and only affect this provider connection.",
-          showOptions: "Show options",
-          hideOptions: "Hide options",
-          applyRecommended: "Use recommended",
-          save: "Save provider options",
-          none: "Unspecified",
-          reasoningEnabled: "Enable reasoning",
-          reasoningEnabledDescription: "Ask the provider to apply reasoning controls for supported models.",
-          reasoningEffort: "Reasoning effort",
-          reasoningMaxTokens: "Reasoning max tokens",
-          reasoningExclude: "Exclude reasoning",
-          reasoningExcludeDescription: "Ask the provider not to return reasoning blocks to OpenSprite.",
-          providerSort: "Provider sort",
-          requireParameters: "Require parameters",
-          requireParametersDescription: "Only route to providers that support the parameters being sent.",
+        modelMetadata: {
           contextLength: (value) => `context: ${value} tokens`,
           customGroup: "Custom / Other",
           otherGroup: "Other",
-          noRecommendation: "Default recommendation: reasoning / effort: medium",
-          capabilities: {
-            reasoning: "Reasoning",
-            vision: "Vision",
-            tools: "Tools",
-          },
-          recommendedSummary: (options = {}) => {
-            options = options || {};
-            const parts = [];
-            if (options.reasoning_enabled) parts.push("reasoning");
-            if (options.reasoning_effort) parts.push(`effort: ${options.reasoning_effort}`);
-            return parts.length ? `Recommended: ${parts.join(" / ")}` : "Default recommendation: reasoning / effort: medium";
-          },
         },
         mediaCategories: {
           vision: {
@@ -3107,7 +3032,6 @@ export const DISPLAY_COPY = {
       modelRestartRequired: "Saved. Restart opensprite gateway for this to take effect.",
       modelLoadFailed: "Could not load model settings.",
       modelSelectFailed: "Could not select model.",
-      providerOptionsSaveFailed: "Could not save provider options.",
       updateStatusFailed: "Could not check update status.",
       updateFailed: "Could not complete update.",
       updateApplied: "Update applied.",

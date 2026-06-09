@@ -9,7 +9,7 @@ from opensprite.runs.events import SEARCH_INDEX_MESSAGE_FAILED_EVENT
 from opensprite.storage import MemoryStorage, StoredMessage
 
 
-def test_minimax_chat_enables_reasoning_split_and_preserves_history_details():
+def test_minimax_chat_preserves_history_reasoning_details_without_extra_body():
     calls = []
 
     class FakeCompletions:
@@ -50,7 +50,7 @@ def test_minimax_chat_enables_reasoning_split_and_preserves_history_details():
 
     assert response.content == "final answer"
     assert response.reasoning_details == [{"type": "reasoning.text", "text": "thinking"}]
-    assert calls[0]["extra_body"] == {"reasoning_split": True}
+    assert "extra_body" not in calls[0]
     assert calls[0]["messages"][0]["reasoning_details"] == [
         {"type": "reasoning.text", "text": "previous thinking"}
     ]

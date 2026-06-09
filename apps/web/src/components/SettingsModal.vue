@@ -431,123 +431,6 @@
               </button>
             </div>
 
-            <div v-if="showProviderRequestOptions" class="provider-options">
-              <div class="provider-options__header">
-                <div>
-                  <strong>{{ copy.settings.models.providerOptions.title }}</strong>
-                  <span>{{ copy.settings.models.providerOptions.description }}</span>
-                </div>
-                <button
-                  class="secondary-button"
-                  type="button"
-                  :disabled="settingsState.modelsLoading"
-                  @click="providerRequestOptionsExpanded = !providerRequestOptionsExpanded"
-                >
-                  {{ providerRequestOptionsExpanded ? copy.settings.models.providerOptions.hideOptions : copy.settings.models.providerOptions.showOptions }}
-                </button>
-              </div>
-
-              <template v-if="providerRequestOptionsExpanded">
-                <div class="provider-options__capabilities">
-                  <span v-if="selectedTextContextBadge" class="provider-row__badge">
-                    {{ selectedTextContextBadge }}
-                  </span>
-                  <span v-for="capability in selectedTextCapabilityBadges" :key="capability" class="provider-row__badge">
-                    {{ capability }}
-                  </span>
-                  <span class="settings-muted">
-                    {{ copy.settings.models.providerOptions.recommendedSummary(selectedTextRecommendedOptions) }}
-                  </span>
-                </div>
-
-                <div class="provider-options__grid">
-                  <div v-if="supportsSelectedProviderRequestOption('reasoning')" class="provider-option-row provider-option-row--switch">
-                    <div>
-                      <strong>{{ copy.settings.models.providerOptions.reasoningEnabled }}</strong>
-                      <span>{{ copy.settings.models.providerOptions.reasoningEnabledDescription }}</span>
-                    </div>
-                    <input
-                      v-model="settingsState.providerRequestOptions[selectedTextProvider.id].reasoningEnabled"
-                      class="switch"
-                      type="checkbox"
-                      :aria-label="copy.settings.models.providerOptions.reasoningEnabled"
-                    />
-                  </div>
-                  <label v-if="supportsSelectedProviderRequestOption('reasoning')" class="provider-option-field">
-                    <span>{{ copy.settings.models.providerOptions.reasoningEffort }}</span>
-                    <select v-model="settingsState.providerRequestOptions[selectedTextProvider.id].reasoningEffort">
-                      <option value="">{{ copy.settings.models.providerOptions.none }}</option>
-                      <option value="minimal">minimal</option>
-                      <option value="low">low</option>
-                      <option value="medium">medium</option>
-                      <option value="high">high</option>
-                      <option value="xhigh">xhigh</option>
-                    </select>
-                  </label>
-                  <label v-if="supportsSelectedProviderRequestOption('reasoning')" class="provider-option-field">
-                    <span>{{ copy.settings.models.providerOptions.reasoningMaxTokens }}</span>
-                    <input
-                      v-model="settingsState.providerRequestOptions[selectedTextProvider.id].reasoningMaxTokens"
-                      type="number"
-                      min="1"
-                      :placeholder="copy.settings.models.providerOptions.none"
-                    />
-                  </label>
-                  <div v-if="supportsSelectedProviderRequestOption('reasoning')" class="provider-option-row provider-option-row--switch">
-                    <div>
-                      <strong>{{ copy.settings.models.providerOptions.reasoningExclude }}</strong>
-                      <span>{{ copy.settings.models.providerOptions.reasoningExcludeDescription }}</span>
-                    </div>
-                    <input
-                      v-model="settingsState.providerRequestOptions[selectedTextProvider.id].reasoningExclude"
-                      class="switch"
-                      type="checkbox"
-                      :aria-label="copy.settings.models.providerOptions.reasoningExclude"
-                    />
-                  </div>
-                  <label v-if="supportsSelectedProviderRequestOption('provider_sort')" class="provider-option-field">
-                    <span>{{ copy.settings.models.providerOptions.providerSort }}</span>
-                    <select v-model="settingsState.providerRequestOptions[selectedTextProvider.id].providerSort">
-                      <option value="">{{ copy.settings.models.providerOptions.none }}</option>
-                      <option value="price">price</option>
-                      <option value="throughput">throughput</option>
-                      <option value="latency">latency</option>
-                    </select>
-                  </label>
-                  <div v-if="supportsSelectedProviderRequestOption('require_parameters')" class="provider-option-row provider-option-row--switch">
-                    <div>
-                      <strong>{{ copy.settings.models.providerOptions.requireParameters }}</strong>
-                      <span>{{ copy.settings.models.providerOptions.requireParametersDescription }}</span>
-                    </div>
-                    <input
-                      v-model="settingsState.providerRequestOptions[selectedTextProvider.id].requireParameters"
-                      class="switch"
-                      type="checkbox"
-                      :aria-label="copy.settings.models.providerOptions.requireParameters"
-                    />
-                  </div>
-                </div>
-
-                <div class="provider-options__actions">
-                  <button
-                    class="secondary-button"
-                    type="button"
-                    :disabled="settingsState.modelsLoading"
-                    @click="$emit('apply-provider-recommended-options', selectedTextProvider.id, selectedTextModel)"
-                  >
-                    {{ copy.settings.models.providerOptions.applyRecommended }}
-                  </button>
-                  <button
-                    class="secondary-button"
-                    type="button"
-                    :disabled="settingsState.modelsLoading"
-                    @click="$emit('save-provider-request-options', selectedTextProvider.id)"
-                  >
-                    {{ copy.settings.models.providerOptions.save }}
-                  </button>
-                </div>
-              </template>
-            </div>
           </div>
 
           <h3>{{ copy.settings.models.effectiveRequest.title }}</h3>
@@ -2371,11 +2254,7 @@ import CuratorSettingsPage from "./CuratorSettingsPage.vue";
 import GeneralSettingsPage from "./GeneralSettingsPage.vue";
 import SettingsNav from "./SettingsNav.vue";
 import ShortcutsSettingsPage from "./ShortcutsSettingsPage.vue";
-import {
-  providerSupportsModelMetadata,
-  providerSupportsRequestOption,
-  providerSupportsRequestOptions,
-} from "../composables/settingsNormalizers";
+import { providerSupportsModelMetadata } from "../composables/settingsNormalizers";
 
 const props = defineProps({
   copy: {
@@ -2427,7 +2306,6 @@ const evalCopyState = ref({ key: "", status: "idle" });
 const evalCopyFallbackOpen = ref(false);
 const evalCopyText = ref("");
 const evalCopyTextarea = ref(null);
-const providerRequestOptionsExpanded = ref(false);
 const searxngOptionsExpanded = ref(false);
 const EVAL_HISTORY_GROUP_WINDOW_SECONDS = 10 * 60;
 let evalCopyResetTimer = null;
@@ -3051,7 +2929,7 @@ function formatCompactTokenCount(value) {
 function modelContextLabel(provider, model) {
   const contextLength = provider?.model_metadata?.[model]?.context_length;
   const formatted = formatCompactTokenCount(contextLength);
-  return formatted ? props.copy.settings.models.providerOptions.contextLength(formatted) : "";
+  return formatted ? props.copy.settings.models.modelMetadata.contextLength(formatted) : "";
 }
 
 function textModelOptionLabel(model) {
@@ -3115,12 +2993,12 @@ function slashModelFamily(model) {
   const normalized = String(model || "").trim();
   const separator = normalized.indexOf("/");
   if (separator <= 0) {
-    return { key: "custom", label: props.copy.settings.models.providerOptions.customGroup };
+    return { key: "custom", label: props.copy.settings.models.modelMetadata.customGroup };
   }
   const family = normalized.slice(0, separator).trim().toLowerCase();
   return {
     key: family,
-    label: modelFamilyLabels[family] || titleCaseModelFamily(family) || props.copy.settings.models.providerOptions.otherGroup,
+    label: modelFamilyLabels[family] || titleCaseModelFamily(family) || props.copy.settings.models.modelMetadata.otherGroup,
   };
 }
 
@@ -3154,30 +3032,11 @@ const selectedTextModel = computed(() => {
   return String(props.settingsState.modelSelections[selectedTextProvider.value.id] || selectedTextProvider.value.selected_model || "").trim();
 });
 
-const selectedTextCapabilities = computed(() => {
-  if (!selectedTextProvider.value || !selectedTextModel.value) {
-    return null;
-  }
-  return selectedTextProvider.value.model_capabilities?.[selectedTextModel.value] || null;
-});
-
-const selectedTextRecommendedOptions = computed(() => selectedTextCapabilities.value?.recommended_options || null);
-
 const selectedTextContextBadge = computed(() => {
   if (!providerSupportsModelMetadata(selectedTextProvider.value, "context_length") || !selectedTextModel.value) {
     return "";
   }
   return modelContextLabel(selectedTextProvider.value, selectedTextModel.value);
-});
-
-const selectedTextCapabilityBadges = computed(() => {
-  const labels = props.copy.settings.models.providerOptions.capabilities;
-  const capabilities = selectedTextCapabilities.value || {};
-  return [
-    capabilities.reasoning ? labels.reasoning : null,
-    capabilities.vision ? labels.vision : null,
-    capabilities.tools ? labels.tools : null,
-  ].filter(Boolean);
 });
 
 const effectiveRequest = computed(() => props.settingsState.llm?.effective_request || {});
@@ -3203,16 +3062,6 @@ const effectiveRequestRows = computed(() => {
       label: labels.model,
       value: request.model || props.copy.settings.models.noModel,
     },
-    {
-      key: "reasoning",
-      label: labels.reasoning,
-      value: formatEffectiveReasoning(request.reasoning || {}),
-    },
-    {
-      key: "provider-options",
-      label: labels.providerOptions,
-      value: formatEffectiveParams(request.provider_options || {}),
-    },
   ];
   if (request.context_window_tokens) {
     rows.splice(1, 0, {
@@ -3223,51 +3072,6 @@ const effectiveRequestRows = computed(() => {
   }
   return rows;
 });
-
-function formatEffectiveReasoning(reasoning) {
-  const copyText = props.copy.settings.models.effectiveRequest;
-  if (!reasoning.source || reasoning.source === "none") {
-    return copyText.reasoningNone;
-  }
-  if (!reasoning.sent) {
-    return `${reasoning.source}: ${copyText.notSent}`;
-  }
-  return `${reasoning.source}: ${formatEffectiveParams(reasoning.payload || {})}`;
-}
-
-function formatEffectiveParams(params) {
-  const entries = Object.entries(params || {});
-  if (!entries.length) {
-    return props.copy.settings.models.effectiveRequest.none;
-  }
-  return entries.map(([key, value]) => `${key}=${formatEffectiveParamValue(value)}`).join(", ");
-}
-
-function formatEffectiveParamValue(value) {
-  const copyText = props.copy.settings.models.effectiveRequest;
-  if (value === null || value === undefined || value === "") {
-    return copyText.omitted;
-  }
-  if (typeof value === "boolean") {
-    return value ? copyText.on : copyText.off;
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map(formatEffectiveParamValue).join(", ")}]`;
-  }
-  if (typeof value === "object") {
-    return `{${formatEffectiveParams(value)}}`;
-  }
-  return String(value);
-}
-
-const showProviderRequestOptions = computed(() => (
-  providerSupportsRequestOptions(selectedTextProvider.value) &&
-  props.settingsState.providerRequestOptions[selectedTextProvider.value.id]
-));
-
-function supportsSelectedProviderRequestOption(option) {
-  return providerSupportsRequestOption(selectedTextProvider.value, option);
-}
 
 function hasConnectedProvider(presetId) {
   return props.settingsState.providers.connected.some((provider) => provider.provider === presetId || provider.id === presetId);
@@ -3680,8 +3484,6 @@ const emit = defineEmits([
   "start-copilot-auth-login",
   "logout-copilot-auth",
   "select-model",
-  "apply-provider-recommended-options",
-  "save-provider-request-options",
   "save-llm-settings",
   "save-log-settings",
   "save-media-model",

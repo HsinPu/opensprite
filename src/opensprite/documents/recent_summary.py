@@ -188,7 +188,7 @@ Required template:
                 {"role": "user", "content": prompt},
             ],
             model=model,
-            **llm.decoding_kwargs(),
+            **llm.request_kwargs(),
         )
 
         update = str(response.content or "").strip()

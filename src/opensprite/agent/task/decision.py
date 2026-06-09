@@ -19,7 +19,10 @@ from .contract import (
     REVIEW_INTENT_KIND,
     TaskContextDecision,
     TaskIntent,
+    _chat_json_planning_llm,
     _compact_text,
+    _llm_response_preview,
+    _llm_response_text,
     _resolver_coerce_bool,
     _resolver_coerce_confidence,
     _resolver_parse_json_object,
@@ -33,6 +36,10 @@ LLM_TASK_INTENT_METHOD = "llm"
 LLM_INITIAL_TASK_PLANNING_REASON = "llm resolved initial task planning"
 TASK_INITIAL_PLANNING_PURPOSE = "initial task planning was not inferred"
 TASK_INITIAL_PLANNING_MIN_CONFIDENCE = 0.55
+_INITIAL_TASK_PLANNING_REPAIR_SYSTEM_PROMPT = (
+    "You repair OpenSprite initial task planning output. Return exactly one valid JSON object "
+    "matching the requested schema. Do not answer the user. Do not include markdown."
+)
 _INITIAL_TASK_INTENT_KINDS = frozenset(
     {
         ANALYSIS_INTENT_KIND,
@@ -161,7 +168,8 @@ class TurnTaskPlanningService:
             work_state_summary=work_state_summary,
         )
         try:
-            response = await provider.chat(
+            response = await _chat_json_planning_llm(
+                provider=provider,
                 messages=[
                     ChatMessage(
                         role="system",
@@ -173,15 +181,47 @@ class TurnTaskPlanningService:
                     ChatMessage(role="user", content=prompt),
                 ],
                 model=model,
-                **self.llm_config.decoding_kwargs(),
+                llm_config=self.llm_config,
             )
         except Exception as exc:
             raise InitialTaskPlanningError(f"initial task planning LLM call failed: {exc}") from exc
 
+        response_text = _llm_response_text(response)
         try:
-            payload = _resolver_parse_json_object(str(getattr(response, "content", "") or ""))
+            payload = _resolver_parse_json_object(response_text)
         except ValueError as exc:
-            raise InitialTaskPlanningError("initial task planning response was not valid JSON") from exc
+            raw_response_preview = _llm_response_preview(response, text=response_text)
+            try:
+                repair_response = await _chat_json_planning_llm(
+                    provider=provider,
+                    messages=[
+                        ChatMessage(role="system", content=_INITIAL_TASK_PLANNING_REPAIR_SYSTEM_PROMPT),
+                        ChatMessage(
+                            role="user",
+                            content=(
+                                "Original initial planning prompt:\n"
+                                f"{prompt}\n\n"
+                                "Invalid initial planning response:\n"
+                                f"{raw_response_preview}\n\n"
+                                "Return only the corrected JSON object."
+                            ),
+                        ),
+                    ],
+                    model=model,
+                    llm_config=self.llm_config,
+                )
+            except Exception as repair_exc:
+                raise InitialTaskPlanningError(
+                    f"initial task planning repair LLM call failed: {repair_exc}"
+                ) from repair_exc
+            repair_text = _llm_response_text(repair_response)
+            try:
+                payload = _resolver_parse_json_object(repair_text)
+            except ValueError as repair_parse_exc:
+                repair_preview = _llm_response_preview(repair_response, text=repair_text)
+                raise InitialTaskPlanningError(
+                    f"initial task planning response was not valid JSON; raw_response_preview={repair_preview}"
+                ) from repair_parse_exc
         if not payload:
             raise InitialTaskPlanningError("initial task planning response was empty")
         confidence = _resolver_coerce_confidence(payload.get("confidence"))

@@ -206,7 +206,7 @@ Required memory template:
             ],
             tools=_SAVE_MEMORY_TOOL,
             model=model,
-            **llm.decoding_kwargs(),
+            **llm.request_kwargs(),
         )
 
         if not response.tool_calls:

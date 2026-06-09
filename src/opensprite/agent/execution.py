@@ -1188,7 +1188,7 @@ Output exactly these sections when applicable:
                 messages=compaction_messages,
                 tools=None,
                 status_callback=None,
-                **compaction_llm.decoding_kwargs(),
+                **compaction_llm.request_kwargs(),
             )
         except Exception as exc:
             error_preview = self.format_log_preview(str(exc), max_chars=240)

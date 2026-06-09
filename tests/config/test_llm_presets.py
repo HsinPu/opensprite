@@ -5,7 +5,6 @@ from opensprite.config.llm_presets import (
     provider_auth_type,
     provider_default_base_url,
     provider_profile_defaults,
-    provider_request_options,
 )
 
 
@@ -107,12 +106,10 @@ def test_load_llm_presets_has_expected_providers():
         "chat",
         "model_discovery",
         "media_discovery",
-        "request_options",
         "model_metadata",
     )
     assert presets.providers["openrouter"].model_discovery == {"type": "openrouter"}
     assert presets.providers["openrouter"].media_discovery == {"type": "openrouter_image"}
-    assert presets.providers["openrouter"].request_options == ("reasoning", "provider_sort", "require_parameters")
     assert presets.providers["openrouter"].model_metadata_fields == ("context_length",)
     assert presets.providers["openai"].model_discovery == {"type": "openai_compatible"}
     assert presets.providers["openai-codex"].model_discovery == {"type": "codex"}
@@ -121,15 +118,8 @@ def test_load_llm_presets_has_expected_providers():
         "reasoning": True,
         "vision": True,
         "tools": True,
-        "recommended_options": {
-            "reasoning_enabled": True,
-            "reasoning_effort": "medium",
-        },
     }
-    assert presets.providers["openrouter"].model_capabilities["openai/gpt-5.5-pro"]["recommended_options"] == {
-        "reasoning_enabled": True,
-        "reasoning_effort": "high",
-    }
+    assert presets.providers["openrouter"].model_capabilities["openai/gpt-5.5-pro"]["reasoning"] is True
     assert presets.providers["minimax"].model_choices[:3] == ("MiniMax-M2.7", "MiniMax-M2.5", "MiniMax-M2.1")
     assert presets.providers["minimax"].default_base_url == "https://api.minimax.io/anthropic"
     assert presets.providers["minimax"].api_mode == "anthropic_messages"
@@ -145,7 +135,6 @@ def test_provider_profile_accessors_return_known_provider_fields():
     assert profile is not None
     assert profile.default_base_url == "https://openrouter.ai/api/v1"
     assert provider_default_base_url("openrouter") == "https://openrouter.ai/api/v1"
-    assert provider_request_options("openrouter") == ("reasoning", "provider_sort", "require_parameters")
     assert provider_auth_type("openai-codex") == "openai_codex_oauth"
     assert provider_api_mode("minimax") == "anthropic_messages"
 
@@ -153,7 +142,6 @@ def test_provider_profile_accessors_return_known_provider_fields():
 def test_provider_profile_accessors_fall_back_for_unknown_provider():
     assert get_provider_profile("missing") is None
     assert provider_default_base_url("missing") == ""
-    assert provider_request_options("missing") == ()
     assert provider_auth_type("missing") == "api_key"
     assert provider_api_mode("missing") is None
 

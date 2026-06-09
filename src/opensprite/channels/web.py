@@ -71,7 +71,6 @@ from ..config.channel_settings import (
     ChannelSettingsService,
     ChannelSettingsValidationError,
 )
-from ..config.llm_presets import provider_profile_defaults, provider_request_options
 from ..config.mcp_settings import (
     MCPSettingsError,
     MCPSettingsNotFound,
@@ -1037,9 +1036,6 @@ class WebAdapter(MessageAdapter):
 
     async def _handle_settings_provider_disconnect(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_core.handle_settings_provider_disconnect(self, request)
-
-    async def _handle_settings_provider_options_update(self, request: web.Request) -> web.Response:
-        return await web_settings_handlers_core.handle_settings_provider_options_update(self, request)
 
     async def _handle_settings_credentials(self, request: web.Request) -> web.Response:
         return await web_settings_handlers_core.handle_settings_credentials(self, request)

@@ -6,12 +6,11 @@ from opensprite.llms import ChatMessage
 from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 
 
-def test_anthropic_messages_minimax_enables_thinking_and_headers():
+def test_anthropic_messages_builds_basic_payload_without_thinking_options():
     provider = AnthropicMessagesLLM(
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
-        reasoning_effort="high",
     )
     payload = provider._build_payload(
         [ChatMessage(role="system", content="Be helpful"), ChatMessage(role="user", content="Think deeply")],
@@ -22,13 +21,13 @@ def test_anthropic_messages_minimax_enables_thinking_and_headers():
 
     assert provider.base_url == "https://api.minimax.io/anthropic"
     assert provider._headers()["Authorization"] == "Bearer minimax-key"
-    assert provider._headers()["anthropic-beta"] == "interleaved-thinking-2025-05-14"
+    assert "anthropic-beta" not in provider._headers()
     assert payload["model"] == "MiniMax-M2.7"
     assert payload["system"] == "Be helpful"
     assert payload["messages"] == [{"role": "user", "content": "Think deeply"}]
-    assert payload["thinking"] == {"type": "enabled", "budget_tokens": 16000}
-    assert payload["temperature"] == 1
-    assert payload["max_tokens"] == 20096
+    assert "thinking" not in payload
+    assert "temperature" not in payload
+    assert payload["max_tokens"] == 1024
     assert "cache_control" not in str(payload)
 
 
@@ -37,7 +36,6 @@ def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
-        reasoning_enabled=False,
     )
 
     assert provider.context_request_kwargs(output_token_reserve=32768) == {"max_tokens": 32768}
@@ -48,7 +46,6 @@ def test_anthropic_messages_requires_configured_max_tokens():
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
-        reasoning_enabled=False,
     )
 
     with pytest.raises(ValueError, match="require max_tokens"):
@@ -60,7 +57,6 @@ def test_anthropic_messages_applies_prompt_cache_for_official_anthropic_base_url
         api_key="anthropic-key",
         base_url="https://api.anthropic.com",
         default_model="claude-sonnet-4-6",
-        reasoning_enabled=False,
     )
     payload = provider._build_payload(
         [
@@ -91,7 +87,6 @@ def test_anthropic_messages_can_force_prompt_cache_for_compatible_endpoint():
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic",
         default_model="MiniMax-M2.7",
-        reasoning_enabled=False,
         prompt_cache_enabled=True,
     )
 
@@ -111,7 +106,6 @@ def test_anthropic_messages_does_not_duplicate_v1_messages_path():
         api_key="anthropic-key",
         base_url="https://api.example.com/v1/",
         default_model="claude-sonnet-4-6",
-        reasoning_enabled=False,
     )
 
     assert provider.base_url == "https://api.example.com/v1"
@@ -123,7 +117,6 @@ def test_anthropic_messages_accepts_full_messages_endpoint_base_url():
         api_key="anthropic-key",
         base_url="https://api.example.com/v1/messages/",
         default_model="claude-sonnet-4-6",
-        reasoning_enabled=False,
     )
 
     assert provider._messages_url() == "https://api.example.com/v1/messages"
@@ -134,7 +127,6 @@ def test_anthropic_messages_appends_v1_messages_to_api_root():
         api_key="minimax-key",
         base_url="https://api.minimax.io/anthropic/",
         default_model="MiniMax-M2.7",
-        reasoning_enabled=False,
     )
 
     assert provider._messages_url() == "https://api.minimax.io/anthropic/v1/messages"

@@ -717,7 +717,8 @@ class TaskContextResolver:
             work_state_summary=work_state_summary,
             deterministic=deterministic,
         )
-        response = await provider.chat(
+        response = await _chat_json_planning_llm(
+            provider=provider,
             messages=[
                 ChatMessage(
                     role="system",
@@ -729,9 +730,9 @@ class TaskContextResolver:
                 ChatMessage(role="user", content=prompt),
             ],
             model=model,
-            **self.llm_config.decoding_kwargs(),
+            llm_config=self.llm_config,
         )
-        payload = _resolver_parse_json_object(str(getattr(response, "content", "") or ""))
+        payload = _resolver_parse_json_object(_llm_response_text(response))
         return _task_context_decision_from_payload(payload, has_active_task=has_current_active_task(active_task))
 
 
@@ -818,7 +819,8 @@ class TaskObjectiveResolver:
             active_task=active_task,
             work_state_summary=work_state_summary,
         )
-        response = await provider.chat(
+        response = await _chat_json_planning_llm(
+            provider=provider,
             messages=[
                 ChatMessage(
                     role="system",
@@ -830,9 +832,9 @@ class TaskObjectiveResolver:
                 ChatMessage(role="user", content=prompt),
             ],
             model=model,
-            **self.llm_config.decoding_kwargs(),
+            llm_config=self.llm_config,
         )
-        payload = _resolver_parse_json_object(str(getattr(response, "content", "") or ""))
+        payload = _resolver_parse_json_object(_llm_response_text(response))
         return _task_objective_decision_from_payload(payload, current_message=current_message)
 
 
@@ -1117,6 +1119,51 @@ def _resolver_parse_json_object(text: str) -> dict[str, Any]:
     return payload
 
 
+async def _chat_json_planning_llm(
+    *,
+    provider: Any,
+    messages: list[ChatMessage],
+    model: str | None,
+    llm_config: DocumentLlmConfig,
+) -> Any:
+    """Call a provider for strict JSON routing/planning without reasoning output."""
+    kwargs = _json_planning_request_kwargs(llm_config)
+    return await provider.chat(messages=messages, model=model, **kwargs)
+
+
+def _json_planning_request_kwargs(llm_config: DocumentLlmConfig) -> dict[str, Any]:
+    kwargs = dict(llm_config.request_kwargs())
+    max_tokens = kwargs.get("max_tokens")
+    if max_tokens is not None:
+        try:
+            kwargs["max_tokens"] = max(int(max_tokens), JSON_PLANNING_MIN_OUTPUT_TOKENS)
+        except (TypeError, ValueError):
+            kwargs["max_tokens"] = JSON_PLANNING_MIN_OUTPUT_TOKENS
+    return kwargs
+
+def _llm_response_text(response: Any) -> str:
+    return str(getattr(response, "content", "") or "")
+
+
+def _llm_response_preview(response: Any, *, text: str | None = None, max_chars: int = 240) -> str:
+    response_text = _llm_response_text(response) if text is None else str(text or "")
+    if response_text.strip():
+        return _truncate_text(response_text, max_chars=max_chars)
+    details = getattr(response, "reasoning_details", None) or []
+    usage = getattr(response, "usage", None) or {}
+    parts = ["<empty content>"]
+    if details:
+        parts.append(f"reasoning_details={len(details)}")
+    finish_reason = getattr(response, "finish_reason", None)
+    if finish_reason:
+        parts.append(f"finish_reason={finish_reason}")
+    if isinstance(usage, dict) and usage:
+        for key in ("completion_tokens", "output_tokens", "total_tokens"):
+            if key in usage:
+                parts.append(f"{key}={usage[key]}")
+    return _truncate_text("; ".join(parts), max_chars=max_chars)
+
+
 def _resolver_recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
     for message in history[-8:]:
@@ -1238,6 +1285,7 @@ PLANNER_UNAVAILABLE_REASON = "task planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or missing task_type"
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
+JSON_PLANNING_MIN_OUTPUT_TOKENS = 1200
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
 REQUIRED_TOOL_EVIDENCE_KIND = "required_tool"
@@ -1840,22 +1888,25 @@ class TaskPlanner:
             capability_catalog=capability_catalog,
         )
         try:
-            response = await provider.chat(
-                [
+            response = await _chat_json_planning_llm(
+                provider=provider,
+                messages=[
                     ChatMessage(role="system", content=_TASK_PLANNER_SYSTEM_PROMPT),
                     ChatMessage(role="user", content=planner_prompt),
                 ],
                 model=model,
-                **self.llm_config.decoding_kwargs(),
+                llm_config=self.llm_config,
             )
         except Exception as exc:
             raise TaskPlannerError(_planner_exception_reason(exc)) from exc
-        response_text = str(getattr(response, "content", "") or "")
+        response_text = _llm_response_text(response)
         payload = _parse_json_object(response_text)
-        if not payload and response_text.strip():
+        raw_response_preview = _llm_response_preview(response, text=response_text, max_chars=400)
+        if not payload:
             try:
-                repair_response = await provider.chat(
-                    [
+                repair_response = await _chat_json_planning_llm(
+                    provider=provider,
+                    messages=[
                         ChatMessage(role="system", content=_PLANNER_REPAIR_SYSTEM_PROMPT),
                         ChatMessage(
                             role="user",
@@ -1863,27 +1914,27 @@ class TaskPlanner:
                                 "Original planner prompt:\n"
                                 f"{planner_prompt}\n\n"
                                 "Invalid planner response:\n"
-                                f"{response_text}\n\n"
+                                f"{raw_response_preview}\n\n"
                                 "Return only the corrected JSON object."
                             ),
                         ),
                     ],
                     model=model,
-                    **self.llm_config.decoding_kwargs(),
+                    llm_config=self.llm_config,
                 )
             except Exception as exc:
                 raise TaskPlannerError(
                     _planner_exception_reason(exc),
-                    raw_response_preview=_truncate(response_text, max_chars=400),
+                    raw_response_preview=raw_response_preview,
                 ) from exc
-            repair_text = str(getattr(repair_response, "content", "") or "")
+            repair_text = _llm_response_text(repair_response)
             payload = _parse_json_object(repair_text)
             if not payload:
-                response_text = repair_text or response_text
+                raw_response_preview = _llm_response_preview(repair_response, text=repair_text, max_chars=400)
         if not payload:
             raise TaskPlannerError(
                 PLANNER_INVALID_JSON_REASON,
-                raw_response_preview=_truncate(response_text, max_chars=240),
+                raw_response_preview=_truncate_text(raw_response_preview, max_chars=240),
             )
         return _contract_from_task_planner_payload(
             payload,

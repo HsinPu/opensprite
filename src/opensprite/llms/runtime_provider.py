@@ -14,10 +14,7 @@ from ..auth.credentials import (
 from ..auth.codex import CodexAuthError, load_or_refresh_codex_token
 from ..auth.copilot import COPILOT_BASE_URL, CopilotAuthError, get_copilot_api_token, load_copilot_token
 from ..config import ProviderConfig
-from ..config.llm_presets import (
-    provider_profile_defaults,
-    provider_request_options,
-)
+from ..config.llm_presets import provider_profile_defaults
 from .context_window import resolve_context_window_tokens
 
 
@@ -39,13 +36,6 @@ class ResolvedProviderRuntime:
     enabled: bool
     api_mode: str | None = None
     auth_type: str = "api_key"
-    reasoning_enabled: bool = False
-    reasoning_effort: str | None = None
-    reasoning_max_tokens: int | None = None
-    reasoning_exclude: bool = False
-    provider_sort: str | None = None
-    require_parameters: bool = False
-    request_options: tuple[str, ...] = ()
     context_window_tokens: int | None = None
 
 
@@ -135,13 +125,6 @@ def resolve_provider_runtime(
         enabled=provider.enabled,
         api_mode=api_mode,
         auth_type=auth_type,
-        reasoning_enabled=provider.reasoning_enabled,
-        reasoning_effort=provider.reasoning_effort,
-        reasoning_max_tokens=provider.reasoning_max_tokens,
-        reasoning_exclude=provider.reasoning_exclude,
-        provider_sort=provider.provider_sort,
-        require_parameters=provider.require_parameters,
-        request_options=provider_request_options(configured_provider),
         context_window_tokens=resolve_context_window_tokens(
             provider_name=configured_provider,
             model=provider.model,
@@ -179,11 +162,4 @@ def create_llm_from_runtime(runtime: ResolvedProviderRuntime):
         enabled=runtime.enabled,
         api_mode=runtime.api_mode,
         auth_type=runtime.auth_type,
-        reasoning_enabled=runtime.reasoning_enabled,
-        reasoning_effort=runtime.reasoning_effort,
-        reasoning_max_tokens=runtime.reasoning_max_tokens,
-        reasoning_exclude=runtime.reasoning_exclude,
-        provider_sort=runtime.provider_sort,
-        require_parameters=runtime.require_parameters,
-        request_options=runtime.request_options,
     )

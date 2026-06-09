@@ -113,6 +113,7 @@ from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
 from .task.progress import WorkProgressService, WorkProgressUpdate
 from .task.active_task import ActiveTaskCommandService
+from .task.planning import required_tools_for_task_contract
 
 
 class BackgroundSessionNotificationService:
@@ -942,7 +943,7 @@ class AgentLoop:
             ),
             resolve_tool_selection=lambda registry, contract: self.tool_selection.resolve_required_tools(
                 registry,
-                getattr(contract, "required_tools", ()),
+                required_tools_for_task_contract(contract),
             ),
             emit_run_event=lambda session_id, run_id, event_type, payload, channel=None, external_chat_id=None: self._emit_run_event(
                 session_id,

@@ -962,6 +962,7 @@ class AgentTurnRunner:
         turn: PreparedTurnInput,
         run_id: str,
         task_intent: TaskIntent,
+        user_message_text: str,
         execution_results: list[ExecutionResult],
         response: str,
         collected_delegated_tasks: tuple[StoredDelegatedTask, ...],
@@ -1016,6 +1017,7 @@ class AgentTurnRunner:
             task_intent=task_intent,
             response_text=response,
             execution_result=aggregate_result,
+            user_message_text=user_message_text,
         )
         completion_metadata = self._completion_metadata(
             completion_result,
@@ -1100,12 +1102,14 @@ class AgentTurnRunner:
         task_intent: TaskIntent,
         response_text: str,
         execution_result: ExecutionResult,
+        user_message_text: str = "",
     ) -> CompletionGateResult:
         provider, model = self._completion_judge_context()
         return await self.completion_gate.evaluate_with_judge(
             task_intent=task_intent,
             response_text=response_text,
             execution_result=execution_result,
+            user_message_text=user_message_text,
             provider=provider,
             model=model,
         )
@@ -1268,6 +1272,7 @@ class AgentTurnRunner:
                 turn=turn,
                 run_id=run_id,
                 task_intent=task_intent,
+                user_message_text=user_message.text,
                 execution_results=execution_results,
                 response=response,
                 collected_delegated_tasks=collected_delegated_tasks,
@@ -1438,6 +1443,7 @@ class AgentTurnRunner:
                 task_intent=task_intent,
                 response_text=response,
                 execution_result=aggregate_result,
+                user_message_text=user_message.text,
             )
             completion_metadata = self._completion_metadata(
                 completion_result,
@@ -1496,6 +1502,7 @@ class AgentTurnRunner:
                 task_intent=task_intent,
                 response_text=response,
                 execution_result=aggregate_result,
+                user_message_text=user_message.text,
             )
             completion_metadata = self._completion_metadata(
                 completion_result,

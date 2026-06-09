@@ -177,8 +177,6 @@
     @start-copilot-auth-login="startCopilotAuthLogin"
     @logout-copilot-auth="logoutCopilotAuth"
     @select-model="selectModel"
-    @apply-provider-recommended-options="applyProviderRecommendedOptions"
-    @save-provider-request-options="saveProviderRequestOptions"
     @save-llm-settings="saveLlmSettings"
     @save-log-settings="saveLogSettings"
     @save-media-model="saveMediaModel"
@@ -332,8 +330,6 @@ const {
   startCopilotAuthLogin,
   logoutCopilotAuth,
   selectModel,
-  applyProviderRecommendedOptions,
-  saveProviderRequestOptions,
   saveLlmSettings,
   saveLogSettings,
   saveMediaModel,

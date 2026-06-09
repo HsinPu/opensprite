@@ -20,6 +20,7 @@ from ...tools.selection import ToolSelectionResolution, ToolSelectionResolver
 from ...utils.log import logger
 from .contract import (
     PLANNER_VALIDATED_STATUS,
+    REQUIRED_TOOL_EVIDENCE_KIND,
     TaskContextDecision,
     TaskContract,
     TaskIntent,
@@ -256,8 +257,30 @@ def _should_seed_active_task_for_contract(
 def _resolve_required_tool_selection(base_tool_registry: ToolRegistry, task_contract: TaskContract) -> ToolSelectionResolution:
     return ToolSelectionResolver().resolve_required_tools(
         base_tool_registry,
-        getattr(task_contract, "required_tools", ()),
+        required_tools_for_task_contract(task_contract),
     )
+
+
+def required_tools_for_task_contract(task_contract: TaskContract) -> tuple[str, ...]:
+    """Return every tool needed by the contract and its evidence requirements."""
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(tool_name: Any) -> None:
+        value = str(tool_name or "").strip()
+        if not value or value in seen:
+            return
+        seen.add(value)
+        names.append(value)
+
+    for tool_name in getattr(task_contract, "required_tools", ()) or ():
+        add(tool_name)
+    for requirement in getattr(task_contract, "requirements", ()) or ():
+        if str(getattr(requirement, "kind", "") or "") != REQUIRED_TOOL_EVIDENCE_KIND:
+            continue
+        for tool_name in getattr(requirement, "tools", ()) or ():
+            add(tool_name)
+    return tuple(names)
 
 
 def _contract_is_minimal_chat_task(task_contract: TaskContract) -> bool:

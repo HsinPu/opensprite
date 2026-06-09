@@ -1,10 +1,4 @@
-import {
-  DEFAULT_PROVIDER_RECOMMENDED_OPTIONS,
-  normalizeMediaSettings,
-  normalizeProviderRequestOptions,
-  providerSupportsRequestOptions,
-  serializeProviderRequestOptions,
-} from "./settingsNormalizers";
+import { normalizeMediaSettings } from "./settingsNormalizers";
 
 function normalizeLlmSettings(payload = {}) {
   const llm = payload?.llm || {};
@@ -36,9 +30,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
         const selectedModel = provider.selected_model || provider.models?.[0] || "";
         settingsState.modelSelections[provider.id] = selectedModel;
         settingsState.customModels[provider.id] = "";
-        if (providerSupportsRequestOptions(provider)) {
-          settingsState.providerRequestOptions[provider.id] = normalizeProviderRequestOptions(provider.options || {});
-        }
       }
       for (const category of Object.keys(settingsState.media.sections || {})) {
         const section = settingsState.media.sections[category] || {};
@@ -71,11 +62,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
     settingsState.modelsError = "";
     settingsState.modelsNotice = "";
     try {
-      const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
-      if (providerSupportsRequestOptions(provider) && providerId !== settingsState.models.default_provider) {
-        settingsState.providerRequestOptions[providerId] = normalizeProviderRequestOptions(DEFAULT_PROVIDER_RECOMMENDED_OPTIONS);
-        await persistProviderRequestOptions(providerId, { silent: true });
-      }
       const payload = await requestSettingsJson("/api/settings/models/select", {
         method: "POST",
         body: JSON.stringify({ provider_id: providerId, model: normalizedModel }),
@@ -90,59 +76,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
       await loadProviderSettings?.();
     } catch (error) {
       settingsState.modelsError = error?.message || copy.value.notices.modelSelectFailed;
-    } finally {
-      settingsState.modelsLoading = false;
-    }
-  }
-
-  async function applyProviderRecommendedOptions(providerId, model) {
-    const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
-    if (!providerSupportsRequestOptions(provider)) {
-      return;
-    }
-    const recommended = provider?.model_capabilities?.[model]?.recommended_options || DEFAULT_PROVIDER_RECOMMENDED_OPTIONS;
-    settingsState.providerRequestOptions[providerId] = normalizeProviderRequestOptions({
-      ...serializeProviderRequestOptions(settingsState.providerRequestOptions[providerId] || {}, provider),
-      ...DEFAULT_PROVIDER_RECOMMENDED_OPTIONS,
-      ...recommended,
-    });
-    await saveProviderRequestOptions(providerId);
-  }
-
-  async function persistProviderRequestOptions(providerId, { silent = false } = {}) {
-    const options = settingsState.providerRequestOptions[providerId];
-    if (!options) {
-      return null;
-    }
-    const provider = (settingsState.models.providers || []).find((entry) => entry.id === providerId);
-    const payload = await requestSettingsJson(`/api/settings/providers/${encodeURIComponent(providerId)}/options`, {
-      method: "PUT",
-      body: JSON.stringify(serializeProviderRequestOptions(options, provider)),
-    });
-    if (!silent) {
-      setSettingsSuccess(
-        "modelsNotice",
-        payload.restart_required ? copy.value.notices.modelRestartRequired : copy.value.notices.modelApplied,
-      );
-      await loadModelSettings();
-      await loadProviderSettings?.();
-    }
-    return payload;
-  }
-
-  async function saveProviderRequestOptions(providerId) {
-    const options = settingsState.providerRequestOptions[providerId];
-    if (!options) {
-      return;
-    }
-
-    settingsState.modelsLoading = true;
-    settingsState.modelsError = "";
-    settingsState.modelsNotice = "";
-    try {
-      await persistProviderRequestOptions(providerId);
-    } catch (error) {
-      settingsState.modelsError = error?.message || copy.value.notices.providerOptionsSaveFailed;
     } finally {
       settingsState.modelsLoading = false;
     }
@@ -210,8 +143,6 @@ export function useModelSettingsActions({ settingsState, requestSettingsJson, co
   return {
     loadModelSettings,
     selectModel,
-    applyProviderRecommendedOptions,
-    saveProviderRequestOptions,
     saveLlmSettings,
     saveMediaModel,
   };

@@ -73,13 +73,6 @@ def create_llm(
     enabled: bool = True,
     api_mode: str | None = None,
     auth_type: str = "api_key",
-    reasoning_enabled: bool = False,
-    reasoning_effort: str | None = None,
-    reasoning_max_tokens: int | None = None,
-    reasoning_exclude: bool = False,
-    provider_sort: str | None = None,
-    require_parameters: bool = False,
-    request_options: tuple[str, ...] | None = None,
 ) -> LLMProvider:
     """建立 LLM Provider"""
     if not enabled:
@@ -96,26 +89,15 @@ def create_llm(
             api_key=api_key,
             base_url=base_url or profile_default_base_url(provider_name),
             default_model=model,
-            reasoning_enabled=reasoning_enabled,
-            reasoning_effort=reasoning_effort,
         )
 
     spec = find_provider(api_key, base_url, model, provider_name)
 
     if spec.name == "openrouter":
-        effective_options = set(
-            request_options if request_options is not None else ("reasoning", "provider_sort", "require_parameters")
-        )
         return OpenRouterLLM(
             api_key=api_key,
             default_model=model,
             base_url=base_url or provider_spec_default_base_url(spec),
-            reasoning_enabled=reasoning_enabled if "reasoning" in effective_options else False,
-            reasoning_effort=reasoning_effort if "reasoning" in effective_options else None,
-            reasoning_max_tokens=reasoning_max_tokens if "reasoning" in effective_options else None,
-            reasoning_exclude=reasoning_exclude if "reasoning" in effective_options else False,
-            provider_sort=provider_sort if "provider_sort" in effective_options else None,
-            require_parameters=require_parameters if "require_parameters" in effective_options else False,
         )
 
     if spec.name == "minimax":

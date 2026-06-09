@@ -83,12 +83,7 @@
     "context_compaction_min_messages": 8,
     "context_compaction_strategy": "deterministic",
     "context_compaction_llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 4096,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 4096
     },
     "context_overflow_error_markers": [
       "context length",
@@ -109,36 +104,16 @@
     "auto_continue_deterministic_action_budget": 4,
     "subagent_max_tool_iterations": 100,
     "task_context_llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 500,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 500
     },
     "task_objective_llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 500,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 500
     },
     "task_planner_llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 400,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 400
     },
     "completion_judge_llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 700,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 700
     },
     "skill_review_enabled": true,
     "skill_review_min_tool_calls": 5,
@@ -150,12 +125,7 @@
     "threshold": 80,
     "token_threshold": 240000,
     "llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 2048,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 2048
     }
   },
   "user_profile": {
@@ -163,12 +133,7 @@
     "threshold": 40,
     "lookback_messages": 80,
     "llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 1200,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 1200
     }
   },
   "active_task": {
@@ -176,12 +141,7 @@
     "threshold": 2,
     "lookback_messages": 40,
     "llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 1200,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 1200
     }
   },
   "recent_summary": {
@@ -191,12 +151,7 @@
     "lookback_messages": 240,
     "keep_last_messages": 80,
     "llm": {
-      "pass_decoding_params": true,
-      "temperature": 0,
-      "max_tokens": 1200,
-      "top_p": null,
-      "frequency_penalty": null,
-      "presence_penalty": null
+      "max_tokens": 1200
     }
   }
 }

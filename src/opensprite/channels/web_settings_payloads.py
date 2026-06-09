@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 from ..config import Config
 from ..config.defaults import DEFAULT_LOG_ENABLED, DEFAULT_LOG_REASONING_DETAILS, DEFAULT_LOG_RETENTION_DAYS, DEFAULT_LOG_SYSTEM_PROMPT, DEFAULT_LOG_SYSTEM_PROMPT_LINES
-from ..config.llm_presets import provider_profile_defaults, provider_request_options
+from ..config.llm_presets import provider_profile_defaults
 from ..llms.context_window import resolve_context_window_tokens
 
 
@@ -75,11 +75,6 @@ def web_search_payload(
     }
 
 
-def anthropic_reasoning_budget(effort: str | None) -> int:
-    budgets = {"minimal": 4000, "low": 4000, "medium": 8000, "high": 16000, "xhigh": 32000}
-    return budgets.get(str(effort or "medium").lower(), budgets["medium"])
-
-
 def effective_llm_request_payload(config: Config) -> dict[str, Any]:
     llm = config.llm
     provider_id = str(llm.default or "").strip()
@@ -92,40 +87,6 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
     )
     provider_name = defaults.provider_id or provider_name
     api_mode = str(defaults.api_mode or "chat_completions").strip()
-    reasoning_source = "none"
-    reasoning_payload: dict[str, Any] = {}
-    provider_options: dict[str, Any] = {}
-    request_options = provider_request_options(provider_name)
-
-    if request_options:
-        reasoning: dict[str, Any] = {}
-        if "reasoning" in request_options and active.reasoning_enabled:
-            if active.reasoning_effort:
-                reasoning["effort"] = active.reasoning_effort
-            if active.reasoning_max_tokens is not None:
-                reasoning["max_tokens"] = active.reasoning_max_tokens
-        if "reasoning" in request_options and active.reasoning_exclude:
-            reasoning["exclude"] = True
-        if "reasoning" in request_options:
-            reasoning_source = provider_name or "provider_request_options"
-        reasoning_payload = reasoning
-        if "provider_sort" in request_options and active.provider_sort:
-            provider_options["sort"] = active.provider_sort
-        if "require_parameters" in request_options and active.require_parameters:
-            provider_options["require_parameters"] = True
-    elif api_mode == "anthropic_messages":
-        reasoning_source = "anthropic_messages"
-        if active.reasoning_enabled:
-            budget = anthropic_reasoning_budget(active.reasoning_effort)
-            output_reserve = max(1, int(config.agent.context_output_reserve_tokens))
-            reasoning_payload = {
-                "thinking": {"type": "enabled", "budget_tokens": budget},
-                "temperature": 1,
-                "max_tokens": max(output_reserve, budget + 4096),
-            }
-    elif provider_name == "minimax":
-        reasoning_source = "minimax_chat_completions"
-        reasoning_payload = {"extra_body": {"reasoning_split": True}}
     model = str(getattr(active, "model", "") or llm.model or "")
     context_window_tokens = resolve_context_window_tokens(
         provider_name=provider_name,
@@ -141,16 +102,6 @@ def effective_llm_request_payload(config: Config) -> dict[str, Any]:
         "api_mode": api_mode,
         "model": model,
         "context_window_tokens": context_window_tokens,
-        "reasoning": {
-            "source": reasoning_source,
-            "sent": bool(reasoning_payload),
-            "enabled": bool(getattr(active, "reasoning_enabled", False)),
-            "effort": getattr(active, "reasoning_effort", None),
-            "max_tokens": getattr(active, "reasoning_max_tokens", None),
-            "exclude": bool(getattr(active, "reasoning_exclude", False)),
-            "payload": reasoning_payload,
-        },
-        "provider_options": provider_options,
     }
 
 

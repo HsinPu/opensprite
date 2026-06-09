@@ -187,7 +187,7 @@ class FakeProvider:
         self.responses = list(responses)
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         return self.responses.pop(0)
 
@@ -199,7 +199,7 @@ class ContextKwargsProvider(FakeProvider):
     def context_request_kwargs(self, *, output_token_reserve: int):
         return {"max_tokens": output_token_reserve}
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools, "max_tokens": max_tokens})
         return self.responses.pop(0)
 
@@ -209,7 +209,7 @@ class SlowProvider:
         self.delay = delay
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         await asyncio.sleep(self.delay)
         return LLMResponse(content="too late", model="fake-model")
@@ -256,7 +256,7 @@ class StreamingProvider:
     def __init__(self, content):
         self.content = content
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         callback = kwargs.get("response_delta_callback")
         if callback is not None:
             await callback(self.content[:5])
@@ -270,7 +270,7 @@ class BlockingOverrideProvider:
         self.entered = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls += 1
         if self.calls == 1:
             self.entered.set()
@@ -283,7 +283,7 @@ class BlockingOverrideProvider:
 
 
 class ToolInputStreamingProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         callback = kwargs.get("tool_input_delta_callback")
         if callback is not None:
             await callback("call-1", "demo_tool", '{"value"', 1)
@@ -295,7 +295,7 @@ class CredentialToolProvider:
     def __init__(self):
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         callback = kwargs.get("tool_input_delta_callback")
         if len(self.calls) == 1:
@@ -316,7 +316,7 @@ class CredentialToolProvider:
 
 
 class ReasoningStreamingProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         callback = kwargs.get("reasoning_delta_callback")
         if callback is not None:
             await callback("think ")
@@ -334,7 +334,7 @@ class OverflowThenSuccessProvider:
         self.error_message = error_message
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({
             "messages": [ChatMessage(role=m.role, content=m.content, tool_call_id=m.tool_call_id, tool_calls=m.tool_calls) for m in messages],
             "tools": tools,
@@ -350,7 +350,7 @@ class RetryableThenSuccessProvider:
         self.calls = []
         self.recover_calls = 0
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         if len(self.calls) == 1:
             error = RuntimeError("rate limited")
@@ -370,11 +370,10 @@ class LlmCompactionProvider:
         self.final_response = final_response
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({
             "messages": [ChatMessage(role=m.role, content=m.content, tool_call_id=m.tool_call_id, tool_calls=m.tool_calls) for m in messages],
             "tools": tools,
-            "temperature": temperature,
             "max_tokens": max_tokens,
         })
         if len(self.calls) == 1:
@@ -1067,7 +1066,7 @@ def test_execution_engine_retries_transient_transport_errors_without_status_code
             self.calls = []
             self.recover_calls = 0
 
-        async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
             self.calls.append({"messages": list(messages), "tools": tools})
             if len(self.calls) == 1:
                 raise RuntimeError("connection reset by peer")
@@ -2152,7 +2151,6 @@ def test_execution_uses_llm_compactor_when_configured():
     assert len(provider.calls) == 2
     compactor_call = provider.calls[0]
     assert compactor_call["tools"] is None
-    assert compactor_call["temperature"] == 0
     assert compactor_call["max_tokens"] == 4096
     assert compactor_call["messages"][0].role == "system"
     assert "context compaction engine" in compactor_call["messages"][0].content
@@ -2337,7 +2335,7 @@ def test_execution_context_compaction_does_not_consume_tool_iteration():
         def __init__(self):
             self.calls = []
 
-        async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
             self.calls.append({"messages": list(messages), "tools": tools})
             if len(self.calls) == 1:
                 return LLMResponse(
@@ -2375,7 +2373,7 @@ def test_execution_context_compaction_does_not_consume_tool_iteration():
 
 def test_execution_does_not_compact_unrelated_llm_errors():
     class BrokenProvider:
-        async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+        async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
             raise RuntimeError("network unavailable")
 
     engine = _make_engine(BrokenProvider(), ToolRegistry(), [])

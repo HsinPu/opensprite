@@ -252,19 +252,6 @@ async def handle_settings_provider_disconnect(adapter: Any, request: web.Request
     return web.json_response(payload)
 
 
-async def handle_settings_provider_options_update(adapter: Any, request: web.Request) -> web.Response:
-    provider_id = adapter._coerce_optional_text(request.match_info.get("provider_id"))
-    if provider_id is None:
-        raise web.HTTPBadRequest(text="provider_id is required")
-    body = await adapter._read_json_body(request)
-    try:
-        payload = adapter._get_provider_settings().update_provider_options(provider_id, body)
-    except ProviderSettingsError as exc:
-        adapter._raise_provider_settings_error(exc)
-    payload = adapter._reload_agent_llm_from_config(payload, force=True)
-    return web.json_response(payload)
-
-
 async def handle_settings_credentials(adapter: Any, request: web.Request) -> web.Response:
     provider = adapter._coerce_optional_text(request.query.get("provider"))
     try:

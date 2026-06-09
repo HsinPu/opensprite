@@ -1,53 +1,5 @@
 const MCP_TRANSPORT_TYPES = new Set(["stdio", "sse", "streamableHttp"]);
 
-export const DEFAULT_PROVIDER_RECOMMENDED_OPTIONS = {
-  reasoning_enabled: true,
-  reasoning_effort: "medium",
-  reasoning_exclude: false,
-};
-
-function coerceBoolean(value) {
-  return value === true || value === "true" || value === 1;
-}
-
-export function normalizeProviderRequestOptions(options = {}) {
-  const maxTokens = options.reasoning_max_tokens ?? "";
-  return {
-    reasoningEnabled: coerceBoolean(options.reasoning_enabled),
-    reasoningEffort: String(options.reasoning_effort || "").trim(),
-    reasoningMaxTokens: maxTokens === null || maxTokens === undefined ? "" : String(maxTokens),
-    reasoningExclude: coerceBoolean(options.reasoning_exclude),
-    providerSort: String(options.provider_sort || "").trim(),
-    requireParameters: coerceBoolean(options.require_parameters),
-  };
-}
-
-function serializeProviderRequestOptionValues(options = {}) {
-  const maxTokens = String(options.reasoningMaxTokens || "").trim();
-  return {
-    reasoning_enabled: coerceBoolean(options.reasoningEnabled),
-    reasoning_effort: String(options.reasoningEffort || "").trim() || null,
-    reasoning_max_tokens: maxTokens ? Number.parseInt(maxTokens, 10) : null,
-    reasoning_exclude: coerceBoolean(options.reasoningExclude),
-    provider_sort: String(options.providerSort || "").trim() || null,
-    require_parameters: coerceBoolean(options.requireParameters),
-  };
-}
-
-export function providerRequestOptions(provider = {}) {
-  return Array.isArray(provider?.request_options)
-    ? provider.request_options.map((option) => String(option || "").trim()).filter(Boolean)
-    : [];
-}
-
-export function providerSupportsRequestOption(provider, option) {
-  return providerRequestOptions(provider).includes(option);
-}
-
-export function providerSupportsRequestOptions(provider) {
-  return providerRequestOptions(provider).length > 0;
-}
-
 export function providerModelMetadataFields(provider = {}) {
   return Array.isArray(provider?.model_metadata_fields)
     ? provider.model_metadata_fields.map((field) => String(field || "").trim()).filter(Boolean)
@@ -56,25 +8,6 @@ export function providerModelMetadataFields(provider = {}) {
 
 export function providerSupportsModelMetadata(provider, field) {
   return providerModelMetadataFields(provider).includes(field);
-}
-
-export function serializeProviderRequestOptions(options = {}, provider = {}) {
-  const serialized = serializeProviderRequestOptionValues(options);
-  const supported = new Set(providerRequestOptions(provider));
-  const out = {};
-  if (supported.has("reasoning")) {
-    out.reasoning_enabled = serialized.reasoning_enabled;
-    out.reasoning_effort = serialized.reasoning_effort;
-    out.reasoning_max_tokens = serialized.reasoning_max_tokens;
-    out.reasoning_exclude = serialized.reasoning_exclude;
-  }
-  if (supported.has("provider_sort")) {
-    out.provider_sort = serialized.provider_sort;
-  }
-  if (supported.has("require_parameters")) {
-    out.require_parameters = serialized.require_parameters;
-  }
-  return out;
 }
 
 export function normalizeMcpTransport(value, fallback = "stdio") {

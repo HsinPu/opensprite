@@ -24,30 +24,23 @@ class ModelRoutedProvider(LLMProvider):
         messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
-        return await self.base_provider.chat(
-            messages=messages,
-            tools=tools,
-            model=model or self.model,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            top_p=top_p,
-            frequency_penalty=frequency_penalty,
-            presence_penalty=presence_penalty,
-            status_callback=status_callback,
-            response_delta_callback=response_delta_callback,
-            tool_input_delta_callback=tool_input_delta_callback,
-            reasoning_delta_callback=reasoning_delta_callback,
-        )
+        kwargs: dict[str, Any] = {
+            "messages": messages,
+            "tools": tools,
+            "model": model or self.model,
+            "max_tokens": max_tokens,
+            "status_callback": status_callback,
+            "response_delta_callback": response_delta_callback,
+            "tool_input_delta_callback": tool_input_delta_callback,
+            "reasoning_delta_callback": reasoning_delta_callback,
+        }
+        return await self.base_provider.chat(**kwargs)
 
     def get_default_model(self) -> str:
         return self.model or self.base_provider.get_default_model()

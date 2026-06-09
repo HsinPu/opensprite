@@ -17,7 +17,6 @@ from opensprite.runs.events import (
     TASK_CONTEXT_RESOLVED_EVENT,
     TOOL_SELECTION_RESOLVED_EVENT,
 )
-from opensprite.tools.selection import ToolSelectionResolver
 from opensprite.tools.base import Tool
 from opensprite.tools.registry import ToolRegistry
 
@@ -59,7 +58,10 @@ def test_turn_planning_resolves_task_contract_and_tool_selection():
             return TaskContract(
                 objective=kwargs["fallback_objective"],
                 task_type="code_change",
-                requirements=(EvidenceRequirement(kind="file_change", min_count=1),),
+                requirements=(
+                    EvidenceRequirement(kind="required_tool", tools=("read_file",), min_count=1),
+                    EvidenceRequirement(kind="file_change", min_count=1),
+                ),
                 required_tools=("edit_file",),
                 allow_no_tool_final=False,
                 planner_metadata={PLANNER_METADATA_STATUS_FIELD: PLANNER_VALIDATED_STATUS},
@@ -76,10 +78,6 @@ def test_turn_planning_resolves_task_contract_and_tool_selection():
 
         service = TurnPlanningService(
             plan_task=plan_task,
-            resolve_tool_selection=lambda registry, contract: ToolSelectionResolver().resolve_required_tools(
-                registry,
-                getattr(contract, "required_tools", ()),
-            ),
             maybe_seed_active_task=maybe_seed_active_task,
             augment_message_for_media=augment_message_for_media,
             emit_run_event=emit_run_event,
@@ -113,7 +111,7 @@ def test_turn_planning_resolves_task_contract_and_tool_selection():
     assert result.effective_task_intent.objective == "Refactor task planning modules."
     assert result.task_contract is not None
     assert result.task_tool_registry is not None
-    assert result.task_tool_registry.tool_names == ["edit_file"]
+    assert result.task_tool_registry.tool_names == ["read_file", "edit_file"]
     assert seed_calls[0]["task_intent"].objective == "Refactor task planning modules."
     assert plan_calls[0]["fallback_objective"] == "Refactor task planning modules."
 

@@ -12,7 +12,6 @@ from .tool_args import parse_tool_arguments
 from ..utils.url import join_url_path
 
 
-THINKING_BUDGETS = {"xhigh": 32000, "high": 16000, "medium": 8000, "low": 4000, "minimal": 4000}
 CACHE_CONTROL_MARKER = {"type": "ephemeral"}
 
 
@@ -121,16 +120,12 @@ class AnthropicMessagesLLM(LLMProvider):
         base_url: str,
         default_model: str,
         *,
-        reasoning_enabled: bool = True,
-        reasoning_effort: str | None = "medium",
         prompt_cache_enabled: bool | None = None,
         timeout_seconds: float = 900.0,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
-        self.reasoning_enabled = reasoning_enabled
-        self.reasoning_effort = reasoning_effort or "medium"
         self.prompt_cache_enabled = (
             "api.anthropic.com" in self.base_url.lower()
             if prompt_cache_enabled is None
@@ -148,8 +143,6 @@ class AnthropicMessagesLLM(LLMProvider):
             "Content-Type": "application/json",
             "anthropic-version": "2023-06-01",
         }
-        if "minimax" in self.base_url.lower():
-            headers["anthropic-beta"] = "interleaved-thinking-2025-05-14"
         return headers
 
     def _build_messages(self, messages: list[ChatMessage | dict[str, Any]]) -> tuple[str | list[dict[str, Any]] | None, list[dict[str, Any]]]:
@@ -225,12 +218,6 @@ class AnthropicMessagesLLM(LLMProvider):
         if tools:
             payload["tools"] = [_convert_tool(tool) for tool in tools]
             payload["tool_choice"] = {"type": "auto"}
-        if self.reasoning_enabled:
-            effort = str(self.reasoning_effort or "medium").lower()
-            budget = THINKING_BUDGETS.get(effort, THINKING_BUDGETS["medium"])
-            payload["thinking"] = {"type": "enabled", "budget_tokens": budget}
-            payload["temperature"] = 1
-            payload["max_tokens"] = max(int(payload["max_tokens"]), budget + 4096)
         if self.prompt_cache_enabled:
             apply_anthropic_cache_control(payload)
         return payload
@@ -249,17 +236,13 @@ class AnthropicMessagesLLM(LLMProvider):
         messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
-        _ = temperature, top_p, frequency_penalty, presence_penalty, status_callback, response_delta_callback, tool_input_delta_callback
+        _ = status_callback, response_delta_callback, tool_input_delta_callback
         payload = self._build_payload(messages, tools, model, max_tokens)
         data = await self._post_messages(payload)
         content_blocks = data.get("content") if isinstance(data.get("content"), list) else []

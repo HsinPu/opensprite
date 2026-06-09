@@ -104,11 +104,7 @@ class LLMProvider(ABC):
         messages: list[ChatMessage], 
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
@@ -121,11 +117,7 @@ class LLMProvider(ABC):
             messages: 對話歷史（ChatMessage 清單）
             tools: Tool 定義清單（可選）
             model: 模型名稱（可選，預設用 Provider 的預設模型）
-            temperature: 創意程度（None 表示不帶此參數，由 API／模型預設）
             max_tokens: 最大回覆長度（None 表示不帶此參數，由 API／模型預設）
-            top_p: nucleus sampling（None 表示由實作決定是否省略）
-            frequency_penalty: 重複用詞懲罰，-2.0～2.0（None 表示由實作決定是否省略）
-            presence_penalty: 是否鼓勵新主題／少重複已出現概念，-2.0～2.0（None 表示由實作決定是否省略）
             status_callback: 長時間等待或重試時對使用者顯示的短訊息（可選，由實作決定是否呼叫）
             response_delta_callback: 可選的可見文字增量 callback；provider 支援 streaming 時呼叫
             tool_input_delta_callback: 可選的工具參數增量 callback；provider 支援 streaming tool calls 時呼叫
@@ -170,11 +162,7 @@ class UnconfiguredLLM(LLMProvider):
         messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,

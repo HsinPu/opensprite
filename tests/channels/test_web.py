@@ -800,7 +800,7 @@ def test_web_adapter_root_explains_missing_frontend(tmp_path):
     asyncio.run(_run_web_frontend_unavailable_response(tmp_path))
 
 
-def test_effective_llm_request_uses_provider_profile_request_options(tmp_path):
+def test_effective_llm_request_omits_provider_request_options(tmp_path):
     config_path = tmp_path / "opensprite.json"
     Config.copy_template(config_path)
     config = Config.from_json(config_path)
@@ -810,30 +810,15 @@ def test_effective_llm_request_uses_provider_profile_request_options(tmp_path):
             api_key="router-key",
             model="anthropic/claude-sonnet-4.6",
             enabled=True,
-            provider_sort="latency",
-            require_parameters=True,
-        ),
-        "openai": ProviderConfig(
-            provider="openai",
-            api_key="openai-key",
-            model="gpt-5.5",
-            enabled=True,
-            provider_sort="latency",
-            require_parameters=True,
         ),
     }
 
     config.llm.default = "openrouter"
     openrouter_payload = WebAdapter._effective_llm_request_payload(config)
-    assert openrouter_payload["reasoning"]["source"] == "openrouter"
-    assert openrouter_payload["reasoning"]["payload"] == {"effort": "medium"}
-    assert openrouter_payload["provider_options"] == {"sort": "latency", "require_parameters": True}
-
-    config.llm.default = "openai"
-    openai_payload = WebAdapter._effective_llm_request_payload(config)
-    assert openai_payload["reasoning"]["source"] == "none"
-    assert openai_payload["reasoning"]["payload"] == {}
-    assert openai_payload["provider_options"] == {}
+    assert openrouter_payload["provider"] == "openrouter"
+    assert openrouter_payload["model"] == "anthropic/claude-sonnet-4.6"
+    assert "reasoning" not in openrouter_payload
+    assert "provider_options" not in openrouter_payload
 
 
 def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
@@ -846,8 +831,6 @@ def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
             api_key="minimax-key",
             model="MiniMax-M2.7",
             enabled=True,
-            reasoning_enabled=True,
-            reasoning_effort="high",
         )
     }
     config.llm.default = "minimax"
@@ -857,12 +840,7 @@ def test_effective_llm_request_uses_provider_profile_api_mode(tmp_path):
     assert payload["provider"] == "minimax"
     assert payload["api_mode"] == "anthropic_messages"
     assert payload["context_window_tokens"] == 204800
-    assert payload["reasoning"]["source"] == "anthropic_messages"
-    assert payload["reasoning"]["payload"] == {
-        "thinking": {"type": "enabled", "budget_tokens": 16000},
-        "temperature": 1,
-        "max_tokens": 32768,
-    }
+    assert "reasoning" not in payload
 
 
 async def _run_web_network_settings_roundtrip(tmp_path: Path):

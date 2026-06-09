@@ -61,12 +61,6 @@ class OpenRouterLLM(LLMProvider):
         api_key: str, 
         default_model: str = "openai/gpt-4o-mini",
         base_url: str = "",
-        reasoning_enabled: bool = True,
-        reasoning_effort: str | None = "medium",
-        reasoning_max_tokens: int | None = None,
-        reasoning_exclude: bool = False,
-        provider_sort: str | None = None,
-        require_parameters: bool = False,
     ):
         """
         初始化 OpenRouter LLM
@@ -83,12 +77,6 @@ class OpenRouterLLM(LLMProvider):
         """
         self.api_key = api_key
         self.default_model = default_model
-        self.reasoning_enabled = reasoning_enabled
-        self.reasoning_effort = reasoning_effort
-        self.reasoning_max_tokens = reasoning_max_tokens
-        self.reasoning_exclude = reasoning_exclude
-        self.provider_sort = provider_sort
-        self.require_parameters = require_parameters
         from httpx import Timeout
 
         self._client_kwargs = {
@@ -116,40 +104,14 @@ class OpenRouterLLM(LLMProvider):
         return AsyncOpenAI(**self._client_kwargs)
 
     async def _create_completion(self, params: dict[str, Any]):
-        try:
-            return await self.client.chat.completions.create(**params)
-        except Exception as exc:
-            extra_body = params.get("extra_body") if isinstance(params.get("extra_body"), dict) else {}
-            if "reasoning" not in extra_body:
-                raise
-            logger.warning(
-                "OpenRouter reasoning request failed; retrying without reasoning: model={}, error={}",
-                params.get("model"),
-                exc,
-            )
-            self.reasoning_enabled = False
-            self.reasoning_effort = None
-            self.reasoning_max_tokens = None
-            self.reasoning_exclude = False
-            retry_params = dict(params)
-            retry_extra_body = dict(extra_body)
-            retry_extra_body.pop("reasoning", None)
-            if retry_extra_body:
-                retry_params["extra_body"] = retry_extra_body
-            else:
-                retry_params.pop("extra_body", None)
-            return await self.client.chat.completions.create(**retry_params)
+        return await self.client.chat.completions.create(**params)
     
     async def chat(
         self, 
         messages: list[ChatMessage], 
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
@@ -184,40 +146,9 @@ class OpenRouterLLM(LLMProvider):
             "model": model or self.default_model,
             "messages": api_messages,
         }
-        if temperature is not None:
-            params["temperature"] = temperature
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
-        if top_p is not None:
-            params["top_p"] = top_p
-        if frequency_penalty is not None:
-            params["frequency_penalty"] = frequency_penalty
-        if presence_penalty is not None:
-            params["presence_penalty"] = presence_penalty
 
-        extra_body: dict[str, Any] = {}
-        reasoning: dict[str, Any] = {}
-        if self.reasoning_enabled:
-            if self.reasoning_effort:
-                reasoning["effort"] = self.reasoning_effort
-            if self.reasoning_max_tokens is not None:
-                reasoning["max_tokens"] = self.reasoning_max_tokens
-        if self.reasoning_exclude:
-            reasoning["exclude"] = True
-        if reasoning:
-            extra_body["reasoning"] = reasoning
-
-        provider: dict[str, Any] = {}
-        if self.provider_sort:
-            provider["sort"] = self.provider_sort
-        if self.require_parameters:
-            provider["require_parameters"] = True
-        if provider:
-            extra_body["provider"] = provider
-        if extra_body:
-            params["extra_body"] = extra_body
-
-        # 加入 tools 如果有
         if tools:
             params["tools"] = tools
             params["tool_choice"] = "auto"

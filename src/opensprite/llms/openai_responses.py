@@ -113,23 +113,17 @@ class OpenAIResponsesLLM(LLMProvider):
         messages: list[ChatMessage],
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
     ) -> LLMResponse:
-        _ = status_callback, top_p, frequency_penalty, presence_penalty, tool_input_delta_callback
+        _ = status_callback, tool_input_delta_callback
         params: dict[str, Any] = {
             "model": model or self.default_model,
             "input": _response_input(messages),
         }
-        if temperature is not None:
-            params["temperature"] = temperature
         if max_tokens is not None:
             params["max_output_tokens"] = max_tokens
         converted_tools = _responses_tools(tools)

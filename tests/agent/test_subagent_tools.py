@@ -160,7 +160,7 @@ class FakeProvider:
         self.tool_name = tool_name
         self.tool_arguments = tool_arguments or {"value": "abc"}
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
@@ -622,7 +622,7 @@ class ResumeProvider:
     def __init__(self):
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         return LLMResponse(content=f"reply-{len(self.calls)}", model="fake-model")
 
@@ -634,7 +634,7 @@ class ParallelOutcomeProvider:
     def __init__(self):
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         self.calls.append({"messages": list(messages), "tools": tools})
         task_text = next(
             str(message.content)
@@ -650,7 +650,7 @@ class ParallelOutcomeProvider:
 
 
 class SlowParallelProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         await asyncio.sleep(0.2)
         return LLMResponse(content="slow-done", model="fake-model")
 
@@ -659,7 +659,7 @@ class SlowParallelProvider:
 
 
 class PartiallyFailingParallelProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         task_text = next(
             str(message.content)
             for message in reversed(messages)
@@ -674,7 +674,7 @@ class PartiallyFailingParallelProvider:
 
 
 class StructuredReviewProvider:
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         return LLMResponse(
             content=(
                 "Review Findings\n"
@@ -723,7 +723,7 @@ class ModelRoutingProvider:
     def __init__(self):
         self.calls = []
 
-    async def chat(self, messages, tools=None, model=None, temperature=0.7, max_tokens=2048, **kwargs):
+    async def chat(self, messages, tools=None, model=None, max_tokens=2048, **kwargs):
         system_text = str(getattr(messages[0], "content", "") or "") if messages else ""
         if "OpenSprite task planner" in system_text:
             return LLMResponse(
@@ -734,7 +734,7 @@ class ModelRoutingProvider:
                 ),
                 model="fake-model",
             )
-        self.calls.append({"messages": list(messages), "tools": tools, "model": model, "temperature": temperature, "max_tokens": max_tokens})
+        self.calls.append({"messages": list(messages), "tools": tools, "model": model, "max_tokens": max_tokens})
         return LLMResponse(content="routed result", model=model or "fake-model")
 
     def get_default_model(self) -> str:
@@ -1104,10 +1104,9 @@ def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
     (prompt_dir / "custom-reviewer.md").write_text(
         "---\n"
         "name: custom-reviewer\n"
-        "description: Custom reviewer with ignored decoding params.\n"
+        "description: Custom reviewer with ignored request params.\n"
         "tool_profile: read-only\n"
         "llm_model: review-model\n"
-        "llm_temperature: 0.1\n"
         "llm_max_tokens: 123\n"
         "---\n"
         "Review the requested task.\n",
@@ -1133,7 +1132,6 @@ def test_run_subagent_ignores_prompt_decoding_overrides(tmp_path):
     asyncio.run(agent.run_subagent("review this task", prompt_type="custom-reviewer"))
 
     assert provider.calls[0]["model"] == "review-model"
-    assert provider.calls[0]["temperature"] != 0.1
     assert provider.calls[0]["max_tokens"] != 123
 
 
@@ -1183,12 +1181,6 @@ def test_run_subagent_uses_prompt_provider_override_when_present(tmp_path, monke
         search_config=SearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         llm_config=LLMsConfig(
-            temperature=0.7,
-            max_tokens=2048,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
-            pass_decoding_params=True,
             providers={
                 "review": ProviderConfig(
                     api_key="review-key",
@@ -1252,12 +1244,6 @@ def test_run_subagent_uses_profile_defaults_for_provider_override(tmp_path, monk
         search_config=SearchConfig(),
         user_profile_config=UserProfileConfig(**{**Config.load_template_data()["user_profile"], "enabled": False}),
         llm_config=LLMsConfig(
-            temperature=0.7,
-            max_tokens=2048,
-            top_p=1.0,
-            frequency_penalty=0.0,
-            presence_penalty=0.0,
-            pass_decoding_params=True,
             providers={
                 "minimax": ProviderConfig(
                     provider="minimax",

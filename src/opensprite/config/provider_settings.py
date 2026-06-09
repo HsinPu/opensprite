@@ -22,8 +22,6 @@ from .llm_presets import ProviderPreset, get_provider_profile, load_llm_presets
 from .schema import Config
 
 
-OPENROUTER_REASONING_EFFORTS = {"minimal", "low", "medium", "high", "xhigh"}
-OPENROUTER_PROVIDER_SORTS = {"price", "throughput", "latency"}
 MODEL_DISCOVERY_TIMEOUT_SECONDS = 8.0
 _OPENROUTER_MODEL_METADATA_CACHE: dict[str, dict[str, Any]] = {}
 
@@ -436,9 +434,6 @@ def connect_provider_in_config(
     provider["auth_type"] = preset.auth_type
     if preset.api_mode:
         provider["api_mode"] = preset.api_mode
-    if "reasoning" in preset.request_options:
-        provider.setdefault("reasoning_enabled", True)
-        provider.setdefault("reasoning_effort", "medium")
     normalized_name = str(display_name or "").strip()
     if normalized_name:
         provider["name"] = normalized_name
@@ -519,32 +514,12 @@ def select_model_in_config(
     return provider
 
 
-def public_provider_request_options(provider: dict[str, Any]) -> dict[str, Any]:
-    """Return provider request options safe for settings APIs."""
-    return {
-        "reasoning_enabled": bool(provider.get("reasoning_enabled", True)),
-        "reasoning_effort": provider.get("reasoning_effort", "medium"),
-        "reasoning_max_tokens": provider.get("reasoning_max_tokens"),
-        "reasoning_exclude": bool(provider.get("reasoning_exclude", False)),
-        "provider_sort": provider.get("provider_sort"),
-        "require_parameters": bool(provider.get("require_parameters", False)),
-    }
-
-
 def public_provider_profile(preset: ProviderPreset | None) -> dict[str, Any]:
     """Return profile fields safe for settings APIs."""
     return {
         "capabilities": list(preset.capabilities) if preset else [],
-        "request_options": list(preset.request_options) if preset else [],
         "model_metadata_fields": list(preset.model_metadata_fields) if preset else [],
     }
-
-
-def public_provider_options(provider: dict[str, Any], preset: ProviderPreset | None) -> dict[str, Any]:
-    """Return persisted provider request options supported by its profile."""
-    if not preset or not preset.request_options:
-        return {}
-    return public_provider_request_options(provider)
 
 
 def is_provider_connected(provider: dict[str, Any], preset: ProviderPreset | None) -> bool:
@@ -615,65 +590,6 @@ def public_credential_source(provider: dict[str, Any], credential: dict[str, Any
     if credential.get("is_default"):
         return "provider_default"
     return "priority"
-
-
-def _ensure_request_option(supported: set[str], option: str) -> None:
-    if option not in supported:
-        raise ProviderSettingsValidationError(f"{option} request options are not available for this provider")
-
-
-def update_provider_request_options(
-    provider: dict[str, Any],
-    body: dict[str, Any],
-    *,
-    request_options: tuple[str, ...] = ("reasoning", "provider_sort", "require_parameters"),
-) -> None:
-    """Validate and update optional provider request settings."""
-    supported = set(request_options)
-    if any(
-        key in body
-        for key in {"reasoning_enabled", "reasoning_effort", "reasoning_max_tokens", "reasoning_exclude"}
-    ):
-        _ensure_request_option(supported, "reasoning")
-    if "provider_sort" in body:
-        _ensure_request_option(supported, "provider_sort")
-    if "require_parameters" in body:
-        _ensure_request_option(supported, "require_parameters")
-
-    if "reasoning_enabled" in body:
-        provider["reasoning_enabled"] = bool(body["reasoning_enabled"])
-    if "reasoning_effort" in body:
-        value = body["reasoning_effort"]
-        if value is None or str(value).strip() == "":
-            provider["reasoning_effort"] = None
-        elif str(value) in OPENROUTER_REASONING_EFFORTS:
-            provider["reasoning_effort"] = str(value)
-        else:
-            raise ProviderSettingsValidationError("reasoning_effort must be one of minimal, low, medium, high, or xhigh")
-    if "reasoning_max_tokens" in body:
-        value = body["reasoning_max_tokens"]
-        if value is None or str(value).strip() == "":
-            provider["reasoning_max_tokens"] = None
-        else:
-            try:
-                normalized = int(value)
-            except (TypeError, ValueError) as exc:
-                raise ProviderSettingsValidationError("reasoning_max_tokens must be a positive integer") from exc
-            if normalized < 1:
-                raise ProviderSettingsValidationError("reasoning_max_tokens must be a positive integer")
-            provider["reasoning_max_tokens"] = normalized
-    if "reasoning_exclude" in body:
-        provider["reasoning_exclude"] = bool(body["reasoning_exclude"])
-    if "provider_sort" in body:
-        value = body["provider_sort"]
-        if value is None or str(value).strip() == "":
-            provider["provider_sort"] = None
-        elif str(value) in OPENROUTER_PROVIDER_SORTS:
-            provider["provider_sort"] = str(value)
-        else:
-            raise ProviderSettingsValidationError("provider_sort must be one of price, throughput, or latency")
-    if "require_parameters" in body:
-        provider["require_parameters"] = bool(body["require_parameters"])
 
 
 class ProviderSettingsService:
@@ -751,7 +667,6 @@ class ProviderSettingsService:
                     **public_provider_profile(preset),
                     "is_default": provider_id == default_provider,
                     "enabled": bool(provider.get("enabled")),
-                    "options": public_provider_options(provider, preset),
                 }
             )
 
@@ -821,30 +736,8 @@ class ProviderSettingsService:
                 **public_provider_profile(preset),
                 "is_default": instance_id == loaded.llm.default,
                 "enabled": bool(provider.get("enabled")),
-                "options": public_provider_options(provider, preset),
             },
             "restart_required": False,
-        }
-
-    def update_provider_options(self, provider_id: str, options: dict[str, Any]) -> dict[str, Any]:
-        """Update optional request settings for a connected provider."""
-        main_data, providers, _loaded = self._load_state()
-        provider = providers.get(provider_id)
-        presets = load_llm_presets()
-        preset_id = get_provider_preset_id(provider_id, provider if isinstance(provider, dict) else {}, presets)
-        preset = presets.providers.get(preset_id) if preset_id else None
-        if not isinstance(provider, dict) or not is_provider_connected(provider, preset):
-            raise ProviderSettingsNotFound(f"Provider is not connected: {provider_id}")
-        if not preset or not preset.request_options:
-            raise ProviderSettingsValidationError("Provider request options are not available for this provider")
-
-        update_provider_request_options(provider, options, request_options=preset.request_options)
-        self._persist_llm_state(main_data, providers)
-        return {
-            "ok": True,
-            "provider_id": provider_id,
-            "options": public_provider_options(provider, preset),
-            "restart_required": bool(provider.get("enabled")),
         }
 
     def disconnect_provider(self, provider_id: str) -> dict[str, Any]:
@@ -952,7 +845,6 @@ class ProviderSettingsService:
                     },
                     "model_capabilities": (preset.model_capabilities or {}) if preset else {},
                     **public_provider_profile(preset),
-                    "options": public_provider_options(provider, preset),
                     "supports_custom_model": True,
                 }
             )

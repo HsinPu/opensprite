@@ -13,7 +13,12 @@ from opensprite.agent.completion_gate import (
 )
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
 from opensprite.agent.execution import TaskArtifact
-from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
+from opensprite.agent.task.contract import (
+    JSON_PLANNING_MIN_OUTPUT_TOKENS,
+    AcceptanceCriterion,
+    EvidenceRequirement,
+    TaskContract,
+)
 from opensprite.agent.task.contract import TaskIntent
 from opensprite.config import DocumentLlmConfig
 from opensprite.llms import LLMResponse
@@ -21,14 +26,7 @@ from opensprite.tools.evidence import ToolEvidence
 
 
 def _llm_config() -> DocumentLlmConfig:
-    return DocumentLlmConfig(
-        pass_decoding_params=True,
-        temperature=0,
-        max_tokens=700,
-        top_p=None,
-        frequency_penalty=None,
-        presence_penalty=None,
-    )
+    return DocumentLlmConfig(max_tokens=700)
 
 
 class FakeProvider:
@@ -130,7 +128,7 @@ def test_normalize_completion_judge_payload_drops_unsupported_active_task_status
 
 
 @pytest.mark.anyio
-async def test_completion_judge_service_calls_provider_with_decoding_config():
+async def test_completion_judge_service_calls_provider_with_request_config():
     provider = FakeProvider('{"status":"incomplete","reason":"missing source citation"}')
     service = CompletionJudgeService(_llm_config())
 
@@ -145,8 +143,8 @@ async def test_completion_judge_service_calls_provider_with_decoding_config():
     assert provider.calls
     messages, kwargs = provider.calls[0]
     assert kwargs["model"] == "test-model"
-    assert kwargs["temperature"] == 0
-    assert kwargs["max_tokens"] == 700
+    assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
+    assert "reasoning_enabled" not in kwargs
     assert messages[0].role == "system"
     assert messages[1].role == "user"
     user_prompt = messages[1].content
@@ -230,8 +228,11 @@ def test_build_completion_judge_facts_uses_structured_execution_data():
         task_intent=intent,
         response_text="final response",
         execution_result=result,
+        user_message_text="請把這句翻成英文：我正在測試 CLI 對話流程。",
     )
 
+    assert facts["user_message"]["text"] == "請把這句翻成英文：我正在測試 CLI 對話流程。"
+    assert facts["user_message"]["char_count"] == len("請把這句翻成英文：我正在測試 CLI 對話流程。")
     assert facts["task_intent"]["objective"] == "Find current sources"
     assert facts["task_contract"]["task_type"] == "web_research"
     assert facts["assistant_response"]["text"] == "final response"
@@ -260,6 +261,7 @@ async def test_completion_gate_evaluate_with_judge_returns_judge_verdict():
         task_intent=intent,
         response_text="answer",
         execution_result=ExecutionResult(content="answer"),
+        user_message_text="Please answer the question",
         provider=object(),
         model="model",
     )
@@ -269,6 +271,7 @@ async def test_completion_gate_evaluate_with_judge_returns_judge_verdict():
     assert result.active_task_status == "done"
     assert result.verification_passed is True
     assert judge.calls[0]["facts"]["assistant_response"]["text"] == "answer"
+    assert judge.calls[0]["facts"]["user_message"]["text"] == "Please answer the question"
 
 
 @pytest.mark.anyio

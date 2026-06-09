@@ -4,7 +4,14 @@ import sqlite3
 from typer.testing import CliRunner
 
 from opensprite.cli import commands
-from opensprite.cli.commands_chat_smoke import SmokeCase, check_trace, load_trace_readonly, select_cases, summarize_trace
+from opensprite.cli.commands_chat_smoke import (
+    SmokeCase,
+    check_trace,
+    load_trace_readonly,
+    resolve_external_chat_prefix,
+    select_cases,
+    summarize_trace,
+)
 from opensprite.cli.commands_trace import trace_payload
 from opensprite.runs.events import (
     COMPLETION_GATE_EVALUATED_EVENT,
@@ -180,12 +187,24 @@ def test_select_cases_rejects_unknown_case():
         raise AssertionError("select_cases should reject unknown ids")
 
 
+def test_resolve_external_chat_prefix_uses_unique_default():
+    assert resolve_external_chat_prefix(" fixed-prefix ") == "fixed-prefix"
+
+    generated = resolve_external_chat_prefix()
+
+    assert generated.startswith("cli-trace-smoke-")
+    assert generated != "cli-trace-smoke"
+
+
 def test_chat_smoke_command_outputs_json(monkeypatch):
     runner = CliRunner()
 
     async def fake_run_smoke_cases(*args, **kwargs):
+        assert str(kwargs["external_chat_prefix"]).startswith("cli-trace-smoke-")
+        assert kwargs["external_chat_prefix"] != "cli-trace-smoke"
         return {
             "ok": True,
+            "external_chat_prefix": kwargs["external_chat_prefix"],
             "case_count": 1,
             "failed_count": 0,
             "elapsed_seconds": 0.1,

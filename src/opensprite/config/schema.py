@@ -69,12 +69,6 @@ class ProviderConfig(BaseModel):
     base_url: str | None = None
     enabled: bool = False
     context_window_tokens: int | None = Field(default=None, ge=1)
-    reasoning_enabled: bool = True
-    reasoning_effort: Literal["minimal", "low", "medium", "high", "xhigh"] | None = "medium"
-    reasoning_max_tokens: int | None = Field(default=None, ge=1)
-    reasoning_exclude: bool = False
-    provider_sort: Literal["price", "throughput", "latency"] | None = None
-    require_parameters: bool = False
 
 
 class LLMsConfig(BaseModel):
@@ -110,32 +104,13 @@ class LLMsConfig(BaseModel):
 
 
 class DocumentLlmConfig(BaseModel):
-    """LLM 解碼參數：背景文件合併（MEMORY / RECENT_SUMMARY / USER profile）的 API 呼叫。"""
+    """LLM request options for internal document and planning calls."""
 
-    pass_decoding_params: bool
-    temperature: float
     max_tokens: int
-    top_p: float | None
-    frequency_penalty: float | None
-    presence_penalty: float | None
 
-    def decoding_kwargs(self) -> dict[str, Any]:
-        """供 provider.chat(..., **kwargs) 使用；關閉時五個參數皆為 None。"""
-        if self.pass_decoding_params:
-            return {
-                "temperature": self.temperature,
-                "max_tokens": self.max_tokens,
-                "top_p": self.top_p,
-                "frequency_penalty": self.frequency_penalty,
-                "presence_penalty": self.presence_penalty,
-            }
-        return {
-            "temperature": None,
-            "max_tokens": None,
-            "top_p": None,
-            "frequency_penalty": None,
-            "presence_penalty": None,
-        }
+    def request_kwargs(self) -> dict[str, Any]:
+        """Build provider.chat kwargs for this internal request."""
+        return {"max_tokens": self.max_tokens}
 
 
 # 舊名稱保留，與 memory.llm 設定語意相同

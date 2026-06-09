@@ -255,7 +255,7 @@ Rules:
             ],
             tools=_SAVE_USER_PROFILE_TOOL,
             model=model,
-            **llm.decoding_kwargs(),
+            **llm.request_kwargs(),
         )
 
         if not response.tool_calls:

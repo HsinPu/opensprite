@@ -56,6 +56,14 @@ SendWebChat = Callable[..., Awaitable[dict[str, Any]]]
 DEFAULT_SESSIONS_DB_PATH = Path.home() / ".opensprite" / "data" / "sessions.db"
 
 
+def resolve_external_chat_prefix(value: str | None = None) -> str:
+    """Return a reusable user prefix or a unique smoke prefix for this run."""
+    prefix = str(value or "").strip()
+    if prefix:
+        return prefix
+    return f"cli-trace-smoke-{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 1_000_000:06d}"
+
+
 def _payload_value(payload: dict[str, Any], *keys: str) -> Any:
     for key in keys:
         if key in payload:
@@ -356,6 +364,7 @@ async def run_smoke_cases(
     failed = [result for result in results if not result["ok"]]
     return {
         "ok": not failed,
+        "external_chat_prefix": external_chat_prefix,
         "case_count": len(results),
         "failed_count": len(failed),
         "elapsed_seconds": round(time.monotonic() - started, 3),
@@ -397,7 +406,7 @@ def chat_smoke_command(
     ws_url: str | None,
     access_token: str | None,
     timeout_seconds: float,
-    external_chat_prefix: str,
+    external_chat_prefix: str | None,
     db_path: str | None,
     case_ids: list[str] | None,
     json_output: bool,
@@ -405,6 +414,7 @@ def chat_smoke_command(
     """Run the Typer-facing chat trace smoke command."""
     try:
         cases = select_cases(case_ids)
+        resolved_external_chat_prefix = resolve_external_chat_prefix(external_chat_prefix)
         payload = asyncio.run(
             run_smoke_cases(
                 cases,
@@ -412,7 +422,7 @@ def chat_smoke_command(
                 ws_url=ws_url,
                 access_token=access_token,
                 timeout_seconds=timeout_seconds,
-                external_chat_prefix=external_chat_prefix,
+                external_chat_prefix=resolved_external_chat_prefix,
                 db_path=db_path,
             )
         )

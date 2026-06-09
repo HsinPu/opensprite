@@ -20,7 +20,6 @@ class ProviderPreset:
     capabilities: tuple[str, ...] = ()
     model_discovery: dict[str, Any] | None = None
     media_discovery: dict[str, Any] | None = None
-    request_options: tuple[str, ...] = ()
     model_metadata_fields: tuple[str, ...] = ()
     media_model_choices: dict[str, tuple[str, ...]] | None = None
     model_capabilities: dict[str, dict[str, Any]] | None = None
@@ -64,7 +63,6 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
         capabilities = _parse_string_tuple(entry, name, "capabilities")
         model_discovery = _parse_discovery_config(entry, name, "model_discovery")
         media_discovery = _parse_discovery_config(entry, name, "media_discovery")
-        request_options = _parse_string_tuple(entry, name, "request_options")
         model_metadata_fields = _parse_string_tuple(entry, name, "model_metadata_fields")
         raw_media_models = entry.get("media_model_choices", {})
         if raw_media_models is None:
@@ -99,7 +97,6 @@ def _parse_providers(raw: dict[str, Any]) -> dict[str, ProviderPreset]:
             capabilities=capabilities,
             model_discovery=model_discovery,
             media_discovery=media_discovery,
-            request_options=request_options,
             model_metadata_fields=model_metadata_fields,
             media_model_choices=media_models or None,
             model_capabilities=model_capabilities or None,
@@ -161,12 +158,6 @@ def get_provider_profile(provider_id: str | None) -> ProviderPreset | None:
     if not normalized:
         return None
     return load_llm_presets().providers.get(normalized)
-
-
-def provider_request_options(provider_id: str | None) -> tuple[str, ...]:
-    """Return request option ids supported by a provider profile."""
-    profile = get_provider_profile(provider_id)
-    return profile.request_options if profile else ()
 
 
 def provider_default_base_url(provider_id: str | None) -> str:

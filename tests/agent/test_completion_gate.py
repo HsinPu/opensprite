@@ -132,14 +132,7 @@ async def _evaluate_with_static_judge(
         )
     )
     service = CompletionGateService(
-        llm_config=DocumentLlmConfig(
-            pass_decoding_params=False,
-            temperature=0,
-            max_tokens=700,
-            top_p=None,
-            frequency_penalty=None,
-            presence_penalty=None,
-        ),
+        llm_config=DocumentLlmConfig(max_tokens=700),
         judge_service=judge,
     )
     return await service.evaluate_with_judge(
@@ -168,14 +161,7 @@ async def test_completion_gate_downgrades_complete_judge_verdict_when_review_fai
         )
     )
     service = CompletionGateService(
-        llm_config=DocumentLlmConfig(
-            pass_decoding_params=False,
-            temperature=0,
-            max_tokens=700,
-            top_p=None,
-            frequency_penalty=None,
-            presence_penalty=None,
-        ),
+        llm_config=DocumentLlmConfig(max_tokens=700),
         judge_service=judge,
     )
 

@@ -87,11 +87,7 @@ class OpenAILLM(LLMProvider):
         messages: list[ChatMessage], 
         tools: list[dict[str, Any]] | None = None,
         model: str | None = None,
-        temperature: float | None = None,
         max_tokens: int | None = None,
-        top_p: float | None = None,
-        frequency_penalty: float | None = None,
-        presence_penalty: float | None = None,
         status_callback: Callable[[str], Awaitable[None]] | None = None,
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
@@ -129,16 +125,8 @@ class OpenAILLM(LLMProvider):
             "model": model or self.default_model,
             "messages": api_messages,
         }
-        if temperature is not None:
-            params["temperature"] = temperature
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
-        if top_p is not None:
-            params["top_p"] = top_p
-        if frequency_penalty is not None:
-            params["frequency_penalty"] = frequency_penalty
-        if presence_penalty is not None:
-            params["presence_penalty"] = presence_penalty
 
         # 加入 tools 如果有
         if tools:

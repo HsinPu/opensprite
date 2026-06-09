@@ -1877,8 +1877,6 @@ export function useChatClient() {
   const {
     loadModelSettings,
     selectModel,
-    applyProviderRecommendedOptions,
-    saveProviderRequestOptions,
     saveLlmSettings,
     saveMediaModel,
   } = useModelSettingsActions({
@@ -4065,8 +4063,6 @@ export function useChatClient() {
     logoutCopilotAuth,
     runUpdate,
     selectModel,
-    applyProviderRecommendedOptions,
-    saveProviderRequestOptions,
     saveLlmSettings,
     saveMediaModel,
     beginMcpEdit,

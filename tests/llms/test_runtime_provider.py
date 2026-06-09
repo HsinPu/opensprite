@@ -133,15 +133,6 @@ def test_create_llm_uses_responses_provider_for_responses_mode():
     assert provider.default_model == "gpt-5.1-codex"
 
 
-def test_resolve_provider_runtime_includes_profile_request_options():
-    runtime = resolve_provider_runtime(
-        ProviderConfig(provider="openrouter", api_key="router-key", model="anthropic/claude-sonnet-4.6", enabled=True),
-        provider_name="openrouter",
-    )
-
-    assert runtime.request_options == ("reasoning", "provider_sort", "require_parameters")
-
-
 def test_resolve_provider_runtime_preserves_configured_context_window():
     runtime = resolve_provider_runtime(
         ProviderConfig(
@@ -179,23 +170,16 @@ def test_resolve_runtime_applies_optional_api_key_profile_defaults():
     assert runtime.base_url == "http://localhost:11434/v1"
 
 
-def test_create_llm_filters_request_options_by_profile():
+def test_create_llm_uses_openrouter_without_provider_request_options():
     provider = create_llm(
         api_key="sk-or-test",
         model="anthropic/claude-sonnet-4.6",
         provider_name="openrouter",
-        reasoning_enabled=True,
-        reasoning_effort="high",
-        provider_sort="latency",
-        require_parameters=True,
-        request_options=(),
     )
 
     assert isinstance(provider, OpenRouterLLM)
-    assert provider.reasoning_enabled is False
-    assert provider.reasoning_effort is None
-    assert provider.provider_sort is None
-    assert provider.require_parameters is False
+    assert not hasattr(provider, "reasoning_enabled")
+    assert not hasattr(provider, "provider_sort")
 
 
 def test_create_llm_passes_minimax_base_url():
@@ -228,13 +212,11 @@ def test_create_llm_uses_anthropic_messages_provider_for_minimax_mode():
         base_url="https://api.minimax.io/anthropic",
         provider_name="minimax",
         api_mode="anthropic_messages",
-        reasoning_enabled=True,
-        reasoning_effort="high",
     )
 
     assert isinstance(provider, AnthropicMessagesLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
-    assert provider.reasoning_effort == "high"
+    assert not hasattr(provider, "reasoning_effort")
 
 
 def test_resolve_runtime_applies_minimax_profile_defaults():
