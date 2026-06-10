@@ -68,6 +68,29 @@ def test_openai_responses_sends_max_output_tokens_only_when_set():
     assert "max_tokens" not in responses.calls[0]
 
 
+def test_openai_responses_sends_reasoning_effort_without_summary():
+    responses = RecordingResponses()
+    provider = _make_provider(responses)
+    provider.reasoning_config = {"enabled": True, "effort": "high"}
+
+    result = asyncio.run(provider.chat([ChatMessage(role="user", content="hello")]))
+
+    assert result.content == "final answer"
+    assert responses.calls[0]["reasoning"] == {"effort": "high"}
+    assert "summary" not in responses.calls[0]["reasoning"]
+
+
+def test_openai_responses_sends_reasoning_none_when_disabled():
+    responses = RecordingResponses()
+    provider = _make_provider(responses)
+    provider.reasoning_config = {"enabled": False}
+
+    result = asyncio.run(provider.chat([ChatMessage(role="user", content="hello")]))
+
+    assert result.content == "final answer"
+    assert responses.calls[0]["reasoning"] == {"effort": "none"}
+
+
 def test_openai_responses_converts_tools_without_tool_choice():
     responses = RecordingResponses()
     provider = _make_provider(responses)

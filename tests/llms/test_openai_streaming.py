@@ -115,6 +115,53 @@ def test_openai_chat_sends_max_tokens_only_when_set():
     assert completions.calls[0]["max_tokens"] == 1234
 
 
+def test_openai_chat_sends_reasoning_effort_for_reasoning_models():
+    completions = FakeCompletions(_message_response("final answer", model="gpt-5.5"))
+    llm = _make_llm(completions)
+    llm.reasoning_config = {"enabled": True, "effort": "high"}
+
+    response = asyncio.run(llm.chat([ChatMessage(role="user", content="hello")], model="gpt-5.5"))
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["reasoning_effort"] == "high"
+
+
+def test_openai_chat_uses_max_completion_tokens_for_reasoning_models():
+    completions = FakeCompletions(_message_response("final answer", model="gpt-5.5"))
+    llm = _make_llm(completions)
+    llm.reasoning_config = {"enabled": True}
+
+    response = asyncio.run(
+        llm.chat([ChatMessage(role="user", content="hello")], model="gpt-5.5", max_tokens=1234)
+    )
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["max_completion_tokens"] == 1234
+    assert "max_tokens" not in completions.calls[0]
+
+
+def test_openai_chat_omits_reasoning_effort_for_non_reasoning_models():
+    completions = FakeCompletions(_message_response("final answer", model="gpt-4o-mini"))
+    llm = _make_llm(completions)
+    llm.reasoning_config = {"enabled": True, "effort": "high"}
+
+    response = asyncio.run(llm.chat([ChatMessage(role="user", content="hello")], model="gpt-4o-mini"))
+
+    assert response.content == "final answer"
+    assert "reasoning_effort" not in completions.calls[0]
+
+
+def test_openai_chat_sends_reasoning_none_when_disabled():
+    completions = FakeCompletions(_message_response("final answer", model="gpt-5.1"))
+    llm = _make_llm(completions)
+    llm.reasoning_config = {"enabled": False}
+
+    response = asyncio.run(llm.chat([ChatMessage(role="user", content="hello")], model="gpt-5.1"))
+
+    assert response.content == "final answer"
+    assert completions.calls[0]["reasoning_effort"] == "none"
+
+
 def test_openai_chat_sends_tools_with_auto_tool_choice():
     completions = FakeCompletions(_message_response("final answer"))
     llm = _make_llm(completions)

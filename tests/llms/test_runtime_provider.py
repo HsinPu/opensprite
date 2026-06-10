@@ -6,6 +6,7 @@ from opensprite.auth.credentials import add_credential
 from opensprite.config import ProviderConfig
 from opensprite.llms.anthropic_messages import AnthropicMessagesLLM
 from opensprite.llms.minimax import MiniMaxLLM
+from opensprite.llms.openai import OpenAILLM
 from opensprite.llms.openai_responses import OpenAIResponsesLLM
 from opensprite.llms.openrouter import OpenRouterLLM
 from opensprite.llms.registry import create_llm
@@ -131,6 +132,26 @@ def test_create_llm_uses_responses_provider_for_responses_mode():
 
     assert isinstance(provider, OpenAIResponsesLLM)
     assert provider.default_model == "gpt-5.1-codex"
+    assert provider.reasoning_config == {"enabled": True}
+
+
+def test_responses_runtime_passes_reasoning_effort_to_provider():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="openai-codex",
+            api_key="codex-token",
+            model="gpt-5.1-codex",
+            api_mode="responses",
+            reasoning_effort="high",
+            enabled=True,
+        ),
+        provider_name="openai-codex",
+    )
+    provider = create_llm_from_runtime(runtime)
+
+    assert isinstance(provider, OpenAIResponsesLLM)
+    assert provider.reasoning_effort == "high"
+    assert provider.reasoning_config == {"enabled": True, "effort": "high"}
 
 
 def test_resolve_provider_runtime_preserves_configured_context_window():
@@ -203,6 +224,24 @@ def test_openrouter_runtime_passes_reasoning_effort_to_provider():
     assert provider.reasoning_config == {"enabled": True, "effort": "high"}
 
 
+def test_openai_runtime_passes_reasoning_effort_to_provider():
+    runtime = resolve_provider_runtime(
+        ProviderConfig(
+            provider="openai",
+            api_key="openai-key",
+            model="gpt-5.5",
+            reasoning_effort="high",
+            enabled=True,
+        ),
+        provider_name="openai",
+    )
+    provider = create_llm_from_runtime(runtime)
+
+    assert isinstance(provider, OpenAILLM)
+    assert provider.reasoning_effort == "high"
+    assert provider.reasoning_config == {"enabled": True, "effort": "high"}
+
+
 def test_create_llm_passes_minimax_base_url():
     provider = create_llm(
         api_key="minimax-key",
@@ -237,7 +276,8 @@ def test_create_llm_uses_anthropic_messages_provider_for_minimax_mode():
 
     assert isinstance(provider, AnthropicMessagesLLM)
     assert provider.base_url == "https://api.minimax.io/anthropic"
-    assert not hasattr(provider, "reasoning_effort")
+    assert provider.reasoning_effort == ""
+    assert provider.reasoning_config is None
 
 
 def test_resolve_runtime_applies_minimax_profile_defaults():

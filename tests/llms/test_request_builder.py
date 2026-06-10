@@ -84,6 +84,18 @@ def test_build_llm_request_includes_provider_extra_body_when_set():
     assert params["extra_body"] == {"reasoning": {"enabled": True, "effort": "high"}}
 
 
+def test_build_llm_request_includes_top_level_extra_params_when_set():
+    params = build_llm_request(
+        OPENAI_RESPONSES_REQUEST_PROFILE.options(
+            model="gpt-test",
+            messages=[{"role": "user", "content": "hello"}],
+            extra_params={"reasoning": {"effort": "medium"}},
+        )
+    )
+
+    assert params["reasoning"] == {"effort": "medium"}
+
+
 def test_reasoning_effort_helpers_normalize_supported_modes():
     assert normalize_reasoning_effort(" HIGH ") == "high"
     assert normalize_reasoning_effort("unknown") == ""

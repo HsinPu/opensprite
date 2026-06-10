@@ -84,12 +84,14 @@ def create_llm(
             api_key=api_key,
             base_url=base_url or profile_default_base_url(provider_name),
             default_model=model,
+            reasoning_effort=reasoning_effort,
         )
     if api_mode == "anthropic_messages":
         return AnthropicMessagesLLM(
             api_key=api_key,
             base_url=base_url or profile_default_base_url(provider_name),
             default_model=model,
+            reasoning_effort=reasoning_effort,
         )
 
     spec = find_provider(api_key, base_url, model, provider_name)
@@ -117,4 +119,9 @@ def create_llm(
             default_headers=copilot_request_headers(),
         )
 
-    return OpenAILLM(api_key=api_key, base_url=base_url or provider_spec_default_base_url(spec), default_model=model)
+    return OpenAILLM(
+        api_key=api_key,
+        base_url=base_url or provider_spec_default_base_url(spec),
+        default_model=model,
+        reasoning_effort=reasoning_effort,
+    )

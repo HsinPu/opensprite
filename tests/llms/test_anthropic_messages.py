@@ -29,6 +29,61 @@ def test_anthropic_messages_builds_basic_payload_without_thinking_options():
     assert "cache_control" not in str(payload)
 
 
+def test_anthropic_messages_ignores_reasoning_effort_for_minimax_endpoint():
+    provider = AnthropicMessagesLLM(
+        api_key="minimax-key",
+        base_url="https://api.minimax.io/anthropic/",
+        default_model="MiniMax-M2.7",
+        reasoning_effort="high",
+    )
+    payload = provider._build_payload(
+        [ChatMessage(role="user", content="Think deeply")],
+        tools=None,
+        model=None,
+        max_tokens=1024,
+    )
+
+    assert "thinking" not in payload
+    assert "output_config" not in payload
+
+
+def test_anthropic_messages_maps_reasoning_effort_for_official_anthropic_endpoint():
+    provider = AnthropicMessagesLLM(
+        api_key="anthropic-key",
+        base_url="https://api.anthropic.com",
+        default_model="claude-sonnet-4-6",
+        reasoning_effort="high",
+        prompt_cache_enabled=False,
+    )
+    payload = provider._build_payload(
+        [ChatMessage(role="user", content="Think deeply")],
+        tools=None,
+        model=None,
+        max_tokens=16000,
+    )
+
+    assert payload["thinking"] == {"type": "adaptive", "display": "summarized"}
+    assert payload["output_config"] == {"effort": "high"}
+
+
+def test_anthropic_messages_downgrades_xhigh_for_claude_4_6():
+    provider = AnthropicMessagesLLM(
+        api_key="anthropic-key",
+        base_url="https://api.anthropic.com",
+        default_model="claude-opus-4-6",
+        reasoning_effort="xhigh",
+        prompt_cache_enabled=False,
+    )
+    payload = provider._build_payload(
+        [ChatMessage(role="user", content="Think deeply")],
+        tools=None,
+        model=None,
+        max_tokens=16000,
+    )
+
+    assert payload["output_config"] == {"effort": "max"}
+
+
 def test_anthropic_messages_uses_context_output_reserve_for_main_requests():
     provider = AnthropicMessagesLLM(
         api_key="minimax-key",

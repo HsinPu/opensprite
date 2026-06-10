@@ -9,7 +9,7 @@ from typing import Any, Awaitable, Callable
 
 from .base import LLMProvider, LLMResponse, ChatMessage
 from .openai_streaming import collect_openai_compatible_stream
-from .reasoning import normalize_reasoning_effort, reasoning_config_from_effort
+from .reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from .request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
 from .response_utils import coerce_content as _coerce_content
 from .response_utils import coerce_reasoning_details
@@ -95,7 +95,7 @@ class OpenRouterLLM(LLMProvider):
         self.api_key = api_key
         self.default_model = default_model
         self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
-        self.reasoning_config = reasoning_config_from_effort(self.reasoning_effort) or {"enabled": True}
+        self.reasoning_config = reasoning_config_or_default(self.reasoning_effort)
         from httpx import Timeout
 
         self._client_kwargs = {
