@@ -25,7 +25,8 @@ class BackgroundServiceStatus:
 
 
 WINDOWS_STARTUP_TASK_NAME = "OpenSprite Gateway"
-WINDOWS_STARTUP_FILE_NAME = "OpenSprite Gateway.cmd"
+WINDOWS_STARTUP_FILE_NAME = "OpenSprite Gateway.vbs"
+WINDOWS_STARTUP_LEGACY_FILE_NAMES = ("OpenSprite Gateway.cmd",)
 
 
 def get_app_home(home: Path | None = None) -> Path:
@@ -54,6 +55,14 @@ def get_windows_startup_folder() -> Path:
 def get_windows_startup_file_path() -> Path:
     """Return the fallback per-user Startup folder command path."""
     return get_windows_startup_folder() / WINDOWS_STARTUP_FILE_NAME
+
+
+def get_windows_startup_file_paths() -> tuple[Path, ...]:
+    """Return current and previous fallback startup file paths."""
+    startup_folder = get_windows_startup_folder()
+    return (startup_folder / WINDOWS_STARTUP_FILE_NAME,) + tuple(
+        startup_folder / file_name for file_name in WINDOWS_STARTUP_LEGACY_FILE_NAMES
+    )
 
 
 def _read_pid(pid_file: Path) -> int | None:
@@ -166,12 +175,31 @@ def _quote_task_command_part(value: str) -> str:
     return '"' + value.replace('"', r'\"') + '"'
 
 
-def _build_windows_startup_command(config_path: Path | None, *, python_executable: Path | None = None) -> str:
+def _windowless_python_executable(python_path: Path) -> Path:
+    if platform.system() == "Windows" and python_path.name.lower() == "python.exe":
+        pythonw_path = python_path.with_name("pythonw.exe")
+        if pythonw_path.exists():
+            return pythonw_path
+    return python_path
+
+
+def _build_windows_startup_command(
+    config_path: Path | None,
+    *,
+    python_executable: Path | None = None,
+    windowless: bool = True,
+) -> str:
     python_path = resolve_gateway_python(python_executable)
+    if windowless:
+        python_path = _windowless_python_executable(python_path)
     parts = [str(python_path), "-m", "opensprite", "service", "start"]
     if config_path is not None:
         parts.extend(["--config", str(Path(config_path).expanduser().resolve())])
     return " ".join(_quote_task_command_part(part) for part in parts)
+
+
+def _vbs_string(value: str | Path) -> str:
+    return '"' + str(value).replace('"', '""') + '"'
 
 
 def _install_dir_from_python(python_path: Path) -> Path:
@@ -185,12 +213,19 @@ def _install_startup_file(*, config_path: Path | None = None, python_executable:
     startup_file = get_windows_startup_file_path()
     startup_file.parent.mkdir(parents=True, exist_ok=True)
     python_path = resolve_gateway_python(python_executable)
-    command = _build_windows_startup_command(config_path, python_executable=python_path)
+    command = _build_windows_startup_command(config_path, python_executable=python_path, windowless=True)
     install_dir = _install_dir_from_python(python_path)
+    for existing_file in get_windows_startup_file_paths():
+        if existing_file == startup_file:
+            continue
+        try:
+            existing_file.unlink()
+        except (FileNotFoundError, OSError):
+            pass
     content = (
-        "@echo off\r\n"
-        f"set \"OPENSPRITE_INSTALL_DIR={install_dir}\"\r\n"
-        f"{command} >NUL 2>&1\r\n"
+        "Set shell = CreateObject(\"WScript.Shell\")\r\n"
+        f"shell.Environment(\"PROCESS\")(\"OPENSPRITE_INSTALL_DIR\") = {_vbs_string(install_dir)}\r\n"
+        f"shell.Run {_vbs_string(command)}, 0, False\r\n"
     )
     startup_file.write_text(content, encoding="utf-8")
     return f"{WINDOWS_STARTUP_TASK_NAME} (Startup folder)"
@@ -229,6 +264,11 @@ def install_startup_task(
         if "access is denied" in message.lower():
             return _install_startup_file(config_path=config_path, python_executable=python_executable)
         raise RuntimeError(message)
+    for startup_file in get_windows_startup_file_paths():
+        try:
+            startup_file.unlink()
+        except (FileNotFoundError, OSError):
+            pass
     return WINDOWS_STARTUP_TASK_NAME
 
 
@@ -237,14 +277,14 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
     if platform.system() != "Windows":
         raise RuntimeError("Startup task uninstall is only supported on Windows.")
     removed = False
-    startup_file = get_windows_startup_file_path()
-    try:
-        startup_file.unlink()
-        removed = True
-    except FileNotFoundError:
-        pass
-    except OSError:
-        pass
+    for startup_file in get_windows_startup_file_paths():
+        try:
+            startup_file.unlink()
+            removed = True
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
 
     result = run(
         ["schtasks", "/Delete", "/TN", WINDOWS_STARTUP_TASK_NAME, "/F"],
@@ -265,7 +305,7 @@ def is_startup_task_installed(*, run=subprocess.run) -> bool:
     """Return whether the Windows logon startup task is registered."""
     if platform.system() != "Windows":
         return False
-    if get_windows_startup_file_path().exists():
+    if any(path.exists() for path in get_windows_startup_file_paths()):
         return True
     result = run(
         ["schtasks", "/Query", "/TN", WINDOWS_STARTUP_TASK_NAME],

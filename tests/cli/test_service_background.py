@@ -235,9 +235,14 @@ def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch
         calls.append((args, kwargs))
         return subprocess.CompletedProcess(args, 0, stdout="SUCCESS", stderr="")
 
+    python_path = tmp_path / "python.exe"
+    pythonw_path = tmp_path / "pythonw.exe"
+    python_path.write_text("", encoding="utf-8")
+    pythonw_path.write_text("", encoding="utf-8")
+
     task_name = service_background.install_startup_task(
         config_path=tmp_path / "opensprite.json",
-        python_executable=tmp_path / "python.exe",
+        python_executable=python_path,
         run=fake_run,
     )
 
@@ -246,7 +251,7 @@ def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch
     assert args[:6] == ["schtasks", "/Create", "/TN", "OpenSprite Gateway", "/SC", "ONLOGON"]
     assert "/TR" in args
     task_run = args[args.index("/TR") + 1]
-    assert "python.exe" in task_run
+    assert "pythonw.exe" in task_run
     assert "-m" in task_run
     assert "opensprite" in task_run
     assert "service" in task_run
@@ -262,6 +267,10 @@ def test_install_startup_task_falls_back_to_startup_folder_on_access_denied(tmp_
     python_path = tmp_path / "OpenSprite" / "opensprite" / ".venv" / "Scripts" / "python.exe"
     python_path.parent.mkdir(parents=True)
     python_path.write_text("", encoding="utf-8")
+    python_path.with_name("pythonw.exe").write_text("", encoding="utf-8")
+    legacy_startup_file = service_background.get_windows_startup_folder() / "OpenSprite Gateway.cmd"
+    legacy_startup_file.parent.mkdir(parents=True)
+    legacy_startup_file.write_text("@echo off\r\n", encoding="utf-8")
 
     def fake_run(args, **kwargs):
         return subprocess.CompletedProcess(args, 1, stdout="", stderr="ERROR: Access is denied.")
@@ -276,13 +285,17 @@ def test_install_startup_task_falls_back_to_startup_folder_on_access_denied(tmp_
     content = startup_file.read_text(encoding="utf-8")
     assert task_name == "OpenSprite Gateway (Startup folder)"
     assert startup_file.exists()
-    assert f'set "OPENSPRITE_INSTALL_DIR={tmp_path / "OpenSprite" / "opensprite"}"' in content
-    assert str(python_path.resolve()) in content
+    assert not legacy_startup_file.exists()
+    assert 'WScript.Shell' in content
+    assert 'OPENSPRITE_INSTALL_DIR") = ' in content
+    assert str(tmp_path / "OpenSprite" / "opensprite") in content
+    assert str(python_path.with_name("pythonw.exe").resolve()) in content
     assert "-m" in content
     assert "opensprite" in content
     assert "service" in content
     assert "start" in content
     assert str((tmp_path / ".opensprite" / "opensprite.json").resolve()) in content
+    assert ", 0, False" in content
 
 
 def test_startup_status_detects_startup_folder_fallback(tmp_path, monkeypatch):
