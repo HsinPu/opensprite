@@ -144,6 +144,7 @@ async def test_completion_judge_service_calls_provider_with_request_config():
     messages, kwargs = provider.calls[0]
     assert kwargs["model"] == "test-model"
     assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
+    assert kwargs["request_mode"] == "completion_judge"
     assert "reasoning_enabled" not in kwargs
     assert messages[0].role == "system"
     assert messages[1].role == "user"

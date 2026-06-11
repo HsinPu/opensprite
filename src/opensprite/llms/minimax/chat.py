@@ -8,6 +8,7 @@ import httpx
 
 from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_from_effort
+from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
 from ..tool_args import parse_tool_arguments
 from ...utils.url import join_url_path
@@ -194,9 +195,11 @@ class MiniMaxLLM(LLMProvider):
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        request_mode: str | None = None,
     ) -> LLMResponse:
         _ = status_callback, response_delta_callback, tool_input_delta_callback
         payload = self._build_payload(messages, tools, model, max_tokens)
+        log_llm_request_params("MiniMax", payload, request_mode=request_mode)
         data = await self._post_messages(payload)
         content_blocks = data.get("content") if isinstance(data.get("content"), list) else []
         text_parts: list[str] = []

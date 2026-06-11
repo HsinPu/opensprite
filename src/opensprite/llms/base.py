@@ -109,6 +109,7 @@ class LLMProvider(ABC):
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        request_mode: str | None = None,
     ) -> LLMResponse:
         """
         發送對話請求到 LLM
@@ -122,6 +123,7 @@ class LLMProvider(ABC):
             response_delta_callback: 可選的可見文字增量 callback；provider 支援 streaming 時呼叫
             tool_input_delta_callback: 可選的工具參數增量 callback；provider 支援 streaming tool calls 時呼叫
             reasoning_delta_callback: 可選的 reasoning 增量 callback；只應用於 inspector trace，不應發到外部 channel
+            request_mode: internal purpose label for logging/request policy only
         
         回傳：
             LLMResponse: 包含回覆內容和使用的模型
@@ -167,6 +169,7 @@ class UnconfiguredLLM(LLMProvider):
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        request_mode: str | None = None,
     ) -> LLMResponse:
         return LLMResponse(content="", model=self.get_default_model())
 

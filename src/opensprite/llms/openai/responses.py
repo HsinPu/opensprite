@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Callable
 from ..base import ChatMessage, LLMProvider, LLMResponse, ToolCall
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default, reasoning_effort_from_config
 from ..request_builder import OPENAI_RESPONSES_REQUEST_PROFILE, build_llm_request
+from ..request_log_fields import log_llm_request_params
 from ..response_utils import usage_payload as _usage_payload
 from ..tool_args import parse_tool_arguments
 
@@ -127,6 +128,7 @@ class OpenAIResponsesLLM(LLMProvider):
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        request_mode: str | None = None,
     ) -> LLMResponse:
         _ = status_callback, tool_input_delta_callback
         converted_tools = _responses_tools(tools)
@@ -142,6 +144,7 @@ class OpenAIResponsesLLM(LLMProvider):
                 stream=response_delta_callback is not None,
             )
         )
+        log_llm_request_params("OpenAI Responses", params, input_key="input", request_mode=request_mode)
 
         if response_delta_callback is not None:
             stream = await self.client.responses.create(**params)

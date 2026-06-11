@@ -10,6 +10,11 @@ from typing import Any
 from ...config.schema import DocumentLlmConfig
 from ...documents.active_task import has_current_active_task
 from ...llms import ChatMessage, is_unconfigured_llm
+from ...llms.request_modes import (
+    JSON_PLANNING_MIN_OUTPUT_TOKENS,
+    LLMRequestMode,
+    request_kwargs_for_mode,
+)
 from ...utils.log import logger
 from ...tool_names import (
     ANALYZE_IMAGE_TOOL_NAME,
@@ -1125,21 +1130,19 @@ async def _chat_json_planning_llm(
     messages: list[ChatMessage],
     model: str | None,
     llm_config: DocumentLlmConfig,
+    request_mode: LLMRequestMode | str = LLMRequestMode.JSON_PLANNING,
 ) -> Any:
     """Call a provider for strict JSON routing/planning without reasoning output."""
-    kwargs = _json_planning_request_kwargs(llm_config)
+    kwargs = _json_planning_request_kwargs(llm_config, request_mode=request_mode)
     return await provider.chat(messages=messages, model=model, **kwargs)
 
 
-def _json_planning_request_kwargs(llm_config: DocumentLlmConfig) -> dict[str, Any]:
-    kwargs = dict(llm_config.request_kwargs())
-    max_tokens = kwargs.get("max_tokens")
-    if max_tokens is not None:
-        try:
-            kwargs["max_tokens"] = max(int(max_tokens), JSON_PLANNING_MIN_OUTPUT_TOKENS)
-        except (TypeError, ValueError):
-            kwargs["max_tokens"] = JSON_PLANNING_MIN_OUTPUT_TOKENS
-    return kwargs
+def _json_planning_request_kwargs(
+    llm_config: DocumentLlmConfig,
+    *,
+    request_mode: LLMRequestMode | str = LLMRequestMode.JSON_PLANNING,
+) -> dict[str, Any]:
+    return request_kwargs_for_mode(llm_config.request_kwargs(), request_mode)
 
 def _llm_response_text(response: Any) -> str:
     return str(getattr(response, "content", "") or "")
@@ -1285,7 +1288,6 @@ PLANNER_UNAVAILABLE_REASON = "task planner unavailable: llm not configured"
 PLANNER_INVALID_JSON_REASON = "task planner returned invalid JSON"
 PLANNER_UNSUPPORTED_TASK_TYPE_REASON = "task planner returned an unsupported or missing task_type"
 PLANNER_VALIDATED_REASON = "llm planner returned a task contract"
-JSON_PLANNING_MIN_OUTPUT_TOKENS = 1200
 PLANNER_MEDIA_ANALYSIS_TASK_TYPE = "media_analysis"
 PLANNER_OPS_TASK_TYPE = "ops"
 REQUIRED_TOOL_EVIDENCE_KIND = "required_tool"

@@ -4,13 +4,13 @@ opensprite/llms/openrouter.py - OpenRouter LLM 實作
 實作 LLMProvider 介面，使用 OpenRouter API
 OpenRouter 可以訪問多種 LLM 模型（OpenAI、Anthropic、Meta 等）
 """
-import json
 from typing import Any, Awaitable, Callable
 
 from ..base import LLMProvider, LLMResponse, ChatMessage
 from ..openai.streaming import collect_openai_compatible_stream
 from ..reasoning import normalize_reasoning_effort, reasoning_config_or_default
 from ..request_builder import OPENAI_REASONING_HISTORY_REQUEST_PROFILE, build_llm_request, normalize_openai_compatible_messages
+from ..request_log_fields import log_llm_request_params
 from ..response_utils import coerce_content as _coerce_content
 from ..response_utils import coerce_reasoning_details
 from ..response_utils import extract_openai_compatible_message
@@ -29,39 +29,6 @@ def _openrouter_reasoning_extra_body(reasoning_config: dict[str, Any] | None) ->
     if not reasoning_config:
         return None
     return {"reasoning": dict(reasoning_config)}
-
-
-def _openrouter_request_param_log_fields(params: dict[str, Any]) -> dict[str, Any]:
-    """Return safe request param fields for logs without message/tool/header content."""
-    extra_body = params.get("extra_body")
-    reasoning = extra_body.get("reasoning") if isinstance(extra_body, dict) else None
-    return {
-        "model": str(params.get("model") or "-"),
-        "messages": len(params.get("messages") or []),
-        "tools": len(params.get("tools") or []),
-        "tool_choice": str(params.get("tool_choice") or "-"),
-        "stream": bool(params.get("stream", False)),
-        "max_tokens": params.get("max_tokens") if params.get("max_tokens") is not None else "-",
-        "reasoning": (
-            json.dumps(reasoning, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            if reasoning is not None
-            else "-"
-        ),
-    }
-
-
-def _log_openrouter_request_params(params: dict[str, Any]) -> None:
-    fields = _openrouter_request_param_log_fields(params)
-    logger.info(
-        "OpenRouter request params | model={} messages={} tools={} tool_choice={} stream={} max_tokens={} extra_body.reasoning={}",
-        fields["model"],
-        fields["messages"],
-        fields["tools"],
-        fields["tool_choice"],
-        fields["stream"],
-        fields["max_tokens"],
-        fields["reasoning"],
-    )
 
 
 class OpenRouterLLM(LLMProvider):
@@ -135,6 +102,7 @@ class OpenRouterLLM(LLMProvider):
         response_delta_callback: Callable[[str], Awaitable[None]] | None = None,
         tool_input_delta_callback: Callable[[str, str, str, int], Awaitable[None]] | None = None,
         reasoning_delta_callback: Callable[[str], Awaitable[None]] | None = None,
+        request_mode: str | None = None,
     ) -> LLMResponse:
         """
         呼叫 OpenRouter Chat Completions API
@@ -157,7 +125,7 @@ class OpenRouterLLM(LLMProvider):
                 stream=response_delta_callback is not None,
             )
         )
-        _log_openrouter_request_params(params)
+        log_llm_request_params("OpenRouter", params, request_mode=request_mode)
 
         if response_delta_callback is not None:
             stream = await self._create_completion(params)

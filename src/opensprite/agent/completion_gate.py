@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..config import DocumentLlmConfig
 from ..llms import ChatMessage, is_unconfigured_llm
+from ..llms.request_modes import LLMRequestMode
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import BATCH_TOOL_NAME, EXECUTION_TOOL_NAMES, WORKSPACE_DISCOVERY_TOOL_NAMES
 from ..documents.active_task import (
@@ -312,6 +313,7 @@ class CompletionJudgeService:
             ],
             model=model,
             llm_config=self.llm_config,
+            request_mode=LLMRequestMode.COMPLETION_JUDGE,
         )
         response_text = str(getattr(response, "content", "") or "")
         payload = parse_completion_judge_json(response_text)

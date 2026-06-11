@@ -2,7 +2,8 @@ import asyncio
 from types import SimpleNamespace
 
 from opensprite.llms import ChatMessage
-from opensprite.llms.openrouter import OpenRouterLLM, _openrouter_request_param_log_fields
+from opensprite.llms.openrouter import OpenRouterLLM
+from opensprite.llms.request_log_fields import request_param_log_fields
 
 
 def _openrouter_response(content="final answer", model="anthropic/claude-sonnet-4.6"):
@@ -49,8 +50,8 @@ def test_openrouter_client_uses_openrouter_headers_and_longer_timeout():
     assert timeout.read == 120.0
 
 
-def test_openrouter_request_param_log_fields_are_sanitized():
-    fields = _openrouter_request_param_log_fields(
+def test_openrouter_request_log_fields_use_shared_sanitized_fields():
+    fields = request_param_log_fields(
         {
             "model": "google/gemini-3-flash-preview",
             "messages": [{"role": "user", "content": "do not log this"}],
@@ -63,6 +64,7 @@ def test_openrouter_request_param_log_fields_are_sanitized():
     )
 
     assert fields == {
+        "mode": "main_chat",
         "model": "google/gemini-3-flash-preview",
         "messages": 1,
         "tools": 1,

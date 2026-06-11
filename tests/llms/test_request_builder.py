@@ -4,6 +4,12 @@ from opensprite.llms.reasoning import (
     normalize_reasoning_effort,
     reasoning_config_from_effort,
 )
+from opensprite.llms.request_log_fields import request_param_log_fields
+from opensprite.llms.request_modes import (
+    JSON_PLANNING_MIN_OUTPUT_TOKENS,
+    LLMRequestMode,
+    request_kwargs_for_mode,
+)
 from opensprite.llms.request_builder import (
     OPENAI_RESPONSES_REQUEST_PROFILE,
     build_llm_request,
@@ -104,3 +110,38 @@ def test_reasoning_effort_helpers_normalize_supported_modes():
     assert reasoning_config_from_effort("") is None
     assert reasoning_config_from_effort("none") == {"enabled": False}
     assert reasoning_config_from_effort("low") == {"enabled": True, "effort": "low"}
+
+
+def test_request_mode_json_planning_enforces_minimum_output_tokens():
+    kwargs = request_kwargs_for_mode({"max_tokens": 12}, LLMRequestMode.JSON_PLANNING)
+
+    assert kwargs["request_mode"] == "json_planning"
+    assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
+
+
+def test_request_param_log_fields_are_sanitized_and_provider_neutral():
+    fields = request_param_log_fields(
+        {
+            "model": "test-model",
+            "input": [{"role": "user", "content": "secret prompt"}],
+            "tools": [{"type": "function", "function": {"name": "secret_tool"}}],
+            "tool_choice": {"type": "auto"},
+            "stream": True,
+            "max_output_tokens": 321,
+            "reasoning": {"effort": "high"},
+        },
+        request_mode=LLMRequestMode.COMPLETION_JUDGE,
+    )
+
+    assert fields == {
+        "mode": "completion_judge",
+        "model": "test-model",
+        "messages": 1,
+        "tools": 1,
+        "tool_choice": '{"type":"auto"}',
+        "stream": True,
+        "max_tokens": 321,
+        "reasoning": '{"effort":"high"}',
+    }
+    assert "secret prompt" not in str(fields)
+    assert "secret_tool" not in str(fields)
