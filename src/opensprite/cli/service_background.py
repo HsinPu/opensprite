@@ -25,6 +25,7 @@ class BackgroundServiceStatus:
 
 
 WINDOWS_STARTUP_TASK_NAME = "OpenSprite Gateway"
+WINDOWS_STARTUP_FILE_NAME = "OpenSprite Gateway.cmd"
 
 
 def get_app_home(home: Path | None = None) -> Path:
@@ -40,6 +41,19 @@ def get_pid_file(home: Path | None = None) -> Path:
 def get_log_file(home: Path | None = None) -> Path:
     """Return the detached gateway log file path."""
     return get_app_home(home) / "logs" / "gateway.log"
+
+
+def get_windows_startup_folder() -> Path:
+    """Return the current user's Windows Startup folder."""
+    appdata = os.getenv("APPDATA")
+    if appdata:
+        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    return Path.home() / "AppData" / "Roaming" / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+
+
+def get_windows_startup_file_path() -> Path:
+    """Return the fallback per-user Startup folder command path."""
+    return get_windows_startup_folder() / WINDOWS_STARTUP_FILE_NAME
 
 
 def _read_pid(pid_file: Path) -> int | None:
@@ -98,7 +112,12 @@ def resolve_gateway_python(python_executable: Path | None = None) -> Path:
     if python_executable is not None:
         return Path(python_executable).expanduser().absolute()
 
-    install_dir = Path(os.getenv("OPENSPRITE_INSTALL_DIR", "~/.local/share/opensprite/opensprite")).expanduser()
+    default_install_dir = (
+        Path(os.getenv("LOCALAPPDATA", "~")).expanduser() / "OpenSprite" / "opensprite"
+        if platform.system() == "Windows"
+        else Path("~/.local/share/opensprite/opensprite").expanduser()
+    )
+    install_dir = Path(os.getenv("OPENSPRITE_INSTALL_DIR", str(default_install_dir))).expanduser()
     for candidate in (
         install_dir / ".venv" / "bin" / "python",
         install_dir / ".venv" / "Scripts" / "python.exe",
@@ -106,7 +125,12 @@ def resolve_gateway_python(python_executable: Path | None = None) -> Path:
         if candidate.exists():
             return candidate.absolute()
 
-    return Path(sys.executable).expanduser().absolute()
+    current_executable = Path(sys.executable).expanduser().absolute()
+    if platform.system() == "Windows" and current_executable.name.lower() != "python.exe":
+        sibling_python = current_executable.parent / "python.exe"
+        if sibling_python.exists():
+            return sibling_python.absolute()
+    return current_executable
 
 
 def _cleanup_stale_pid(pid_file: Path) -> None:
@@ -150,6 +174,28 @@ def _build_windows_startup_command(config_path: Path | None, *, python_executabl
     return " ".join(_quote_task_command_part(part) for part in parts)
 
 
+def _install_dir_from_python(python_path: Path) -> Path:
+    parent = python_path.parent
+    if parent.name.lower() in {"scripts", "bin"} and parent.parent.name == ".venv":
+        return parent.parent.parent
+    return parent.parent
+
+
+def _install_startup_file(*, config_path: Path | None = None, python_executable: Path | None = None) -> str:
+    startup_file = get_windows_startup_file_path()
+    startup_file.parent.mkdir(parents=True, exist_ok=True)
+    python_path = resolve_gateway_python(python_executable)
+    command = _build_windows_startup_command(config_path, python_executable=python_path)
+    install_dir = _install_dir_from_python(python_path)
+    content = (
+        "@echo off\r\n"
+        f"set \"OPENSPRITE_INSTALL_DIR={install_dir}\"\r\n"
+        f"{command} >NUL 2>&1\r\n"
+    )
+    startup_file.write_text(content, encoding="utf-8")
+    return f"{WINDOWS_STARTUP_TASK_NAME} (Startup folder)"
+
+
 def install_startup_task(
     *,
     config_path: Path | None = None,
@@ -180,6 +226,8 @@ def install_startup_task(
     )
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "Failed to register Windows startup task."
+        if "access is denied" in message.lower():
+            return _install_startup_file(config_path=config_path, python_executable=python_executable)
         raise RuntimeError(message)
     return WINDOWS_STARTUP_TASK_NAME
 
@@ -188,6 +236,16 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
     """Remove the Windows logon startup task if it exists."""
     if platform.system() != "Windows":
         raise RuntimeError("Startup task uninstall is only supported on Windows.")
+    removed = False
+    startup_file = get_windows_startup_file_path()
+    try:
+        startup_file.unlink()
+        removed = True
+    except FileNotFoundError:
+        pass
+    except OSError:
+        pass
+
     result = run(
         ["schtasks", "/Delete", "/TN", WINDOWS_STARTUP_TASK_NAME, "/F"],
         capture_output=True,
@@ -198,7 +256,7 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
         return True
     output = f"{result.stdout}\n{result.stderr}".lower()
     if "cannot find" in output or "does not exist" in output:
-        return False
+        return removed
     message = result.stderr.strip() or result.stdout.strip() or "Failed to remove Windows startup task."
     raise RuntimeError(message)
 
@@ -207,6 +265,8 @@ def is_startup_task_installed(*, run=subprocess.run) -> bool:
     """Return whether the Windows logon startup task is registered."""
     if platform.system() != "Windows":
         return False
+    if get_windows_startup_file_path().exists():
+        return True
     result = run(
         ["schtasks", "/Query", "/TN", WINDOWS_STARTUP_TASK_NAME],
         capture_output=True,

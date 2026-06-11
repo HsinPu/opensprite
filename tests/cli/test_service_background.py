@@ -99,6 +99,32 @@ def test_resolve_gateway_python_prefers_installer_venv(tmp_path, monkeypatch):
     assert service_background.resolve_gateway_python() == python_path.absolute()
 
 
+def test_resolve_gateway_python_prefers_windows_default_install_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("OPENSPRITE_INSTALL_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    python_path = tmp_path / "OpenSprite" / "opensprite" / ".venv" / "Scripts" / "python.exe"
+    python_path.parent.mkdir(parents=True)
+    python_path.write_text("", encoding="utf-8")
+
+    assert service_background.resolve_gateway_python() == python_path.absolute()
+
+
+def test_resolve_gateway_python_uses_sibling_python_for_console_launcher(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.delenv("OPENSPRITE_INSTALL_DIR", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "missing"))
+    scripts_dir = tmp_path / "install" / ".venv" / "Scripts"
+    launcher = scripts_dir / "opensprite.exe"
+    python_path = scripts_dir / "python.exe"
+    scripts_dir.mkdir(parents=True)
+    launcher.write_text("", encoding="utf-8")
+    python_path.write_text("", encoding="utf-8")
+    monkeypatch.setattr(service_background.sys, "executable", str(launcher))
+
+    assert service_background.resolve_gateway_python() == python_path.absolute()
+
+
 def test_resolve_gateway_python_falls_back_to_current_interpreter(tmp_path, monkeypatch):
     monkeypatch.setenv("OPENSPRITE_INSTALL_DIR", str(tmp_path / "missing"))
 
@@ -228,6 +254,49 @@ def test_install_startup_task_registers_windows_logon_task(tmp_path, monkeypatch
     assert str((tmp_path / "opensprite.json").resolve()) in task_run
     assert "/F" in args
     assert kwargs["capture_output"] is True
+
+
+def test_install_startup_task_falls_back_to_startup_folder_on_access_denied(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    python_path = tmp_path / "OpenSprite" / "opensprite" / ".venv" / "Scripts" / "python.exe"
+    python_path.parent.mkdir(parents=True)
+    python_path.write_text("", encoding="utf-8")
+
+    def fake_run(args, **kwargs):
+        return subprocess.CompletedProcess(args, 1, stdout="", stderr="ERROR: Access is denied.")
+
+    task_name = service_background.install_startup_task(
+        config_path=tmp_path / ".opensprite" / "opensprite.json",
+        python_executable=python_path,
+        run=fake_run,
+    )
+
+    startup_file = service_background.get_windows_startup_file_path()
+    content = startup_file.read_text(encoding="utf-8")
+    assert task_name == "OpenSprite Gateway (Startup folder)"
+    assert startup_file.exists()
+    assert f'set "OPENSPRITE_INSTALL_DIR={tmp_path / "OpenSprite" / "opensprite"}"' in content
+    assert str(python_path.resolve()) in content
+    assert "-m" in content
+    assert "opensprite" in content
+    assert "service" in content
+    assert "start" in content
+    assert str((tmp_path / ".opensprite" / "opensprite.json").resolve()) in content
+
+
+def test_startup_status_detects_startup_folder_fallback(tmp_path, monkeypatch):
+    monkeypatch.setattr(service_background.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(service_background, "is_process_running", lambda pid: False)
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    startup_file = service_background.get_windows_startup_file_path()
+    startup_file.parent.mkdir(parents=True)
+    startup_file.write_text("@echo off\r\n", encoding="utf-8")
+
+    status = service_background.get_service_status(home=tmp_path, include_startup=True)
+
+    assert status.startup_enabled is True
+    assert status.startup_task_name == "OpenSprite Gateway"
 
 
 def test_get_service_status_can_include_windows_startup_task(tmp_path, monkeypatch):
