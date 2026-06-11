@@ -3,7 +3,6 @@
 from .base import (
     StorageProvider,
     StoredDelegatedTask,
-    StoredEvalRun,
     StoredMessage,
     StoredRun,
     StoredRunEvent,
@@ -18,7 +17,6 @@ from .sqlite import SQLiteStorage
 __all__ = [
     "StorageProvider",
     "StoredDelegatedTask",
-    "StoredEvalRun",
     "StoredMessage",
     "StoredRun",
     "StoredRunEvent",

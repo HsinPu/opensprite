@@ -2,7 +2,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { getDisplayCopy } from "../i18n/copy";
 import { useBrowserSettingsActions } from "./useBrowserSettingsActions";
 import { useChannelSettingsActions } from "./useChannelSettingsActions";
-import { useDataSettingsActions } from "./useDataSettingsActions";
 import { useLogSettingsActions } from "./useLogSettingsActions";
 import { useMcpSettingsActions } from "./useMcpSettingsActions";
 import { useModelSettingsActions } from "./useModelSettingsActions";
@@ -1905,12 +1904,6 @@ export function useChatClient() {
     setSettingsSuccess,
   });
 
-  const { loadDataSettings, loadDataSessionTimeline } = useDataSettingsActions({
-    settingsState,
-    requestSettingsJson,
-    copy,
-  });
-
   const { loadNetworkSettings, saveNetworkSettings } = useNetworkSettingsActions({
     settingsState,
     requestSettingsJson,
@@ -2911,151 +2904,6 @@ export function useChatClient() {
     }
   }
 
-  async function loadEvalStatus() {
-    settingsState.evalLoading = true;
-    settingsState.evalError = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/long-task");
-      settingsState.evalStatus = {
-        ready: Boolean(payload?.ready),
-        storage_available: Boolean(payload?.storage_available),
-        background_process_counts: payload?.background_process_counts || {},
-        recent_background_processes: payload?.recent_background_processes || 0,
-        recommended_metrics: Array.isArray(payload?.recommended_metrics) ? payload.recommended_metrics : [],
-        recommended_scenarios: Array.isArray(payload?.recommended_scenarios) ? payload.recommended_scenarios : [],
-      };
-    } catch (error) {
-      settingsState.evalError = error?.message || copy.value.notices.evalStatusLoadFailed;
-    } finally {
-      settingsState.evalLoading = false;
-    }
-  }
-
-  async function runEvalSmokeCheck() {
-    settingsState.evalRunning = true;
-    settingsState.evalError = "";
-    settingsState.evalNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/long-task/smoke", { method: "POST" });
-      settingsState.evalSmoke = {
-        ok: Boolean(payload?.ok),
-        checks: Array.isArray(payload?.checks) ? payload.checks : [],
-        background_process_counts: payload?.background_process_counts || {},
-        metrics: Array.isArray(payload?.metrics) ? payload.metrics : [],
-      };
-      settingsState.evalNotice = payload?.ok ? copy.value.settings.eval.smokePassed : copy.value.settings.eval.smokeFailed;
-      await loadEvalStatus();
-    } catch (error) {
-      settingsState.evalError = error?.message || copy.value.notices.evalSmokeFailed;
-    } finally {
-      settingsState.evalRunning = false;
-    }
-  }
-
-  async function runTaskCompletionEvalSmoke() {
-    settingsState.taskCompletionRunning = true;
-    settingsState.evalError = "";
-    settingsState.evalNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/task-completion/smoke", { method: "POST" });
-      settingsState.taskCompletionSmoke = {
-        ok: Boolean(payload?.ok),
-        cases: Array.isArray(payload?.cases) ? payload.cases : [],
-        summary: payload?.summary || {
-          passed_cases: 0,
-          total_cases: 0,
-          passed_checks: 0,
-          total_checks: 0,
-        },
-      };
-      settingsState.evalNotice = payload?.ok
-        ? copy.value.settings.eval.taskCompletionSmokePassed
-        : copy.value.settings.eval.taskCompletionSmokeFailed;
-    } catch (error) {
-      settingsState.evalError = error?.message || copy.value.notices.taskCompletionEvalSmokeFailed;
-    } finally {
-      settingsState.taskCompletionRunning = false;
-    }
-  }
-
-  async function runTaskCompletionLiveEval() {
-    settingsState.taskCompletionLiveRunning = true;
-    settingsState.evalError = "";
-    settingsState.evalNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/task-completion/run", { method: "POST" });
-      settingsState.taskCompletionLive = {
-        ok: Boolean(payload?.ok),
-        cases: Array.isArray(payload?.cases) ? payload.cases : [],
-        summary: payload?.summary || {
-          passed_cases: 0,
-          total_cases: 0,
-          passed_checks: 0,
-          total_checks: 0,
-        },
-      };
-      settingsState.evalNotice = payload?.ok
-        ? copy.value.settings.eval.taskCompletionLivePassed
-        : copy.value.settings.eval.taskCompletionLiveFailed;
-      await loadTaskCompletionHistory();
-    } catch (error) {
-      settingsState.evalError = error?.message || copy.value.notices.taskCompletionLiveEvalFailed;
-    } finally {
-      settingsState.taskCompletionLiveRunning = false;
-    }
-  }
-
-  async function loadTaskCompletionHistory() {
-    settingsState.taskCompletionHistoryLoading = true;
-    settingsState.taskCompletionHistoryError = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/task-completion/history?limit=20");
-      settingsState.taskCompletionHistory = Array.isArray(payload?.history) ? payload.history : [];
-    } catch (error) {
-      settingsState.taskCompletionHistoryError = error?.message || copy.value.notices.taskCompletionHistoryLoadFailed;
-    } finally {
-      settingsState.taskCompletionHistoryLoading = false;
-    }
-  }
-
-  async function deleteTaskCompletionHistoryItem(evalId) {
-    const normalizedEvalId = String(evalId || "").trim();
-    if (!normalizedEvalId) {
-      return;
-    }
-    settingsState.taskCompletionHistoryLoading = true;
-    settingsState.taskCompletionHistoryError = "";
-    settingsState.evalNotice = "";
-    try {
-      await requestSettingsJson(`/api/evals/task-completion/history/${encodeURIComponent(normalizedEvalId)}`, {
-        method: "DELETE",
-      });
-      settingsState.taskCompletionHistory = settingsState.taskCompletionHistory.filter(
-        (item) => item?.eval_id !== normalizedEvalId,
-      );
-      settingsState.evalNotice = copy.value.settings.eval.historyDeleted;
-    } catch (error) {
-      settingsState.taskCompletionHistoryError = error?.message || copy.value.notices.taskCompletionHistoryDeleteFailed;
-    } finally {
-      settingsState.taskCompletionHistoryLoading = false;
-    }
-  }
-
-  async function clearTaskCompletionHistory() {
-    settingsState.taskCompletionHistoryLoading = true;
-    settingsState.taskCompletionHistoryError = "";
-    settingsState.evalNotice = "";
-    try {
-      const payload = await requestSettingsJson("/api/evals/task-completion/history", { method: "DELETE" });
-      settingsState.taskCompletionHistory = [];
-      settingsState.evalNotice = copy.value.settings.eval.historyCleared(Number(payload?.deleted || 0));
-    } catch (error) {
-      settingsState.taskCompletionHistoryError = error?.message || copy.value.notices.taskCompletionHistoryDeleteFailed;
-    } finally {
-      settingsState.taskCompletionHistoryLoading = false;
-    }
-  }
-
   function loadSettingsSection(sectionName) {
     if (sectionName === "general") {
       loadUpdateStatus();
@@ -3098,15 +2946,6 @@ export function useChatClient() {
     }
     if (sectionName === "log") {
       loadLogSettings();
-      return;
-    }
-    if (sectionName === "data") {
-      loadDataSettings();
-      return;
-    }
-    if (sectionName === "eval") {
-      loadEvalStatus();
-      loadTaskCompletionHistory();
       return;
     }
     if (sectionName === "curator") {
@@ -3620,7 +3459,6 @@ export function useChatClient() {
 
     if (deletedExternalChatIds.size > 0) {
       removeSessionsFromState((candidate) => deletedExternalChatIds.has(candidate.externalChatId), { preferWeb: true });
-      void loadDataSettings();
     }
 
     if (failureCount > 0) {
@@ -3643,7 +3481,6 @@ export function useChatClient() {
       const payload = await requestSettingsJson(buildSessionsClearPath("web"), { method: "DELETE" });
       removeSessionsFromState((session) => !session.channel || session.channel === "web", { preferWeb: true });
       setNotice(copy.value.notices.sessionsCleared(Number(payload?.deleted || 0)), "success");
-      void loadDataSettings();
     } catch (error) {
       setNotice(error?.message || copy.value.notices.sessionDeleteFailed, "warning");
     }
@@ -4031,16 +3868,7 @@ export function useChatClient() {
     loadSearxngOptions,
     loadBrowserSettings,
     loadLogSettings,
-    loadDataSettings,
-    loadEvalStatus,
-    runEvalSmokeCheck,
-    runTaskCompletionEvalSmoke,
-    runTaskCompletionLiveEval,
-    loadTaskCompletionHistory,
-    deleteTaskCompletionHistoryItem,
-    clearTaskCompletionHistory,
     loadBackgroundProcesses,
-    loadDataSessionTimeline,
     loadMcpSettings,
     loadCronJobs,
     beginChannelConnect,

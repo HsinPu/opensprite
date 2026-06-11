@@ -197,16 +197,7 @@
     @run-browser-test="runBrowserTest"
     @run-browser-doctor="runBrowserDoctor"
     @run-browser-install="runBrowserInstall"
-    @refresh-data-settings="loadDataSettings"
-    @refresh-eval-status="loadEvalStatus"
-    @run-eval-smoke="runEvalSmokeCheck"
-    @run-task-completion-smoke="runTaskCompletionEvalSmoke"
-    @run-task-completion-live="runTaskCompletionLiveEval"
-    @refresh-task-completion-history="loadTaskCompletionHistory"
-    @delete-task-completion-history-item="deleteTaskCompletionHistoryItem"
-    @clear-task-completion-history="clearTaskCompletionHistory"
     @clear-web-sessions="clearWebSessions"
-    @load-data-session-timeline="loadDataSessionTimeline"
     @begin-cron-job-create="beginCronJobCreate"
     @save-cron-job="saveCronJob"
     @edit-cron-job="beginCronJobEdit"
@@ -349,16 +340,7 @@ const {
   runBrowserTest,
   runBrowserDoctor,
   runBrowserInstall,
-  loadDataSettings,
-  loadEvalStatus,
-  runEvalSmokeCheck,
-  runTaskCompletionEvalSmoke,
-  runTaskCompletionLiveEval,
-  loadTaskCompletionHistory,
-  deleteTaskCompletionHistoryItem,
-  clearTaskCompletionHistory: clearTaskCompletionHistoryNow,
   loadBackgroundProcesses,
-  loadDataSessionTimeline,
   beginCronJobCreate,
   beginCronJobEdit,
   cancelCronJobEdit,
@@ -534,15 +516,4 @@ function clearWebSessions() {
   });
 }
 
-function clearTaskCompletionHistory() {
-  openConfirmDialog({
-    eyebrow: copy.value.settings.eval.clearHistory,
-    title: copy.value.settings.eval.confirmClearHistoryTitle,
-    message: copy.value.settings.eval.confirmClearHistory,
-    detail: copy.value.settings.eval.confirmClearHistoryDescription(settingsState.taskCompletionHistory.length || 0),
-    cancelLabel: copy.value.sidebar.cancelDelete,
-    confirmLabel: copy.value.settings.eval.confirmClearHistoryAction,
-    action: () => clearTaskCompletionHistoryNow(),
-  });
-}
 </script>

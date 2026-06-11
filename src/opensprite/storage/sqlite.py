@@ -20,7 +20,6 @@ from ..utils.log import logger
 from .base import (
     StorageProvider,
     StoredBackgroundProcess,
-    StoredEvalRun,
     StoredMessage,
     StoredRun,
     StoredRunEvent,
@@ -192,29 +191,6 @@ CREATE INDEX IF NOT EXISTS idx_background_processes_owner_updated
 
 CREATE INDEX IF NOT EXISTS idx_background_processes_state_updated
     ON background_processes(state, updated_at);
-
-CREATE TABLE IF NOT EXISTS eval_runs (
-    eval_id TEXT PRIMARY KEY,
-    kind TEXT NOT NULL,
-    case_id TEXT NOT NULL,
-    ok INTEGER NOT NULL,
-    summary_json TEXT NOT NULL DEFAULT '{}',
-    checks_json TEXT NOT NULL DEFAULT '[]',
-    prompt TEXT NOT NULL DEFAULT '',
-    response_preview TEXT NOT NULL DEFAULT '',
-    session_id TEXT NOT NULL DEFAULT '',
-    run_id TEXT NOT NULL DEFAULT '',
-    completion_status TEXT NOT NULL DEFAULT '',
-    had_tool_error INTEGER NOT NULL DEFAULT 0,
-    metadata_json TEXT NOT NULL DEFAULT '{}',
-    created_at REAL NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_eval_runs_kind_created
-    ON eval_runs(kind, created_at, eval_id);
-
-CREATE INDEX IF NOT EXISTS idx_eval_runs_run
-    ON eval_runs(run_id);
 
 CREATE TABLE IF NOT EXISTS search_chunks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -391,40 +367,6 @@ def ensure_schema_upgrades(conn: sqlite3.Connection) -> None:
         """
         CREATE INDEX IF NOT EXISTS idx_background_processes_state_updated
         ON background_processes(state, updated_at)
-        """
-    )
-
-    if not table_exists(conn, "eval_runs"):
-        conn.execute(
-            """
-            CREATE TABLE eval_runs (
-                eval_id TEXT PRIMARY KEY,
-                kind TEXT NOT NULL,
-                case_id TEXT NOT NULL,
-                ok INTEGER NOT NULL,
-                summary_json TEXT NOT NULL DEFAULT '{}',
-                checks_json TEXT NOT NULL DEFAULT '[]',
-                prompt TEXT NOT NULL DEFAULT '',
-                response_preview TEXT NOT NULL DEFAULT '',
-                session_id TEXT NOT NULL DEFAULT '',
-                run_id TEXT NOT NULL DEFAULT '',
-                completion_status TEXT NOT NULL DEFAULT '',
-                had_tool_error INTEGER NOT NULL DEFAULT 0,
-                metadata_json TEXT NOT NULL DEFAULT '{}',
-                created_at REAL NOT NULL
-            )
-            """
-        )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_eval_runs_kind_created
-        ON eval_runs(kind, created_at, eval_id)
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_eval_runs_run
-        ON eval_runs(run_id)
         """
     )
 
@@ -815,29 +757,6 @@ class SQLiteStorage(StorageProvider):
         ]
 
     @staticmethod
-    def _rows_to_eval_runs(rows: list[sqlite3.Row]) -> list[StoredEvalRun]:
-        """Convert selected eval run rows into StoredEvalRun objects."""
-        return [
-            StoredEvalRun(
-                eval_id=str(row["eval_id"]),
-                kind=str(row["kind"]),
-                case_id=str(row["case_id"]),
-                ok=bool(row["ok"]),
-                summary=_load_metadata(row["summary_json"]),
-                checks=_load_json_list_or_fallback(row, "checks_json"),
-                prompt=str(row["prompt"] or ""),
-                response_preview=str(row["response_preview"] or ""),
-                session_id=str(row["session_id"] or ""),
-                run_id=str(row["run_id"] or ""),
-                completion_status=str(row["completion_status"] or ""),
-                had_tool_error=bool(row["had_tool_error"]),
-                metadata=_load_metadata(row["metadata_json"]),
-                created_at=float(row["created_at"] or 0),
-            )
-            for row in rows
-        ]
-
-    @staticmethod
     def _row_to_work_state(row: sqlite3.Row | None) -> StoredWorkState | None:
         """Convert one work-state row into a StoredWorkState object."""
         if row is None:
@@ -1163,117 +1082,6 @@ class SQLiteStorage(StorageProvider):
                     (session_id, run_id),
                 ).fetchone()
                 return self._row_to_run(row)
-            finally:
-                conn.close()
-
-    async def add_eval_run(self, eval_run: StoredEvalRun) -> StoredEvalRun | None:
-        """Persist one eval result."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                created_at = float(eval_run.created_at or time.time())
-                conn.execute(
-                    """
-                    INSERT INTO eval_runs (
-                        eval_id,
-                        kind,
-                        case_id,
-                        ok,
-                        summary_json,
-                        checks_json,
-                        prompt,
-                        response_preview,
-                        session_id,
-                        run_id,
-                        completion_status,
-                        had_tool_error,
-                        metadata_json,
-                        created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(eval_id) DO UPDATE SET
-                        kind = excluded.kind,
-                        case_id = excluded.case_id,
-                        ok = excluded.ok,
-                        summary_json = excluded.summary_json,
-                        checks_json = excluded.checks_json,
-                        prompt = excluded.prompt,
-                        response_preview = excluded.response_preview,
-                        session_id = excluded.session_id,
-                        run_id = excluded.run_id,
-                        completion_status = excluded.completion_status,
-                        had_tool_error = excluded.had_tool_error,
-                        metadata_json = excluded.metadata_json,
-                        created_at = excluded.created_at
-                    """,
-                    (
-                        eval_run.eval_id,
-                        eval_run.kind,
-                        eval_run.case_id,
-                        int(bool(eval_run.ok)),
-                        json.dumps(json_safe(eval_run.summary or {}), ensure_ascii=False),
-                        json.dumps(json_safe(list(eval_run.checks or [])), ensure_ascii=False),
-                        eval_run.prompt,
-                        eval_run.response_preview,
-                        eval_run.session_id,
-                        eval_run.run_id,
-                        eval_run.completion_status,
-                        int(bool(eval_run.had_tool_error)),
-                        json.dumps(json_safe(eval_run.metadata or {}), ensure_ascii=False),
-                        created_at,
-                    ),
-                )
-                conn.commit()
-                row = conn.execute("SELECT * FROM eval_runs WHERE eval_id = ?", (eval_run.eval_id,)).fetchone()
-                runs = self._rows_to_eval_runs([row]) if row is not None else []
-                return runs[0] if runs else None
-            finally:
-                conn.close()
-
-    async def list_eval_runs(self, *, kind: str | None = None, limit: int | None = None) -> list[StoredEvalRun]:
-        """Return persisted eval results from newest to oldest."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                params: tuple[Any, ...]
-                if kind is None:
-                    query = "SELECT * FROM eval_runs ORDER BY created_at DESC, eval_id DESC"
-                    params = ()
-                else:
-                    query = "SELECT * FROM eval_runs WHERE kind = ? ORDER BY created_at DESC, eval_id DESC"
-                    params = (kind,)
-                if limit is not None:
-                    query += " LIMIT ?"
-                    params = (*params, int(limit))
-                rows = conn.execute(query, params).fetchall()
-                return self._rows_to_eval_runs(rows)
-            finally:
-                conn.close()
-
-    async def delete_eval_run(self, eval_id: str, *, kind: str | None = None) -> bool:
-        """Delete one persisted eval result."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                if kind is None:
-                    cursor = conn.execute("DELETE FROM eval_runs WHERE eval_id = ?", (eval_id,))
-                else:
-                    cursor = conn.execute("DELETE FROM eval_runs WHERE eval_id = ? AND kind = ?", (eval_id, kind))
-                conn.commit()
-                return cursor.rowcount > 0
-            finally:
-                conn.close()
-
-    async def clear_eval_runs(self, *, kind: str | None = None) -> int:
-        """Delete persisted eval results and return the number deleted."""
-        async with self._lock:
-            conn = self._get_conn()
-            try:
-                if kind is None:
-                    cursor = conn.execute("DELETE FROM eval_runs")
-                else:
-                    cursor = conn.execute("DELETE FROM eval_runs WHERE kind = ?", (kind,))
-                conn.commit()
-                return int(cursor.rowcount or 0)
             finally:
                 conn.close()
 

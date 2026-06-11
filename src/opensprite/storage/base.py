@@ -95,53 +95,6 @@ class StoredRunTrace:
 
 
 @dataclass
-class StoredEvalRun:
-    """Persisted evaluation result for one eval case execution."""
-
-    eval_id: str
-    kind: str
-    case_id: str
-    ok: bool
-    summary: dict[str, Any] = field(default_factory=dict)
-    checks: list[dict[str, Any]] = field(default_factory=list)
-    prompt: str = ""
-    response_preview: str = ""
-    session_id: str = ""
-    run_id: str = ""
-    completion_status: str = ""
-    had_tool_error: bool = False
-    metadata: dict[str, Any] = field(default_factory=dict)
-    created_at: float = 0.0
-
-    def to_payload(self) -> dict[str, Any]:
-        """Return a JSON-safe API payload for eval history."""
-        metadata = dict(self.metadata or {})
-        return {
-            "eval_id": self.eval_id,
-            "kind": self.kind,
-            "case_id": self.case_id,
-            "case_label": str(metadata.get("case_label") or self.case_id),
-            "ok": bool(self.ok),
-            "summary": dict(self.summary or {}),
-            "checks": list(self.checks or []),
-            "prompt": self.prompt,
-            "response_preview": self.response_preview,
-            "session_id": self.session_id,
-            "run_id": self.run_id,
-            "completion_status": self.completion_status,
-            "had_tool_error": bool(self.had_tool_error),
-            "metadata": metadata,
-            "model": dict(metadata.get("model") or {}),
-            "batch_id": str(metadata.get("batch_id") or ""),
-            "expected_summary": str(metadata.get("expected_summary") or ""),
-            "actual_response": str(metadata.get("actual_response") or self.response_preview),
-            "error": str(metadata.get("error") or ""),
-            "response_source": str(metadata.get("response_source") or ""),
-            "created_at": self.created_at,
-        }
-
-
-@dataclass
 class StoredBackgroundProcess:
     """Persisted metadata for one managed background shell process."""
 
@@ -520,22 +473,6 @@ class StorageProvider(ABC):
             parts=await self.get_run_parts(session_id, run_id),
             file_changes=await self.get_run_file_changes(session_id, run_id),
         )
-
-    async def add_eval_run(self, eval_run: StoredEvalRun) -> StoredEvalRun | None:
-        """Persist one eval result when supported."""
-        return None
-
-    async def list_eval_runs(self, *, kind: str | None = None, limit: int | None = None) -> list[StoredEvalRun]:
-        """Return persisted eval results from newest to oldest when supported."""
-        return []
-
-    async def delete_eval_run(self, eval_id: str, *, kind: str | None = None) -> bool:
-        """Delete one persisted eval result when supported."""
-        return False
-
-    async def clear_eval_runs(self, *, kind: str | None = None) -> int:
-        """Delete persisted eval results and return the number deleted when supported."""
-        return 0
 
     async def upsert_background_process(
         self,

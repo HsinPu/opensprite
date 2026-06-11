@@ -324,19 +324,13 @@
 
 :root[data-color-scheme="dark"] .settings-nav,
 :root[data-color-scheme="dark"] .settings-card,
-:root[data-color-scheme="dark"] .settings-inline-status,
-:root[data-color-scheme="dark"] .eval-copy-fallback,
-:root[data-color-scheme="dark"] .eval-history-row__failures,
-:root[data-color-scheme="dark"] .data-timeline-table th,
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid pre {
+:root[data-color-scheme="dark"] .settings-inline-status {
   background: var(--surface-muted);
 }
 
 :root[data-color-scheme="dark"] .provider-options,
 :root[data-color-scheme="dark"] .provider-option-row,
 :root[data-color-scheme="dark"] .provider-option-field,
-:root[data-color-scheme="dark"] .eval-history-group__toggle,
-:root[data-color-scheme="dark"] .eval-history-group__items,
 :root[data-color-scheme="dark"] .codex-auth-command {
   background: var(--surface);
 }
@@ -351,15 +345,6 @@
 :root[data-color-scheme="dark"] .custom-model-row label,
 :root[data-color-scheme="dark"] .channel-field,
 :root[data-color-scheme="dark"] .settings-row span,
-:root[data-color-scheme="dark"] .eval-history-row__failures ul,
-:root[data-color-scheme="dark"] .eval-history-row__comparison p,
-:root[data-color-scheme="dark"] .eval-history-group__main span,
-:root[data-color-scheme="dark"] .eval-history-group__chevron,
-:root[data-color-scheme="dark"] .data-timeline-table,
-:root[data-color-scheme="dark"] .data-timeline-table th,
-:root[data-color-scheme="dark"] .data-timeline-table__row span:not(.provider-row__badge),
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid p,
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid ul,
 :root[data-color-scheme="dark"] .schedule-editor__header span,
 :root[data-color-scheme="dark"] .schedule-job-row__main > span,
 :root[data-color-scheme="dark"] .provider-row__main span:not(.provider-row__mark):not(.provider-row__badge),
@@ -388,11 +373,6 @@
 :root[data-color-scheme="dark"] .model-select-row select,
 :root[data-color-scheme="dark"] .provider-row__select select,
 :root[data-color-scheme="dark"] .settings-row strong,
-:root[data-color-scheme="dark"] .eval-history-row__failures strong,
-:root[data-color-scheme="dark"] .eval-history-row__comparison strong,
-:root[data-color-scheme="dark"] .eval-history-group__main strong,
-:root[data-color-scheme="dark"] .data-timeline-table__row strong,
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid strong,
 :root[data-color-scheme="dark"] .settings-row select,
 :root[data-color-scheme="dark"] .settings-row input[type="text"],
 :root[data-color-scheme="dark"] .settings-choice,
@@ -400,8 +380,7 @@
 :root[data-color-scheme="dark"] .custom-model-row input,
 :root[data-color-scheme="dark"] .channel-field input,
 :root[data-color-scheme="dark"] .channel-field select,
-:root[data-color-scheme="dark"] .channel-field textarea,
-:root[data-color-scheme="dark"] .eval-copy-fallback textarea {
+:root[data-color-scheme="dark"] .channel-field textarea {
   color: var(--text);
 }
 
@@ -421,16 +400,6 @@
 
 :root[data-color-scheme="dark"] .provider-row,
 :root[data-color-scheme="dark"] .settings-row,
-:root[data-color-scheme="dark"] .eval-copy-fallback,
-:root[data-color-scheme="dark"] .eval-copy-fallback textarea,
-:root[data-color-scheme="dark"] .eval-history-row__failures,
-:root[data-color-scheme="dark"] .eval-history-row__comparison div,
-:root[data-color-scheme="dark"] .eval-history-group,
-:root[data-color-scheme="dark"] .eval-history-group__toggle,
-:root[data-color-scheme="dark"] .data-timeline-table th,
-:root[data-color-scheme="dark"] .data-timeline-table td,
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid,
-:root[data-color-scheme="dark"] .data-timeline-table__details-grid pre,
 :root[data-color-scheme="dark"] .settings-nav,
 :root[data-color-scheme="dark"] .settings-panel,
 :root[data-color-scheme="dark"] .settings-inline-status,
@@ -459,8 +428,6 @@
 }
 
 :root[data-color-scheme="dark"] .provider-row__mark,
-:root[data-color-scheme="dark"] .data-timeline-table__row--expanded td,
-:root[data-color-scheme="dark"] .data-timeline-table__details td,
 :root[data-color-scheme="dark"] .provider-row__action,
 :root[data-color-scheme="dark"] .provider-connect-field input,
 :root[data-color-scheme="dark"] .custom-model-row input,
@@ -471,7 +438,6 @@
 :root[data-color-scheme="dark"] .provider-row__select select,
 :root[data-color-scheme="dark"] .provider-option-field select,
 :root[data-color-scheme="dark"] .provider-option-field input,
-:root[data-color-scheme="dark"] .eval-copy-fallback textarea,
 :root[data-color-scheme="dark"] .settings-row select:hover,
 :root[data-color-scheme="dark"] .settings-row select:focus,
 :root[data-color-scheme="dark"] .settings-row input[type="text"]:hover,
@@ -5670,324 +5636,6 @@ button:disabled {
   display: grid;
 }
 
-.eval-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-}
-
-.eval-grid .settings-row {
-  border-bottom: 0;
-  border-right: 1px solid var(--border-soft);
-}
-
-.eval-grid .settings-row:last-child {
-  border-right: 0;
-}
-
-.eval-chip-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 16px;
-}
-
-.eval-history-group {
-  display: grid;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.eval-history-group:last-child {
-  border-bottom: 0;
-}
-
-.eval-history-group__toggle {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  min-height: 68px;
-  padding: 13px 16px;
-  color: var(--text);
-  background: var(--surface);
-  text-align: left;
-}
-
-.eval-history-group__toggle:hover {
-  background: var(--surface-hover);
-}
-
-.eval-history-group__chevron {
-  width: 18px;
-  color: var(--text-soft);
-  font-size: 1.05rem;
-  text-align: center;
-}
-
-.eval-history-group__main {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.eval-history-group__main strong,
-.eval-history-group__main span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.eval-history-group__main strong {
-  color: var(--text);
-  font-size: 0.94rem;
-  font-weight: 600;
-}
-
-.eval-history-group__main span {
-  color: var(--text-muted);
-  font-size: 0.84rem;
-}
-
-.eval-history-group__items {
-  display: grid;
-  border-top: 1px solid var(--border-soft);
-  background: var(--surface);
-}
-
-.eval-history-group__batch-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.eval-history-group__items .eval-history-row {
-  border-bottom-color: var(--border-soft);
-}
-
-.eval-history-group__items .eval-history-row:last-child {
-  border-bottom: 0;
-}
-
-.settings-row.eval-history-row {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-}
-
-.settings-row .eval-result-row__title,
-.settings-row .eval-history-row__title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.settings-row .eval-result-row__title strong,
-.settings-row .eval-history-row__title strong {
-  margin-bottom: 0;
-}
-
-.settings-row .eval-result-row__title .provider-row__badge,
-.settings-row .eval-history-row__title .provider-row__badge {
-  display: inline-flex;
-  flex: 0 0 auto;
-  margin: 0;
-}
-
-.eval-history-row__actions {
-  align-self: start;
-}
-
-.eval-history-row__actions .secondary-button {
-  white-space: nowrap;
-}
-
-.eval-copy-fallback {
-  display: grid;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--warning-border);
-  border-radius: 8px;
-  background: var(--warning-soft);
-}
-
-.eval-copy-fallback span {
-  color: var(--warning-text);
-  font-size: 0.84rem;
-  font-weight: 650;
-}
-
-.eval-copy-fallback textarea {
-  width: 100%;
-  min-height: 180px;
-  resize: vertical;
-  padding: 10px;
-  border: 1px solid var(--warning-border);
-  border-radius: 7px;
-  color: var(--text);
-  background: var(--surface);
-  font: 0.82rem/1.45 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  white-space: pre;
-}
-
-.eval-history-row__failures {
-  display: grid;
-  grid-column: 1 / -1;
-  gap: 8px;
-  padding: 11px 12px;
-  border: 1px solid var(--danger-border);
-  border-radius: 8px;
-  background: var(--danger-soft);
-}
-
-.eval-history-row__failures strong {
-  margin: 0;
-  color: var(--danger-text);
-  font-size: 0.82rem;
-  font-weight: 650;
-}
-
-.eval-history-row__failures ul {
-  margin: 0;
-  padding-left: 18px;
-  color: var(--text-muted);
-  font-size: 0.84rem;
-  line-height: 1.45;
-}
-
-.eval-history-row__comparison {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.eval-history-row__comparison div {
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--danger-border);
-  border-radius: 7px;
-  background: var(--surface);
-}
-
-.eval-history-row__comparison strong {
-  margin: 0;
-  color: var(--text);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.eval-history-row__comparison p {
-  overflow: auto;
-  max-height: 140px;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-
-.data-timeline-table-wrap {
-  overflow-x: auto;
-}
-
-.data-timeline-table {
-  width: 100%;
-  min-width: 760px;
-  border-collapse: collapse;
-  color: var(--text);
-  font-size: 0.88rem;
-}
-
-.data-timeline-table th,
-.data-timeline-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border-soft);
-  text-align: left;
-  vertical-align: top;
-}
-
-.data-timeline-table th {
-  color: var(--text-soft);
-  background: var(--surface-muted);
-  font-size: 0.74rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.data-timeline-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.data-timeline-table__row strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text);
-  font-weight: 600;
-}
-
-.data-timeline-table__row span:not(.provider-row__badge) {
-  display: block;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-}
-
-.data-timeline-table__row--expanded td {
-  background: var(--surface);
-}
-
-.data-timeline-table__details td {
-  padding: 0;
-  background: var(--surface);
-}
-
-.data-timeline-table__details-grid {
-  display: grid;
-  gap: 12px;
-  padding: 14px;
-  border-bottom: 1px solid var(--border-soft);
-}
-
-.data-timeline-table__details-grid section {
-  display: grid;
-  gap: 6px;
-}
-
-.data-timeline-table__details-grid strong {
-  color: var(--text);
-  font-size: 0.83rem;
-  font-weight: 650;
-}
-
-.data-timeline-table__details-grid p,
-.data-timeline-table__details-grid ul {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.55;
-}
-
-.data-timeline-table__details-grid ul {
-  padding-left: 18px;
-}
-
-.data-timeline-table__details-grid pre {
-  overflow: auto;
-  max-height: 260px;
-  margin: 0;
-  padding: 12px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  color: var(--text);
-  background: var(--code-bg);
-  font-size: 0.78rem;
-  line-height: 1.45;
-  white-space: pre-wrap;
-}
-
 .settings-inline-status {
   margin: 0;
   padding: 10px 12px;
@@ -7283,7 +6931,6 @@ textarea:focus-visible {
   .settings-row,
   .settings-row--field,
   .settings-row--update,
-  .settings-row.eval-history-row,
   .provider-row,
   .provider-row__content,
   .channel-card__header,
@@ -7304,19 +6951,6 @@ textarea:focus-visible {
 
   .settings-row__actions {
     justify-content: flex-start;
-  }
-
-  .eval-history-group__toggle {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .eval-history-group__toggle .provider-row__badge {
-    grid-column: 2;
-    justify-self: start;
-  }
-
-  .eval-history-row__comparison {
-    grid-template-columns: 1fr;
   }
 
   .schedule-editor__header,

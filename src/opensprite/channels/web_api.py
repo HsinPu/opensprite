@@ -2,20 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-import os
-import shlex
-import subprocess
-import sys
-import time
 from typing import Any
 
 from aiohttp import web
 
-from . import web_api_control, web_api_evals, web_api_runs, web_api_sessions
+from . import web_api_control, web_api_runs, web_api_sessions
 from ..bus.session_commands import session_command_catalog
-from ..config import Config
-from ..evals.task_completion import run_live_task_completion_eval, run_task_completion_smoke
 from ..runs.schema import (
     serialize_file_change,
     serialize_run_artifacts,
@@ -26,7 +18,6 @@ from ..runs.schema import (
     serialize_diff_summary,
 )
 from ..runs.session_entries import serialize_run_trace_entries, serialize_session_entries
-from ..tools.shell_runtime import CapturedOutputChunk, start_shell_process
 
 
 class WebApiHandlers:
@@ -125,54 +116,23 @@ class WebApiHandlers:
         return await web_api_runs.handle_runs(self.adapter, request)
 
     async def handle_background_processes(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_background_processes(
-            self.adapter,
-            request,
-            coerce_states=_coerce_states,
-            serialize_background_process=_serialize_background_process,
+        adapter = self.adapter
+        storage = adapter._require_storage()
+        session_id = adapter._coerce_optional_text(request.query.get("session_id"))
+        states = _coerce_states(request.query.get("states") or request.query.get("state"))
+        limit = adapter._coerce_limit(request.query.get("limit"), default=20, maximum=100)
+        processes = await storage.list_background_processes(owner_session_id=session_id, states=states, limit=limit)
+        counts: dict[str, int] = {}
+        for process in processes:
+            counts[process.state] = counts.get(process.state, 0) + 1
+        return web.json_response(
+            {
+                "session_id": session_id,
+                "states": list(states or []),
+                "counts": counts,
+                "processes": [_serialize_background_process(process) for process in processes],
+            }
         )
-
-    async def handle_long_task_eval_status(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_long_task_eval_status(
-            self.adapter,
-            request,
-            long_task_eval_metrics=_long_task_eval_metrics,
-            long_task_eval_scenarios=_long_task_eval_scenarios,
-        )
-
-    async def handle_long_task_eval_smoke(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_long_task_eval_smoke(
-            self.adapter,
-            request,
-            long_task_eval_metrics=_long_task_eval_metrics,
-        )
-
-    async def handle_long_task_eval_controlled(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_long_task_eval_controlled(
-            self.adapter,
-            request,
-            long_task_controlled_command=_long_task_controlled_command,
-            serialize_background_process=_serialize_background_process,
-        )
-
-    async def handle_task_completion_eval_smoke(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_task_completion_eval_smoke(request)
-
-    async def handle_task_completion_eval_run(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_task_completion_eval_run(
-            self.adapter,
-            request,
-            active_llm_model_info=_active_llm_model_info,
-        )
-
-    async def handle_task_completion_eval_history(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_task_completion_eval_history(self.adapter, request)
-
-    async def handle_task_completion_eval_history_delete(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_task_completion_eval_history_delete(self.adapter, request)
-
-    async def handle_task_completion_eval_history_clear(self, request: web.Request) -> web.Response:
-        return await web_api_evals.handle_task_completion_eval_history_clear(self.adapter, request)
 
     async def handle_sessions(self, request: web.Request) -> web.Response:
         return await web_api_sessions.handle_sessions(self.adapter, request)
@@ -185,14 +145,8 @@ class WebApiHandlers:
             delete_conversation_sessions=_delete_conversation_sessions,
         )
 
-    async def handle_session_timeline(self, request: web.Request) -> web.Response:
-        return await web_api_sessions.handle_session_timeline(self.adapter, request)
-
     async def handle_session_status(self, request: web.Request) -> web.Response:
         return await web_api_sessions.handle_session_status(self.adapter, request)
-
-    async def handle_storage_status(self, request: web.Request) -> web.Response:
-        return await web_api_sessions.handle_storage_status(self.adapter, request)
 
     async def handle_run_trace(self, request: web.Request) -> web.Response:
         return await web_api_runs.handle_run_trace(self.adapter, request)
@@ -256,107 +210,6 @@ async def _delete_one_conversation_session(adapter: Any, storage: Any, session_i
     status_service = adapter._get_session_status_service()
     if status_service is not None:
         status_service.set(session_id, "idle")
-
-
-def _active_llm_model_info(adapter: Any) -> dict[str, Any]:
-    agent = adapter._get_agent()
-    explicit = getattr(agent, "eval_model_info", None) if agent is not None else None
-    if isinstance(explicit, dict):
-        return _model_info_payload(explicit)
-
-    provider_id = ""
-    provider_name = ""
-    model = ""
-    configured: bool | None = None
-    context_window_tokens: int | None = None
-
-    provider = getattr(agent, "provider", None) if agent is not None else None
-    get_default_model = getattr(provider, "get_default_model", None)
-    if callable(get_default_model):
-        model = str(get_default_model() or "").strip()
-    agent_context_window = getattr(agent, "llm_context_window_tokens", None) if agent is not None else None
-    if isinstance(agent_context_window, int) and agent_context_window > 0:
-        context_window_tokens = agent_context_window
-
-    llm_config = getattr(agent, "llm_config", None) if agent is not None else None
-    if llm_config is not None:
-        provider_id = str(getattr(llm_config, "default", "") or "").strip()
-        get_active = getattr(llm_config, "get_active", None)
-        active = get_active() if callable(get_active) else None
-        if active is not None:
-            provider_name = str(getattr(active, "provider", "") or "").strip()
-            model = model or str(getattr(active, "model", "") or "").strip()
-            active_context_window = getattr(active, "context_window_tokens", None)
-            if context_window_tokens is None and isinstance(active_context_window, int) and active_context_window > 0:
-                context_window_tokens = active_context_window
-        configured = bool(getattr(agent, "llm_configured", False))
-
-    if not model:
-        try:
-            config = Config.load(adapter._get_config_path())
-            active = config.llm.get_active()
-            provider_id = provider_id or str(config.llm.default or "").strip()
-            provider_name = provider_name or str(getattr(active, "provider", "") or "").strip()
-            model = str(getattr(active, "model", "") or "").strip()
-            configured = bool(config.is_llm_configured)
-            active_context_window = getattr(active, "context_window_tokens", None)
-            if context_window_tokens is None and isinstance(active_context_window, int) and active_context_window > 0:
-                context_window_tokens = active_context_window
-        except Exception:
-            pass
-
-    return _model_info_payload(
-        {
-            "provider_id": provider_id,
-            "provider": provider_name or provider_id,
-            "model": model,
-            "configured": configured,
-            "context_window_tokens": context_window_tokens,
-        }
-    )
-
-
-def _model_info_payload(value: dict[str, Any]) -> dict[str, Any]:
-    return {
-        key: value[key]
-        for key in ("provider_id", "provider", "model", "configured", "context_window_tokens")
-        if key in value and value[key] not in (None, "")
-    }
-
-
-def _long_task_eval_metrics() -> list[dict[str, str]]:
-    return [
-        {"id": "expected_outcome_accuracy", "label": "Expected outcome accuracy"},
-        {"id": "completion_rate", "label": "Completion rate"},
-        {"id": "tool_call_error_rate", "label": "Tool call error rate"},
-        {"id": "retry_recovery_rate", "label": "Retry recovery rate"},
-        {"id": "summary_delivery_rate", "label": "Summary delivery rate"},
-        {"id": "lost_process_rate", "label": "Lost process rate"},
-        {"id": "ui_visibility_rate", "label": "Web/API visibility rate"},
-    ]
-
-
-def _long_task_eval_scenarios() -> list[dict[str, str]]:
-    return [
-        {"id": "short_success", "label": "Short successful background process"},
-        {"id": "expected_failure", "label": "Expected failing background process"},
-        {"id": "restart_recovery", "label": "Gateway restart marks stale work as lost"},
-        {"id": "parallel_processes", "label": "Multiple concurrent background processes"},
-        {"id": "agent_summary", "label": "Agent summary after process completion"},
-    ]
-
-
-def _long_task_controlled_command() -> str:
-    code = (
-        "import time; "
-        "print('opensprite-long-task-controlled:start', flush=True); "
-        "time.sleep(0.05); "
-        "print('opensprite-long-task-controlled:done', flush=True)"
-    )
-    argv = [sys.executable, "-u", "-c", code]
-    if os.name == "nt":
-        return subprocess.list2cmdline(argv)
-    return shlex.join(argv)
 
 
 def _serialize_background_process(process: Any) -> dict[str, Any]:

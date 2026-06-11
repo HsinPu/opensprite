@@ -59,8 +59,6 @@ const groups = computed(() => [
       { section: "search", icon: "⌕", title: props.copy.settingsTitles.search },
       { section: "browser", icon: "◉", title: props.copy.settingsTitles.browser },
       { section: "log", icon: "≋", title: props.copy.settingsTitles.log },
-      { section: "data", icon: "▣", title: props.copy.settingsTitles.data },
-      { section: "eval", icon: "✓", title: props.copy.settingsTitles.eval },
     ],
   },
 ]);

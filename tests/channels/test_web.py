@@ -1732,60 +1732,6 @@ async def _run_web_run_events_api():
             assert processes_payload["processes"][1]["command"] == "npm run dev"
             assert processes_payload["processes"][1]["metadata"] == {"source": "test"}
 
-            async with session.get(f"http://127.0.0.1:{port}/api/evals/long-task") as resp:
-                assert resp.status == 200
-                eval_status_payload = await resp.json()
-
-            assert eval_status_payload["ready"] is True
-            assert eval_status_payload["background_process_counts"] == {"completed": 1, "lost": 1, "running": 2}
-            assert "completion_rate" in {metric["id"] for metric in eval_status_payload["recommended_metrics"]}
-            assert "restart_recovery" in {scenario["id"] for scenario in eval_status_payload["recommended_scenarios"]}
-
-            async with session.post(f"http://127.0.0.1:{port}/api/evals/long-task/smoke") as resp:
-                assert resp.status == 200
-                eval_smoke_payload = await resp.json()
-
-            assert eval_smoke_payload["ok"] is True
-            assert [check["id"] for check in eval_smoke_payload["checks"]] == [
-                "storage_available",
-                "background_process_api",
-                "run_event_schema",
-            ]
-            assert eval_smoke_payload["background_process_counts"] == {"completed": 1, "lost": 1, "running": 2}
-
-            async with session.post(f"http://127.0.0.1:{port}/api/evals/long-task/controlled") as resp:
-                assert resp.status == 200
-                controlled_payload = await resp.json()
-
-            assert controlled_payload["ok"] is True, controlled_payload["checks"]
-            assert [check["id"] for check in controlled_payload["checks"]] == [
-                "process_record_created",
-                "process_completed",
-                "started_event_recorded",
-                "completed_event_recorded",
-                "output_tail_captured",
-            ]
-            assert controlled_payload["process"]["state"] == "exited"
-            assert controlled_payload["process"]["exit_code"] == 0
-            assert "background_process.started" in controlled_payload["event_types"]
-            assert "background_process.completed" in controlled_payload["event_types"]
-
-            async with session.post(f"http://127.0.0.1:{port}/api/evals/task-completion/smoke") as resp:
-                assert resp.status == 200
-                task_completion_payload = await resp.json()
-
-            assert task_completion_payload["ok"] is True
-            assert task_completion_payload["summary"] == {
-                "passed_cases": 2,
-                "total_cases": 2,
-                "passed_checks": 15,
-                "total_checks": 15,
-            }
-            assert {case["id"] for case in task_completion_payload["cases"]} == {
-                "web_smoke_question",
-                "task_completion_question",
-            }
-
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1",
                 params={"session_id": "web:browser-1"},
@@ -1883,27 +1829,6 @@ async def _run_web_run_events_api():
                     "metadata": {"objective": "notes.txt"},
                 }
             ]
-
-            async with session.get(
-                f"http://127.0.0.1:{port}/api/sessions/timeline",
-                params={"session_id": "web:browser-1"},
-            ) as resp:
-                assert resp.status == 200
-                timeline_payload = await resp.json()
-
-            assert timeline_payload["session_id"] == "web:browser-1"
-            assert [message["role"] for message in timeline_payload["messages"]] == ["user", "assistant"]
-            assert [run["run_id"] for run in timeline_payload["runs"]] == ["run-2", "run-1"]
-            assert [entry["entry_id"] for entry in timeline_payload["entries"]] == [
-                "message:1",
-                "run:run-1",
-                "message:2",
-                "run:run-2",
-            ]
-            assert timeline_payload["entries"][0]["text"] == "inspect run timeline"
-            assert timeline_payload["entries"][1]["content"][0]["type"] == "tool"
-            assert timeline_payload["entries"][1]["content"][1]["type"] == "file"
-            assert timeline_payload["entries"][2]["content"][0]["text"] == "timeline inspected"
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs/run-1/summary",
@@ -2024,10 +1949,6 @@ async def _run_web_run_events_api():
             async with session.get(f"http://127.0.0.1:{port}/api/runs") as resp:
                 assert resp.status == 400
 
-            async with session.get(f"http://127.0.0.1:{port}/api/sessions/timeline") as resp:
-                assert resp.status == 400
-                assert await resp.text() == "session_id is required"
-
             async with session.get(
                 f"http://127.0.0.1:{port}/api/runs",
                 params={"session_id": "web:browser-1", "limit": "not-a-number"},
@@ -2062,166 +1983,6 @@ async def _run_web_run_events_api():
 def test_web_adapter_exposes_run_events_api():
     asyncio.run(_run_web_run_events_api())
 
-
-async def _run_web_task_completion_live_eval_api():
-    storage = MemoryStorage()
-
-    class LiveEvalAgent:
-        def __init__(self):
-            self.storage = storage
-            self.seen_messages = []
-            self.eval_model_info = {
-                "provider_id": "test-provider",
-                "provider": "test",
-                "model": "test-model",
-                "configured": True,
-            }
-
-        async def process(self, user_message):
-            self.seen_messages.append(user_message)
-            case_id = user_message.metadata["eval_case_id"]
-            run_id = f"run-{case_id}"
-            response_text = {
-                "literal_instruction": "alpha beta gamma",
-                "multi_step_completion": (
-                    "1. 問題：這是格式遵循測試。\n"
-                    "2. 可能原因：模型可能漏掉步驟；輸出格式可能不穩定。\n"
-                    "3. 結論：已完成三步驟回答"
-                ),
-                "exact_two_line_output": "狀態：完成\n代碼：A7-42",
-                "exact_json_output": '{"status":"complete","items":["alpha","beta"]}',
-            }[case_id]
-            await storage.create_run(user_message.session_id, run_id, status="running", created_at=1.0)
-            await storage.add_run_event(
-                user_message.session_id,
-                run_id,
-                COMPLETION_GATE_EVALUATED_EVENT,
-                payload={"status": "complete", "reason": "test"},
-                created_at=2.0,
-            )
-            await storage.add_run_event(
-                user_message.session_id,
-                run_id,
-                RUN_FINISHED_EVENT,
-                payload={"status": "completed", "had_tool_error": False},
-                created_at=3.0,
-            )
-            await storage.update_run_status(
-                user_message.session_id,
-                run_id,
-                "completed",
-                metadata={"had_tool_error": False},
-                finished_at=3.0,
-            )
-            return AssistantMessage(
-                text=response_text,
-                channel="web",
-                external_chat_id=user_message.external_chat_id,
-                session_id=user_message.session_id,
-                metadata={"source": "live-eval-test"},
-            )
-
-    agent = LiveEvalAgent()
-    adapter = WebAdapter(
-        mq=MessageQueue(agent),
-        config={
-            "host": "127.0.0.1",
-            "port": 0,
-            "path": "/ws",
-            "health_path": "/healthz",
-            "frontend_auto_build": False,
-        },
-    )
-    adapter_task = asyncio.create_task(adapter.run())
-
-    try:
-        await adapter.wait_until_started()
-        port = adapter.bound_port
-        assert port is not None
-
-        async with ClientSession() as session:
-            async with session.post(f"http://127.0.0.1:{port}/api/evals/task-completion/run") as resp:
-                assert resp.status == 200
-                payload = await resp.json()
-
-            async with session.get(f"http://127.0.0.1:{port}/api/evals/task-completion/history") as resp:
-                assert resp.status == 200
-                history_payload = await resp.json()
-
-        assert payload["ok"] is True
-        assert payload["live"] is True
-        assert payload["model"] == agent.eval_model_info
-        assert payload["batch_id"].startswith("eval_batch_")
-        assert payload["summary"]["passed_cases"] == 4
-        cases_by_id = {case["id"]: case for case in payload["cases"]}
-        assert set(cases_by_id) == {
-            "literal_instruction",
-            "multi_step_completion",
-            "exact_two_line_output",
-            "exact_json_output",
-        }
-        assert cases_by_id["literal_instruction"]["run_id"] == "run-literal_instruction"
-        assert cases_by_id["literal_instruction"]["eval_id"].startswith("eval_")
-        assert {case["batch_id"] for case in cases_by_id.values()} == {payload["batch_id"]}
-        assert cases_by_id["literal_instruction"]["completion_status"] == "complete"
-        assert cases_by_id["literal_instruction"]["model"] == agent.eval_model_info
-        assert cases_by_id["multi_step_completion"]["run_id"] == "run-multi_step_completion"
-        assert cases_by_id["exact_two_line_output"]["run_id"] == "run-exact_two_line_output"
-        assert cases_by_id["exact_json_output"]["run_id"] == "run-exact_json_output"
-        history_by_case = {item["case_id"]: item for item in history_payload["history"]}
-        assert history_by_case["literal_instruction"]["eval_id"] == cases_by_id["literal_instruction"]["eval_id"]
-        assert history_by_case["literal_instruction"]["case_label"] == "Literal instruction answer"
-        assert history_by_case["literal_instruction"]["expected_summary"] == "alpha beta gamma"
-        assert history_by_case["literal_instruction"]["actual_response"] == "alpha beta gamma"
-        assert history_by_case["literal_instruction"]["response_preview"] == "alpha beta gamma"
-        assert history_by_case["literal_instruction"]["model"] == agent.eval_model_info
-        assert {item["batch_id"] for item in history_payload["history"]} == {payload["batch_id"]}
-        assert history_by_case["multi_step_completion"]["eval_id"] == cases_by_id["multi_step_completion"]["eval_id"]
-
-        async with ClientSession() as session:
-            literal_eval_id = cases_by_id["literal_instruction"]["eval_id"]
-            async with session.delete(
-                f"http://127.0.0.1:{port}/api/evals/task-completion/history/{literal_eval_id}"
-            ) as resp:
-                assert resp.status == 200
-                delete_payload = await resp.json()
-
-            async with session.get(f"http://127.0.0.1:{port}/api/evals/task-completion/history") as resp:
-                assert resp.status == 200
-                history_after_delete = await resp.json()
-
-            async with session.delete(f"http://127.0.0.1:{port}/api/evals/task-completion/history") as resp:
-                assert resp.status == 200
-                clear_payload = await resp.json()
-
-            async with session.get(f"http://127.0.0.1:{port}/api/evals/task-completion/history") as resp:
-                assert resp.status == 200
-                history_after_clear = await resp.json()
-
-        assert delete_payload == {"ok": True, "eval_id": literal_eval_id, "deleted": 1}
-        assert {item["case_id"] for item in history_after_delete["history"]} == {
-            "multi_step_completion",
-            "exact_two_line_output",
-            "exact_json_output",
-        }
-        assert clear_payload == {"ok": True, "deleted": 3}
-        assert history_after_clear["history"] == []
-        assert agent.seen_messages[0].channel == "web"
-        assert {message.metadata["eval_batch_id"] for message in agent.seen_messages} == {payload["batch_id"]}
-        assert agent.seen_messages[0].external_chat_id.startswith("eval-task-completion-literal_instruction-")
-        assert agent.seen_messages[1].external_chat_id.startswith("eval-task-completion-multi_step_completion-")
-        assert agent.seen_messages[2].external_chat_id.startswith("eval-task-completion-exact_two_line_output-")
-        assert agent.seen_messages[3].external_chat_id.startswith("eval-task-completion-exact_json_output-")
-    finally:
-        adapter_task.cancel()
-        try:
-            await adapter_task
-        except asyncio.CancelledError:
-            pass
-
-
-def test_web_adapter_exposes_task_completion_live_eval_api():
-    asyncio.run(_run_web_task_completion_live_eval_api())
 
 
 async def _run_web_sessions_api():
@@ -2366,10 +2127,6 @@ async def _run_web_sessions_api():
                 assert resp.status == 200
                 status_payload = await resp.json()
 
-            async with session.get(f"http://127.0.0.1:{port}/api/storage/status") as resp:
-                assert resp.status == 200
-                storage_status_payload = await resp.json()
-
             async with session.get(
                 f"http://127.0.0.1:{port}/api/sessions/status",
                 params={"session_id": "web:missing"},
@@ -2404,14 +2161,6 @@ async def _run_web_sessions_api():
         assert idle_status_payload["status"]["session_id"] == "web:missing"
         assert idle_status_payload["status"]["status"] == "idle"
         assert idle_status_payload["status"]["metadata"] == {}
-        assert storage_status_payload["storage"]["type"] in {"memory", "sqlite"}
-        assert storage_status_payload["storage"]["provider"] == "MemoryStorage"
-        assert storage_status_payload["counts"] == {
-            "sessions": 3,
-            "raw_sessions": 4,
-            "messages": 5,
-            "runs": 3,
-        }
         assert payload["sessions"][0]["message_count"] == 1
         assert payload["sessions"][0]["runs"] == [
             {

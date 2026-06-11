@@ -54,7 +54,6 @@ const [
   app,
   settingsModal,
   chatClient,
-  dataSettingsActions,
   browserSettingsActions,
   mcpSettingsActions,
   modelSettingsActions,
@@ -86,7 +85,6 @@ const [
   read("src/App.vue"),
   read("src/components/SettingsModal.vue"),
   read("src/composables/useChatClient.js"),
-  read("src/composables/useDataSettingsActions.js"),
   read("src/composables/useBrowserSettingsActions.js"),
   read("src/composables/useMcpSettingsActions.js"),
   read("src/composables/useModelSettingsActions.js"),
@@ -104,7 +102,7 @@ const [
   read("styles.css"),
 ]);
 
-const settingsLogic = `${chatClient}\n${dataSettingsActions}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
+const settingsLogic = `${chatClient}\n${browserSettingsActions}\n${mcpSettingsActions}\n${modelSettingsActions}\n${browserDefaults}\n${logDefaults}\n${networkDefaults}\n${scheduleDefaults}\n${searchDefaults}\n${settingsNormalizers}\n${networkSettingsActions}\n${providerSettingsActions}\n${scheduleSettingsActions}`;
 const settingsUi = `${settingsModal}\n${generalSettingsPage}\n${shortcutsSettingsPage}`;
 
 assertIncludes(messageList, "artifactTypeLabel", "session entry artifact labels");
@@ -196,8 +194,6 @@ assertIncludes(app, "confirmDialog", "custom confirm dialog state");
 assertIncludes(app, "confirmDialogAction", "custom confirm dialog action");
 assertIncludes(app, "deleteSessions: deleteSessionsNow", "conversation delete skips native confirm in client action");
 assertIncludes(app, "clearWebSessions: clearWebSessionsNow", "web conversation clear skips native confirm in client action");
-assertIncludes(app, "clearTaskCompletionHistory: clearTaskCompletionHistoryNow", "eval history clear skips native confirm in client action");
-assertIncludes(app, "confirmClearHistoryTitle", "eval history clear custom confirm title");
 assertIncludes(settingsUi, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
@@ -281,37 +277,9 @@ assertIncludes(settingsModal, "showCopilotAuthCard", "conditional Copilot auth c
 assertIncludes(settingsUi, "form.showWorkState", "work state settings switch");
 assertIncludes(settingsUi, "form.showRunHistory", "run history settings switch");
 assertIncludes(settingsUi, "form.accessToken", "gateway access token setting");
-assertIncludes(settingsModal, "run-task-completion-smoke", "task completion eval action");
-assertIncludes(settingsModal, "run-task-completion-live", "live task completion eval action");
-assertIncludes(settingsModal, "refresh-task-completion-history", "task completion history refresh action");
-assertIncludes(settingsModal, "delete-task-completion-history-item", "task completion history delete action");
-assertIncludes(settingsModal, "clear-task-completion-history", "task completion history clear action");
-assertIncludes(settingsModal, "failedEvalChecksSummary", "task completion failed-check summary rendering");
-assertIncludes(settingsModal, "failedEvalCheckText", "task completion failed-check detail rendering");
-assertIncludes(settingsModal, "failedEvalCheckItem", "task completion failed-check item labels");
-assertIncludes(settingsModal, "failedEvalCheckHint", "task completion failed-check diagnosis hints");
-assertIncludes(settingsModal, "evalResultMeta", "task completion result meta rendering");
-assertIncludes(settingsModal, "evalChecksSummary", "task completion result check-count summary");
-assertIncludes(settingsModal, "eval-result-row__title", "task completion result status title layout");
-assertIncludes(settingsModal, "evalHistoryCaseLabel", "task completion history case labels");
-assertIncludes(settingsModal, "evalExpectedSummary", "task completion expected answer display");
-assertIncludes(settingsModal, "evalActualResponse", "task completion actual answer display");
-assertIncludes(settingsModal, "evalEntryError", "task completion eval error display");
-assertIncludes(settingsModal, "copyEvalDebugReport", "task completion debug report copy action");
-assertIncludes(settingsModal, "buildEvalDebugReport", "task completion debug report builder");
-assertIncludes(settingsModal, "evalCopyButtonLabel", "task completion debug copy button state");
-assertIncludes(settingsModal, "resetEvalCopyFallback", "task completion debug fallback reset");
-assertIncludes(settingsModal, "isEvalCopySourceEmpty", "task completion stale debug fallback detection");
-assertIncludes(settingsModal, "clearTaskCompletionHistory", "task completion history clear resets debug fallback");
-assertIncludes(settingsModal, "deleteTaskCompletionHistoryItem", "task completion history delete resets debug fallback");
-assertIncludes(settingsModal, "eval-copy-fallback", "task completion debug manual copy fallback");
-assertIncludes(settingsModal, "taskCompletionHistoryGroups", "task completion history grouping");
-assertIncludes(settingsModal, "toggleEvalHistoryGroup", "task completion history group toggle");
-assertIncludes(settingsModal, "evalHistoryBatchId", "task completion history batch grouping");
-assertIncludes(settingsModal, "eval-history-group__toggle", "task completion history group accordion");
-assertIncludes(settingsModal, "eval-history-row__failures", "task completion history failure details rendering");
-assertIncludes(settingsModal, "evalModelLabel", "task completion eval model label rendering");
-assertIncludes(styles, ".eval-copy-fallback", "task completion debug copy fallback styling");
+assertNotIncludes(settingsModal, "run-task-completion-smoke", "task completion eval action removed");
+assertNotIncludes(settingsModal, "taskCompletionHistoryGroups", "task completion history UI removed");
+assertNotIncludes(styles, ".eval-copy-fallback", "task completion debug copy fallback styling removed");
 assertIncludes(chatClient, "STORAGE_KEYS.accessToken", "access token preference persistence");
 assertIncludes(chatClient, "authorizedHeaders", "authorized API requests");
 assertIncludes(chatClient, "access_token", "authorized websocket connection");
@@ -326,11 +294,9 @@ assertIncludes(chatClient, "readStoredDraftSessions", "local draft sessions rest
 assertIncludes(chatClient, "persistLocalDraftSessions", "local draft sessions update with sidebar changes");
 assertIncludes(chatClient, "preserveActiveSession: quiet", "quiet history refresh preserves active trace state");
 assertIncludes(chatClient, "mergeHistorySession(existingSession, historySession", "history refresh reuses existing session objects");
-assertIncludes(chatClient, "/api/evals/task-completion/smoke", "task completion eval fetch");
-assertIncludes(chatClient, "/api/evals/task-completion/run", "live task completion eval fetch");
-assertIncludes(chatClient, "/api/evals/task-completion/history", "task completion history fetch");
-assertIncludes(chatClient, "deleteTaskCompletionHistoryItem", "task completion history delete fetch");
-assertIncludes(chatClient, "clearTaskCompletionHistory", "task completion history clear fetch");
+assertNotIncludes(chatClient, "/api/evals/", "eval API fetches removed from chat client");
+assertNotIncludes(chatClient, "deleteTaskCompletionHistoryItem", "task completion history delete fetch removed");
+assertNotIncludes(chatClient, "clearTaskCompletionHistory", "task completion history clear fetch removed");
 assertIncludes(settingsModal, "hasConnectedProvider", "OAuth auth card connected-provider visibility");
 assertIncludes(settingsModal, "providerCredentials", "credential picker rendering");
 assertIncludes(settingsModal, "providerEffectiveCredentialId", "effective credential selection");
@@ -339,15 +305,12 @@ assertIncludes(settingsModal, "set-provider-credential", "provider credential se
 assertNotIncludes(settingsModal, "decodingModeOptions", "request parameter mode options removed");
 assertNotIncludes(settingsLogic, "decoding_mode", "LLM decoding mode save payload removed");
 assertNotIncludes(copy, "decodingMode", "request parameter mode copy removed");
-assertIncludes(settingsModal, "section === 'data'", "data settings section");
-assertIncludes(settingsModal, "settingsState.dataSessions", "data session rendering");
-assertIncludes(settingsModal, "selectedDataSession", "data maintenance dialog state");
-assertIncludes(settingsModal, "copy.settings.data.maintenanceTitle", "data maintenance dialog copy");
-assertIncludes(settingsModal, "dataTimelineEntries", "data timeline rendering");
-assertIncludes(settingsModal, "data-timeline-table", "data timeline table rendering");
-assertIncludes(settingsModal, "toggleTimelineEntry", "data timeline row expansion");
-assertIncludes(settingsModal, "timelineItemLabel", "data timeline item labels");
-assertIncludes(copy, "timelineColumns", "data timeline table copy");
+assertNotIncludes(settingsModal, "section === 'data'", "data settings section removed");
+assertNotIncludes(settingsModal, "settingsState.dataSessions", "data session rendering removed");
+assertNotIncludes(settingsModal, "selectedDataSession", "data maintenance dialog state removed");
+assertNotIncludes(settingsModal, "copy.settings.data", "data settings copy removed");
+assertNotIncludes(settingsModal, "data-timeline-table", "data timeline table rendering removed");
+assertNotIncludes(styles, ".data-timeline-table", "data timeline table styling removed");
 assertNotIncludes(settingsUi, "props.copy.settings.general.update.branch", "update description hides branch");
 assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.copilotAuth.title", "Copilot auth provider placement");
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
@@ -355,7 +318,7 @@ assertIncludes(chatClient, "buildSessionDeletePath", "conversation delete API pa
 assertIncludes(chatClient, "buildSessionsClearPath", "web conversation clear API path");
 assertNotIncludes(chatClient, "copy.value.sidebar.confirmDeleteChat", "conversation delete does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.general.clearWebChats.confirm", "web conversation clear does not use native confirm in client action");
-assertNotIncludes(chatClient, "copy.value.settings.eval.confirmClearHistory", "eval history clear does not use native confirm in client action");
+assertNotIncludes(chatClient, "copy.value.settings.eval", "eval settings copy removed from chat client");
 assertIncludes(settingsLogic, "/api/settings/media", "media model settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser", "browser settings fetch");
 assertIncludes(settingsLogic, "/api/settings/browser/test", "browser settings test fetch");
@@ -406,9 +369,9 @@ assertIncludes(chatClient, "viewExternalChatIdForPayload", "external session rea
 assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing");
 assertIncludes(settingsLogic, "connectForm.name", "provider connection naming");
 assertIncludes(settingsLogic, "/api/settings/credentials", "credential settings fetch");
-assertIncludes(settingsLogic, "/api/storage/status", "storage status fetch");
-assertIncludes(settingsLogic, "/api/sessions/timeline", "session timeline fetch");
-assertIncludes(settingsLogic, "loadDataSessionTimeline", "session timeline action export");
+assertNotIncludes(settingsLogic, "/api/storage/status", "storage status fetch removed");
+assertNotIncludes(settingsLogic, "/api/sessions/timeline", "session timeline fetch removed");
+assertNotIncludes(settingsLogic, "loadDataSessionTimeline", "session timeline action export removed");
 assertIncludes(settingsLogic, "setProviderCredential", "provider credential switching");
 assertIncludes(chatClient, "window.requestAnimationFrame", "message stage deferred scroll");
 assertIncludes(chatClient, "currentEntries.value.length, currentMessages.value.length", "message list scroll watch");
@@ -423,14 +386,6 @@ for (const key of [
   "curator",
   "credentialSources",
   "missingCredential",
-  "dataLoadFailed",
-  "dataTimelineLoadFailed",
-  "taskCompletionSmokePassed",
-  "taskCompletionEvalSmokeFailed",
-  "taskCompletionLivePassed",
-  "taskCompletionLiveEvalFailed",
-  "taskCompletionHistoryLoadFailed",
-  "taskCompletionHistoryDeleteFailed",
   "deleteChat",
   "cancelDelete",
   "clearWebChats",
@@ -445,35 +400,6 @@ for (const key of [
   "sessionsDeletedWithFailures",
   "sessionDeleteFailed",
   "sessionsCleared",
-  "clearHistory",
-  "deleteHistoryItem",
-  "confirmClearHistoryTitle",
-  "confirmClearHistory",
-  "confirmClearHistoryDescription",
-  "confirmClearHistoryAction",
-  "historyCleared",
-  "historyGroupTitle",
-  "historyGroupMeta",
-  "historyBatchLabel",
-  "failedChecksTitle",
-  "failedChecksForCase",
-  "checksSummary",
-  "errorLabel",
-  "expectedAnswerTitle",
-  "actualAnswerTitle",
-  "copyDebug",
-  "copyAllSmokeDebug",
-  "copyAllLiveDebug",
-  "copyAllHistoryDebug",
-  "copyBatchDebug",
-  "copyDebugDescription",
-  "debugFallback",
-  "debugReportTitle",
-  "failedCheckItem",
-  "failedCheckItems",
-  "failedCheckHints",
-  "failedChecks",
-  "modelLabel",
 ]) {
   assertRegex(copy, new RegExp(`${key}\\s*:`), `copy key ${key}`);
 }

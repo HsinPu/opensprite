@@ -12,7 +12,6 @@ from typing import Any
 from .base import (
     StorageProvider,
     StoredBackgroundProcess,
-    StoredEvalRun,
     StoredMessage,
     StoredRun,
     StoredRunEvent,
@@ -41,7 +40,6 @@ class MemoryStorage(StorageProvider):
         self._run_events: dict[tuple[str, str], list[StoredRunEvent]] = defaultdict(list)
         self._run_file_changes: dict[tuple[str, str], list[StoredRunFileChange]] = defaultdict(list)
         self._run_parts: dict[tuple[str, str], list[StoredRunPart]] = defaultdict(list)
-        self._eval_runs: dict[str, StoredEvalRun] = {}
         self._work_states: dict[str, StoredWorkState] = {}
         self._background_processes: dict[str, StoredBackgroundProcess] = {}
     
@@ -217,49 +215,6 @@ class MemoryStorage(StorageProvider):
         if run is None or run.session_id != session_id:
             return None
         return run
-
-    async def add_eval_run(self, eval_run: StoredEvalRun) -> StoredEvalRun:
-        created_at = float(eval_run.created_at or time.time())
-        stored = StoredEvalRun(
-            eval_id=eval_run.eval_id,
-            kind=eval_run.kind,
-            case_id=eval_run.case_id,
-            ok=bool(eval_run.ok),
-            summary=dict(eval_run.summary or {}),
-            checks=list(eval_run.checks or []),
-            prompt=eval_run.prompt,
-            response_preview=eval_run.response_preview,
-            session_id=eval_run.session_id,
-            run_id=eval_run.run_id,
-            completion_status=eval_run.completion_status,
-            had_tool_error=bool(eval_run.had_tool_error),
-            metadata=dict(eval_run.metadata or {}),
-            created_at=created_at,
-        )
-        self._eval_runs[stored.eval_id] = stored
-        return stored
-
-    async def list_eval_runs(self, *, kind: str | None = None, limit: int | None = None) -> list[StoredEvalRun]:
-        runs = list(self._eval_runs.values())
-        if kind is not None:
-            runs = [run for run in runs if run.kind == kind]
-        runs.sort(key=lambda run: (run.created_at, run.eval_id), reverse=True)
-        if limit is not None:
-            return runs[:limit]
-        return runs
-
-    async def delete_eval_run(self, eval_id: str, *, kind: str | None = None) -> bool:
-        run = self._eval_runs.get(eval_id)
-        if run is None or (kind is not None and run.kind != kind):
-            return False
-        del self._eval_runs[eval_id]
-        return True
-
-    async def clear_eval_runs(self, *, kind: str | None = None) -> int:
-        eval_ids = [eval_id for eval_id, run in self._eval_runs.items() if kind is None or run.kind == kind]
-        for eval_id in eval_ids:
-            del self._eval_runs[eval_id]
-        return len(eval_ids)
 
     async def get_work_state(self, session_id: str) -> StoredWorkState | None:
         return self._work_states.get(session_id)

@@ -6,7 +6,6 @@ from opensprite.runs.lifecycle import RUN_STARTED_EVENT
 from opensprite.storage.base import (
     StoredBackgroundProcess,
     StoredDelegatedTask,
-    StoredEvalRun,
     StoredMessage,
     StoredWorkState,
 )
@@ -115,7 +114,6 @@ def test_sqlite_storage_migrates_legacy_sessions_and_drops_table(tmp_path):
         "run_parts",
         "run_file_changes",
         "work_states",
-        "eval_runs",
         "search_chunks",
         "search_chunks_fts",
     }.issubset(table_names)
@@ -305,71 +303,6 @@ def test_sqlite_storage_persists_runs_and_events(tmp_path):
     assert loaded_work_state.metadata == {"source": "test"}
     assert cleared_work_state is None
     assert chats == ["chat-1"]
-
-
-def test_sqlite_storage_persists_eval_runs(tmp_path):
-    async def scenario():
-        storage = SQLiteStorage(tmp_path / "eval-runs.db")
-        await storage.add_eval_run(
-            StoredEvalRun(
-                eval_id="eval-older",
-                kind="task_completion",
-                case_id="case-old",
-                ok=False,
-                summary={"text": "1/2 checks passed.", "score": {"passed": 1, "total": 2}},
-                checks=[{"id": "response_present", "ok": True}],
-                prompt="old prompt",
-                response_preview="old response",
-                session_id="web:old",
-                run_id="run-old",
-                completion_status="incomplete",
-                had_tool_error=True,
-                metadata={"live": True, "error": "tool failed"},
-                created_at=10.0,
-            )
-        )
-        stored = await storage.add_eval_run(
-            StoredEvalRun(
-                eval_id="eval-newer",
-                kind="task_completion",
-                case_id="case-new",
-                ok=True,
-                summary={"text": "2/2 checks passed.", "score": {"passed": 2, "total": 2}},
-                checks=[{"id": "response_present", "ok": True}, {"id": "completion_status", "ok": True}],
-                prompt="new prompt",
-                response_preview="new response",
-                session_id="web:new",
-                run_id="run-new",
-                completion_status="complete",
-                had_tool_error=False,
-                metadata={"live": True},
-                created_at=20.0,
-            )
-        )
-        await storage.add_eval_run(
-            StoredEvalRun(
-                eval_id="eval-other-kind",
-                kind="other",
-                case_id="case-other",
-                ok=True,
-                created_at=30.0,
-            )
-        )
-        all_task_completion = await storage.list_eval_runs(kind="task_completion")
-        limited = await storage.list_eval_runs(kind="task_completion", limit=1)
-        all_kinds = await storage.list_eval_runs(limit=10)
-        return stored, all_task_completion, limited, all_kinds
-
-    stored, all_task_completion, limited, all_kinds = asyncio.run(scenario())
-
-    assert stored is not None
-    assert stored.eval_id == "eval-newer"
-    assert stored.summary == {"text": "2/2 checks passed.", "score": {"passed": 2, "total": 2}}
-    assert [run.eval_id for run in all_task_completion] == ["eval-newer", "eval-older"]
-    assert [run.eval_id for run in limited] == ["eval-newer"]
-    assert [run.eval_id for run in all_kinds] == ["eval-other-kind", "eval-newer", "eval-older"]
-    assert all_task_completion[0].checks[1]["id"] == "completion_status"
-    assert all_task_completion[1].had_tool_error is True
 
 
 def test_sqlite_work_state_backfills_delegated_tasks_from_legacy_active_fields(tmp_path):

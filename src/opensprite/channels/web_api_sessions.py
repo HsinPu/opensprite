@@ -6,9 +6,7 @@ from typing import Any, Callable
 
 from aiohttp import web
 
-from ..config import Config
 from ..runs.schema import serialize_diff_summary
-from ..runs.session_entries import serialize_session_entries
 
 
 async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
@@ -57,32 +55,6 @@ async def handle_sessions_delete(
     return web.json_response({"ok": True, "channel": channel_filter or "all", "deleted": deleted})
 
 
-async def handle_session_timeline(adapter: Any, request: web.Request) -> web.Response:
-    storage = adapter._require_storage()
-    session_id = adapter._coerce_optional_text(request.query.get("session_id"))
-    if session_id is None:
-        raise web.HTTPBadRequest(text="session_id is required")
-
-    message_limit = adapter._coerce_limit(request.query.get("messages"), default=200, maximum=500)
-    run_limit = adapter._coerce_limit(request.query.get("runs"), default=50, maximum=100)
-    messages = await storage.get_messages(session_id, limit=message_limit)
-    runs = await storage.get_runs(session_id, limit=run_limit)
-    traces = []
-    for run in runs:
-        trace = await storage.get_run_trace(session_id, run.run_id)
-        if trace is not None:
-            traces.append(trace)
-
-    return web.json_response(
-        {
-            "session_id": session_id,
-            "messages": [adapter._serialize_message(message) for message in messages],
-            "runs": [adapter._serialize_run(run) for run in runs],
-            "entries": serialize_session_entries(messages, traces),
-        }
-    )
-
-
 async def handle_session_status(adapter: Any, request: web.Request) -> web.Response:
     session_id = adapter._coerce_optional_text(request.query.get("session_id"))
     if session_id is not None:
@@ -91,36 +63,6 @@ async def handle_session_status(adapter: Any, request: web.Request) -> web.Respo
     service = adapter._get_session_status_service()
     statuses = [] if service is None else [adapter._serialize_session_status(item.session_id) for item in service.list()]
     return web.json_response({"statuses": statuses})
-
-
-async def handle_storage_status(adapter: Any, request: web.Request) -> web.Response:
-    storage = adapter._require_storage()
-    config = Config.load(adapter._get_config_path())
-    session_ids = await storage.get_all_sessions()
-    visible_session_ids = [session_id for session_id in session_ids if ":subagent:" not in session_id]
-    message_count = 0
-    run_count = 0
-    for session_id in session_ids:
-        message_count += await storage.get_message_count(session_id)
-        run_count += len(await storage.get_runs(session_id))
-
-    storage_path = getattr(storage, "db_path", None) or getattr(config.storage, "path", "")
-    return web.json_response(
-        {
-            "storage": {
-                "type": config.storage.type,
-                "path": str(storage_path or ""),
-                "provider": type(storage).__name__,
-            },
-            "counts": {
-                "sessions": len(visible_session_ids),
-                "raw_sessions": len(session_ids),
-                "messages": message_count,
-                "runs": run_count,
-            },
-        }
-    )
-
 
 async def serialize_session_summary(adapter: Any, storage: Any, session_id: str, *, message_limit: int) -> dict[str, Any]:
     messages = await storage.get_messages(session_id, limit=message_limit)
