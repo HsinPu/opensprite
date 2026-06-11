@@ -38,7 +38,8 @@ TASK_INITIAL_PLANNING_PURPOSE = "initial task planning was not inferred"
 TASK_INITIAL_PLANNING_MIN_CONFIDENCE = 0.55
 _INITIAL_TASK_PLANNING_REPAIR_SYSTEM_PROMPT = (
     "You repair OpenSprite initial task planning output. Return exactly one valid JSON object "
-    "matching the requested schema. Do not answer the user. Do not include markdown."
+    "matching the requested schema. Do not answer the user. Do not include markdown, "
+    "comments, code fences, prose, or a second JSON object."
 )
 _INITIAL_TASK_INTENT_KINDS = frozenset(
     {
@@ -184,75 +185,69 @@ class TurnTaskPlanningService:
         response_text = _llm_response_text(response)
         try:
             payload = _resolver_parse_json_object(response_text)
-        except ValueError as exc:
-            raw_response_preview = _llm_response_preview(response, text=response_text)
-            try:
-                repair_response = await _chat_json_planning_llm(
-                    provider=provider,
-                    messages=[
-                        ChatMessage(role="system", content=_INITIAL_TASK_PLANNING_REPAIR_SYSTEM_PROMPT),
-                        ChatMessage(
-                            role="user",
-                            content=(
-                                "Original initial planning prompt:\n"
-                                f"{prompt}\n\n"
-                                "Invalid initial planning response:\n"
-                                f"{raw_response_preview}\n\n"
-                                "Return only the corrected JSON object."
-                            ),
+            return _initial_decision_from_payload(payload, active_task=active_task)
+        except (ValueError, InitialTaskPlanningError) as exc:
+            return await self._repair_initial_decision_with_llm(
+                prompt=prompt,
+                response=response,
+                response_text=response_text,
+                error=str(exc),
+                active_task=active_task,
+                provider=provider,
+                model=model,
+            )
+
+    async def _repair_initial_decision_with_llm(
+        self,
+        *,
+        prompt: str,
+        response: Any,
+        response_text: str,
+        error: str,
+        active_task: str,
+        provider: Any | None,
+        model: str | None,
+    ) -> _InitialTaskDecision:
+        raw_response_preview = _llm_response_preview(response, text=response_text)
+        invalid_response = _resolver_truncate(response_text, 3000) or raw_response_preview
+        try:
+            repair_response = await _chat_json_planning_llm(
+                provider=provider,
+                messages=[
+                    ChatMessage(role="system", content=_INITIAL_TASK_PLANNING_REPAIR_SYSTEM_PROMPT),
+                    ChatMessage(
+                        role="user",
+                        content=(
+                            "Original initial planning prompt:\n"
+                            f"{prompt}\n\n"
+                            f"Validation error: {error}\n\n"
+                            "Invalid initial planning response:\n"
+                            f"{invalid_response}\n\n"
+                            "Return only one corrected JSON object. Do not include markdown or prose."
                         ),
-                    ],
-                    model=model,
-                    llm_config=self.llm_config,
-                )
-            except Exception as repair_exc:
-                raise InitialTaskPlanningError(
-                    f"initial task planning repair LLM call failed: {repair_exc}"
-                ) from repair_exc
-            repair_text = _llm_response_text(repair_response)
-            try:
-                payload = _resolver_parse_json_object(repair_text)
-            except ValueError as repair_parse_exc:
-                repair_preview = _llm_response_preview(repair_response, text=repair_text)
-                raise InitialTaskPlanningError(
-                    f"initial task planning response was not valid JSON; raw_response_preview={repair_preview}"
-                ) from repair_parse_exc
-        if not payload:
-            raise InitialTaskPlanningError("initial task planning response was empty")
-        confidence = _resolver_coerce_confidence(payload.get("confidence"))
-        clarification_question = _initial_clarification_question(payload)
-        intent = _task_intent_from_initial_payload(
-            payload.get("task_intent"),
-        )
-        needs_clarification = confidence < TASK_INITIAL_PLANNING_MIN_CONFIDENCE or intent.needs_clarification
-        if needs_clarification:
-            if not clarification_question:
-                raise InitialTaskPlanningError(
-                    "initial task planning requires clarification_question when confidence is low "
-                    "or task_intent.needs_clarification is true"
-                )
-            if not intent.needs_clarification:
-                intent = replace(intent, needs_clarification=True)
-        context_payload = payload.get("task_context")
-        if not isinstance(context_payload, dict):
-            raise InitialTaskPlanningError("initial task planning response missing task_context")
-        _validate_initial_task_context_payload(context_payload)
-        context = _task_context_decision_from_payload(
-            context_payload,
-            has_active_task=bool(_compact_text(active_task)),
-        )
-        reason = _resolver_truncate(
-            str(payload.get("reason") or context.reason or LLM_INITIAL_TASK_PLANNING_REASON),
-            240,
-        )
-        return _InitialTaskDecision(
-            task_intent=intent,
-            task_context_decision=context,
-            method=LLM_TASK_INTENT_METHOD,
-            confidence=confidence,
-            reason=reason,
-            clarification_question=clarification_question,
-        )
+                    ),
+                ],
+                model=model,
+                llm_config=self.llm_config,
+            )
+        except Exception as repair_exc:
+            raise InitialTaskPlanningError(
+                f"initial task planning repair LLM call failed: {repair_exc}"
+            ) from repair_exc
+        repair_text = _llm_response_text(repair_response)
+        try:
+            repair_payload = _resolver_parse_json_object(repair_text)
+            return _initial_decision_from_payload(repair_payload, active_task=active_task)
+        except ValueError as repair_parse_exc:
+            repair_preview = _llm_response_preview(repair_response, text=repair_text)
+            raise InitialTaskPlanningError(
+                f"initial task planning response was not valid JSON; raw_response_preview={repair_preview}"
+            ) from repair_parse_exc
+        except InitialTaskPlanningError as repair_validation_exc:
+            repair_preview = _llm_response_preview(repair_response, text=repair_text)
+            raise InitialTaskPlanningError(
+                f"{repair_validation_exc}; raw_response_preview={repair_preview}"
+            ) from repair_validation_exc
 
     def _build_result(
         self,
@@ -302,6 +297,45 @@ class TurnTaskPlanningService:
             task_intent_confidence=task_intent_confidence,
             task_intent_reason=task_intent_reason,
         )
+
+
+def _initial_decision_from_payload(payload: dict[str, Any], *, active_task: str) -> _InitialTaskDecision:
+    if not payload:
+        raise InitialTaskPlanningError("initial task planning response was empty")
+    confidence = _resolver_coerce_confidence(payload.get("confidence"))
+    clarification_question = _initial_clarification_question(payload)
+    intent = _task_intent_from_initial_payload(
+        payload.get("task_intent"),
+    )
+    needs_clarification = confidence < TASK_INITIAL_PLANNING_MIN_CONFIDENCE or intent.needs_clarification
+    if needs_clarification:
+        if not clarification_question:
+            raise InitialTaskPlanningError(
+                "initial task planning requires clarification_question when confidence is low "
+                "or task_intent.needs_clarification is true"
+            )
+        if not intent.needs_clarification:
+            intent = replace(intent, needs_clarification=True)
+    context_payload = payload.get("task_context")
+    if not isinstance(context_payload, dict):
+        raise InitialTaskPlanningError("initial task planning response missing task_context")
+    _validate_initial_task_context_payload(context_payload)
+    context = _task_context_decision_from_payload(
+        context_payload,
+        has_active_task=bool(_compact_text(active_task)),
+    )
+    reason = _resolver_truncate(
+        str(payload.get("reason") or context.reason or LLM_INITIAL_TASK_PLANNING_REASON),
+        240,
+    )
+    return _InitialTaskDecision(
+        task_intent=intent,
+        task_context_decision=context,
+        method=LLM_TASK_INTENT_METHOD,
+        confidence=confidence,
+        reason=reason,
+        clarification_question=clarification_question,
+    )
 
 
 def _task_intent_from_initial_payload(

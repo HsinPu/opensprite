@@ -182,6 +182,9 @@ def test_json_object_helpers_share_extraction_policy_but_keep_error_policy():
 
     assert _resolver_parse_json_object(response) == {"task_type": "pure_answer"}
     assert _parse_json_object(response) == {"task_type": "pure_answer"}
+    noisy_response = 'planner said:\n{"task_type": "pure_answer"}\nextra diagnostic {not json}'
+    assert _resolver_parse_json_object(noisy_response) == {"task_type": "pure_answer"}
+    assert _parse_json_object(noisy_response) == {"task_type": "pure_answer"}
     assert _parse_json_object("not JSON") == {}
     with pytest.raises(ValueError, match="LLM did not return a JSON object"):
         _resolver_parse_json_object("not JSON")

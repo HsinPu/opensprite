@@ -392,6 +392,129 @@ def test_turn_task_planning_repairs_empty_reasoning_response():
     assert all(call["max_tokens"] >= 1200 for call in provider.calls)
 
 
+def test_turn_task_planning_repair_prompt_keeps_bounded_invalid_response():
+    repaired_payload = {
+        "task_intent": {
+            "kind": "task",
+            "objective": "Create a test file.",
+            "constraints": [],
+            "done_criteria": ["test file is created"],
+            "needs_clarification": False,
+            "long_running": False,
+            "expects_code_change": False,
+            "expects_verification": True,
+        },
+        "task_context": {
+            "is_follow_up": False,
+            "should_inherit_active_task": False,
+            "should_seed_active_task": True,
+            "should_replace_active_task": False,
+            "inherited_task_type": None,
+            "continuation_type": "new_task",
+            "confidence": 0.89,
+            "reason": "The user asks for a new file operation.",
+        },
+        "confidence": 0.9,
+        "reason": "The repair returned a valid routing decision.",
+    }
+    provider = _SequenceProvider(
+        [
+            LLMResponse(
+                content="not json " + ("x" * 280) + " TAIL-CONTEXT-FOR-REPAIR",
+                model="fake-model",
+            ),
+            LLMResponse(content=json.dumps(repaired_payload), model="fake-model"),
+        ]
+    )
+    service = TurnTaskPlanningService(
+        work_progress=WorkProgressService(),
+        read_active_task_snapshot=lambda session_id: "",
+        build_runtime_message=lambda message, metadata: message,
+        llm_config=Config.load_agent_template_config().task_context_llm,
+    )
+
+    result = asyncio.run(
+        service.plan(
+            user_message=UserMessage(text="Create a harmless test file."),
+            session_id="web:browser-1",
+            user_metadata={},
+            existing_work_state=None,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert result.task_intent.objective == "Create a test file."
+    assert len(provider.calls) == 2
+    repair_prompt = provider.calls[1]["messages"][-1].content
+    assert "TAIL-CONTEXT-FOR-REPAIR" in repair_prompt
+    assert "Return only one corrected JSON object" in repair_prompt
+
+
+def test_turn_task_planning_repairs_missing_required_top_level_fields():
+    repaired_payload = {
+        "task_intent": {
+            "kind": "analysis",
+            "objective": "Locate Windows service startup code.",
+            "constraints": [],
+            "done_criteria": ["startup code path is identified"],
+            "needs_clarification": False,
+            "long_running": False,
+            "expects_code_change": False,
+            "expects_verification": False,
+        },
+        "task_context": {
+            "is_follow_up": False,
+            "should_inherit_active_task": False,
+            "should_seed_active_task": True,
+            "should_replace_active_task": False,
+            "inherited_task_type": None,
+            "continuation_type": "new_task",
+            "confidence": 0.88,
+            "reason": "The user asks to inspect the mounted repo.",
+        },
+        "confidence": 0.89,
+        "reason": "The repair returned the required top-level fields.",
+    }
+    provider = _SequenceProvider(
+        [
+            LLMResponse(
+                content=json.dumps(
+                    {
+                        "task_context": repaired_payload["task_context"],
+                        "confidence": 0.8,
+                        "reason": "Missing task_intent by mistake.",
+                    }
+                ),
+                model="fake-model",
+            ),
+            LLMResponse(content=json.dumps(repaired_payload), model="fake-model"),
+        ]
+    )
+    service = TurnTaskPlanningService(
+        work_progress=WorkProgressService(),
+        read_active_task_snapshot=lambda session_id: "",
+        build_runtime_message=lambda message, metadata: message,
+        llm_config=Config.load_agent_template_config().task_context_llm,
+    )
+
+    result = asyncio.run(
+        service.plan(
+            user_message=UserMessage(text="Find the Windows startup service code."),
+            session_id="web:browser-1",
+            user_metadata={},
+            existing_work_state=None,
+            provider=provider,
+            model=provider.get_default_model(),
+        )
+    )
+
+    assert result.task_intent.objective == "Locate Windows service startup code."
+    assert len(provider.calls) == 2
+    repair_prompt = provider.calls[1]["messages"][-1].content
+    assert "Validation error: initial task planning response missing task_intent" in repair_prompt
+
+
 def test_turn_task_planning_raises_when_llm_omits_required_fields():
     provider = _JsonProvider(
         {

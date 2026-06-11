@@ -2682,13 +2682,41 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 
 
 def _json_object_text(text: str) -> str | None:
-    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.IGNORECASE | re.DOTALL)
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.IGNORECASE | re.DOTALL)
     raw = fenced.group(1) if fenced else text
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start < 0 or end < start:
-        return None
-    return raw[start : end + 1]
+    for start, char in enumerate(raw):
+        if char != "{":
+            continue
+        candidate = _balanced_json_object_text(raw, start=start)
+        if candidate is not None:
+            return candidate
+    return None
+
+
+def _balanced_json_object_text(text: str, *, start: int) -> str | None:
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    return None
 
 
 def _recent_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:

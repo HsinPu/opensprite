@@ -43,6 +43,18 @@ class FakeProvider:
         return LLMResponse(content=self.response, model=str(kwargs.get("model") or "test-model"))
 
 
+class SequencedFakeProvider:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    async def chat(self, messages, **kwargs):
+        self.calls.append((messages, kwargs))
+        if not self.responses:
+            raise AssertionError("No fake verifier responses left")
+        return LLMResponse(content=self.responses.pop(0), model=str(kwargs.get("model") or "test-model"))
+
+
 class FakeVerifierService:
     def __init__(self, verdict=None, error=None):
         self.verdict = verdict
@@ -63,6 +75,15 @@ def test_parse_completion_verifier_json_accepts_fenced_object():
 
     assert payload["status"] == "complete"
     assert payload["reason"] == "answered the question"
+
+
+def test_parse_completion_verifier_json_extracts_first_balanced_object():
+    payload = parse_completion_verifier_json(
+        'verifier output:\n{"status":"complete","reason":"done"}\nextra diagnostic {not json}'
+    )
+
+    assert payload["status"] == "complete"
+    assert payload["reason"] == "done"
 
 
 def test_parse_completion_verifier_json_rejects_invalid_json():
@@ -195,6 +216,53 @@ async def test_completion_verifier_service_calls_provider_with_request_config():
     assert "search, fetch" not in user_prompt
     assert "in_progress" not in user_prompt
     assert "active|blocked|done|waiting_user|null" in user_prompt
+
+
+@pytest.mark.anyio
+async def test_completion_verifier_service_repairs_invalid_json_once():
+    provider = SequencedFakeProvider(
+        [
+            "I think it is complete, but this is not JSON.",
+            '{"status":"complete","reason":"repair returned strict JSON","confidence":0.9}',
+        ]
+    )
+    service = CompletionVerifierService(_llm_config())
+
+    verdict = await service.verify(
+        provider=provider,
+        model="test-model",
+        facts={"response": "done"},
+    )
+
+    assert verdict.status == "complete"
+    assert verdict.reason == "repair returned strict JSON"
+    assert verdict.confidence == 0.9
+    assert verdict.metadata["repair_attempted"] is True
+    assert verdict.metadata["repair_error"] == "completion verifier returned invalid JSON"
+    assert len(provider.calls) == 2
+    repair_messages, repair_kwargs = provider.calls[1]
+    assert repair_kwargs["request_mode"] == "completion_verifier"
+    assert "The previous verifier response was invalid" in repair_messages[1].content
+    assert "Return only one valid JSON object" in repair_messages[1].content
+
+
+@pytest.mark.anyio
+async def test_completion_verifier_service_blocks_when_repair_invalid():
+    provider = SequencedFakeProvider(["not JSON", "still not JSON"])
+    service = CompletionVerifierService(_llm_config())
+
+    with pytest.raises(CompletionVerifierError) as exc_info:
+        await service.verify(
+            provider=provider,
+            model="test-model",
+            facts={"response": "done"},
+        )
+
+    assert str(exc_info.value) == (
+        "completion verifier returned invalid JSON; verifier repair failed: "
+        "completion verifier returned invalid JSON"
+    )
+    assert len(provider.calls) == 2
 
 
 def test_completion_verifier_active_task_statuses_match_supported_statuses():
