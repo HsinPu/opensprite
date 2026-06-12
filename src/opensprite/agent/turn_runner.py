@@ -51,12 +51,12 @@ from .completion_gate import (
     COMPLETION_RESULT_VERIFICATION_ACTION_FIELD,
     COMPLETION_RESULT_VERIFICATION_PATH_FIELD,
     COMPLETION_RESULT_VERIFICATION_PYTEST_ARGS_FIELD,
-    COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
     CompletionBlockerMessages,
     CompletionGateResult,
     CompletionGateService,
     completion_blocker_response,
 )
+from .completion.verifier import COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER
 from .completion_gate import (
     BLOCKED_COMPLETION_STATUS,
     INCOMPLETE_COMPLETION_STATUS,

@@ -1,11 +1,10 @@
 import pytest
 
-from opensprite.agent.completion_gate import (
+from opensprite.agent.completion.verifier import (
     COMPLETION_VERIFIER_ACTIVE_TASK_STATUSES,
     COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
     COMPLETION_VERIFIER_NEXT_ACTION_CONTINUE_LLM,
     COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
-    CompletionGateService,
     CompletionVerifierError,
     CompletionVerifierService,
     CompletionVerifierVerdict,
@@ -15,6 +14,7 @@ from opensprite.agent.completion_gate import (
     normalize_completion_verifier_payload,
     parse_completion_verifier_json,
 )
+from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult, LlmStepEvent
 from opensprite.agent.execution import TaskArtifact
 from opensprite.agent.task.contract import (

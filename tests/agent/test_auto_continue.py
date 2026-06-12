@@ -1,9 +1,5 @@
 from opensprite.agent.completion_gate import AUTO_CONTINUE_ALLOW_TOOLS_FIELD, AutoContinueService, format_web_source_context
 from opensprite.agent.completion_gate import (
-    COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
-    COMPLETION_VERIFIER_NEXT_ACTION_CONTINUE_LLM,
-    COMPLETION_VERIFIER_NEXT_ACTION_RESUME_WORKFLOW,
-    COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
     MAX_AUTO_CONTINUES_REACHED_REASON,
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     NO_TOOL_PROGRESS_AFTER_INCOMPLETE_RESPONSE_REASON,
@@ -12,6 +8,12 @@ from opensprite.agent.completion_gate import (
     completion_gate_continue_reason,
 )
 from opensprite.agent.completion_gate import ASSISTANT_RESPONSE_DID_NOT_COMPLETE_REASON, CompletionGateResult
+from opensprite.agent.completion.verifier import (
+    COMPLETION_VERIFIER_NEXT_ACTION_ASK_USER,
+    COMPLETION_VERIFIER_NEXT_ACTION_CONTINUE_LLM,
+    COMPLETION_VERIFIER_NEXT_ACTION_RESUME_WORKFLOW,
+    COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
+)
 from opensprite.agent.execution import ExecutionResult, TaskArtifact
 from opensprite.agent.task.contract import (
     AcceptanceCriterion,
