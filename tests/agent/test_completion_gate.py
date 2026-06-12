@@ -7,20 +7,21 @@ from opensprite.agent.completion_gate import (
     CompletionGateService,
     TASK_CONTRACT_PLANNER_UNVALIDATED_REASON,
     _coerce_bool,
-    _completion_status_for_unsuccessful_workflow,
     _contract_requires_verification,
     _is_blocking_planner_status,
-    _string_or_none,
     _truthy,
     is_complete_completion_status,
-    is_research_then_outline_workflow,
-    is_review_workflow,
     needs_verification_completion_status,
     is_optional_workspace_batch_failure_tool,
     path_requires_delegated_review,
-    workflow_fix_follow_up_fields,
 )
 from opensprite.agent.completion.evidence_gate import EvidenceGateService
+from opensprite.agent.completion.workflow_gate import _completion_status_for_unsuccessful_workflow, _string_or_none
+from opensprite.agent.completion.workflow_rules import (
+    is_research_then_outline_workflow,
+    is_review_workflow,
+    workflow_fix_follow_up_fields,
+)
 from opensprite.agent.completion.verifier import CompletionVerifierVerdict, _optional_text
 from opensprite.agent.task.contract import LLM_PLANNER_CONTRACT_SOURCES
 from opensprite.agent.task.contract import (

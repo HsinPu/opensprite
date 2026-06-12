@@ -3,8 +3,8 @@ from opensprite.agent.workflow import (
     WORKFLOW_NEXT_STEP_LABEL_FIELD,
     WORKFLOW_NEXT_STEP_PROMPT_TYPE_FIELD,
 )
-from opensprite.agent.completion_gate import (
-    WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON,
+from opensprite.agent.completion.workflow_gate import WORKFLOW_VERIFICATION_EVIDENCE_MISSING_REASON
+from opensprite.agent.completion.workflow_rules import (
     is_research_then_outline_workflow,
     is_review_workflow,
     workflow_clean_review_reason,
