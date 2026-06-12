@@ -1,4 +1,4 @@
-from opensprite.agent.execution import _format_acceptance_criterion
+from opensprite.agent.execution_support.task_guidance import format_acceptance_criterion
 from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     ITEMIZED_OUTPUT_CRITERION_KIND,
@@ -10,19 +10,19 @@ from opensprite.agent.task.contract import (
 
 
 def test_format_acceptance_criterion_uses_policy_helpers():
-    assert "itemized result entries" in _format_acceptance_criterion(
+    assert "itemized result entries" in format_acceptance_criterion(
         AcceptanceCriterion(kind=ITEMIZED_OUTPUT_CRITERION_KIND, min_count=3)
     )
-    assert "traceable source" in _format_acceptance_criterion(
+    assert "traceable source" in format_acceptance_criterion(
         AcceptanceCriterion(kind=SOURCE_ARTIFACT_CRITERION_KIND, min_count=2)
     )
-    assert "gathered source" in _format_acceptance_criterion(
+    assert "gathered source" in format_acceptance_criterion(
         AcceptanceCriterion(kind=SOURCE_REFERENCE_CRITERION_KIND)
     )
-    assert "verification gap" in _format_acceptance_criterion(
+    assert "verification gap" in format_acceptance_criterion(
         AcceptanceCriterion(kind=VERIFICATION_OR_GAP_CRITERION_KIND)
     )
-    workspace_guidance = _format_acceptance_criterion(
+    workspace_guidance = format_acceptance_criterion(
         AcceptanceCriterion(kind=WORKSPACE_LOCATION_CRITERION_KIND)
     )
     assert "workspace file path" in workspace_guidance
