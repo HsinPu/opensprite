@@ -2069,6 +2069,58 @@ async def _run_web_sessions_api():
         created_at=301.0,
     )
     await storage.add_message(
+        "web:cli-via-web-test",
+        StoredMessage(
+            role="user",
+            content="cli session should stay out of browser history",
+            timestamp=500.0,
+            metadata={"source": "cli_via_web", "sender_name": "OpenSprite CLI"},
+        ),
+    )
+    await storage.add_message(
+        "web:cli-via-web-test",
+        StoredMessage(
+            role="user",
+            content="cron follow-up should not make this a browser session",
+            timestamp=500.5,
+            metadata={"source": "cron", "sender_name": "cron"},
+        ),
+    )
+    await storage.create_run(
+        "web:cli-via-web-test",
+        "run-cli-latest",
+        status="completed",
+        metadata={"objective": "hidden CLI test"},
+        created_at=501.0,
+    )
+    await storage.add_message(
+        "web:codex-automation-test",
+        StoredMessage(
+            role="user",
+            content="codex automation should stay out of browser history",
+            timestamp=550.0,
+            metadata={"sender_name": "Codex debug"},
+        ),
+    )
+    await storage.create_run(
+        "web:codex-automation-test",
+        "run-codex-latest",
+        status="completed",
+        metadata={"objective": "hidden automation test"},
+        created_at=551.0,
+    )
+    await storage.add_message(
+        "cli:native-cli-test",
+        StoredMessage(role="user", content="native CLI should stay out of browser history", timestamp=600.0),
+    )
+    await storage.create_run(
+        "cli:native-cli-test",
+        "run-native-cli-latest",
+        status="completed",
+        metadata={"objective": "hidden native CLI test"},
+        created_at=601.0,
+    )
+    await storage.add_message(
         "web:browser-new:subagent:task_abc12345",
         StoredMessage(role="user", content="hidden delegated task", timestamp=400.0),
     )
@@ -2118,6 +2170,13 @@ async def _run_web_sessions_api():
 
             async with session.get(
                 f"http://127.0.0.1:{port}/api/sessions",
+                params={"channel": "all", "limit": "6", "messages": "1", "include_cli": "true"},
+            ) as resp:
+                assert resp.status == 200
+                all_with_cli_payload = await resp.json()
+
+            async with session.get(
+                f"http://127.0.0.1:{port}/api/sessions",
                 params={"channel": "telegram", "limit": "3", "messages": "1"},
             ) as resp:
                 assert resp.status == 200
@@ -2140,6 +2199,14 @@ async def _run_web_sessions_api():
         assert payload["sessions"][0]["channel"] == "web"
         assert payload["sessions"][0]["title"] == "new hello"
         assert [item["session_id"] for item in all_payload["sessions"]] == [
+            "telegram:123",
+            "web:browser-new",
+            "web:browser-old",
+        ]
+        assert [item["session_id"] for item in all_with_cli_payload["sessions"]] == [
+            "cli:native-cli-test",
+            "web:codex-automation-test",
+            "web:cli-via-web-test",
             "telegram:123",
             "web:browser-new",
             "web:browser-old",
@@ -2323,7 +2390,7 @@ async def _run_web_sessions_api():
 
         assert delete_payload == {"ok": True, "session_id": "web:browser-old", "deleted": 1}
         assert [item["session_id"] for item in after_delete_payload["sessions"]] == ["telegram:123", "web:browser-new"]
-        assert clear_payload == {"ok": True, "channel": "web", "deleted": 2}
+        assert clear_payload == {"ok": True, "channel": "web", "deleted": 4}
         assert [item["session_id"] for item in after_clear_payload["sessions"]] == ["telegram:123"]
         assert await storage.get_messages("web:browser-new") == []
         assert await storage.get_messages("web:browser-new:subagent:task_abc12345") == []

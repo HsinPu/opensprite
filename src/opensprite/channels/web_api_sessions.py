@@ -6,7 +6,66 @@ from typing import Any, Callable
 
 from aiohttp import web
 
+from ..agent.turn_input import CLI_VIA_WEB_TURN_SOURCE, TURN_SOURCE_METADATA_KEY
 from ..runs.schema import serialize_diff_summary
+
+
+def _coerce_bool(value: str | None) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _message_source(message: Any) -> str:
+    metadata = getattr(message, "metadata", None)
+    if not isinstance(metadata, dict):
+        return ""
+    return str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip()
+
+
+def _is_browser_user_message(message: Any) -> bool:
+    metadata = getattr(message, "metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source = str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip().lower()
+    sender_name = str(metadata.get("sender_name") or "").strip().lower()
+    if str(metadata.get("overlay_profile_id") or "").strip():
+        return True
+    if source in {CLI_VIA_WEB_TURN_SOURCE, "cron"}:
+        return False
+    if sender_name in {"opensprite cli", "cron"}:
+        return False
+    if any(token in sender_name for token in ("cli", "codex")):
+        return False
+    return True
+
+
+def _is_automation_user_message(message: Any) -> bool:
+    metadata = getattr(message, "metadata", None)
+    metadata = metadata if isinstance(metadata, dict) else {}
+    source = str(metadata.get(TURN_SOURCE_METADATA_KEY) or "").strip().lower()
+    sender_name = str(metadata.get("sender_name") or "").strip().lower()
+    if source in {CLI_VIA_WEB_TURN_SOURCE, "cron"}:
+        return True
+    if any(token in source for token in ("cli", "codex", "smoke")):
+        return True
+    return any(token in sender_name for token in ("cli", "codex"))
+
+
+async def _should_hide_from_browser_history(storage: Any, session_id: str) -> bool:
+    if session_id.startswith("cli:"):
+        return True
+    if not session_id.startswith("web:"):
+        return False
+    messages = await storage.get_messages(session_id)
+    display_messages = [
+        message for message in messages if str(getattr(message, "role", "") or "") in {"user", "assistant"}
+    ]
+    if not display_messages:
+        return True
+    user_messages = [message for message in messages if str(getattr(message, "role", "") or "") == "user"]
+    if not user_messages:
+        return False
+    has_automation_user = any(_is_automation_user_message(message) for message in user_messages)
+    has_browser_user = any(_is_browser_user_message(message) for message in user_messages)
+    return has_automation_user and not has_browser_user
 
 
 async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
@@ -14,6 +73,7 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
     session_limit = adapter._coerce_limit(request.query.get("limit"), default=30, maximum=100)
     message_limit = adapter._coerce_limit(request.query.get("messages"), default=50, maximum=200)
     channel_filter = adapter._coerce_optional_text(request.query.get("channel"))
+    include_cli = _coerce_bool(request.query.get("include_cli"))
     session_ids = await storage.get_all_sessions()
     session_ids = [session_id for session_id in session_ids if ":subagent:" not in session_id]
     if channel_filter is None:
@@ -22,6 +82,13 @@ async def handle_sessions(adapter: Any, request: web.Request) -> web.Response:
     elif channel_filter.lower() != "all":
         session_prefix = f"{channel_filter}:"
         session_ids = [session_id for session_id in session_ids if session_id.startswith(session_prefix)]
+
+    if not include_cli:
+        visible_session_ids = []
+        for session_id in session_ids:
+            if not await _should_hide_from_browser_history(storage, session_id):
+                visible_session_ids.append(session_id)
+        session_ids = visible_session_ids
 
     sessions = [
         await adapter._serialize_session_summary(storage, session_id, message_limit=message_limit)

@@ -1561,6 +1561,9 @@ export function useChatClient() {
       || externalChatIdFromSessionId(sessionId)
       || generateExternalChatId();
     const externalChatId = channel === "web" ? transportExternalChatId : sessionId;
+    if (!shouldAcceptLivePayload(payload, externalChatId)) {
+      return;
+    }
     const session = ensureSession(externalChatId, sessionId);
     session.channel = channel;
     session.transportExternalChatId = transportExternalChatId;
@@ -1583,6 +1586,26 @@ export function useChatClient() {
       || externalChatIdFromSessionId(sessionId)
       || generateExternalChatId();
     return channel === "web" ? transportExternalChatId : (sessionId || `${channel}:${transportExternalChatId}`);
+  }
+
+  function hasKnownSession(externalChatId, sessionId = "") {
+    return state.sessions.some((session) => {
+      return (externalChatId && session.externalChatId === externalChatId)
+        || (sessionId && session.sessionId === sessionId);
+    });
+  }
+
+  function shouldAcceptLivePayload(payload, externalChatId = "") {
+    const sessionId = String(payload?.session_id || payload?.sessionId || "").trim();
+    const channel = String(payload?.channel || channelFromSessionId(sessionId) || "web").trim() || "web";
+    if (channel !== "web") {
+      return true;
+    }
+    const resolvedExternalChatId = externalChatId
+      || String(payload?.external_chat_id || payload?.externalChatId || "").trim()
+      || externalChatIdFromSessionId(sessionId)
+      || "";
+    return hasKnownSession(resolvedExternalChatId, sessionId);
   }
 
   function addMessage(externalChatId, message) {
@@ -1761,6 +1784,9 @@ export function useChatClient() {
 
   function handleRunEvent(payload) {
     const externalChatId = viewExternalChatIdForPayload(payload);
+    if (!shouldAcceptLivePayload(payload, externalChatId)) {
+      return;
+    }
     const session = ensureSession(externalChatId, payload.session_id);
     const runId = String(payload.run_id || `run-${Date.now().toString(36)}-${randomToken()}`);
     const eventType = String(payload.event_type || "run_event");
@@ -3274,6 +3300,9 @@ export function useChatClient() {
 
     if (payload.type === "message") {
       const externalChatId = payload.external_chat_id || currentSession.value?.externalChatId || generateExternalChatId();
+      if (!shouldAcceptLivePayload(payload, externalChatId)) {
+        return;
+      }
       const session = ensureSession(externalChatId, payload.session_id);
       if (session.channel !== "web") {
         return;
