@@ -334,6 +334,8 @@ assertIncludes(chatClient, "buildSessionDeletePath", "conversation delete API pa
 assertIncludes(chatClient, "buildSessionsClearPath", "web conversation clear API path");
 assertIncludes(chatClient, "deletedSessionTombstones", "deleted sessions stay removed during history refresh");
 assertIncludes(chatClient, "isDeletedSessionTombstoned", "history merge filters deleted sessions");
+assertIncludes(chatClient, "sessionMatchesDeleteSets", "delete removes sessions before history reload");
+assertIncludes(chatClient, "forgetDeletedSession", "failed deletes can restore history sessions");
 assertNotIncludes(chatClient, "copy.value.sidebar.confirmDeleteChat", "conversation delete does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.general.clearWebChats.confirm", "web conversation clear does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.eval", "eval settings copy removed from chat client");

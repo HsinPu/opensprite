@@ -3515,6 +3515,24 @@ export function useChatClient() {
     }
   }
 
+  function forgetDeletedSession(session) {
+    for (const key of sessionTombstoneKeys(session)) {
+      const timer = deletedSessionTombstones.get(key);
+      if (timer) {
+        clearTimeout(timer);
+      }
+      deletedSessionTombstones.delete(key);
+    }
+  }
+
+  function sessionMatchesDeleteSets(session, externalChatIds, sessionIds) {
+    return (
+      externalChatIds.has(session.externalChatId)
+      || sessionIds.has(session.sessionId)
+      || isDeletedSessionTombstoned(session)
+    );
+  }
+
   function ensureActiveAfterSessionRemoval(preferWeb = false) {
     if (state.sessions.some((session) => session.externalChatId === state.activeExternalChatId)) {
       writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
@@ -3548,40 +3566,51 @@ export function useChatClient() {
       return;
     }
 
+    rememberDeletedSessions(targets);
+    const targetExternalChatIds = new Set(targets.map((session) => session.externalChatId).filter(Boolean));
+    const targetSessionIds = new Set(targets.map((session) => getCuratorSessionId(session) || session.sessionId).filter(Boolean));
+    removeSessionsFromState((candidate) => sessionMatchesDeleteSets(candidate, targetExternalChatIds, targetSessionIds));
+
     const deletedSessions = [];
     const deletedExternalChatIds = new Set();
     const deletedSessionIds = new Set();
+    const failedSessions = [];
     let failureCount = 0;
     let lastError = "";
     for (const session of targets) {
       const sessionId = session.sessionId ? getCuratorSessionId(session) : "";
       if (!sessionId) {
-        rememberDeletedSession(session);
         deletedSessions.push(session);
         deletedExternalChatIds.add(session.externalChatId);
         continue;
       }
       try {
         await requestSettingsJson(buildSessionDeletePath(sessionId), { method: "DELETE" });
-        rememberDeletedSession(session);
         deletedSessions.push(session);
         deletedExternalChatIds.add(session.externalChatId);
         deletedSessionIds.add(sessionId);
       } catch (error) {
+        if (error?.status === 404) {
+          deletedSessions.push(session);
+          deletedExternalChatIds.add(session.externalChatId);
+          deletedSessionIds.add(sessionId);
+          continue;
+        }
         failureCount += 1;
+        failedSessions.push(session);
         lastError = error?.message || copy.value.notices.sessionDeleteFailed;
       }
     }
 
     if (deletedExternalChatIds.size > 0) {
-      removeSessionsFromState((candidate) => (
-        deletedExternalChatIds.has(candidate.externalChatId)
-        || deletedSessionIds.has(candidate.sessionId)
-        || isDeletedSessionTombstoned(candidate)
-      ));
+      removeSessionsFromState((candidate) => sessionMatchesDeleteSets(candidate, deletedExternalChatIds, deletedSessionIds));
     }
 
     if (failureCount > 0) {
+      for (const session of failedSessions) {
+        forgetDeletedSession(session);
+      }
+      await loadSessionHistory({ quiet: true });
       const message = deletedExternalChatIds.size > 0
         ? copy.value.notices.sessionsDeletedWithFailures(deletedExternalChatIds.size, failureCount)
         : lastError;
