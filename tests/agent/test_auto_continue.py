@@ -23,12 +23,12 @@ from opensprite.agent.task.contract import (
     EvidenceRequirement,
     ITEMIZED_OUTPUT_CRITERION_KIND,
     MEDIA_ARTIFACT_CRITERION_KIND,
-    ResourceRef,
     SOURCE_ARTIFACT_CRITERION_KIND,
     SOURCE_DETAIL_CRITERION_KIND,
     SOURCE_REFERENCE_CRITERION_KIND,
     TaskContract,
 )
+from opensprite.agent.task.resources import ResourceRef
 from opensprite.agent.task.contract import TaskIntentService
 from opensprite.agent.task.progress import WorkProgressService
 from opensprite.tools.result_status import tool_error_result

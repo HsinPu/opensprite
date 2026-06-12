@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, ResourceIndex, TaskContract
+from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 from opensprite.agent.task.contract import TaskContextDecision, TaskContextResolver
 from opensprite.agent.task.contract import TaskIntent
+from opensprite.agent.task.resources import ResourceIndex
 
 
 _URL_RE = re.compile(r"https?://[^\s)\]>\"']+", re.IGNORECASE)

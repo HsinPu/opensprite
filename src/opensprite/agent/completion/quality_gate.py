@@ -29,7 +29,6 @@ from ..execution_support.artifacts import TASK_ARTIFACTS_NOT_PRODUCED_REASON
 from ..task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,
-    ResourceIndex,
     TaskContract,
     TaskIntent,
     is_history_retrieval_task_type,
@@ -46,6 +45,7 @@ from ..task.contract import (
     is_workspace_read_task_type,
     neutral_task_contract,
 )
+from ..task.resources import ResourceIndex
 from .response_quality import (
     COMMAND_VERSION_MISSING_REASON,
     ITEMIZED_OUTPUT_MISSING_REASON,
