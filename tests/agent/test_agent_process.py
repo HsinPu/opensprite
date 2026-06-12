@@ -1195,14 +1195,14 @@ def test_agent_verify_hooks_emit_verification_events(tmp_path):
         agent._message_bus = bus
         await storage.create_run("web:browser-1", "run-1")
 
-        before = agent._make_tool_progress_hook(
+        before = agent.agent_run_hooks.make_tool_progress_hook(
             channel="web",
             external_chat_id="browser-1",
             session_id="web:browser-1",
             run_id="run-1",
             enabled=True,
         )
-        after = agent._make_tool_result_hook(
+        after = agent.agent_run_hooks.make_tool_result_hook(
             channel="web",
             external_chat_id="browser-1",
             session_id="web:browser-1",
@@ -1268,7 +1268,7 @@ def test_agent_tool_result_hook_marks_error_executing_results_failed(tmp_path):
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         await storage.create_run("web:browser-1", "run-1")
-        after = agent._make_tool_result_hook(
+        after = agent.agent_run_hooks.make_tool_result_hook(
             channel="web",
             external_chat_id="browser-1",
             session_id="web:browser-1",
@@ -1321,7 +1321,7 @@ def test_agent_tool_result_hook_marks_structured_json_error_failed(tmp_path):
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         await storage.create_run("web:browser-1", "run-1")
-        after = agent._make_tool_result_hook(
+        after = agent.agent_run_hooks.make_tool_result_hook(
             channel="web",
             external_chat_id="browser-1",
             session_id="web:browser-1",
@@ -1363,7 +1363,7 @@ def test_agent_tool_result_hook_records_search_trace_metadata(tmp_path):
             **Config.packaged_agent_llm_chat_kwargs(),
         )
         await storage.create_run("web:browser-1", "run-1")
-        after = agent._make_tool_result_hook(
+        after = agent.agent_run_hooks.make_tool_result_hook(
             channel="web",
             external_chat_id="browser-1",
             session_id="web:browser-1",

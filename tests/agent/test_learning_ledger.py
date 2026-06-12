@@ -36,7 +36,7 @@ def test_learning_ledger_records_and_ranks_relevant_entries():
 def test_agent_loop_marks_read_skill_reuse_in_learning_ledger(tmp_path):
     async def scenario():
         agent = make_agent_loop(tmp_path)
-        hook = agent._make_tool_result_hook(
+        hook = agent.agent_run_hooks.make_tool_result_hook(
             channel="telegram",
             external_chat_id="room-1",
             session_id="telegram:room-1",
@@ -59,7 +59,7 @@ def test_agent_loop_marks_read_skill_reuse_in_learning_ledger(tmp_path):
 def test_agent_loop_ignores_failed_read_skill_for_learning_ledger(tmp_path):
     async def scenario():
         agent = make_agent_loop(tmp_path)
-        hook = agent._make_tool_result_hook(
+        hook = agent.agent_run_hooks.make_tool_result_hook(
             channel="telegram",
             external_chat_id="room-1",
             session_id="telegram:room-1",

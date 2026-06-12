@@ -60,7 +60,7 @@ from ..runs.events import (
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
-from ..tools.result_status import classify_tool_result_status, tool_error_result
+from ..tools.result_status import tool_error_result
 from ..tools.verify import classify_verification_result
 from ..tools.web_research import WebResearchTool
 from ..tools.web_search import WebSearchTool
@@ -106,6 +106,7 @@ from .task.resolution import (
 )
 from .task.intent import TaskIntent, TaskIntentService
 from ..tools.selection import ToolSelectionResolver
+from .agent_run_hooks import AgentRunHookFactory
 from .background_session_notifications import BackgroundSessionNotificationService
 from .response_finalizer import AgentResponseFinalizer
 from .turn_context import TurnContextService
@@ -180,160 +181,6 @@ class AgentLoop:
     def _extract_available_subagents(system_prompt: str) -> list[str]:
         """Parse the Available Subagents section from a rendered system prompt."""
         return PromptLoggingService.extract_available_subagents(system_prompt)
-
-    @staticmethod
-    def _tool_warrants_progress_notice(tool_name: str) -> bool:
-        """Whether to send a short interim message before this tool runs (main agent only)."""
-        return RunHookService.tool_warrants_progress_notice(tool_name)
-
-    @staticmethod
-    def _format_tool_progress_message(tool_name: str, tool_args: dict[str, Any]) -> str:
-        """User-facing one-line status for skill / subagent / MCP tool execution."""
-        return RunHookService.format_tool_progress_message(tool_name, tool_args)
-
-    def _make_tool_progress_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[str, dict[str, Any]], Awaitable[None]] | None:
-        """Publish run telemetry and a brief outbound status before selected tools run."""
-        return self.run_hooks.make_tool_progress_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
-
-    def _make_tool_result_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[str, dict[str, Any], str], Awaitable[None]] | None:
-        """Publish structured run telemetry after a tool finishes."""
-        base_hook = self.run_hooks.make_tool_result_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
-        if run_id is None:
-            return base_hook
-        if base_hook is None and self.learning_ledger is None:
-            return None
-
-        async def _hook(
-            tool_name: str,
-            tool_args: dict[str, Any],
-            result: str,
-            tool_call_id: str | None = None,
-            iteration: int | None = None,
-            delegate_task_id: str | None = None,
-            delegate_prompt_type: str | None = None,
-            state: str | None = None,
-            interrupted: bool = False,
-        ) -> None:
-            if base_hook is not None:
-                await base_hook(
-                    tool_name,
-                    tool_args,
-                    result,
-                    tool_call_id,
-                    iteration,
-                    delegate_task_id,
-                    delegate_prompt_type,
-                    state,
-                    interrupted,
-                )
-            if tool_name != READ_SKILL_TOOL_NAME:
-                return
-            skill_name = str((tool_args or {}).get("skill_name") or "").strip()
-            if not skill_name or not classify_tool_result_status(result).ok:
-                return
-            self._run_skill_reads.setdefault(run_id, set()).add(skill_name)
-
-        return _hook
-
-    def _make_llm_status_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[Any], Awaitable[None]] | None:
-        """在 LLM 長時間等待或重試前，對使用者發送短暫狀態（與工具進度相同走 MessageBus）。"""
-        return self.run_hooks.make_llm_status_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
-
-    def _make_llm_delta_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[str, str, str, int], Awaitable[None]] | None:
-        """Publish visible assistant response chunks into the run event stream."""
-        return self.run_hooks.make_llm_delta_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
-
-    def _make_tool_input_delta_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[str, str, str, int], Awaitable[None]] | None:
-        """Publish streamed tool input chunks into the run event stream."""
-        return self.run_hooks.make_tool_input_delta_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
-
-    def _make_reasoning_delta_hook(
-        self,
-        *,
-        channel: str | None,
-        external_chat_id: str | None,
-        session_id: str,
-        run_id: str | None,
-        enabled: bool,
-    ) -> Callable[[str, int], Awaitable[None]] | None:
-        """Publish provider reasoning chunks into the run event stream only."""
-        return self.run_hooks.make_reasoning_delta_hook(
-            channel=channel,
-            external_chat_id=external_chat_id,
-            session_id=session_id,
-            run_id=run_id,
-            enabled=enabled,
-        )
 
     async def _create_run(
         self,
@@ -706,6 +553,11 @@ class AgentLoop:
             emit_run_event=self._emit_run_event,
             format_log_preview=self._format_log_preview,
         )
+        self.agent_run_hooks = AgentRunHookFactory(
+            run_hooks=self.run_hooks,
+            run_skill_reads=self._run_skill_reads,
+            learning_ledger_getter=lambda: self.learning_ledger,
+        )
         self.background_notifications = BackgroundSessionNotificationService(
             message_bus_getter=lambda: self._message_bus,
             save_message=self._save_message,
@@ -880,12 +732,12 @@ class AgentLoop:
             get_tool_registry=lambda: self.tools,
             get_current_run_id=self.turn_context.current_run_id,
             should_cancel_run=lambda session_id, run_id: self._is_run_cancel_requested(session_id, run_id),
-            make_tool_progress_hook=lambda *args, **kwargs: self._make_tool_progress_hook(*args, **kwargs),
-            make_tool_result_hook=lambda *args, **kwargs: self._make_tool_result_hook(*args, **kwargs),
-            make_llm_status_hook=lambda *args, **kwargs: self._make_llm_status_hook(*args, **kwargs),
-            make_llm_delta_hook=lambda *args, **kwargs: self._make_llm_delta_hook(*args, **kwargs),
-            make_tool_input_delta_hook=lambda *args, **kwargs: self._make_tool_input_delta_hook(*args, **kwargs),
-            make_reasoning_delta_hook=lambda *args, **kwargs: self._make_reasoning_delta_hook(*args, **kwargs),
+            make_tool_progress_hook=lambda *args, **kwargs: self.agent_run_hooks.make_tool_progress_hook(*args, **kwargs),
+            make_tool_result_hook=lambda *args, **kwargs: self.agent_run_hooks.make_tool_result_hook(*args, **kwargs),
+            make_llm_status_hook=lambda *args, **kwargs: self.agent_run_hooks.make_llm_status_hook(*args, **kwargs),
+            make_llm_delta_hook=lambda *args, **kwargs: self.agent_run_hooks.make_llm_delta_hook(*args, **kwargs),
+            make_tool_input_delta_hook=lambda *args, **kwargs: self.agent_run_hooks.make_tool_input_delta_hook(*args, **kwargs),
+            make_reasoning_delta_hook=lambda *args, **kwargs: self.agent_run_hooks.make_reasoning_delta_hook(*args, **kwargs),
             execute_messages=lambda *args, **kwargs: self._execute_messages(*args, **kwargs),
         )
 
@@ -1987,14 +1839,14 @@ class AgentLoop:
         if pytest_args:
             tool_args["pytest_args"] = [str(item) for item in pytest_args if str(item).strip()]
 
-        before = self._make_tool_progress_hook(
+        before = self.agent_run_hooks.make_tool_progress_hook(
             channel=self.turn_context.current_channel(),
             external_chat_id=self.turn_context.current_external_chat_id(),
             session_id=session_id,
             run_id=run_id,
             enabled=True,
         )
-        after = self._make_tool_result_hook(
+        after = self.agent_run_hooks.make_tool_result_hook(
             channel=self.turn_context.current_channel(),
             external_chat_id=self.turn_context.current_external_chat_id(),
             session_id=session_id,
