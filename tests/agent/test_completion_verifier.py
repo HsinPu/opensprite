@@ -15,8 +15,9 @@ from opensprite.agent.completion.verifier import (
     parse_completion_verifier_json,
 )
 from opensprite.agent.completion_gate import CompletionGateService
-from opensprite.agent.execution import ExecutionResult, LlmStepEvent
-from opensprite.agent.execution import TaskArtifact
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution_support.events import LlmStepEvent
+from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import (
     JSON_PLANNING_MIN_OUTPUT_TOKENS,
     AcceptanceCriterion,

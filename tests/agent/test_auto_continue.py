@@ -14,7 +14,8 @@ from opensprite.agent.completion.verifier import (
     COMPLETION_VERIFIER_NEXT_ACTION_RESUME_WORKFLOW,
     COMPLETION_VERIFIER_NEXT_ACTION_RUN_VERIFICATION,
 )
-from opensprite.agent.execution import ExecutionResult, TaskArtifact
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,

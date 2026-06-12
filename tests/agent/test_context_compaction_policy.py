@@ -1,4 +1,4 @@
-from opensprite.agent.execution import (
+from opensprite.agent.execution_support.events import (
     COMPACTED_CONVERSATION_STATE_HEADING,
     COMPACTED_TASK_STATE_HEADING,
     contains_compaction_handoff,

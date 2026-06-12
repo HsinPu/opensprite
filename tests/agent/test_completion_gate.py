@@ -49,10 +49,8 @@ from opensprite.tools.evidence import (
     is_web_source_evidence_tool,
 )
 from opensprite.agent.completion_gate import AutoContinueService
-from opensprite.agent.execution import (
-    ExecutionResult,
-    is_max_tool_iterations_stop_reason,
-)
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution_support.events import is_max_tool_iterations_stop_reason
 from opensprite.agent.subagent import is_clean_structured_subagent_status
 from opensprite.agent.workflow import (
     is_workflow_cancelled_status,
@@ -68,7 +66,7 @@ from opensprite.context.message_history import (
 from opensprite.agent.completion_gate import OPERATION_VALIDATION_OR_RISK_MISSING_REASON
 from opensprite.agent.completion_gate import QualityGateService
 from opensprite.agent.completion_gate import ITEMIZED_OUTPUT_MISSING_REASON, TERSE_FINAL_ANSWER_REASON
-from opensprite.agent.execution import TASK_ARTIFACTS_NOT_PRODUCED_REASON, TaskArtifact
+from opensprite.agent.execution_support.artifacts import TASK_ARTIFACTS_NOT_PRODUCED_REASON, TaskArtifact
 from opensprite.agent.task.contract import (
     AcceptanceCriterion,
     COMMAND_VERSION_QUALITY_CHECK,

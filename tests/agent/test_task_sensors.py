@@ -1,5 +1,6 @@
 from opensprite.agent.completion_gate import CompletionGateResult
-from opensprite.agent.execution import ExecutionResult, TaskArtifact
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.capabilities import evaluate_task_sensors
 from opensprite.tools.evidence import ToolEvidence
 

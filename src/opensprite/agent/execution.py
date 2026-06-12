@@ -33,21 +33,13 @@ from ..runs.events import (
 from ..context.builder import ContextBuilder
 from ..storage.base import StoredDelegatedTask
 from ..tool_names import (
-    ANALYZE_IMAGE_TOOL_NAME,
-    ANALYZE_VIDEO_TOOL_NAME,
     CONFIGURE_SKILL_TOOL_NAME,
     CONFIGURE_SUBAGENT_TOOL_NAME,
     DELEGATE_TOOL_NAME,
     EXEC_TOOL_NAME,
-    OCR_IMAGE_TOOL_NAME,
-    TRANSCRIBE_AUDIO_TOOL_NAME,
 )
 from ..tools import ToolRegistry
 from ..tools.evidence import (
-    VERIFICATION_RESULT_ARTIFACT_KIND,
-    VERIFICATION_TOOL_NAME,
-    WEB_SOURCE_ARTIFACT_KIND,
-    WEB_SOURCE_ARTIFACT_TOOLS,
     ToolEvidence,
     is_verification_tool_name,
     is_web_research_source_artifact_tool,
@@ -82,6 +74,24 @@ from .task.contract import (
     is_verification_or_gap_criterion,
     is_workspace_location_criterion,
     resolve_planning_mode,
+)
+from .execution_support.artifacts import TaskArtifact, build_task_artifact
+from .execution_support.events import (
+    COMPACTED_CONVERSATION_STATE_HEADING,
+    COMPACTED_TASK_STATE_HEADING,
+    LLM_COMPACTION_CONFIG_MISSING_REASON,
+    LLM_COMPACTION_EMPTY_REASON,
+    LLM_COMPACTION_ERROR_REASON,
+    LLM_COMPACTION_NO_BODY_REASON,
+    LLM_COMPACTION_NO_PROMPT_REASON,
+    LLM_COMPACTION_TOO_LARGE_REASON,
+    LLM_STEP_COMPLETED_STATUS,
+    LLM_STEP_ERROR_STATUS,
+    MAX_TOOL_ITERATIONS_STOP_REASON,
+    ContextCompactionEvent,
+    LlmStepEvent,
+    contains_compaction_handoff,
+    format_repeated_invalid_tool_call_content,
 )
 from .subagent import (
     DEFAULT_MAX_PARALLEL_SUBAGENTS,
@@ -181,160 +191,6 @@ from ..tools.loop_guardrail import (
     append_toolguard_guidance,
     build_toolguard_synthetic_result,
 )
-
-
-LLM_STEP_COMPLETED_STATUS = "completed"
-LLM_STEP_ERROR_STATUS = "error"
-COMPACTED_CONVERSATION_STATE_HEADING = "# Compacted Conversation State"
-COMPACTED_TASK_STATE_HEADING = "# Compacted Task State"
-COMPACTION_HANDOFF_HEADINGS = (
-    COMPACTED_CONVERSATION_STATE_HEADING,
-    COMPACTED_TASK_STATE_HEADING,
-)
-LLM_COMPACTION_TOO_LARGE_REASON = "llm_too_large"
-LLM_COMPACTION_CONFIG_MISSING_REASON = "llm_config_missing"
-LLM_COMPACTION_NO_BODY_REASON = "no_body"
-LLM_COMPACTION_NO_PROMPT_REASON = "no_prompt"
-LLM_COMPACTION_ERROR_REASON = "llm_error"
-LLM_COMPACTION_EMPTY_REASON = "llm_empty"
-MAX_TOOL_ITERATIONS_STOP_REASON = "max_tool_iterations"
-TASK_ARTIFACTS_NOT_PRODUCED_REASON = "required task artifacts were not produced"
-_TOOL_ARTIFACT_KINDS: dict[str, str] = {
-    OCR_IMAGE_TOOL_NAME: "image_text",
-    ANALYZE_IMAGE_TOOL_NAME: "image_analysis",
-    TRANSCRIBE_AUDIO_TOOL_NAME: "audio_transcript",
-    ANALYZE_VIDEO_TOOL_NAME: "video_analysis",
-    **{tool_name: WEB_SOURCE_ARTIFACT_KIND for tool_name in WEB_SOURCE_ARTIFACT_TOOLS},
-    VERIFICATION_TOOL_NAME: VERIFICATION_RESULT_ARTIFACT_KIND,
-    EXEC_TOOL_NAME: "command_result",
-}
-
-
-@dataclass(frozen=True)
-class TaskArtifact:
-    """One structured output artifact available for completion quality checks."""
-
-    kind: str
-    source_tool: str
-    resource_ids: tuple[str, ...] = ()
-    content_preview: str = ""
-    ok: bool = True
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-    def to_metadata(self) -> dict[str, Any]:
-        return {
-            "kind": self.kind,
-            "source_tool": self.source_tool,
-            "resource_ids": list(self.resource_ids),
-            "content_preview": self.content_preview,
-            "ok": self.ok,
-            "metadata": dict(self.metadata),
-        }
-
-
-def build_task_artifact(evidence: ToolEvidence) -> TaskArtifact | None:
-    """Create a typed artifact when a tool produced reusable task output."""
-    if not evidence.ok:
-        return None
-    kind = _TOOL_ARTIFACT_KINDS.get(evidence.name)
-    if kind is None:
-        return None
-    if is_web_source_artifact_kind(kind) and not _has_traceable_sources(evidence.metadata):
-        return None
-    metadata = {"tool_args": dict(evidence.args)}
-    metadata.update(dict(evidence.metadata))
-    return TaskArtifact(
-        kind=kind,
-        source_tool=evidence.name,
-        resource_ids=tuple(evidence.resource_ids),
-        content_preview=evidence.result_preview,
-        ok=evidence.ok,
-        metadata=metadata,
-    )
-
-
-def _has_traceable_sources(metadata: dict[str, Any]) -> bool:
-    sources = metadata.get("sources") if isinstance(metadata, dict) else None
-    if not isinstance(sources, list):
-        return False
-    for source in sources:
-        if not isinstance(source, dict):
-            continue
-        url = str(source.get("url") or "").strip()
-        title = str(source.get("title") or "").strip()
-        snippet = str(source.get("snippet") or "").strip()
-        if url and (title or snippet):
-            return True
-    return False
-
-
-def is_max_tool_iterations_stop_reason(stop_reason: str | None) -> bool:
-    return str(stop_reason or "").strip() == MAX_TOOL_ITERATIONS_STOP_REASON
-
-
-def contains_compaction_handoff(content: str | None) -> bool:
-    text = str(content or "")
-    return any(heading in text for heading in COMPACTION_HANDOFF_HEADINGS)
-
-
-def format_repeated_invalid_tool_call_content(template: str | None, result: str) -> str:
-    cleaned_template = str(template or "").strip()
-    cleaned_result = str(result or "").strip()
-    if not cleaned_template:
-        return cleaned_result
-    try:
-        return cleaned_template.format(result=result)
-    except (KeyError, IndexError, ValueError):
-        return f"{cleaned_template}\n\n{result}"
-
-
-@dataclass
-class ContextCompactionEvent:
-    """Structured telemetry for one context compaction decision."""
-
-    trigger: str
-    strategy: str
-    outcome: str
-    iteration: int
-    messages_before: int
-    messages_after: int
-    estimated_tokens: int | None = None
-    compacted_tokens: int | None = None
-    threshold_tokens: int | None = None
-    budget_tokens: int | None = None
-    context_window_tokens: int | None = None
-    output_reserve_tokens: int | None = None
-    message_tokens: int | None = None
-    tool_schema_tokens: int | None = None
-    fallback_reason: str | None = None
-    error: str | None = None
-
-
-@dataclass
-class LlmStepEvent:
-    """Structured telemetry for one LLM request attempt."""
-
-    iteration: int
-    attempt: int
-    status: str
-    provider: str | None
-    model: str | None
-    duration_ms: int
-    estimated_input_tokens: int
-    message_tokens: int
-    tool_schema_tokens: int
-    tools_enabled: bool = False
-    tool_count: int = 0
-    output_tokens: int | None = None
-    total_tokens: int | None = None
-    reasoning_tokens: int | None = None
-    cached_tokens: int | None = None
-    finish_reason: str | None = None
-    tool_calls: int = 0
-    error: str | None = None
-    retryable: bool = False
-    retry_after_ms: int | None = None
-    next_retry_at: float | None = None
 
 
 @dataclass

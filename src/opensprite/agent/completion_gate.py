@@ -20,7 +20,9 @@ from .task.capabilities import (
     OPERATIONS_TASK_TYPE,
     VERIFICATION_REQUIREMENT_KIND,
 )
-from .execution import ExecutionResult, TASK_ARTIFACTS_NOT_PRODUCED_REASON, is_max_tool_iterations_stop_reason
+from .execution import ExecutionResult
+from .execution_support.artifacts import TASK_ARTIFACTS_NOT_PRODUCED_REASON
+from .execution_support.events import is_max_tool_iterations_stop_reason
 from .task.contract import (
     WORKFLOW_COMPLETION_INTENT_KINDS,
     TaskIntent,

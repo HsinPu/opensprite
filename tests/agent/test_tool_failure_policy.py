@@ -1,5 +1,5 @@
 from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.execution import TaskArtifact
+from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.completion_gate import (
     has_only_optional_history_retrieval_failures,
     has_only_optional_web_discovery_failures,

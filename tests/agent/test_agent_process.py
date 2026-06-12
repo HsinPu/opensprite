@@ -14,9 +14,10 @@ from opensprite.agent.completion_gate import (
     REVIEW_EVIDENCE_STILL_MISSING_REASON,
 )
 from opensprite.agent.completion_gate import CompletionGateResult
-from opensprite.agent.execution import ContextCompactionEvent, ExecutionResult
+from opensprite.agent.execution import ExecutionResult
+from opensprite.agent.execution_support.events import ContextCompactionEvent
 from opensprite.runs.trace import RunBusyError
-from opensprite.agent.execution import TaskArtifact
+from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import (
     EvidenceRequirement,
     LLM_PLANNER_CONTRACT_SOURCES,
