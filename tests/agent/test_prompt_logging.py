@@ -1,7 +1,7 @@
 from agent_test_helpers import make_agent_loop
 import opensprite.agent.agent as agent_module
 import opensprite.agent.execution as llm_call_module
-from opensprite.agent.execution import PromptLoggingService
+from opensprite.agent.execution_support.prompt_logging import PromptLoggingService
 
 
 def _make_logging_agent(tmp_path):

@@ -12,7 +12,7 @@ from opensprite.agent.execution_support.events import (
     LLM_STEP_ERROR_STATUS,
     MAX_TOOL_ITERATIONS_STOP_REASON,
 )
-from opensprite.agent.execution import PromptLoggingService
+from opensprite.agent.execution_support.prompt_logging import PromptLoggingService
 from opensprite.tools.evidence import SOURCE_MATERIAL_INSUFFICIENT_REASON
 from tests.agent.task_contract_test_helpers import TaskContractService
 from opensprite.agent.task.contract import TaskIntentService

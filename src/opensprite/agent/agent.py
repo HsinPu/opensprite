@@ -87,8 +87,9 @@ from ..documents.curator import (
     UserProfileUpdateService,
     fingerprint_text_directory,
 )
-from .execution import ExecutionEngine, ExecutionResult
-from .execution import LlmCallService, PromptBudgetService, PromptLoggingService
+from .execution import ExecutionEngine, ExecutionResult, LlmCallService
+from .execution_support.prompt_budget import PromptBudgetService
+from .execution_support.prompt_logging import PromptLoggingService
 from ..context.message_history import HistoryResetService, LearningLedger, MessageHistoryService, ProactiveRetrievalService
 from ..tools.registration import (
     BROWSER_TOOL_NAMES,
