@@ -1,5 +1,5 @@
 from opensprite.agent.task.capabilities import TaskScorecard, TaskSensorResult
-from opensprite.agent.turn_runner import _task_trace_health
+from opensprite.agent.task.scorecard import task_trace_health
 
 
 def test_task_sensor_result_metadata_is_json_safe():
@@ -46,17 +46,17 @@ def test_task_scorecard_metadata_has_stable_sections():
 
 
 def test_task_trace_health_uses_sensor_severity_and_missing_sections():
-    passing = _task_trace_health(
+    passing = task_trace_health(
         has_contract=True,
         has_completion=True,
         sensors=(TaskSensorResult("completion.final_answer", "pass"),),
     )
-    warning = _task_trace_health(
+    warning = task_trace_health(
         has_contract=True,
         has_completion=True,
         sensors=(TaskSensorResult("research.freshness", "warn"),),
     )
-    failing = _task_trace_health(
+    failing = task_trace_health(
         has_contract=False,
         has_completion=True,
         sensors=(TaskSensorResult("research.source_coverage", "fail"),),

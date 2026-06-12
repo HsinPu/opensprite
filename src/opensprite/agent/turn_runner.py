@@ -33,12 +33,7 @@ from ..runs.events import (
     WORK_PLAN_CREATED_EVENT,
     WORK_PROGRESS_UPDATED_EVENT,
 )
-from .task.capabilities import (
-    PURE_ANSWER_TASK_TYPE,
-    TaskScorecard,
-    TaskSensorResult,
-    evaluate_task_sensors,
-)
+from .task.capabilities import PURE_ANSWER_TASK_TYPE
 from ..utils.log import logger
 from ..utils.url import join_url_path
 from .completion.auto_continue import AutoContinueService
@@ -89,6 +84,7 @@ from .task.progress import (
     WorkProgressUpdate,
     metadata_is_work_progress_source,
 )
+from .task.scorecard import task_contract_type, task_scorecard_metadata
 from .task.decision import TurnTaskPlanningService
 from .run_lifecycle import RunLifecycleService
 from .workflow import is_workflow_failed_status
@@ -1009,7 +1005,7 @@ class AgentTurnRunner:
             external_chat_id=turn.external_chat_id,
         )
         await self.run_trace.record_task_checkpoint_part(turn.session_id, run_id, task_checkpoint)
-        task_scorecard = _task_scorecard_metadata(
+        task_scorecard = task_scorecard_metadata(
             aggregate_result=aggregate_result,
             completion_result=completion_result,
         )
@@ -1420,7 +1416,7 @@ class AgentTurnRunner:
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            final_task_scorecard = _task_scorecard_metadata(
+            final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
@@ -1479,7 +1475,7 @@ class AgentTurnRunner:
                 channel=turn.channel,
                 external_chat_id=turn.external_chat_id,
             )
-            final_task_scorecard = _task_scorecard_metadata(
+            final_task_scorecard = task_scorecard_metadata(
                 aggregate_result=aggregate_result,
                 completion_result=completion_result,
             )
@@ -1968,7 +1964,7 @@ def _task_checkpoint_metadata(
         "schema_version": 1,
         "pass_index": max(1, pass_index),
         TURN_METADATA_AUTO_CONTINUE_ATTEMPTS_FIELD: max(0, auto_continue_attempts),
-        "task_type": _task_contract_type(task_contract),
+        "task_type": task_contract_type(task_contract),
         "tool_selection": dict(aggregate_result.tool_selection or {}),
         TURN_METADATA_TASK_CONTRACT_FIELD: task_contract.to_metadata() if task_contract is not None else None,
         "completion": completion_result.to_metadata(),
@@ -2038,93 +2034,6 @@ def _should_replace_nonfinal_response(
     if is_blocking_completion_status(completion_result.status):
         return False
     return allows_nonfinal_response_replacement(completion_result.status)
-
-
-def _task_contract_type(task_contract: Any) -> str:
-    return str(getattr(task_contract, "task_type", "") or "").strip()
-
-
-def _scorecard_sensor_task_type(task_type: str) -> str:
-    normalized = str(task_type or "").strip()
-    return {
-        "workspace_read": "workspace_analysis",
-        "analysis": "workspace_analysis",
-        "task": "pure_answer",
-        "planning": "pure_answer",
-    }.get(normalized, normalized)
-
-
-def _task_scorecard_metadata(
-    *,
-    aggregate_result: ExecutionResult,
-    completion_result: CompletionGateResult,
-) -> dict[str, Any]:
-    task_contract = getattr(aggregate_result, "task_contract", None)
-    contract_metadata = task_contract.to_metadata() if task_contract is not None else {}
-    task_type = _task_contract_type(task_contract)
-    sensors = evaluate_task_sensors(
-        task_type=_scorecard_sensor_task_type(task_type),
-        execution_result=aggregate_result,
-        completion_result=completion_result,
-    )
-    scorecard = TaskScorecard(
-        contract=contract_metadata,
-        tools={
-            "executed_tool_calls": aggregate_result.executed_tool_calls,
-            "had_tool_error": aggregate_result.had_tool_error,
-            "file_change_count": aggregate_result.file_change_count,
-            "tool_evidence_count": len(aggregate_result.tool_evidence),
-            "task_artifact_count": len(aggregate_result.task_artifacts),
-        },
-        tool_selection={
-            "tool_selection": dict(aggregate_result.tool_selection or {}),
-        },
-        sensors=sensors,
-        completion=completion_result.to_metadata(),
-        trace_health=_task_trace_health(
-            has_contract=task_contract is not None,
-            has_completion=bool(completion_result.status),
-            sensors=sensors,
-        ),
-    )
-    metadata = scorecard.to_metadata()
-    metadata["kind"] = "task_scorecard"
-    metadata["task"] = {"task_type": task_type}
-    return metadata
-
-
-def _task_trace_health(
-    *,
-    has_contract: bool,
-    has_completion: bool,
-    sensors: tuple[TaskSensorResult, ...],
-) -> dict[str, Any]:
-    sensor_statuses = [sensor.status for sensor in sensors]
-    missing_sections = [
-        section
-        for section, present in (
-            ("contract", has_contract),
-            ("completion", has_completion),
-        )
-        if not present
-    ]
-    status = "pass"
-    if missing_sections or "fail" in sensor_statuses:
-        status = "fail"
-    elif "warn" in sensor_statuses or "not_applicable" in sensor_statuses:
-        status = "warn"
-    return {
-        "status": status,
-        "has_contract": has_contract,
-        "has_completion": has_completion,
-        "missing_sections": missing_sections,
-        "sensor_counts": {
-            "pass": sensor_statuses.count("pass"),
-            "warn": sensor_statuses.count("warn"),
-            "fail": sensor_statuses.count("fail"),
-            "not_applicable": sensor_statuses.count("not_applicable"),
-        },
-    }
 
 
 def _is_tool_backed_task_contract(task_contract: Any) -> bool:
