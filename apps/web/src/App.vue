@@ -5,7 +5,7 @@
       'app-shell--sidebar-collapsed': sidebarCollapsed,
       'app-shell--trace-collapsed': traceInspectorCollapsed,
     }"
-    :style="traceSidebarStyle"
+    :style="appShellStyle"
   >
     <button
       class="mobile-nav-toggle"
@@ -42,6 +42,7 @@
       @set-show-hidden-sessions="setShowHiddenSessions"
       @select-background-process="selectBackgroundProcess"
       @refresh-background-processes="loadBackgroundProcesses"
+      @begin-sidebar-resize="beginSidebarResize"
       @toggle-sidebar-collapsed="toggleSidebarCollapsed"
       @open-settings="openSettings()"
     />
@@ -375,12 +376,18 @@ const {
 } = useChatClient();
 
 const TRACE_WIDTH_STORAGE_KEY = "opensprite:web:traceInspectorWidth";
+const SIDEBAR_WIDTH_STORAGE_KEY = "opensprite:web:sidebarWidth";
+const SIDEBAR_WIDTH_DEFAULT = 268;
+const SIDEBAR_WIDTH_MIN = 220;
+const SIDEBAR_WIDTH_MAX = 440;
+const SIDEBAR_COLLAPSED_WIDTH = 52;
 const TRACE_WIDTH_MIN = 440;
 const TRACE_CHAT_MIN = 520;
-const TRACE_LEFT_GUTTER = 268;
 
+const sidebarWidth = ref(readStoredSidebarWidth());
 const traceInspectorWidth = ref(readStoredTraceWidth());
-const traceSidebarStyle = computed(() => ({
+const appShellStyle = computed(() => ({
+  "--sidebar-width": sidebarWidth.value ? `${sidebarWidth.value}px` : undefined,
   "--trace-sidebar-width": traceInspectorWidth.value ? `${traceInspectorWidth.value}px` : undefined,
 }));
 
@@ -419,13 +426,69 @@ function readStoredTraceWidth() {
   }
 }
 
+function readStoredSidebarWidth() {
+  try {
+    const value = Number.parseInt(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) || "", 10);
+    return Number.isFinite(value) ? clampSidebarWidth(value) : SIDEBAR_WIDTH_DEFAULT;
+  } catch {
+    return SIDEBAR_WIDTH_DEFAULT;
+  }
+}
+
+function clampSidebarWidth(width) {
+  const viewportWidth = window.innerWidth || 0;
+  const maxFromViewport = viewportWidth
+    ? Math.max(SIDEBAR_WIDTH_MIN, viewportWidth - TRACE_CHAT_MIN - (traceInspectorCollapsed.value ? 0 : TRACE_WIDTH_MIN))
+    : SIDEBAR_WIDTH_MAX;
+  const maxWidth = Math.min(SIDEBAR_WIDTH_MAX, maxFromViewport);
+  return Math.round(Math.min(Math.max(width, SIDEBAR_WIDTH_MIN), maxWidth));
+}
+
+function currentSidebarGutter() {
+  return sidebarCollapsed.value ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth.value || SIDEBAR_WIDTH_DEFAULT;
+}
+
 function clampTraceWidth(width) {
   const viewportWidth = window.innerWidth || 0;
   const fallbackMax = Math.max(TRACE_WIDTH_MIN, Math.round(viewportWidth * 0.78));
   const maxWidth = viewportWidth
-    ? Math.max(TRACE_WIDTH_MIN, viewportWidth - TRACE_LEFT_GUTTER - TRACE_CHAT_MIN)
+    ? Math.max(TRACE_WIDTH_MIN, viewportWidth - currentSidebarGutter() - TRACE_CHAT_MIN)
     : fallbackMax;
   return Math.round(Math.min(Math.max(width, TRACE_WIDTH_MIN), maxWidth));
+}
+
+function beginSidebarResize(event) {
+  if (sidebarCollapsed.value || event.button !== 0) {
+    return;
+  }
+
+  event.preventDefault();
+  event.currentTarget.setPointerCapture?.(event.pointerId);
+
+  const handlePointerMove = (moveEvent) => {
+    sidebarWidth.value = clampSidebarWidth(moveEvent.clientX);
+    if (!traceInspectorCollapsed.value && traceInspectorWidth.value) {
+      traceInspectorWidth.value = clampTraceWidth(traceInspectorWidth.value);
+    }
+  };
+
+  const stopResize = () => {
+    window.removeEventListener("pointermove", handlePointerMove);
+    window.removeEventListener("pointerup", stopResize);
+    window.removeEventListener("pointercancel", stopResize);
+    try {
+      window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth.value));
+      if (traceInspectorWidth.value) {
+        window.localStorage.setItem(TRACE_WIDTH_STORAGE_KEY, String(traceInspectorWidth.value));
+      }
+    } catch {
+      // Ignore storage failures; resize still works for the active session.
+    }
+  };
+
+  window.addEventListener("pointermove", handlePointerMove);
+  window.addEventListener("pointerup", stopResize, { once: true });
+  window.addEventListener("pointercancel", stopResize, { once: true });
 }
 
 function beginTraceResize(event) {

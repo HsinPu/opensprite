@@ -538,7 +538,7 @@ button:disabled {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 268px minmax(360px, 1fr) var(--trace-sidebar-width, var(--trace-sidebar-default-width));
+  grid-template-columns: var(--sidebar-width, 268px) minmax(360px, 1fr) var(--trace-sidebar-width, var(--trace-sidebar-default-width));
   height: 100dvh;
   min-height: 100vh;
   background: var(--bg);
@@ -564,6 +564,37 @@ button:disabled {
   border-right: 1px solid var(--sidebar-border);
   background: var(--sidebar);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.68);
+}
+
+.sidebar__resize {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  bottom: 0;
+  z-index: 6;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.sidebar__resize::after {
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 4px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transition: background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sidebar__resize:hover::after,
+.sidebar__resize:focus-visible::after {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .sidebar__top {
@@ -1272,7 +1303,7 @@ button:disabled {
   }
 
   .app-shell--trace-collapsed {
-    grid-template-columns: 268px minmax(0, 1fr) 0;
+    grid-template-columns: var(--sidebar-width, 268px) minmax(0, 1fr) 0;
   }
 
   .app-shell--sidebar-collapsed.app-shell--trace-collapsed {
@@ -1307,6 +1338,7 @@ button:disabled {
   .app-shell--sidebar-collapsed .sidebar__section-actions,
   .app-shell--sidebar-collapsed .session-filter,
   .app-shell--sidebar-collapsed .session-history-toggle,
+  .app-shell--sidebar-collapsed .sidebar__resize,
   .app-shell--sidebar-collapsed .session-tile__select,
   .app-shell--sidebar-collapsed .session-tile__heading,
   .app-shell--sidebar-collapsed .session-tile__id,
@@ -1967,7 +1999,7 @@ button:disabled {
 
 @media (max-width: 1180px) and (min-width: 861px) {
   .app-shell {
-    grid-template-columns: 268px minmax(0, 1fr) min(var(--trace-sidebar-width, 100vw), clamp(360px, 38vw, 480px));
+    grid-template-columns: var(--sidebar-width, 268px) minmax(0, 1fr) min(var(--trace-sidebar-width, 100vw), clamp(360px, 38vw, 480px));
   }
 
   .app-shell--sidebar-collapsed {
@@ -1975,7 +2007,7 @@ button:disabled {
   }
 
   .app-shell--trace-collapsed {
-    grid-template-columns: 268px minmax(0, 1fr) 0;
+    grid-template-columns: var(--sidebar-width, 268px) minmax(0, 1fr) 0;
   }
 
   .app-shell--sidebar-collapsed.app-shell--trace-collapsed {
@@ -6882,6 +6914,10 @@ textarea:focus-visible {
   }
 
   .trace-sidebar__resize {
+    display: none;
+  }
+
+  .sidebar__resize {
     display: none;
   }
 

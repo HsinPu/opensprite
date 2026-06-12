@@ -152,6 +152,14 @@
         </span>
       </button>
     </div>
+    <button
+      v-show="!collapsed"
+      class="sidebar__resize"
+      type="button"
+      :aria-label="copy.sidebar.resizeSidebar"
+      :title="copy.sidebar.resizeSidebar"
+      @pointerdown="$emit('begin-sidebar-resize', $event)"
+    ></button>
   </aside>
 </template>
 
@@ -210,6 +218,7 @@ const emit = defineEmits([
   "set-show-hidden-sessions",
   "select-background-process",
   "refresh-background-processes",
+  "begin-sidebar-resize",
   "toggle-sidebar-collapsed",
   "open-settings",
 ]);

@@ -176,6 +176,8 @@ assertIncludes(app, "traceInspectorCollapsed", "right trace sidebar collapse sta
 assertIncludes(app, "toggleTraceInspectorCollapsed", "right trace sidebar collapse action");
 assertIncludes(app, "trace-sidebar__resize", "right trace sidebar resize handle");
 assertIncludes(app, "opensprite:web:traceInspectorWidth", "right trace sidebar width persistence");
+assertIncludes(app, "opensprite:web:sidebarWidth", "left sidebar width persistence");
+assertIncludes(app, "beginSidebarResize", "left sidebar resize action");
 assertIncludes(app, ":show-run-history=\"state.showRunHistory\"", "run history prop wiring");
 assertIncludes(chatComposer, "composer__commands", "slash command hints rendering");
 assertIncludes(toastStack, "toast-stack", "toast stack rendering");
@@ -187,6 +189,7 @@ assertIncludes(sidebarNav, "brand-mark__expand", "collapsed sidebar brand hover 
 assertIncludes(sidebarNav, "collapsed && $emit('toggle-sidebar-collapsed')", "collapsed brand mark expands sidebar");
 assertIncludes(sidebarNav, "showHiddenSessions", "sidebar hidden session toggle prop");
 assertIncludes(sidebarNav, "set-show-hidden-sessions", "sidebar hidden session toggle event");
+assertIncludes(sidebarNav, "begin-sidebar-resize", "sidebar resize event");
 assertNotIncludes(sidebarNav, "session-tile__delete", "sidebar row delete button removed");
 assertIncludes(app, "state.authRequired", "auth gate visibility");
 assertIncludes(app, "submitAccessToken", "auth gate submit wiring");
@@ -212,6 +215,8 @@ assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(copy, "Show CLI/test history", "hidden session toggle copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
 assertIncludes(styles, ".session-history-toggle", "hidden session toggle styling");
+assertIncludes(styles, ".sidebar__resize", "left sidebar resize styling");
+assertIncludes(styles, "var(--sidebar-width, 268px)", "left sidebar uses resizable width variable");
 assertIncludes(chatClient, "STORAGE_KEYS.showHiddenSessions", "hidden session toggle persistence key");
 assertIncludes(chatClient, "include_cli", "hidden session toggle fetches CLI/test sessions");
 assertIncludes(styles, "var(--trace-sidebar-width, var(--trace-sidebar-default-width))", "desktop resizable trace sidebar width");
@@ -249,7 +254,7 @@ assertIncludesNormalized(
 assertIncludes(styles, ".confirm-dialog", "custom confirmation dialog styling");
 assertIncludes(styles, ".session-tile__select", "sidebar session select styling");
 assertIncludes(styles, "grid-template-rows: minmax(0, 1fr) auto", "sidebar keeps footer pinned while top content scrolls");
-assertIncludes(styles, "grid-template-rows: auto auto minmax(0, 1fr)", "sidebar top list can shrink before footer moves");
+assertIncludes(styles, "grid-template-rows: auto auto auto minmax(0, 1fr)", "sidebar top list can shrink before footer moves");
 assertIncludes(styles, "overscroll-behavior: contain", "sidebar session list scroll stays inside the list");
 assertIncludes(styles, "scrollbar-gutter: stable", "sidebar session list reserves scrollbar space");
 assertIncludes(styles, ".app-shell--sidebar-collapsed .sidebar-collapse-button", "collapsed sidebar hides top restore button");
