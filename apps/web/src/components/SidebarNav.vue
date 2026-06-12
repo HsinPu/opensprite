@@ -242,7 +242,7 @@ watch(
 );
 
 function sessionSelectionKey(session) {
-  return session?.externalChatId || session?.sessionId || "";
+  return session?.sessionId || session?.externalChatId || "";
 }
 
 function beginDeleteMode() {

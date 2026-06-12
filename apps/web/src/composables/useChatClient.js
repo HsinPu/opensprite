@@ -99,6 +99,7 @@ const BACKGROUND_PROCESS_LIMIT = 30;
 const GATEWAY_RECONNECT_DELAY_MS = 30000;
 const SESSION_HISTORY_REFRESH_INTERVAL_MS = 30000;
 const LOCAL_DRAFT_SESSION_LIMIT = 10;
+const DELETED_SESSION_TOMBSTONE_MS = 5 * 60 * 1000;
 const CURATOR_HISTORY_LIMIT = 5;
 const CURATOR_POLL_INTERVAL_MS = 2500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
@@ -1104,6 +1105,7 @@ export function useChatClient() {
   let curatorPollSessionId = "";
   let toastId = 0;
   const toastTimers = new Map();
+  const deletedSessionTombstones = new Map();
   let curatorActionToken = "";
 
   function applyDocumentPreferences() {
@@ -2890,14 +2892,15 @@ export function useChatClient() {
 
   function mergeHistorySessions(historySessions, options = {}) {
     const preserveActiveSession = Boolean(options?.preserveActiveSession);
-    if (!historySessions.length) {
+    const visibleHistorySessions = historySessions.filter((session) => !isDeletedSessionTombstoned(session));
+    if (!visibleHistorySessions.length) {
       persistLocalDraftSessions();
       return;
     }
 
     const existingSessionsByExternalChatId = new Map(state.sessions.map((session) => [session.externalChatId, session]));
     const sessionsByExternalChatId = new Map();
-    for (const historySession of historySessions) {
+    for (const historySession of visibleHistorySessions) {
       const existingSession = existingSessionsByExternalChatId.get(historySession.externalChatId);
       if (!existingSession) {
         sessionsByExternalChatId.set(historySession.externalChatId, historySession);
@@ -2912,6 +2915,9 @@ export function useChatClient() {
     }
 
     for (const session of state.sessions) {
+      if (isDeletedSessionTombstoned(session)) {
+        continue;
+      }
       const isCurrentDraft = session.externalChatId === state.activeExternalChatId && isLocalDraftSession(session);
       const isStoredDraft = isLocalDraftSession(session) && localDraftExternalChatIds.has(session.externalChatId);
       const shouldRetainLocalSession = session.sessionId
@@ -3478,6 +3484,37 @@ export function useChatClient() {
     }
   }
 
+  function sessionTombstoneKeys(session) {
+    return [
+      String(session?.sessionId || "").trim(),
+      String(session?.externalChatId || "").trim(),
+      String(session?.transportExternalChatId || "").trim(),
+    ].filter(Boolean);
+  }
+
+  function isDeletedSessionTombstoned(session) {
+    return sessionTombstoneKeys(session).some((key) => deletedSessionTombstones.has(key));
+  }
+
+  function rememberDeletedSession(session) {
+    for (const key of sessionTombstoneKeys(session)) {
+      const existingTimer = deletedSessionTombstones.get(key);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+      }
+      const timer = setTimeout(() => {
+        deletedSessionTombstones.delete(key);
+      }, DELETED_SESSION_TOMBSTONE_MS);
+      deletedSessionTombstones.set(key, timer);
+    }
+  }
+
+  function rememberDeletedSessions(sessions) {
+    for (const session of sessions) {
+      rememberDeletedSession(session);
+    }
+  }
+
   function ensureActiveAfterSessionRemoval(preferWeb = false) {
     if (state.sessions.some((session) => session.externalChatId === state.activeExternalChatId)) {
       writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);
@@ -3511,18 +3548,25 @@ export function useChatClient() {
       return;
     }
 
+    const deletedSessions = [];
     const deletedExternalChatIds = new Set();
+    const deletedSessionIds = new Set();
     let failureCount = 0;
     let lastError = "";
     for (const session of targets) {
       const sessionId = session.sessionId ? getCuratorSessionId(session) : "";
       if (!sessionId) {
+        rememberDeletedSession(session);
+        deletedSessions.push(session);
         deletedExternalChatIds.add(session.externalChatId);
         continue;
       }
       try {
         await requestSettingsJson(buildSessionDeletePath(sessionId), { method: "DELETE" });
+        rememberDeletedSession(session);
+        deletedSessions.push(session);
         deletedExternalChatIds.add(session.externalChatId);
+        deletedSessionIds.add(sessionId);
       } catch (error) {
         failureCount += 1;
         lastError = error?.message || copy.value.notices.sessionDeleteFailed;
@@ -3530,7 +3574,11 @@ export function useChatClient() {
     }
 
     if (deletedExternalChatIds.size > 0) {
-      removeSessionsFromState((candidate) => deletedExternalChatIds.has(candidate.externalChatId));
+      removeSessionsFromState((candidate) => (
+        deletedExternalChatIds.has(candidate.externalChatId)
+        || deletedSessionIds.has(candidate.sessionId)
+        || isDeletedSessionTombstoned(candidate)
+      ));
     }
 
     if (failureCount > 0) {
@@ -3541,6 +3589,9 @@ export function useChatClient() {
       return;
     }
 
+    if (deletedSessions.length > 0) {
+      await loadSessionHistory({ quiet: true });
+    }
     setNotice(copy.value.notices.sessionsDeleted(deletedExternalChatIds.size), "success");
   }
 
@@ -3551,7 +3602,9 @@ export function useChatClient() {
   async function clearWebSessions() {
     try {
       const payload = await requestSettingsJson(buildSessionsClearPath("web"), { method: "DELETE" });
+      rememberDeletedSessions(state.sessions.filter((session) => !session.channel || session.channel === "web"));
       removeSessionsFromState((session) => !session.channel || session.channel === "web", { preferWeb: true });
+      await loadSessionHistory({ quiet: true });
       setNotice(copy.value.notices.sessionsCleared(Number(payload?.deleted || 0)), "success");
     } catch (error) {
       setNotice(error?.message || copy.value.notices.sessionDeleteFailed, "warning");
@@ -3866,6 +3919,10 @@ export function useChatClient() {
       clearTimeout(timer);
     }
     toastTimers.clear();
+    for (const timer of deletedSessionTombstones.values()) {
+      clearTimeout(timer);
+    }
+    deletedSessionTombstones.clear();
     removeColorSchemeListener();
     document.removeEventListener("keydown", handleGlobalKeydown);
     document.body.classList.remove("settings-open", "sidebar-open");

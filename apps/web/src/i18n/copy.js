@@ -54,7 +54,7 @@ export const DISPLAY_COPY = {
       confirmDeleteTitle: "確認刪除對話",
       confirmDeleteChat: (title) => `確定要刪除「${title}」？`,
       confirmDeleteChats: (count) => `確定要刪除 ${count} 個對話？`,
-      confirmDeleteDetail: "刪除後會移除本機保存的 Web 對話與相關子 session，且無法從 Web UI 還原。",
+      confirmDeleteDetail: "刪除後會移除本機保存的對話/歷史與相關子 session，且無法從 Web UI 還原。",
       confirmDeleteAction: "刪除",
       filters: {
         all: "全部",
@@ -1404,7 +1404,7 @@ export const DISPLAY_COPY = {
       confirmDeleteTitle: "Confirm conversation deletion",
       confirmDeleteChat: (title) => `Delete "${title}"?`,
       confirmDeleteChats: (count) => `Delete ${count} conversation${count === 1 ? "" : "s"}?`,
-      confirmDeleteDetail: "This removes locally saved Web conversations and related child sessions. It cannot be restored from the Web UI.",
+      confirmDeleteDetail: "This removes locally saved conversations or history sessions and related child sessions. It cannot be restored from the Web UI.",
       confirmDeleteAction: "Delete",
       filters: {
         all: "All",

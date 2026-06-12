@@ -215,6 +215,7 @@ assertIncludes(settingsModal, "browserBackendOptions", "browser backend option r
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(copy, "Show CLI/test history", "hidden session toggle copy");
 assertIncludes(copy, "deletable history", "non-web session delete history copy");
+assertIncludes(copy, "history sessions", "delete confirmation covers non-web history sessions");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
 assertIncludes(styles, ".session-history-toggle", "hidden session toggle styling");
 assertIncludes(styles, ".sidebar__resize", "left sidebar resize styling");
@@ -331,6 +332,8 @@ assertOrder(settingsModal, "section === 'providers'", "copy.settings.providers.c
 assertIncludes(chatClient, "/api/commands", "command catalog fetch");
 assertIncludes(chatClient, "buildSessionDeletePath", "conversation delete API path");
 assertIncludes(chatClient, "buildSessionsClearPath", "web conversation clear API path");
+assertIncludes(chatClient, "deletedSessionTombstones", "deleted sessions stay removed during history refresh");
+assertIncludes(chatClient, "isDeletedSessionTombstoned", "history merge filters deleted sessions");
 assertNotIncludes(chatClient, "copy.value.sidebar.confirmDeleteChat", "conversation delete does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.general.clearWebChats.confirm", "web conversation clear does not use native confirm in client action");
 assertNotIncludes(chatClient, "copy.value.settings.eval", "eval settings copy removed from chat client");
