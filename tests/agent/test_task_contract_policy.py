@@ -34,7 +34,6 @@ from opensprite.agent.task.contract import (
     _resolver_truncate_middle,
     _truncate,
     _truncate_middle,
-    build_planner_capability_catalog,
     contract_expects_file_change,
     contract_requests_itemized_output,
     contract_requests_source_material,
@@ -61,6 +60,7 @@ from opensprite.agent.task.contract import (
     task_planner_reason,
     task_planner_status,
 )
+from opensprite.agent.task.planning_mode import build_planner_capability_catalog
 from opensprite.tools.base import Tool
 from opensprite.tools.evidence import ToolEvidence
 from opensprite.tools.registry import ToolRegistry
