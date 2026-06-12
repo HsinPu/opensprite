@@ -8,7 +8,6 @@ from opensprite.llms.request_log_fields import request_param_log_fields
 from opensprite.llms.request_modes import (
     JSON_PLANNING_MIN_OUTPUT_TOKENS,
     LLMRequestMode,
-    is_json_only_request_mode,
     request_kwargs_for_mode,
 )
 from opensprite.llms.request_builder import (
@@ -118,12 +117,6 @@ def test_request_mode_json_planning_enforces_minimum_output_tokens():
 
     assert kwargs["request_mode"] == "json_planning"
     assert kwargs["max_tokens"] == JSON_PLANNING_MIN_OUTPUT_TOKENS
-
-
-def test_request_mode_identifies_json_only_modes():
-    assert is_json_only_request_mode(LLMRequestMode.JSON_PLANNING) is True
-    assert is_json_only_request_mode(LLMRequestMode.COMPLETION_VERIFIER) is True
-    assert is_json_only_request_mode(LLMRequestMode.MAIN_CHAT) is False
 
 
 def test_request_param_log_fields_are_sanitized_and_provider_neutral():

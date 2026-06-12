@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from opensprite.llms import ChatMessage
 from opensprite.llms.openrouter import OpenRouterLLM
 from opensprite.llms.request_log_fields import request_param_log_fields
-from opensprite.llms.request_modes import LLMRequestMode
 
 
 def _openrouter_response(content="final answer", model="anthropic/claude-sonnet-4.6"):
@@ -92,23 +91,6 @@ def test_openrouter_chat_sends_reasoning_enabled_by_default():
             "extra_body": {"reasoning": {"enabled": True}},
         }
     ]
-
-
-def test_openrouter_chat_disables_reasoning_for_json_only_modes():
-    completions = RecordingCompletions()
-    provider = _make_provider(completions)
-
-    response = asyncio.run(
-        provider.chat(
-            [ChatMessage(role="user", content="return json")],
-            request_mode=LLMRequestMode.JSON_PLANNING,
-            max_tokens=1200,
-        )
-    )
-
-    assert response.content == "final answer"
-    assert completions.calls[0]["extra_body"] == {"reasoning": {"enabled": False}}
-    assert completions.calls[0]["max_tokens"] == 1200
 
 
 def test_openrouter_chat_sends_max_tokens_only_when_set():

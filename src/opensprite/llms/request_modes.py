@@ -16,7 +16,6 @@ class LLMRequestMode(str, Enum):
 
 JSON_PLANNING_MIN_OUTPUT_TOKENS = 1200
 _JSON_ONLY_MODES = {LLMRequestMode.JSON_PLANNING, LLMRequestMode.COMPLETION_VERIFIER}
-JSON_ONLY_REQUEST_MODE_VALUES = frozenset(item.value for item in _JSON_ONLY_MODES)
 
 
 def normalize_request_mode(mode: LLMRequestMode | str | None) -> str:
@@ -24,11 +23,6 @@ def normalize_request_mode(mode: LLMRequestMode | str | None) -> str:
     if isinstance(mode, LLMRequestMode):
         return mode.value
     return str(mode or LLMRequestMode.MAIN_CHAT.value).strip() or LLMRequestMode.MAIN_CHAT.value
-
-
-def is_json_only_request_mode(mode: LLMRequestMode | str | None) -> bool:
-    """Return whether the request must produce parser-safe JSON content."""
-    return normalize_request_mode(mode) in JSON_ONLY_REQUEST_MODE_VALUES
 
 
 def request_kwargs_for_mode(
@@ -42,7 +36,7 @@ def request_kwargs_for_mode(
     normalized = normalize_request_mode(mode)
     kwargs["request_mode"] = normalized
 
-    if normalized in JSON_ONLY_REQUEST_MODE_VALUES:
+    if normalized in {item.value for item in _JSON_ONLY_MODES}:
         kwargs["max_tokens"] = _coerce_min_tokens(kwargs.get("max_tokens"), min_output_tokens)
 
     return kwargs
