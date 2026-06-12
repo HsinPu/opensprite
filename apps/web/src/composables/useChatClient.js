@@ -2925,11 +2925,9 @@ export function useChatClient() {
 
   function mergeHistorySessions(historySessions, options = {}) {
     const preserveActiveSession = Boolean(options?.preserveActiveSession);
+    const pruneMissingHistorySessions = Boolean(options?.pruneMissingHistorySessions);
     const visibleHistorySessions = historySessions.filter((session) => !isDeletedSessionTombstoned(session));
-    if (!visibleHistorySessions.length) {
-      persistLocalDraftSessions();
-      return;
-    }
+    const historySessionIds = new Set(visibleHistorySessions.map((session) => session.sessionId).filter(Boolean));
 
     const existingSessionsByExternalChatId = new Map(state.sessions.map((session) => [session.externalChatId, session]));
     const sessionsByExternalChatId = new Map();
@@ -2951,10 +2949,18 @@ export function useChatClient() {
       if (isDeletedSessionTombstoned(session)) {
         continue;
       }
+      if (session.sessionId && historySessionIds.has(session.sessionId)) {
+        continue;
+      }
       const isCurrentDraft = session.externalChatId === state.activeExternalChatId && isLocalDraftSession(session);
       const isStoredDraft = isLocalDraftSession(session) && localDraftExternalChatIds.has(session.externalChatId);
+      const shouldRetainActiveHistorySession = !pruneMissingHistorySessions
+        && preserveActiveSession
+        && session.sessionId
+        && session.externalChatId === state.activeExternalChatId;
       const shouldRetainLocalSession = session.sessionId
-        || session.messages.length > 0
+        ? shouldRetainActiveHistorySession
+        : session.messages.length > 0
         || session.entries.length > 0
         || isStoredDraft
         || isCurrentDraft;
@@ -2986,7 +2992,10 @@ export function useChatClient() {
       const historySessions = Array.isArray(payload.sessions)
         ? payload.sessions.map(normalizeHistorySession)
         : [];
-      mergeHistorySessions(historySessions, { preserveActiveSession: quiet });
+      mergeHistorySessions(historySessions, {
+        preserveActiveSession: quiet,
+        pruneMissingHistorySessions: Boolean(options?.pruneMissingHistorySessions),
+      });
       if (!quiet) {
         scrollMessagesToBottom({ force: true });
       }
@@ -3578,11 +3587,9 @@ export function useChatClient() {
   }
 
   function sessionMatchesDeleteSets(session, externalChatIds, sessionIds) {
-    return (
-      externalChatIds.has(session.externalChatId)
-      || sessionIds.has(session.sessionId)
-      || isDeletedSessionTombstoned(session)
-    );
+    return sessionTombstoneKeys(session).some((key) => {
+      return externalChatIds.has(key) || sessionIds.has(key) || deletedSessionTombstones.has(key);
+    });
   }
 
   function reconnectSocketSoon() {
@@ -3689,7 +3696,7 @@ export function useChatClient() {
     }
 
     if (deletedSessions.length > 0) {
-      await loadSessionHistory({ quiet: true });
+      await loadSessionHistory({ quiet: true, pruneMissingHistorySessions: true });
     }
     setNotice(copy.value.notices.sessionsDeleted(deletedExternalChatIds.size), "success");
   }
@@ -3704,7 +3711,7 @@ export function useChatClient() {
       rememberDeletedSessions(state.sessions.filter((session) => !session.channel || session.channel === "web"));
       removeSessionsFromState((session) => !session.channel || session.channel === "web", { preferWeb: true });
       reconnectSocketSoon();
-      await loadSessionHistory({ quiet: true });
+      await loadSessionHistory({ quiet: true, pruneMissingHistorySessions: true });
       setNotice(copy.value.notices.sessionsCleared(Number(payload?.deleted || 0)), "success");
     } catch (error) {
       setNotice(error?.message || copy.value.notices.sessionDeleteFailed, "warning");
