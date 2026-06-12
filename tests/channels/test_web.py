@@ -2366,6 +2366,20 @@ async def _run_web_sessions_api():
         async with ClientSession() as session:
             async with session.delete(
                 f"http://127.0.0.1:{port}/api/sessions",
+                params={"session_id": "cli:native-cli-test"},
+            ) as resp:
+                assert resp.status == 200
+                cli_delete_payload = await resp.json()
+
+            async with session.get(
+                f"http://127.0.0.1:{port}/api/sessions",
+                params={"channel": "all", "limit": "6", "messages": "1", "include_cli": "true"},
+            ) as resp:
+                assert resp.status == 200
+                after_cli_delete_payload = await resp.json()
+
+            async with session.delete(
+                f"http://127.0.0.1:{port}/api/sessions",
                 params={"session_id": "web:browser-old"},
             ) as resp:
                 assert resp.status == 200
@@ -2398,10 +2412,13 @@ async def _run_web_sessions_api():
                 assert resp.status == 200
                 after_clear_payload = await resp.json()
 
+        assert cli_delete_payload == {"ok": True, "session_id": "cli:native-cli-test", "deleted": 1}
+        assert "cli:native-cli-test" not in [item["session_id"] for item in after_cli_delete_payload["sessions"]]
         assert delete_payload == {"ok": True, "session_id": "web:browser-old", "deleted": 1}
         assert [item["session_id"] for item in after_delete_payload["sessions"]] == ["telegram:123", "web:browser-new"]
         assert clear_payload == {"ok": True, "channel": "web", "deleted": 4}
         assert [item["session_id"] for item in after_clear_payload["sessions"]] == ["telegram:123"]
+        assert await storage.get_messages("cli:native-cli-test") == []
         assert await storage.get_messages("web:browser-new") == []
         assert await storage.get_messages("web:browser-new:subagent:task_abc12345") == []
     finally:

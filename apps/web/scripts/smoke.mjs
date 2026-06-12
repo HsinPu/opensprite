@@ -189,6 +189,7 @@ assertIncludes(sidebarNav, "brand-mark__expand", "collapsed sidebar brand hover 
 assertIncludes(sidebarNav, "collapsed && $emit('toggle-sidebar-collapsed')", "collapsed brand mark expands sidebar");
 assertIncludes(sidebarNav, "showHiddenSessions", "sidebar hidden session toggle prop");
 assertIncludes(sidebarNav, "set-show-hidden-sessions", "sidebar hidden session toggle event");
+assertIncludes(sidebarNav, "historySessionLabel", "sidebar non-web sessions show deletable history label");
 assertIncludes(sidebarNav, "begin-sidebar-resize", "sidebar resize event");
 assertNotIncludes(sidebarNav, "session-tile__delete", "sidebar row delete button removed");
 assertIncludes(app, "state.authRequired", "auth gate visibility");
@@ -213,6 +214,7 @@ assertIncludes(settingsModal, "browserDoctorSummary", "browser settings doctor s
 assertIncludes(settingsModal, "browserBackendOptions", "browser backend option rendering");
 assertIncludes(copy, "browserbase", "browser cloud backend copy");
 assertIncludes(copy, "Show CLI/test history", "hidden session toggle copy");
+assertIncludes(copy, "deletable history", "non-web session delete history copy");
 assertIncludes(styles, ".auth-gate", "auth gate styling");
 assertIncludes(styles, ".session-history-toggle", "hidden session toggle styling");
 assertIncludes(styles, ".sidebar__resize", "left sidebar resize styling");

@@ -120,7 +120,7 @@
               <span class="session-tile__heading">
                 <strong>{{ getSessionTitle(session) }}</strong>
                 <span v-if="session.channel && session.channel !== 'web'" class="session-tile__channel">
-                  {{ session.channel }} · read-only
+                  {{ copy.sidebar.historySessionLabel(session.channel) }}
                 </span>
               </span>
               <span class="session-tile__id">{{ getSessionDisplayId(session) }}</span>

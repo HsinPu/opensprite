@@ -3530,7 +3530,7 @@ export function useChatClient() {
     }
 
     if (deletedExternalChatIds.size > 0) {
-      removeSessionsFromState((candidate) => deletedExternalChatIds.has(candidate.externalChatId), { preferWeb: true });
+      removeSessionsFromState((candidate) => deletedExternalChatIds.has(candidate.externalChatId));
     }
 
     if (failureCount > 0) {
