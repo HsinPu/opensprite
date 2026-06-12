@@ -21,14 +21,13 @@ opensprite/agent.py - Agent Loop
 """
 
 from contextvars import ContextVar
-import time
 from pathlib import Path
 import shutil
 from typing import Any, Awaitable, Callable
 
 from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
-from ..storage import StorageProvider, StoredDelegatedTask
+from ..storage import StorageProvider
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store, is_current_active_task_status
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
@@ -103,9 +102,9 @@ from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
 from .tool_setup import setup_agent_tools
+from .run_update_buffer import RunUpdateBuffer
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .verification_runner import run_agent_verification
-from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
 from .task.progress import WorkProgressService, WorkProgressUpdate
 from .task.active_task import ActiveTaskCommandService
@@ -254,73 +253,6 @@ class AgentLoop:
             external_chat_id=external_chat_id,
         )
 
-    def _record_delegated_task_update(self, run_id: str | None, task: StoredDelegatedTask) -> None:
-        """Track delegated child-task updates for the active parent run."""
-        if run_id is None:
-            return
-        task_id = str(task.task_id or "").strip()
-        if not task_id:
-            return
-        bucket = self._delegated_task_updates.setdefault(run_id, {})
-        previous = bucket.pop(task_id, None)
-        now = time.time()
-        bucket[task_id] = StoredDelegatedTask(
-            task_id=task_id,
-            prompt_type=task.prompt_type or (previous.prompt_type if previous is not None else None),
-            status=str(task.status or (previous.status if previous is not None else "unknown")).strip() or "unknown",
-            selected=bool(task.selected),
-            summary=str(task.summary or (previous.summary if previous is not None else "")).strip(),
-            error=(
-                str(task.error or "").strip()
-                if str(task.error or "").strip()
-                else ""
-                if str(task.status or "").strip() and not is_workflow_failed_status(task.status)
-                else previous.error if previous is not None else ""
-            ),
-            child_session_id=task.child_session_id or (previous.child_session_id if previous is not None else None),
-            last_child_run_id=task.last_child_run_id or (previous.last_child_run_id if previous is not None else None),
-            metadata={**(previous.metadata if previous is not None else {}), **dict(task.metadata or {})},
-            created_at=(
-                previous.created_at
-                if previous is not None and previous.created_at
-                else float(task.created_at or now)
-            ),
-            updated_at=float(task.updated_at or now),
-        )
-
-    def _consume_delegated_task_updates(self, run_id: str) -> tuple[StoredDelegatedTask, ...]:
-        """Return and clear delegated child-task updates captured for one run."""
-        bucket = self._delegated_task_updates.pop(run_id, None)
-        if not bucket:
-            return ()
-        return tuple(bucket.values())
-
-    def _clear_delegated_task_updates(self, run_id: str) -> None:
-        """Drop delegated child-task updates for one run without returning them."""
-        self._delegated_task_updates.pop(run_id, None)
-
-    def _record_workflow_outcome(self, run_id: str | None, outcome: dict[str, Any]) -> None:
-        """Track one completed or failed workflow outcome for the active run."""
-        if run_id is None or not isinstance(outcome, dict):
-            return
-        workflow_run_id = str(outcome.get("workflow_run_id") or "").strip()
-        if not workflow_run_id:
-            return
-        bucket = self._workflow_outcomes.setdefault(run_id, {})
-        bucket.pop(workflow_run_id, None)
-        bucket[workflow_run_id] = dict(outcome)
-
-    def _consume_workflow_outcomes(self, run_id: str) -> tuple[dict[str, Any], ...]:
-        """Return and clear workflow outcomes captured for one run."""
-        bucket = self._workflow_outcomes.pop(run_id, None)
-        if not bucket:
-            return ()
-        return tuple(bucket.values())
-
-    def _clear_workflow_outcomes(self, run_id: str) -> None:
-        """Drop workflow outcomes for one run without returning them."""
-        self._workflow_outcomes.pop(run_id, None)
-
     def cleanup_worktree_sandbox(self, sandbox_path: str) -> dict[str, Any]:
         """Remove an OpenSprite-managed worktree sandbox by marker-guarded path."""
         return WorktreeSandboxInspector.cleanup(sandbox_path)
@@ -432,8 +364,7 @@ class AgentLoop:
         self._maintenance_tasks: dict[str, Any] = {}
         self._maintenance_rerun: set[str] = set()
         self._run_skill_reads: dict[str, set[str]] = {}
-        self._delegated_task_updates: dict[str, dict[str, StoredDelegatedTask]] = {}
-        self._workflow_outcomes: dict[str, dict[str, dict[str, Any]]] = {}
+        self.run_update_buffer = RunUpdateBuffer()
         # Set by runtime after MessageQueue is created; used for interim tool progress outbound messages.
         self._message_bus: Any = None
 
@@ -537,10 +468,10 @@ class AgentLoop:
                 run_id,
                 success,
             ),
-            consume_delegated_task_updates=self._consume_delegated_task_updates,
-            clear_delegated_task_updates=self._clear_delegated_task_updates,
-            consume_workflow_outcomes=self._consume_workflow_outcomes,
-            clear_workflow_outcomes=self._clear_workflow_outcomes,
+            consume_delegated_task_updates=self.run_update_buffer.consume_delegated_task_updates,
+            clear_delegated_task_updates=self.run_update_buffer.clear_delegated_task_updates,
+            consume_workflow_outcomes=self.run_update_buffer.consume_workflow_outcomes,
+            clear_workflow_outcomes=self.run_update_buffer.clear_workflow_outcomes,
             worktree_sandbox_enabled=lambda: self.config.worktree_sandbox_enabled,
             workspace_root=lambda: Path(self.tool_workspace or getattr(self._context_builder, "workspace", Path.cwd())),
         )
@@ -597,7 +528,7 @@ class AgentLoop:
             format_log_preview=self._format_log_preview,
             run_trace=self.run_trace,
             run_hooks=self.run_hooks,
-            record_delegated_task_update=self._record_delegated_task_update,
+            record_delegated_task_update=self.run_update_buffer.record_delegated_task_update,
         )
         self.workflows = SubagentWorkflowService(
             current_session_id_getter=self._get_current_session_id,
@@ -607,7 +538,7 @@ class AgentLoop:
             run_subagent_task=lambda task, prompt_type: self.subagents.run_task(task, prompt_type),
             emit_run_event=self._emit_run_event,
             format_log_preview=self._format_log_preview,
-            record_workflow_outcome=self._record_workflow_outcome,
+            record_workflow_outcome=self.run_update_buffer.record_workflow_outcome,
         )
         self.prompt_budget = PromptBudgetService(
             context_builder=self._context_builder,

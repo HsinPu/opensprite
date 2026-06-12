@@ -2190,7 +2190,7 @@ def test_agent_process_full_deterministic_review_and_verification_matrix(tmp_pat
             resumed.append((workflow, task, start_step))
             run_id = agent.turn_context.current_run_id()
             if start_step == "review":
-                agent._record_workflow_outcome(
+                agent.run_update_buffer.record_workflow_outcome(
                     run_id,
                     {
                         "workflow_run_id": "workflow_review_resume",
@@ -2210,7 +2210,7 @@ def test_agent_process_full_deterministic_review_and_verification_matrix(tmp_pat
                     },
                 )
                 return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-            agent._record_workflow_outcome(
+            agent.run_update_buffer.record_workflow_outcome(
                 run_id,
                 {
                     "workflow_run_id": "workflow_fix_resume",
@@ -2477,7 +2477,7 @@ def test_agent_process_auto_continue_prompt_uses_workflow_follow_up_detail(tmp_p
         async def fake_run_workflow(workflow, task, start_step=None):
             resumed.append((workflow, task, start_step))
             run_id = agent.turn_context.current_run_id()
-            agent._record_workflow_outcome(
+            agent.run_update_buffer.record_workflow_outcome(
                 run_id,
                 {
                     "workflow_run_id": "workflow_resume123",
@@ -2567,7 +2567,7 @@ def test_agent_process_can_chain_changed_workflow_follow_up_targets(tmp_path):
             resumed.append((workflow, task, start_step))
             run_id = agent.turn_context.current_run_id()
             if start_step == "review":
-                agent._record_workflow_outcome(
+                agent.run_update_buffer.record_workflow_outcome(
                     run_id,
                     {
                         "workflow_run_id": "workflow_review_resume",
@@ -2587,7 +2587,7 @@ def test_agent_process_can_chain_changed_workflow_follow_up_targets(tmp_path):
                     },
                 )
                 return "Workflow: implement_then_review\nStatus: completed\n[2] code-reviewer | completed"
-            agent._record_workflow_outcome(
+            agent.run_update_buffer.record_workflow_outcome(
                 run_id,
                 {
                     "workflow_run_id": "workflow_fix_resume",
@@ -2677,7 +2677,7 @@ def test_agent_process_metadata_resume_follow_up_runs_workflow_before_llm(tmp_pa
         async def fake_run_workflow(workflow, task, start_step=None):
             resumed.append((workflow, task, start_step))
             run_id = agent.turn_context.current_run_id()
-            agent._record_workflow_outcome(
+            agent.run_update_buffer.record_workflow_outcome(
                 run_id,
                 {
                     "workflow_run_id": "workflow_resume_ui",
