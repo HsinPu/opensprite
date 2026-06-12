@@ -18,7 +18,8 @@ from ...runs.trace import mcp_tool_names as list_mcp_tool_names
 from ...tools import ToolRegistry
 from ...utils.log import logger
 from ..execution import ExecutionResult
-from ..task.contract import TaskContextDecision, TaskContract
+from ..task.contract import TaskContract
+from ..task.resolution import TaskContextDecision
 from ..task.intent import TaskIntent
 from ..task.planning_mode import resolve_planning_mode
 from ..task.planning import TurnPlanningService

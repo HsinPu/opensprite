@@ -21,12 +21,11 @@ from ...utils.log import logger
 from .contract import (
     PLANNER_VALIDATED_STATUS,
     REQUIRED_TOOL_EVIDENCE_KIND,
-    TaskContextDecision,
     TaskContract,
-    TaskObjectiveDecision,
     task_planner_status,
 )
 from .intent import TaskIntent, is_plain_answer_task_type
+from .resolution import TaskContextDecision, TaskObjectiveDecision
 
 
 RunEventEmitter = Callable[..., Awaitable[None]]

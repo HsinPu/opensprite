@@ -19,13 +19,13 @@ from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.execution_support.events import LlmStepEvent
 from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import (
-    JSON_PLANNING_MIN_OUTPUT_TOKENS,
     AcceptanceCriterion,
     EvidenceRequirement,
     TaskContract,
 )
 from opensprite.agent.task.intent import TaskIntent
 from opensprite.config import DocumentLlmConfig
+from opensprite.llms.request_modes import JSON_PLANNING_MIN_OUTPUT_TOKENS
 from opensprite.llms import LLMResponse
 from opensprite.tools.evidence import ToolEvidence
 

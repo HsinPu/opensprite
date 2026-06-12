@@ -21,8 +21,8 @@ from opensprite.config.schema import (
 from opensprite.context.file_builder import FileContextBuilder
 from opensprite.context.paths import sync_templates
 from opensprite.documents.active_task import TASK_BOUNDARY_CONFIRMATION_EVENT, create_active_task_store
-from opensprite.agent.task.contract import TaskContextDecision
-from opensprite.agent.task.contract import TaskObjectiveDecision
+from opensprite.agent.task.resolution import TaskContextDecision
+from opensprite.agent.task.resolution import TaskObjectiveDecision
 from opensprite.agent.task.intent import TaskIntentService
 from opensprite.agent.task.planning import _effective_task_intent
 from opensprite.llms.base import LLMResponse

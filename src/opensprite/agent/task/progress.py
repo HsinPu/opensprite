@@ -29,9 +29,11 @@ from ..completion_gate import (
 from ..execution import ExecutionResult
 from ..execution_support.events import MAX_TOOL_ITERATIONS_STOP_REASON, is_max_tool_iterations_stop_reason
 from .contract import (
+    TaskContract,
+)
+from .resolution import (
     CONTINUE_ACTIVE_TASK_CONTINUATION_TYPE,
     PRESERVE_STATE_RESET_CONTINUATION_TYPES,
-    TaskContract,
     TaskContextDecision,
 )
 from .evidence_policy import contract_expects_file_change

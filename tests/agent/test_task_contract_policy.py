@@ -26,14 +26,18 @@ from opensprite.agent.task.contract import (
     _normalize_planner_quality_checks,
     _normalize_planner_required_tools,
     _parse_json_object,
+    _truncate,
+    _truncate_middle,
+    task_planner_reason,
+    task_planner_status,
+)
+from opensprite.agent.task.resolution import (
     _resolver_compact,
     _resolver_coerce_bool,
     _resolver_coerce_confidence,
     _resolver_parse_json_object,
     _resolver_truncate,
     _resolver_truncate_middle,
-    _truncate,
-    _truncate_middle,
     is_allowed_continuation_type,
     is_ambiguous_boundary_continuation_type,
     is_current_task_continuation_type,
@@ -42,8 +46,6 @@ from opensprite.agent.task.contract import (
     is_new_task_continuation_type,
     is_objective_resolution_enrichable_type,
     is_objective_resolution_skip_type,
-    task_planner_reason,
-    task_planner_status,
 )
 from opensprite.agent.task.evidence_policy import (
     contract_expects_file_change,

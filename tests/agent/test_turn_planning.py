@@ -4,11 +4,11 @@ from opensprite.agent.task.contract import (
     PLANNER_METADATA_STATUS_FIELD,
     PLANNER_VALIDATED_STATUS,
     EvidenceRequirement,
-    TaskContextDecision,
     TaskContract,
 )
 from opensprite.agent.task.intent import TaskIntent
 from opensprite.agent.task.planning import TurnPlanningService
+from opensprite.agent.task.resolution import TaskContextDecision
 from opensprite.runs.events import (
     TASK_CONTRACT_CREATED_EVENT,
     TASK_CONTRACT_PLANNED_EVENT,

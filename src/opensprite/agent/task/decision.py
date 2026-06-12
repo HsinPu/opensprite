@@ -9,7 +9,7 @@ from typing import Any, Callable
 from ...bus.message import UserMessage
 from ...llms import ChatMessage, is_unconfigured_llm
 from ...storage import StoredWorkState
-from .contract import (
+from .resolution import (
     TaskContextDecision,
     _chat_json_planning_llm,
     _llm_response_preview,

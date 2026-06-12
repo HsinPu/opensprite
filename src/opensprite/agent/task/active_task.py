@@ -32,7 +32,7 @@ from ...storage import StorageProvider, StoredWorkState
 from ...storage.base import get_storage_message_count
 from ...utils.log import logger
 from ..completion_gate import CompletionGateResult, is_blocking_completion_status
-from .contract import (
+from .resolution import (
     BOUNDARY_CONTINUE_REPLY_COMMAND,
     BOUNDARY_SWITCH_REPLY_COMMAND,
     TaskContextDecision,

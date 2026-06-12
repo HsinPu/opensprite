@@ -3,10 +3,10 @@ import asyncio
 from opensprite.agent.completion_gate import CompletionGateService
 from opensprite.agent.execution import ExecutionResult
 from tests.agent.task_contract_test_helpers import TaskContractService
-from opensprite.agent.task.contract import (
+from opensprite.llms.request_modes import JSON_PLANNING_MIN_OUTPUT_TOKENS
+from opensprite.agent.task.resolution import (
     CURRENT_MESSAGE_ACKNOWLEDGEMENT_REASON,
     LLM_RESOLVED_TASK_CONTEXT_REASON,
-    JSON_PLANNING_MIN_OUTPUT_TOKENS,
     TASK_CONTEXT_RESOLUTION_PURPOSE,
     TASK_OBJECTIVE_RESOLUTION_PURPOSE,
     TASK_BOUNDARY_CONFIDENCE_TOO_LOW_REASON_PREFIX,

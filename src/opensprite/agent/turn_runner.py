@@ -84,7 +84,7 @@ from .task.contract import (
     PLANNER_VALIDATED_STATUS,
     task_planner_status,
 )
-from .task.contract import TaskContextDecision
+from .task.resolution import TaskContextDecision
 from .task.intent import PLANNING_ERROR_TASK_TYPE, TaskIntent
 from .task.progress import (
     WorkPlan,

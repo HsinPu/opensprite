@@ -1,7 +1,7 @@
 from opensprite.agent.completion_gate import CompletionGateResult
 from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task.contract import EvidenceRequirement, TaskContract
-from opensprite.agent.task.contract import TaskContextDecision
+from opensprite.agent.task.resolution import TaskContextDecision
 from opensprite.agent.task.intent import TaskIntentService
 from opensprite.agent.task.progress import WorkProgressService, WorkProgressUpdate, metadata_is_work_progress_source
 from opensprite.agent.task.progress import VERIFICATION_REQUIRED_RESUME_HINT

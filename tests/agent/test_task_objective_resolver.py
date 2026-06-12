@@ -1,9 +1,9 @@
 import asyncio
 
 from opensprite.agent.task.intent import TaskIntent, TaskIntentService
-from opensprite.agent.task.contract import (
+from opensprite.llms.request_modes import JSON_PLANNING_MIN_OUTPUT_TOKENS
+from opensprite.agent.task.resolution import (
     DETERMINISTIC_OBJECTIVE_METHOD,
-    JSON_PLANNING_MIN_OUTPUT_TOKENS,
     LLM_OBJECTIVE_NOT_MORE_SPECIFIC_REASON,
     LLM_RESOLVED_TASK_OBJECTIVE_REASON,
     OBJECTIVE_ENRICHMENT_NOT_NEEDED_REASON,

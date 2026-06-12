@@ -17,7 +17,7 @@ from ...llms import ChatMessage, is_unconfigured_llm
 from ...llms.request_modes import LLMRequestMode
 from ...tools.evidence import is_verification_result_artifact_kind, is_verification_tool_name
 from ..execution import ExecutionResult
-from ..task.contract import _chat_json_planning_llm, _json_object_text
+from ..task.resolution import _chat_json_planning_llm, _json_object_text
 from ..task.intent import TaskIntent
 from .path_rules import normalized_touched_paths
 from .status import (

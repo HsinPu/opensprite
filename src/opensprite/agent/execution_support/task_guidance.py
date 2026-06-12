@@ -5,10 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from ..task.capabilities import HISTORY_RETRIEVAL_TASK_TYPE
-from ..task.contract import (
-    TaskContextDecision,
-    TaskContract,
-)
+from ..task.contract import TaskContract
+from ..task.resolution import TaskContextDecision
 from ..task.evidence_policy import (
     is_itemized_output_criterion,
     is_media_artifact_criterion,
