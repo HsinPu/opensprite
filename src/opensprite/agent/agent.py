@@ -55,8 +55,6 @@ from ..runs.events import (
 from ..search.base import SearchStore
 from ..tools import ToolRegistry
 from ..tools.process_runtime import BackgroundProcessManager, BackgroundSession
-from ..tools.result_status import tool_error_result
-from ..tools.verify import classify_verification_result
 from ..documents.user_overlay_identity import resolve_user_overlay_id
 from ..tool_names import (
     PROCESS_TOOL_NAME,
@@ -106,6 +104,7 @@ from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
 from .tool_setup import setup_agent_tools
 from ..tools.evidence import VERIFICATION_TOOL_NAME
+from .verification_runner import run_agent_verification
 from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
 from .task.progress import WorkProgressService, WorkProgressUpdate
@@ -1616,54 +1615,11 @@ class AgentLoop:
         pytest_args: tuple[str, ...] = (),
     ) -> ExecutionResult:
         """Run deterministic verification through the registered verify tool."""
-        session_id = self._get_current_session_id()
-        run_id = self.turn_context.current_run_id()
-        if session_id is None or run_id is None:
-            return ExecutionResult(
-                content=tool_error_result(
-                    "No active run is available for deterministic verification.",
-                    error_type="VerifyToolError",
-                    category="missing_run_context",
-                    metadata={"tool_name": VERIFICATION_TOOL_NAME},
-                ),
-                had_tool_error=True,
-            )
-
-        tool_args: dict[str, Any] = {
-            "action": str(action or "auto").strip() or "auto",
-            "path": str(path or ".").strip() or ".",
-        }
-        if pytest_args:
-            tool_args["pytest_args"] = [str(item) for item in pytest_args if str(item).strip()]
-
-        before = self.agent_run_hooks.make_tool_progress_hook(
-            channel=self.turn_context.current_channel(),
-            external_chat_id=self.turn_context.current_external_chat_id(),
-            session_id=session_id,
-            run_id=run_id,
-            enabled=True,
-        )
-        after = self.agent_run_hooks.make_tool_result_hook(
-            channel=self.turn_context.current_channel(),
-            external_chat_id=self.turn_context.current_external_chat_id(),
-            session_id=session_id,
-            run_id=run_id,
-            enabled=True,
-        )
-
-        if before is not None:
-            await before(VERIFICATION_TOOL_NAME, tool_args)
-        result = await self.tools.execute(VERIFICATION_TOOL_NAME, tool_args)
-        if after is not None:
-            await after(VERIFICATION_TOOL_NAME, tool_args, result)
-
-        verification = classify_verification_result(result)
-        return ExecutionResult(
-            content=result,
-            executed_tool_calls=1,
-            had_tool_error=_verification_result_is_tool_error(verification),
-            verification_attempted=bool(verification["attempted"]),
-            verification_passed=bool(verification["ok"]),
+        return await run_agent_verification(
+            self,
+            action=action,
+            path=path,
+            pytest_args=pytest_args,
         )
 
     async def process(self, user_message: UserMessage) -> AssistantMessage:
@@ -2037,11 +1993,3 @@ class AgentLoop:
             session_id: Internal session ID. If None, clears all sessions.
         """
         await self.history_reset.reset(session_id)
-
-
-def _verification_result_is_tool_error(verification: dict[str, Any]) -> bool:
-    return str(verification.get("status") or "").strip().lower() in {
-        "error",
-        "failed",
-        "timed_out",
-    }
