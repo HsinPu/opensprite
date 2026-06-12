@@ -295,8 +295,13 @@ async def run_web_chat(
                             if reply_text:
                                 terminal_reply_deadline = time.monotonic() + 1.0
                     elif frame.get("type") == "message":
+                        frame_run_id = str(frame.get("run_id") or "") or None
+                        if frame_run_id and run_id and frame_run_id != run_id:
+                            continue
+                        if run_id is None:
+                            continue
                         reply_text = str(frame.get("text") or "")
-                        if terminal_run_seen or not run_id:
+                        if terminal_run_seen:
                             break
     except (ClientError, asyncio.TimeoutError, TimeoutError, OSError, RuntimeError) as exc:
         if reply_text and run_id and isinstance(exc, (asyncio.TimeoutError, TimeoutError)):

@@ -322,6 +322,74 @@ def test_run_web_chat_ignores_stale_run_events_before_current_run_start():
     assert {event["run_id"] for event in payload["recent_events"]} == {"run-new"}
 
 
+def test_run_web_chat_ignores_unrelated_messages_before_current_run_start():
+    async def scenario():
+        async def handle_ws(request):
+            ws = web.WebSocketResponse()
+            await ws.prepare(request)
+            external_chat_id = request.query.get("external_chat_id") or "default"
+            session_id = f"web:{external_chat_id}"
+            await ws.send_json({"type": "session", "external_chat_id": external_chat_id, "session_id": session_id})
+            message = await ws.receive_json(timeout=2)
+            await ws.send_json(
+                {
+                    "type": "message",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "text": "unrelated cron reminder reply",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-new",
+                    "event_type": RUN_STARTED_EVENT,
+                    "status": "running",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "message",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "text": "echo:" + message["text"],
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "run_event",
+                    "session_id": session_id,
+                    "external_chat_id": external_chat_id,
+                    "run_id": "run-new",
+                    "event_type": RUN_FINISHED_EVENT,
+                    "status": "completed",
+                }
+            )
+            await ws.close()
+            return ws
+
+        app = web.Application()
+        app.router.add_get("/ws", handle_ws)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", 0)
+        await site.start()
+        port = getattr(site, "_server").sockets[0].getsockname()[1]
+        try:
+            return await run_web_chat("ping", gateway_url=f"http://127.0.0.1:{port}", external_chat_id="web-smoke")
+        finally:
+            await runner.cleanup()
+
+    payload = asyncio.run(scenario())
+
+    assert payload["reply"] == "echo:ping"
+    assert payload["run_id"] == "run-new"
+    assert payload["run_status"] == "completed"
+    assert payload["run_event_count"] == 2
+
+
 def test_run_web_chat_ignores_intermediate_messages_until_run_finishes():
     async def scenario():
         async def handle_ws(request):
