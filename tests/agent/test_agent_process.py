@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from opensprite.agent.agent import AgentLoop
+from opensprite.agent.active_task_runtime import task_intent_for_explicit_goal
 from opensprite.agent.completion.auto_continue import (
     NO_PROGRESS_DURING_CONTINUATION_REASON,
     REVIEW_EVIDENCE_STILL_MISSING_REASON,
@@ -919,7 +920,7 @@ def test_agent_goal_intent_uses_explicit_task_kind(tmp_path):
         **Config.packaged_agent_llm_chat_kwargs(),
     )
 
-    intent = agent._task_intent_for_explicit_goal("Please refactor the agent and run tests.")
+    intent = task_intent_for_explicit_goal(agent, "Please refactor the agent and run tests.")
 
     assert intent.kind == "task"
     assert intent.long_running is True
