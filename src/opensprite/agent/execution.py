@@ -39,8 +39,6 @@ from ..tools.evidence import (
 from ..tools.result_status import classify_tool_result_status, tool_error_result
 from ..tools.verify import classify_verification_result
 from ..utils import (
-    count_messages_tokens,
-    count_text_tokens,
     sanitize_assistant_visible_text,
     strip_assistant_internal_scaffolding,
 )
@@ -65,6 +63,13 @@ from .execution_support.events import (
     LlmStepEvent,
     contains_compaction_handoff,
     format_repeated_invalid_tool_call_content,
+)
+from .execution_support.token_accounting import (
+    cached_tokens,
+    estimate_request_tokens,
+    get_token_model,
+    reasoning_tokens,
+    usage_int,
 )
 from .execution_support.tool_persistence import ToolResultPersistence
 from .subagent import (
@@ -665,65 +670,6 @@ Output exactly these sections when applicable:
             detail = detail[:177].rstrip() + "..."
         return f"{tool_name}: {detail}"
 
-    def _get_token_model(self, provider: LLMProvider | None = None) -> str | None:
-        """Best-effort model name lookup for local token estimates."""
-        active_provider = provider or self.provider
-        get_default_model = getattr(active_provider, "get_default_model", None)
-        if not callable(get_default_model):
-            return None
-        try:
-            return str(get_default_model() or "") or None
-        except Exception:
-            return None
-
-    @staticmethod
-    def _estimate_tool_schema_tokens(tools: list[dict[str, Any]] | None, *, model: str | None) -> int:
-        if not tools:
-            return 0
-        try:
-            tool_schema_text = json.dumps(tools, ensure_ascii=False, sort_keys=True)
-        except Exception:
-            tool_schema_text = str(tools)
-        return count_text_tokens(tool_schema_text, model=model)
-
-    def _estimate_request_tokens(
-        self,
-        chat_messages: list[ChatMessage],
-        tools: list[dict[str, Any]] | None,
-        *,
-        provider: LLMProvider | None = None,
-    ) -> tuple[int, int, int]:
-        model = self._get_token_model(provider)
-        message_tokens = count_messages_tokens(chat_messages, model=model)
-        tool_schema_tokens = self._estimate_tool_schema_tokens(tools, model=model)
-        return message_tokens + tool_schema_tokens, message_tokens, tool_schema_tokens
-
-    @staticmethod
-    def _usage_int(usage: dict[str, Any], *keys: str) -> int | None:
-        for key in keys:
-            value = usage.get(key)
-            if value is None:
-                continue
-            try:
-                return int(value)
-            except (TypeError, ValueError):
-                continue
-        return None
-
-    @classmethod
-    def _reasoning_tokens(cls, usage: dict[str, Any]) -> int | None:
-        details = usage.get("completion_tokens_details")
-        if not isinstance(details, dict):
-            return None
-        return cls._usage_int(details, "reasoning_tokens")
-
-    @classmethod
-    def _cached_tokens(cls, usage: dict[str, Any]) -> int | None:
-        details = usage.get("prompt_tokens_details")
-        if not isinstance(details, dict):
-            return None
-        return cls._usage_int(details, "cached_tokens")
-
     async def _build_proactive_compaction(
         self,
         log_id: str,
@@ -743,7 +689,7 @@ Output exactly these sections when applicable:
             return None
 
         threshold_tokens = max(1, int(self.context_compaction_token_budget * self.context_compaction_threshold_ratio))
-        estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(
+        estimated_tokens, message_tokens, tool_schema_tokens = estimate_request_tokens(
             chat_messages,
             tools,
             provider=provider,
@@ -763,7 +709,7 @@ Output exactly these sections when applicable:
             )
             compacted_messages = llm_attempt.messages
             if compacted_messages is not None:
-                compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools, provider=provider)
+                compacted_tokens, _, _ = estimate_request_tokens(compacted_messages, tools, provider=provider)
                 if compacted_tokens < estimated_tokens:
                     return _ProactiveCompactionResult(
                         messages=compacted_messages,
@@ -795,7 +741,7 @@ Output exactly these sections when applicable:
         if compacted_messages is None:
             return None
 
-        compacted_tokens, _, _ = self._estimate_request_tokens(compacted_messages, tools, provider=provider)
+        compacted_tokens, _, _ = estimate_request_tokens(compacted_messages, tools, provider=provider)
         if compacted_tokens >= estimated_tokens:
             return None
 
@@ -1361,7 +1307,7 @@ Output exactly these sections when applicable:
             while True:
                 self._raise_if_cancel_requested(should_cancel)
                 request_attempt = len([event for event in llm_step_events if event.iteration == iteration + 1]) + 1
-                estimated_tokens, message_tokens, tool_schema_tokens = self._estimate_request_tokens(
+                estimated_tokens, message_tokens, tool_schema_tokens = estimate_request_tokens(
                     chat_messages,
                     tools,
                     provider=active_provider,
@@ -1370,7 +1316,7 @@ Output exactly these sections when applicable:
                 try:
                     logger.info(
                         f"[{log_id}] llm.request.attempt | iter={iteration + 1} attempt={request_attempt} "
-                        f"provider={type(active_provider).__name__} model={self._get_token_model(active_provider) or '-'} "
+                        f"provider={type(active_provider).__name__} model={get_token_model(active_provider) or '-'} "
                         f"messages={len(chat_messages)} tools={len(tools or [])} "
                         f"estimated_tokens={estimated_tokens} message_tokens={message_tokens} tool_schema_tokens={tool_schema_tokens}"
                     )
@@ -1388,10 +1334,10 @@ Output exactly these sections when applicable:
                     )
                     duration_ms = int((time.perf_counter() - started_at) * 1000)
                     usage = dict(getattr(response, "usage", {}) or {})
-                    output_tokens = self._usage_int(usage, "completion_tokens", "output_tokens")
-                    total_tokens = self._usage_int(usage, "total_tokens")
-                    reasoning_tokens = self._reasoning_tokens(usage)
-                    cached_tokens = self._cached_tokens(usage)
+                    output_tokens = usage_int(usage, "completion_tokens", "output_tokens")
+                    total_tokens = usage_int(usage, "total_tokens")
+                    reasoning_token_count = reasoning_tokens(usage)
+                    cached_token_count = cached_tokens(usage)
                     finish_reason = getattr(response, "finish_reason", None)
                     llm_step_events.append(
                         LlmStepEvent(
@@ -1408,8 +1354,8 @@ Output exactly these sections when applicable:
                             tool_count=len(tools or []),
                             output_tokens=output_tokens,
                             total_tokens=total_tokens,
-                            reasoning_tokens=reasoning_tokens,
-                            cached_tokens=cached_tokens,
+                            reasoning_tokens=reasoning_token_count,
+                            cached_tokens=cached_token_count,
                             finish_reason=finish_reason,
                             tool_calls=len(getattr(response, "tool_calls", None) or []),
                         )
@@ -1425,7 +1371,7 @@ Output exactly these sections when applicable:
                             attempt=request_attempt,
                             status=LLM_STEP_ERROR_STATUS,
                             provider=type(active_provider).__name__,
-                            model=self._get_token_model(active_provider),
+                            model=get_token_model(active_provider),
                             duration_ms=duration_ms,
                             estimated_input_tokens=estimated_tokens,
                             message_tokens=message_tokens,
@@ -1451,7 +1397,7 @@ Output exactly these sections when applicable:
                             overflow_context_compactions += 1
                             context_compactions += 1
                             before_count = len(chat_messages)
-                            compacted_tokens, _, _ = self._estimate_request_tokens(
+                            compacted_tokens, _, _ = estimate_request_tokens(
                                 compacted_messages,
                                 tools,
                                 provider=active_provider,
