@@ -1,4 +1,4 @@
-from opensprite.agent.turn_runner import rank_web_sources_for_objective, web_source_relevance_score
+from opensprite.agent.completion.source_finalization import rank_web_sources_for_objective, web_source_relevance_score
 
 
 def test_rank_web_sources_for_objective_prefers_relevant_title_and_snippet():

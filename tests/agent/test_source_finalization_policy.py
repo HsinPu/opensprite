@@ -1,9 +1,9 @@
 from opensprite.agent.completion_gate import CompletionGateResult
-from opensprite.agent.execution import ExecutionResult
-from opensprite.agent.turn_runner import (
+from opensprite.agent.completion.source_finalization import (
     source_finalization_allowed,
     task_contract_requires_web_sources,
 )
+from opensprite.agent.execution import ExecutionResult
 from opensprite.agent.task.contract import AcceptanceCriterion, EvidenceRequirement, TaskContract
 
 
