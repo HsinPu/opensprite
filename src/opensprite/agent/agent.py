@@ -30,7 +30,6 @@ from ..bus.message import UserMessage, AssistantMessage
 from ..llms import LLMProvider, ChatMessage
 from ..llms.runtime_provider import create_llm_from_runtime, resolve_provider_runtime
 from ..storage import StorageProvider, StoredDelegatedTask
-from ..storage.base import get_storage_message_count
 from ..documents.active_task import ActiveTaskConsolidator, create_active_task_store, is_current_active_task_status
 from ..context.builder import ContextBuilder
 from ..documents.memory import MemoryStore
@@ -93,7 +92,6 @@ from ..context.message_history import HistoryResetService, LearningLedger, Messa
 from ..tools.registration import (
     BROWSER_TOOL_NAMES,
     register_browser_tools,
-    register_default_tools,
     register_memory_tool,
 )
 from ..runs.trace import RunFileChangeService, RunTraceRecorder, WorktreeSandboxInspector
@@ -112,6 +110,7 @@ from .response_finalizer import AgentResponseFinalizer
 from .turn_context import TurnContextService
 from .turn_input import TurnInputPreparer
 from .turn_runner import AgentTurnRunner
+from .tool_setup import setup_agent_tools
 from ..tools.evidence import VERIFICATION_TOOL_NAME
 from .workflow import is_workflow_failed_status
 from .workflow import SubagentWorkflowService
@@ -578,7 +577,7 @@ class AgentLoop:
             media_service=self.media_service,
             format_log_preview=self._format_log_preview,
         )
-        self.tools = self._setup_tools(tools)
+        self.tools = setup_agent_tools(self, tools)
         self.subagents = SubagentRunService(
             storage=self.storage,
             tools=self.tools,
@@ -855,15 +854,6 @@ class AgentLoop:
         if callable(setter):
             setter(ledger)
         return ledger
-
-    def _setup_tools(self, tools: ToolRegistry | None) -> ToolRegistry:
-        """Resolve the tool registry and populate defaults when needed."""
-        registry = tools or ToolRegistry()
-        if not registry.tool_names:
-            self.tools = registry
-            self._register_default_tools()
-            return self.tools
-        return registry
 
     def _setup_memory_store(self) -> MemoryStore:
         """Create the long-term memory store."""
@@ -1409,49 +1399,6 @@ class AgentLoop:
     def _persist_inbound_videos(self, session_id: str, videos: list[str] | None) -> list[str]:
         """Persist inbound video data URLs under the session workspace videos directory."""
         return self.media_service.persist_inbound_videos(session_id, videos)
-
-    def _register_default_tools(self) -> None:
-        """
-        註冊代理人的預設工具。
-        
-        Register default tools for the agent.
-        
-        註冊檔案系統工具、Shell 執行、網頁搜尋和網頁抓取。
-        Registers filesystem tools, shell execution, web search, and web fetch.
-        """
-        register_default_tools(
-            self.tools,
-            workspace_resolver=self._get_current_workspace,
-            get_session_id=self._get_current_session_id,
-            run_subagent=self.run_subagent,
-            run_subagents_many=self.run_subagents_many,
-            run_workflow=self.run_workflow,
-            workflow_catalog_getter=lambda: self.workflows.catalog(),
-            config_path_resolver=self._get_config_path,
-            reload_mcp=self.reload_mcp_from_config,
-            app_home=self.app_home,
-            skills_loader=getattr(self._context_builder, "skills_loader", None),
-            tools_config=self.tools_config,
-            search_store=self.search_store,
-            search_config=self.search_config,
-            cron_manager=self.cron_manager,
-            cron_messages_config=self.messages.cron,
-            media_router=self.media_router,
-            get_current_images=self._get_current_images,
-            get_current_audios=self._get_current_audios,
-            get_current_videos=self._get_current_videos,
-            queue_outbound_media=self._queue_outbound_media,
-            background_notification_factory=self._make_background_session_exit_notifier,
-            background_session_owner_factory=self._current_background_session_owner,
-            process_manager_callback=self._set_background_process_manager,
-            active_task_store_factory=self._get_active_task_store,
-            get_message_count=lambda session_id: get_storage_message_count(self.storage, session_id),
-            file_change_recorder=self._record_file_changes,
-            storage=self.storage,
-            preview_run_file_change_revert=self.preview_run_file_change_revert,
-        )
-        
-        logger.info(f"agent.init | tools={', '.join(self.tools.tool_names)}")
 
     async def _load_history(self, session_id: str) -> list[ChatMessage]:
         """
