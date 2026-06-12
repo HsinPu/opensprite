@@ -1,10 +1,10 @@
 """Runtime helpers specific to exec-style shell command execution."""
 
 import asyncio
-import os
-import subprocess
 from dataclasses import dataclass
 from typing import Any
+
+from ..utils.processes import detached_process_kwargs
 
 
 @dataclass(slots=True)
@@ -56,9 +56,7 @@ def format_captured_output(
 
 
 def _process_creation_kwargs() -> dict[str, Any]:
-    if os.name == "nt":
-        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
-    return {"start_new_session": True}
+    return detached_process_kwargs()
 
 
 async def _read_process_stream(

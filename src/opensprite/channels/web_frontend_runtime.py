@@ -9,6 +9,8 @@ import shutil
 import subprocess
 from typing import Any, Mapping
 
+from ..utils.processes import windows_hidden_process_kwargs
+
 
 def is_frontend_source_dir(path: Path) -> bool:
     return (path / "package.json").is_file()
@@ -64,16 +66,7 @@ def frontend_dependencies_ready(source_dir: Path) -> bool:
 
 
 def build_frontend_run_kwargs() -> dict[str, object]:
-    run_kwargs: dict[str, object] = {}
-    if os.name == "nt":
-        run_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        startupinfo_type = getattr(subprocess, "STARTUPINFO", None)
-        if startupinfo_type is not None:
-            startupinfo = startupinfo_type()
-            startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
-            startupinfo.wShowWindow = 0
-            run_kwargs["startupinfo"] = startupinfo
-    return run_kwargs
+    return windows_hidden_process_kwargs()
 
 
 def run_frontend_command(source_dir: Path, args: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
@@ -247,6 +240,7 @@ async def run_browser_doctor_command(
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            **windows_hidden_process_kwargs(),
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=max(1, timeout))
     except asyncio.TimeoutError:

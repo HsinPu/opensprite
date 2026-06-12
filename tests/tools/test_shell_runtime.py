@@ -1,6 +1,7 @@
 import asyncio
 
 from opensprite.tools import shell_runtime as shell_runtime_module
+from opensprite.utils import processes as processes_module
 
 
 class _FakeProcess:
@@ -17,7 +18,7 @@ def test_start_shell_process_uses_expected_stdio_and_session_kwargs(monkeypatch)
         shell_calls.append((args, kwargs))
         return _FakeProcess(pid=321)
 
-    monkeypatch.setattr(shell_runtime_module.os, "name", "posix", raising=False)
+    monkeypatch.setattr(processes_module.os, "name", "posix", raising=False)
     monkeypatch.setattr(
         shell_runtime_module.asyncio,
         "create_subprocess_shell",

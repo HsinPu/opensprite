@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from ..utils.processes import terminate_process_tree
+from ..utils.processes import detached_process_kwargs, terminate_process_tree
 from .base import Tool
 from .result_status import classify_tool_result_status, tool_error_result
 from .validation import NON_EMPTY_STRING_PATTERN
@@ -159,9 +159,7 @@ def _command_display(command: list[str]) -> str:
 
 
 def _process_creation_kwargs() -> dict[str, Any]:
-    if os.name == "nt":
-        return {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)}
-    return {"start_new_session": True}
+    return detached_process_kwargs()
 
 
 def _format_streams(stdout: bytes | None, stderr: bytes | None, *, max_chars: int = 6000) -> str:

@@ -9,6 +9,8 @@ import shutil
 import subprocess
 import sys
 
+from ..utils.processes import windows_hidden_process_kwargs
+
 
 @dataclass(frozen=True)
 class UpdateResult:
@@ -59,7 +61,14 @@ def _run(
     runner=subprocess.run,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    result = runner(args, cwd=cwd, capture_output=True, text=True, check=False)
+    result = runner(
+        args,
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        **windows_hidden_process_kwargs(),
+    )
     if check and result.returncode != 0:
         output = (result.stderr or result.stdout or "command failed").strip()
         raise UpdateError(output)

@@ -99,6 +99,7 @@ from ..runs.session_entries import serialize_session_entries
 from ..tools.browser import _validate_navigation_url
 from ..tools.browser_runtime import AgentBrowserRuntime, browser_cloud_status, cloud_provider_from_config
 from ..utils.log import logger, setup_log
+from ..utils.processes import windows_hidden_process_kwargs
 from ..utils.url import join_url_path
 from .web_api import WebApiHandlers
 from . import web_cron_api
@@ -1058,7 +1059,14 @@ class WebAdapter(MessageAdapter):
 
     @staticmethod
     def _git_output(args: list[str], *, cwd: Path) -> str:
-        result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+            **windows_hidden_process_kwargs(),
+        )
         if result.returncode != 0:
             raise RuntimeError((result.stderr or result.stdout or "git command failed").strip())
         return result.stdout.strip()

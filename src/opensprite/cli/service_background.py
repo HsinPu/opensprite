@@ -13,6 +13,8 @@ import sys
 import time
 import ctypes
 
+from ..utils.processes import windows_hidden_process_kwargs
+
 try:  # pragma: no cover - imported only on Windows hosts
     import winreg
 except ImportError:  # pragma: no cover - non-Windows hosts
@@ -275,6 +277,7 @@ def install_startup_task(
         capture_output=True,
         text=True,
         check=False,
+        **windows_hidden_process_kwargs(),
     )
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "Failed to register Windows startup task."
@@ -298,6 +301,7 @@ def uninstall_startup_task(*, run=subprocess.run) -> bool:
         capture_output=True,
         text=True,
         check=False,
+        **windows_hidden_process_kwargs(),
     )
     if result.returncode == 0:
         return True
@@ -319,6 +323,7 @@ def is_startup_task_installed(*, run=subprocess.run) -> bool:
         capture_output=True,
         text=True,
         check=False,
+        **windows_hidden_process_kwargs(),
     )
     return result.returncode == 0
 
@@ -411,7 +416,13 @@ def stop_service(
 
     assert pid is not None
     if platform.system() == "Windows":
-        run(["taskkill", "/PID", str(pid), "/T"], capture_output=True, text=True, check=False)
+        run(
+            ["taskkill", "/PID", str(pid), "/T"],
+            capture_output=True,
+            text=True,
+            check=False,
+            **windows_hidden_process_kwargs(),
+        )
     else:
         os.kill(pid, signal.SIGTERM)
 
@@ -421,7 +432,13 @@ def stop_service(
             break
         time.sleep(0.2)
     if is_process_running(pid) and platform.system() == "Windows":
-        run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, text=True, check=False)
+        run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
+            capture_output=True,
+            text=True,
+            check=False,
+            **windows_hidden_process_kwargs(),
+        )
         force_deadline = time.monotonic() + force_timeout
         while time.monotonic() < force_deadline:
             if not is_process_running(pid):

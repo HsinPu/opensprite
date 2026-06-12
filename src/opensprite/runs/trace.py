@@ -40,6 +40,7 @@ from ..runs.lifecycle import (
     RUN_RUNNING_STATUS,
     RUN_STARTED_EVENT,
 )
+from ..utils.processes import windows_hidden_process_kwargs
 from ..runs.schema import serialize_work_state_todos
 from ..storage import StorageProvider, StoredRunFileChange
 from ..tool_names import (
@@ -284,6 +285,7 @@ class WorktreeSandboxInspector:
                 check=False,
                 text=True,
                 timeout=timeout,
+                **windows_hidden_process_kwargs(),
             )
         except (OSError, subprocess.TimeoutExpired):
             return subprocess.CompletedProcess(["git", *args], 1, stdout="", stderr=GIT_COMMAND_FAILED_REASON)

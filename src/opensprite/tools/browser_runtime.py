@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 
 import httpx
 
+from ..utils.processes import windows_hidden_process_kwargs
+
 from ..config.defaults import (
     BROWSER_BACKENDS,
     CLOUD_BROWSER_BACKENDS,
@@ -386,6 +388,7 @@ class AgentBrowserRuntime:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                **windows_hidden_process_kwargs(),
             )
         except FileNotFoundError as exc:
             raise BrowserRuntimeError(str(exc)) from exc

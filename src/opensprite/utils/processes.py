@@ -4,9 +4,36 @@ import asyncio
 import contextlib
 import os
 import signal
+import subprocess
+from typing import Any
 
 
 _WINDOWS_FORCE_FOLLOWUP_DELAY = 0.25
+
+
+def windows_hidden_process_kwargs(*, new_process_group: bool = False) -> dict[str, Any]:
+    """Return Windows subprocess kwargs that suppress console windows."""
+    if os.name != "nt":
+        return {}
+
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    if new_process_group:
+        creationflags |= getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+    kwargs: dict[str, Any] = {"creationflags": creationflags}
+    startupinfo_type = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_type is not None:
+        startupinfo = startupinfo_type()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = 0
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
+def detached_process_kwargs() -> dict[str, Any]:
+    if os.name == "nt":
+        return windows_hidden_process_kwargs(new_process_group=True)
+    return {"start_new_session": True}
 
 
 async def _run_taskkill(pid: int, *, force: bool, wait_timeout: float) -> None:
@@ -20,6 +47,7 @@ async def _run_taskkill(pid: int, *, force: bool, wait_timeout: float) -> None:
             *args,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
+            **windows_hidden_process_kwargs(),
         )
     except Exception:
         return

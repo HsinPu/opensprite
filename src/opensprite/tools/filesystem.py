@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable
 from ..skills import SkillsLoader
 from ..utils import format_unified_diff, text_sha256
 from ..utils.log import logger
+from ..utils.processes import windows_hidden_process_kwargs
 from .base import Tool
 from .result_status import tool_error_result
 from .skill_config import path_touches_read_only_app_skills_dir
@@ -553,6 +554,7 @@ async def _run_ripgrep(args: list[str], cwd: Path) -> tuple[int, str, str]:
         cwd=str(cwd),
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        **windows_hidden_process_kwargs(),
     )
     try:
         stdout_bytes, stderr_bytes = await asyncio.wait_for(

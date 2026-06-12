@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 
 from opensprite.utils import processes as processes_module
 
@@ -47,6 +48,19 @@ class _FakeProcess:
     def terminate(self):
         self.terminate_called = True
         self.returncode = 0
+
+
+def test_windows_hidden_process_kwargs_suppresses_console_window(monkeypatch):
+    monkeypatch.setattr(processes_module.os, "name", "nt", raising=False)
+    monkeypatch.setattr(processes_module.subprocess, "CREATE_NO_WINDOW", 0x08000000, raising=False)
+    monkeypatch.setattr(processes_module.subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200, raising=False)
+
+    kwargs = processes_module.windows_hidden_process_kwargs(new_process_group=True)
+
+    assert kwargs["creationflags"] & 0x08000000
+    assert kwargs["creationflags"] & 0x00000200
+    if getattr(subprocess, "STARTUPINFO", None) is not None:
+        assert "startupinfo" in kwargs
 
 
 def test_terminate_process_tree_uses_graceful_then_force_taskkill_on_windows(monkeypatch):
