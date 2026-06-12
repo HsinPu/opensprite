@@ -4,9 +4,9 @@ from opensprite.agent.completion_gate import TERSE_FINAL_ANSWER_REASON
 from opensprite.agent.execution_support.artifacts import TaskArtifact
 from opensprite.agent.task.contract import TaskContract
 from opensprite.agent.completion.source_finalization import source_finalization_available
+from opensprite.agent.turn_input import message_with_runtime_context
 from opensprite.agent.turn_runner import (
     _final_response_after_exhausted_continuation,
-    _message_with_runtime_context,
 )
 
 
@@ -20,7 +20,7 @@ COMPLETION_BLOCKER_MESSAGES = CompletionBlockerMessages(
 
 
 def test_message_with_runtime_context_adds_cli_gateway_and_snapshot_details():
-    message = _message_with_runtime_context(
+    message = message_with_runtime_context(
         "check healthz",
         {
             "source": "cli_via_web",
