@@ -205,6 +205,7 @@ assertIncludes(app, "clearWebSessions: clearWebSessionsNow", "web conversation c
 assertIncludes(chatClient, "pruneMissingHistorySessions", "deleted history sessions prune stale local state");
 assertIncludes(chatClient, "sessionTombstoneKeys(session).some((key)", "deleted history sessions match all session identities");
 assertIncludes(chatClient, "loadSessionHistory({ quiet: true, pruneMissingHistorySessions: true })", "successful delete refresh prunes missing history");
+assertIncludes(chatClient, "&& !session.hiddenFromBrowserHistory", "quiet refresh does not retain deleted hidden history");
 assertIncludes(settingsUi, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");

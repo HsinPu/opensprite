@@ -2957,6 +2957,7 @@ export function useChatClient() {
       const shouldRetainActiveHistorySession = !pruneMissingHistorySessions
         && preserveActiveSession
         && session.sessionId
+        && !session.hiddenFromBrowserHistory
         && session.externalChatId === state.activeExternalChatId;
       const shouldRetainLocalSession = session.sessionId
         ? shouldRetainActiveHistorySession
