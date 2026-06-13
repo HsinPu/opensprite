@@ -1026,6 +1026,8 @@ export function useChatClient() {
   const initialSession = createSession(
     isExternalChannelSessionId(storedExternalChatId) ? generateExternalChatId() : storedExternalChatId || generateExternalChatId(),
   );
+  const initialSessionFromStoredExternalChatId = Boolean(storedExternalChatId && !isExternalChannelSessionId(storedExternalChatId));
+  const initialSessionExternalChatId = initialSession.externalChatId;
   const initialDraftSessions = readStoredDraftSessions()
     .filter((session) => session.externalChatId !== initialSession.externalChatId);
   const localDraftExternalChatIds = new Set(initialDraftSessions.map((session) => session.externalChatId));
@@ -2952,7 +2954,12 @@ export function useChatClient() {
       if (session.sessionId && historySessionIds.has(session.sessionId)) {
         continue;
       }
-      const isCurrentDraft = session.externalChatId === state.activeExternalChatId && isLocalDraftSession(session);
+      const isBootstrapStoredDraft = initialSessionFromStoredExternalChatId
+        && session.externalChatId === initialSessionExternalChatId
+        && isLocalDraftSession(session);
+      const isCurrentDraft = session.externalChatId === state.activeExternalChatId
+        && isLocalDraftSession(session)
+        && !isBootstrapStoredDraft;
       const isStoredDraft = isLocalDraftSession(session) && localDraftExternalChatIds.has(session.externalChatId);
       const shouldRetainActiveHistorySession = !pruneMissingHistorySessions
         && preserveActiveSession
@@ -2971,6 +2978,9 @@ export function useChatClient() {
     }
 
     state.sessions = [...sessionsByExternalChatId.values()].sort((left, right) => right.updatedAt - left.updatedAt);
+    if (!state.sessions.length) {
+      state.sessions.push(createSession());
+    }
     if (!state.sessions.some((session) => session.externalChatId === state.activeExternalChatId)) {
       state.activeExternalChatId = state.sessions[0]?.externalChatId || state.activeExternalChatId;
       writeStoredValue(STORAGE_KEYS.activeExternalChatId, state.activeExternalChatId);

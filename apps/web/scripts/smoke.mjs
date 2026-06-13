@@ -206,6 +206,7 @@ assertIncludes(chatClient, "pruneMissingHistorySessions", "deleted history sessi
 assertIncludes(chatClient, "sessionTombstoneKeys(session).some((key)", "deleted history sessions match all session identities");
 assertIncludes(chatClient, "loadSessionHistory({ quiet: true, pruneMissingHistorySessions: true })", "successful delete refresh prunes missing history");
 assertIncludes(chatClient, "&& !session.hiddenFromBrowserHistory", "quiet refresh does not retain deleted hidden history");
+assertIncludes(chatClient, "isBootstrapStoredDraft", "startup does not preserve stale stored active session drafts");
 assertIncludes(settingsUi, "clear-web-sessions", "settings clear web sessions event");
 assertIncludes(settingsModal, "section === 'browser'", "browser settings section");
 assertIncludes(settingsModal, "save-browser-settings", "browser settings save event");
