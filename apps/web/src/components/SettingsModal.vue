@@ -32,16 +32,6 @@
           @run-update="$emit('run-update')"
         />
 
-        <section v-if="section === 'curator'" class="settings-page">
-          <CuratorSettingsPage
-            :copy="copy"
-            :state="curatorState"
-            :status="curatorStatus"
-            @refresh-curator="$emit('refresh-curator')"
-            @run-curator-action="$emit('run-curator-action', $event)"
-          />
-        </section>
-
         <ShortcutsSettingsPage v-if="section === 'shortcuts'" :copy="copy" />
 
         <section v-if="section === 'channels'" class="settings-page">
@@ -1742,7 +1732,6 @@
 
 <script setup>
 import { computed, ref } from "vue";
-import CuratorSettingsPage from "./CuratorSettingsPage.vue";
 import GeneralSettingsPage from "./GeneralSettingsPage.vue";
 import SettingsNav from "./SettingsNav.vue";
 import ShortcutsSettingsPage from "./ShortcutsSettingsPage.vue";
@@ -1780,14 +1769,6 @@ const props = defineProps({
   connectionState: {
     type: String,
     required: true,
-  },
-  curatorState: {
-    type: Object,
-    required: true,
-  },
-  curatorStatus: {
-    type: Object,
-    default: null,
   },
 });
 
@@ -2417,8 +2398,6 @@ const emit = defineEmits([
   "run-browser-doctor",
   "run-browser-install",
   "clear-web-sessions",
-  "refresh-curator",
-  "run-curator-action",
   "begin-cron-job-create",
   "save-cron-job",
   "edit-cron-job",

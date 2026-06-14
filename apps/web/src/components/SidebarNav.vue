@@ -132,18 +132,6 @@
     </div>
 
     <div class="sidebar__bottom">
-      <BackgroundProcessSidebar
-        :copy="copy"
-        :processes="backgroundProcesses.processes"
-        :loading="backgroundProcesses.loading"
-        :error="backgroundProcesses.error"
-        :collapsed="collapsed"
-        :active-session-id="activeSessionId"
-        @select-session="$emit('select-background-process', $event)"
-        @select-run="$emit('select-background-process', $event)"
-        @refresh="$emit('refresh-background-processes')"
-      />
-
       <button class="settings-button" type="button" :title="copy.sidebar.settings" @click="$emit('open-settings')">
         <span class="settings-button__avatar" aria-hidden="true">OS</span>
         <span class="settings-button__copy">
@@ -165,7 +153,6 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import BackgroundProcessSidebar from "./BackgroundProcessSidebar.vue";
 
 const props = defineProps({
   copy: {
@@ -196,14 +183,6 @@ const props = defineProps({
     type: Boolean,
     required: true,
   },
-  backgroundProcesses: {
-    type: Object,
-    required: true,
-  },
-  activeSessionId: {
-    type: String,
-    default: "",
-  },
   getSessionDisplayId: {
     type: Function,
     required: true,
@@ -220,8 +199,6 @@ const emit = defineEmits([
   "set-active-session",
   "set-session-channel-filter",
   "set-show-hidden-sessions",
-  "select-background-process",
-  "refresh-background-processes",
   "begin-sidebar-resize",
   "toggle-sidebar-collapsed",
   "open-settings",

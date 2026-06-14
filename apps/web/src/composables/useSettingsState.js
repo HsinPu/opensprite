@@ -202,15 +202,3 @@ export function createSettingsState() {
     },
   };
 }
-
-export function createCuratorState() {
-  return {
-    loading: false,
-    action: "",
-    error: "",
-    status: null,
-    history: [],
-    historyLoading: false,
-    historyError: "",
-  };
-}

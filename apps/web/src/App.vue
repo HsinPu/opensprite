@@ -32,8 +32,6 @@
       :session-channel-filter="sessionChannelFilter"
       :show-hidden-sessions="showHiddenSessions"
       :collapsed="sidebarCollapsed"
-      :background-processes="state.backgroundProcesses"
-      :active-session-id="currentSessionApiId"
       :get-session-display-id="getSessionDisplayId"
       :get-session-title="getSessionTitle"
       @create-new-chat="createNewChat"
@@ -41,8 +39,6 @@
       @set-active-session="setActiveSession"
       @set-session-channel-filter="setSessionChannelFilter"
       @set-show-hidden-sessions="setShowHiddenSessions"
-      @select-background-process="selectBackgroundProcess"
-      @refresh-background-processes="loadBackgroundProcesses"
       @begin-sidebar-resize="beginSidebarResize"
       @toggle-sidebar-collapsed="toggleSidebarCollapsed"
       @open-settings="openSettings()"
@@ -155,8 +151,6 @@
     :settings-state="settingsState"
     :web-session-count="webSessionCount"
     :connection-state="state.connectionState"
-    :curator-state="curatorState"
-    :curator-status="currentCuratorStatus"
     @close="closeSettings"
     @select-section="selectSettingsSection"
     @save-connection-settings="saveConnectionSettings"
@@ -207,8 +201,6 @@
     @edit-cron-job="beginCronJobEdit"
     @cancel-cron-job-edit="cancelCronJobEdit"
     @cron-job-action="runCronJobAction"
-    @refresh-curator="refreshCuratorState"
-    @run-curator-action="runCuratorAction"
   />
 
   <section
@@ -283,9 +275,6 @@ const {
   currentRun,
   currentRunTimeline,
   currentRunSummary,
-  curatorState,
-  currentCuratorStatus,
-  currentSessionApiId,
   settingsTitle,
   sessionMeta,
   composerHint,
@@ -300,7 +289,6 @@ const {
   setActiveSession,
   setSessionChannelFilter,
   setShowHiddenSessions,
-  selectBackgroundProcess,
   selectRun,
   selectSettingsSection,
   openSettings,
@@ -347,7 +335,6 @@ const {
   runBrowserTest,
   runBrowserDoctor,
   runBrowserInstall,
-  loadBackgroundProcesses,
   beginCronJobCreate,
   beginCronJobEdit,
   cancelCronJobEdit,
@@ -366,9 +353,6 @@ const {
   cleanupWorktreeSandbox,
   resumeFollowUp,
   runVerification,
-  loadCuratorStatus,
-  refreshCuratorState,
-  runCuratorAction,
   toggleSettingsConnection,
   submitMessage,
   handleComposerKeydown,

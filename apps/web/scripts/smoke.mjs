@@ -48,7 +48,6 @@ const [
   chatComposer,
   toastStack,
   sidebarNav,
-  curatorSettingsPage,
   generalSettingsPage,
   shortcutsSettingsPage,
   app,
@@ -79,7 +78,6 @@ const [
   read("src/components/ChatComposer.vue"),
   read("src/components/ToastStack.vue"),
   read("src/components/SidebarNav.vue"),
-  read("src/components/CuratorSettingsPage.vue"),
   read("src/components/GeneralSettingsPage.vue"),
   read("src/components/ShortcutsSettingsPage.vue"),
   read("src/App.vue"),
@@ -271,10 +269,10 @@ assertIncludes(styles, "scrollbar-gutter: stable", "sidebar session list reserve
 assertIncludes(styles, ".app-shell--sidebar-collapsed .sidebar-collapse-button", "collapsed sidebar hides top restore button");
 assertIncludes(styles, ".app-shell--sidebar-collapsed .brand-mark--button:hover .brand-mark__expand", "collapsed sidebar brand hover expand styling");
 assertIncludes(styles, ".secondary-button--danger", "settings destructive action styling");
-assertIncludes(curatorSettingsPage, "settings-card", "curator settings card layout");
-assertIncludes(curatorSettingsPage, "provider-row", "curator settings history layout");
-assertIncludes(settingsModal, "CuratorSettingsPage", "curator settings placement");
-assertIncludes(settingsModal, "section === 'curator'", "curator settings section");
+assertNotIncludes(settingsModal, "CuratorSettingsPage", "curator settings page removed from settings UI");
+assertNotIncludes(settingsModal, "section === 'curator'", "curator settings section removed from settings UI");
+assertNotIncludes(sidebarNav, "BackgroundProcessSidebar", "background process sidebar removed from main UI");
+assertNotIncludes(sidebarNav, "refresh-background-processes", "background process sidebar refresh removed from main UI");
 assertIncludes(settingsModal, "connectedCount", "multiple provider connection count");
 assertIncludes(settingsModal, "save-media-model", "media model settings action");
 assertIncludes(settingsModal, "textProviderModelGroups", "provider model grouping");
@@ -372,11 +370,13 @@ assertNotIncludes(settingsModal, "permissionProfiles", "unused permission profil
 assertNotIncludes(settingsModal, "permissionProfilePresets", "unused permission profile preset rendering removed");
 assertNotIncludes(copy, "permissionsLoadFailed", "permission settings load failure copy removed");
 assertNotIncludes(styles, ".settings-policy-preview", "tool access preview styling removed");
-assertIncludes(chatClient, "/api/curator/status", "curator status fetch");
-assertIncludes(chatClient, "/api/curator/history", "curator history fetch");
-assertIncludes(chatClient, "/api/curator/", "curator action fetch");
-assertIncludes(chatClient, 'params.set("scope", scope)', "curator scoped action fetch");
-assertIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval");
+assertNotIncludes(chatClient, "/api/curator/status", "curator status fetch removed from web client");
+assertNotIncludes(chatClient, "/api/curator/history", "curator history fetch removed from web client");
+assertNotIncludes(chatClient, "/api/curator/", "curator action fetch removed from web client");
+assertNotIncludes(chatClient, 'params.set("scope", scope)', "curator scoped action fetch removed from web client");
+assertNotIncludes(chatClient, "CURATOR_POLL_INTERVAL_MS", "curator polling interval removed from web client");
+assertNotIncludes(chatClient, "/api/background-processes", "background process list polling removed from web client");
+assertNotIncludes(chatClient, "loadBackgroundProcesses", "background process list loader removed from web client");
 assertIncludes(chatClient, "task_context.resolved", "task context timeline event");
 assertIncludes(chatClient, "task_objective.resolved", "task objective timeline event");
 assertIncludes(chatClient, "task_contract.planned", "task contract planned timeline event");
@@ -391,8 +391,8 @@ assertIncludes(chatClient, "continuation_type", "task context continuation detai
 assertIncludes(chatClient, "formatTaskContextDetail", "task context timeline detail");
 assertIncludes(chatClient, "STORAGE_KEYS.showWorkState", "work state preference persistence");
 assertIncludes(chatClient, "STORAGE_KEYS.showRunHistory", "run history preference persistence");
-assertIncludes(chatClient, "scheduleCuratorPoll", "curator polling scheduler");
-assertIncludes(chatClient, "curator.completed", "curator event refresh");
+assertNotIncludes(chatClient, "scheduleCuratorPoll", "curator polling scheduler removed from web client");
+assertNotIncludes(chatClient, "curator.completed", "curator event refresh removed from web client");
 assertIncludes(chatClient, "viewExternalChatIdForPayload", "external session realtime keying");
 assertIncludes(chatClient, "setSettingsSuccess", "settings success toast routing");
 assertIncludes(settingsLogic, "connectForm.name", "provider connection naming");
@@ -411,7 +411,6 @@ for (const key of [
   "codeNavigationActions",
   "retentionTitle",
   "commandSuggestions",
-  "curator",
   "credentialSources",
   "missingCredential",
   "deleteChat",

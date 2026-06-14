@@ -44,7 +44,6 @@ const groups = computed(() => [
     items: [
       { section: "general", icon: "⌘", title: props.copy.settingsTitles.general },
       { section: "shortcuts", icon: "⌗", title: props.copy.settingsTitles.shortcuts },
-      { section: "curator", icon: "◌", title: props.copy.settingsTitles.curator },
     ],
   },
   {

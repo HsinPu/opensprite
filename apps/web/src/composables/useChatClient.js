@@ -12,7 +12,6 @@ import { useSearchSettingsActions } from "./useSearchSettingsActions";
 import { useUpdateSettingsActions } from "./useUpdateSettingsActions";
 import { buildHttpApiUrl, requestSettingsJson as requestSettingsJsonFromApi } from "./settingsApi";
 import {
-  buildBackgroundProcessesPath as buildBackgroundProcessesPathBase,
   buildRunFileChangeRevertPath as buildRunFileChangeRevertPathBase,
   buildRunSummaryPath as buildRunSummaryPathBase,
   buildRunTracePath as buildRunTracePathBase,
@@ -36,7 +35,6 @@ import {
   formatSubagentGroupDetail as formatSubagentGroupDetailBase,
   formatWorkflowDetail as formatWorkflowDetailBase,
   formatWorkflowStepDetail as formatWorkflowStepDetailBase,
-  normalizeBackgroundProcess as normalizeBackgroundProcessBase,
   statusFromRunEvent as statusFromRunEventBase,
 } from "./chatClientRunHelpers";
 import { normalizeRunSummary } from "./runSummaryNormalizers";
@@ -57,7 +55,7 @@ import {
   updateLiveTraceEventCounts,
 } from "./runTraceNormalizers";
 import { DEFAULT_CRON_TIMEZONE } from "./scheduleDefaults";
-import { createCuratorState, createSettingsForm, createSettingsState } from "./useSettingsState";
+import { createSettingsForm, createSettingsState } from "./useSettingsState";
 
 const STORAGE_KEYS = {
   wsUrl: "opensprite:web:wsUrl",
@@ -95,16 +93,12 @@ const RUN_SUMMARY_FETCH_DELAY_MS = 500;
 const RUN_SUMMARY_NOT_FOUND_RETRY_DELAY_MS = 1200;
 const RUN_SUMMARY_NOT_FOUND_RETRY_LIMIT = 3;
 const RUN_BACKFILL_COOLDOWN_MS = 2000;
-const BACKGROUND_PROCESS_LIMIT = 30;
 const GATEWAY_RECONNECT_DELAY_MS = 30000;
 const SESSION_HISTORY_REFRESH_INTERVAL_MS = 30000;
 const LOCAL_DRAFT_SESSION_LIMIT = 10;
 const DELETED_SESSION_TOMBSTONE_MS = 5 * 60 * 1000;
-const CURATOR_HISTORY_LIMIT = 5;
-const CURATOR_POLL_INTERVAL_MS = 2500;
 const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "cancelled"]);
 const TERMINAL_PART_STATES = new Set(["completed", "failed", "cancelled", "error"]);
-const CURATOR_BUSY_STATES = new Set(["queued", "running"]);
 const TIMELINE_EVENT_TYPES = new Set([
   "run_started",
   "task_context.resolved",
@@ -135,9 +129,6 @@ const TIMELINE_EVENT_TYPES = new Set([
   "workflow.step.failed",
   "workflow.completed",
   "workflow.failed",
-  "curator.started",
-  "curator.completed",
-  "curator.failed",
   "execution.stopped",
   "completion_gate.evaluated",
   "auto_continue.scheduled",
@@ -503,14 +494,6 @@ function shouldLoadRunTrace(run) {
   return !(run.traceLoaded && hasNeededFileChanges);
 }
 
-function isCuratorBusy(status) {
-  if (!status || typeof status !== "object") {
-    return false;
-  }
-  const state = String(status.state || "").trim();
-  return Boolean(status.running || status.queued || status.rerun_pending || CURATOR_BUSY_STATES.has(state));
-}
-
 function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
   return createRunViewStateBase({ runId, sessionId, status, createdAt, updatedAt, finishedAt });
 }
@@ -531,22 +514,6 @@ function buildWorktreeCleanupPath() {
   return buildWorktreeCleanupPathBase();
 }
 
-function buildCuratorStatusPath(sessionId) {
-  return `/api/curator/status?session_id=${encodeURIComponent(sessionId)}`;
-}
-
-function buildCuratorHistoryPath(sessionId, limit = CURATOR_HISTORY_LIMIT) {
-  return `/api/curator/history?session_id=${encodeURIComponent(sessionId)}&limit=${encodeURIComponent(limit)}`;
-}
-
-function buildCuratorActionPath(action, sessionId, scope = "") {
-  const params = new URLSearchParams({ session_id: sessionId });
-  if (scope) {
-    params.set("scope", scope);
-  }
-  return `/api/curator/${encodeURIComponent(action)}?${params.toString()}`;
-}
-
 function buildRunsPath(sessionId) {
   return buildRunsPathBase(sessionId, RUN_HISTORY_LIMIT);
 }
@@ -557,14 +524,6 @@ function buildSessionDeletePath(sessionId) {
 
 function buildSessionsClearPath(channel = "web") {
   return buildSessionsClearPathBase(channel);
-}
-
-function buildBackgroundProcessesPath(sessionId = "", limit = BACKGROUND_PROCESS_LIMIT) {
-  return buildBackgroundProcessesPathBase(sessionId, limit);
-}
-
-function normalizeBackgroundProcess(payload) {
-  return normalizeBackgroundProcessBase(payload);
 }
 
 function statusFromRunEvent(eventType, payload, eventStatus = "") {
@@ -818,30 +777,6 @@ function describeRunEvent(eventType, payload, copy) {
     };
   }
 
-  if (eventType === "curator.started") {
-    return {
-      label: copy.run.curatorStarted,
-      detail: payload.message || payload.summary || "",
-      tone: "running",
-    };
-  }
-
-  if (eventType === "curator.completed") {
-    return {
-      label: copy.run.curatorCompleted,
-      detail: payload.summary || payload.message || "",
-      tone: "success",
-    };
-  }
-
-  if (eventType === "curator.failed") {
-    return {
-      label: copy.run.curatorFailed,
-      detail: payload.error || payload.message || "",
-      tone: "error",
-    };
-  }
-
   if (eventType === "auto_continue.scheduled") {
     return {
       label: copy.run.autoContinueScheduled,
@@ -1063,13 +998,6 @@ export function useChatClient() {
       loading: false,
       error: "",
     },
-    backgroundProcesses: {
-      processes: [],
-      counts: {},
-      loading: false,
-      error: "",
-      lastLoadedAt: null,
-    },
     sessionHistory: {
       total: 0,
       limit: 0,
@@ -1097,7 +1025,6 @@ export function useChatClient() {
   const settingsSection = ref("general");
   const settingsForm = reactive(createSettingsForm(state));
   const settingsState = reactive(createSettingsState());
-  const curatorState = reactive(createCuratorState());
 
   let activeSocket = null;
   let colorSchemeMediaQuery = null;
@@ -1109,14 +1036,11 @@ export function useChatClient() {
   let boundMessageStage = null;
   const runSummaryTimers = new Map();
   const runBackfillTimes = new Map();
-  let curatorPollTimer = null;
   let codexAuthPollTimer = null;
   let copilotAuthPollTimer = null;
-  let curatorPollSessionId = "";
   let toastId = 0;
   const toastTimers = new Map();
   const deletedSessionTombstones = new Map();
-  let curatorActionToken = "";
 
   function applyDocumentPreferences() {
     if (typeof document === "undefined") {
@@ -1215,18 +1139,6 @@ export function useChatClient() {
       title: latestEvent.label,
       tone: runTone(run.status, latestEvent.tone),
     };
-  });
-
-  const currentCuratorStatus = computed(() => curatorState.status || null);
-
-  const currentSessionApiId = computed(() => getCuratorSessionId(currentSession.value));
-
-  const activeBackgroundProcesses = computed(() => {
-    const sessionId = currentSessionApiId.value;
-    if (!sessionId) {
-      return [];
-    }
-    return state.backgroundProcesses.processes.filter((process) => process.ownerSessionId === sessionId);
   });
 
   const settingsTitle = computed(() => copy.value.settingsTitles[settingsSection.value] || copy.value.settingsTitles.general);
@@ -1412,17 +1324,7 @@ export function useChatClient() {
   watch(
     () => [currentSession.value?.externalChatId, currentSession.value?.sessionId],
     () => {
-      clearCuratorPollTimer();
-      curatorActionToken = "";
-      curatorState.action = "";
-      curatorState.status = null;
-      curatorState.error = "";
-      curatorState.history = [];
-      curatorState.historyLoading = false;
-      curatorState.historyError = "";
       void loadCurrentSessionRuns();
-      void refreshCuratorState();
-      void loadBackgroundProcesses({ quiet: true });
       scrollMessagesToBottom({ force: true });
     },
     { immediate: true },
@@ -1497,7 +1399,7 @@ export function useChatClient() {
     return session?.sessionId || "";
   }
 
-  function getCuratorSessionId(session) {
+  function getSessionOwnerId(session) {
     if (!session) {
       return "";
     }
@@ -1510,10 +1412,6 @@ export function useChatClient() {
     return session.externalChatId ? `web:${session.externalChatId}` : "";
   }
 
-  function isCurrentCuratorSessionId(sessionId) {
-    return Boolean(sessionId) && getCuratorSessionId(currentSession.value) === sessionId;
-  }
-
   function persistLocalDraftSessions() {
     writeStoredDraftSessions(state.sessions);
     localDraftExternalChatIds.clear();
@@ -1522,30 +1420,6 @@ export function useChatClient() {
         localDraftExternalChatIds.add(session.externalChatId);
       }
     }
-  }
-
-  function clearCuratorPollTimer() {
-    if (curatorPollTimer) {
-      clearTimeout(curatorPollTimer);
-    }
-    curatorPollTimer = null;
-    curatorPollSessionId = "";
-  }
-
-  function scheduleCuratorPoll(status = curatorState.status, sessionId = getCuratorSessionId(currentSession.value)) {
-    clearCuratorPollTimer();
-    if (clientDisposed || !sessionId || !isCuratorBusy(status)) {
-      return;
-    }
-    curatorPollSessionId = sessionId;
-    curatorPollTimer = setTimeout(() => {
-      curatorPollTimer = null;
-      if (clientDisposed || curatorPollSessionId !== sessionId || !isCurrentCuratorSessionId(sessionId)) {
-        curatorPollSessionId = "";
-        return;
-      }
-      void loadCuratorStatus({ sessionId, quiet: true });
-    }, CURATOR_POLL_INTERVAL_MS);
   }
 
   function getSessionTitle(session) {
@@ -1910,15 +1784,6 @@ export function useChatClient() {
     if (isTerminalRunStatus(run.status) || eventType === "run_finished" || eventType === "run_failed") {
       scheduleRunSummaryFetch(session, run);
     }
-    if (eventType.startsWith("curator.")) {
-      const curatorSessionId = getCuratorSessionId(session);
-      if (curatorSessionId && isCurrentCuratorSessionId(curatorSessionId)) {
-        void refreshCuratorState({ sessionId: curatorSessionId, quiet: true });
-      }
-    }
-    if (eventType.startsWith("background_process.")) {
-      void loadBackgroundProcesses({ quiet: true });
-    }
   }
 
   function setNotice(text, tone) {
@@ -2124,27 +1989,6 @@ export function useChatClient() {
     ensureActiveSessionVisibleInSidebar();
   }
 
-  async function selectBackgroundProcess(process) {
-    const ownerSessionId = String(process?.ownerSessionId || "").trim();
-    const ownerChannel = String(process?.ownerChannel || channelFromSessionId(ownerSessionId) || "web").trim() || "web";
-    const ownerExternalChatId = String(process?.ownerExternalChatId || "").trim() || externalChatIdFromSessionId(ownerSessionId);
-    const externalChatId = ownerChannel === "web" ? ownerExternalChatId : ownerSessionId;
-    if (!externalChatId) {
-      return;
-    }
-
-    const session = ensureSession(externalChatId, ownerSessionId);
-    if (!session) {
-      return;
-    }
-    session.channel = ownerChannel;
-    setActiveSession(session.externalChatId);
-    await loadCurrentSessionRuns({ force: true });
-    if (process?.ownerRunId) {
-      selectRun(process.ownerRunId);
-    }
-  }
-
   function selectRun(runId) {
     const session = currentSession.value;
     const normalizedRunId = String(runId || "").trim();
@@ -2328,145 +2172,6 @@ export function useChatClient() {
       state.commandCatalog.error = error?.message || "Command catalog unavailable";
     } finally {
       state.commandCatalog.loading = false;
-    }
-  }
-
-  async function loadCuratorStatus(options = {}) {
-    const sessionId = String(options?.sessionId || getCuratorSessionId(currentSession.value)).trim();
-    const quiet = Boolean(options?.quiet);
-    if (!sessionId) {
-      clearCuratorPollTimer();
-      curatorState.loading = false;
-      curatorState.status = null;
-      curatorState.error = "";
-      return null;
-    }
-    if (!quiet) {
-      curatorState.loading = true;
-      curatorState.error = "";
-    }
-    try {
-      const payload = await requestSettingsJson(buildCuratorStatusPath(sessionId));
-      const status = payload?.status || null;
-      if (isCurrentCuratorSessionId(sessionId)) {
-        curatorState.status = status;
-        curatorState.error = "";
-        scheduleCuratorPoll(status, sessionId);
-      }
-      return status;
-    } catch (error) {
-      if (isCurrentCuratorSessionId(sessionId)) {
-        clearCuratorPollTimer();
-        curatorState.error = error?.message || copy.value.curator.unavailable;
-      }
-      return null;
-    } finally {
-      if (!quiet && isCurrentCuratorSessionId(sessionId)) {
-        curatorState.loading = false;
-      }
-    }
-  }
-
-  async function loadCuratorHistory(options = {}) {
-    const sessionId = String(options?.sessionId || getCuratorSessionId(currentSession.value)).trim();
-    const quiet = Boolean(options?.quiet);
-    const limit = coerceNonNegativeInteger(options?.limit) || CURATOR_HISTORY_LIMIT;
-    if (!sessionId) {
-      curatorState.historyLoading = false;
-      curatorState.history = [];
-      curatorState.historyError = "";
-      return [];
-    }
-    if (!quiet) {
-      curatorState.historyLoading = true;
-      curatorState.historyError = "";
-    }
-    try {
-      const payload = await requestSettingsJson(buildCuratorHistoryPath(sessionId, limit));
-      const history = Array.isArray(payload?.history) ? payload.history : [];
-      if (isCurrentCuratorSessionId(sessionId)) {
-        curatorState.history = history;
-        curatorState.historyError = "";
-      }
-      return history;
-    } catch (error) {
-      if (isCurrentCuratorSessionId(sessionId)) {
-        curatorState.historyError = error?.message || copy.value.curator.historyUnavailable;
-      }
-      return [];
-    } finally {
-      if (!quiet && isCurrentCuratorSessionId(sessionId)) {
-        curatorState.historyLoading = false;
-      }
-    }
-  }
-
-  async function refreshCuratorState(options = {}) {
-    const sessionId = String(options?.sessionId || getCuratorSessionId(currentSession.value)).trim();
-    const quiet = Boolean(options?.quiet);
-    if (!sessionId) {
-      curatorState.loading = false;
-      curatorState.status = null;
-      curatorState.error = "";
-      curatorState.history = [];
-      curatorState.historyLoading = false;
-      curatorState.historyError = "";
-      return null;
-    }
-    if (!quiet) {
-      curatorState.loading = true;
-      curatorState.error = "";
-    }
-    try {
-      const [status] = await Promise.all([
-        loadCuratorStatus({ sessionId, quiet: true }),
-        loadCuratorHistory({ sessionId, quiet: true, limit: options?.limit }),
-      ]);
-      return status;
-    } finally {
-      if (!quiet && isCurrentCuratorSessionId(sessionId)) {
-        curatorState.loading = false;
-      }
-    }
-  }
-
-  async function runCuratorAction(action) {
-    const normalizedAction = typeof action === "object" && action !== null
-      ? String(action.action || "").trim()
-      : String(action || "").trim();
-    const scope = typeof action === "object" && action !== null
-      ? String(action.scope || "").trim()
-      : "";
-    const sessionId = getCuratorSessionId(currentSession.value);
-    if (!normalizedAction || !sessionId) {
-      return null;
-    }
-    const actionToken = `${sessionId}\0${normalizedAction}\0${scope}\0${Date.now().toString(36)}-${randomToken()}`;
-    curatorActionToken = actionToken;
-    curatorState.action = normalizedAction;
-    curatorState.error = "";
-    try {
-      const payload = await requestSettingsJson(
-        buildCuratorActionPath(normalizedAction, sessionId, normalizedAction === "run" ? scope : ""),
-        { method: "POST" },
-      );
-      const status = payload?.status || null;
-      if (isCurrentCuratorSessionId(sessionId)) {
-        curatorState.status = status;
-        curatorState.error = "";
-        scheduleCuratorPoll(status, sessionId);
-      }
-      return status;
-    } catch (error) {
-      if (isCurrentCuratorSessionId(sessionId)) {
-        curatorState.error = error?.message || copy.value.curator.actionFailed;
-      }
-      return null;
-    } finally {
-      if (curatorActionToken === actionToken) {
-        curatorActionToken = "";
-        curatorState.action = "";
-      }
     }
   }
 
@@ -2817,38 +2522,6 @@ export function useChatClient() {
     }
   }
 
-  async function loadBackgroundProcesses(options = {}) {
-    const sessionId = String(options?.sessionId || "").trim();
-    const quiet = Boolean(options?.quiet);
-    const limit = coerceNonNegativeInteger(options?.limit) || BACKGROUND_PROCESS_LIMIT;
-    if (state.backgroundProcesses.loading || clientDisposed) {
-      return [];
-    }
-
-    if (!quiet) {
-      state.backgroundProcesses.loading = true;
-      state.backgroundProcesses.error = "";
-    }
-    try {
-      const payload = await requestSettingsJson(buildBackgroundProcessesPath(sessionId, limit));
-      const processes = Array.isArray(payload?.processes)
-        ? payload.processes.map(normalizeBackgroundProcess).filter(Boolean)
-        : [];
-      state.backgroundProcesses.processes = processes;
-      state.backgroundProcesses.counts = payload?.counts && typeof payload.counts === "object" ? payload.counts : {};
-      state.backgroundProcesses.error = "";
-      state.backgroundProcesses.lastLoadedAt = Date.now();
-      return processes;
-    } catch (error) {
-      state.backgroundProcesses.error = error?.message || copy.value.sidebar.backgroundProcessesLoadFailed;
-      return [];
-    } finally {
-      if (!quiet) {
-        state.backgroundProcesses.loading = false;
-      }
-    }
-  }
-
   async function loadCurrentSessionRuns({ force = false } = {}) {
     const session = currentSession.value;
     if (!session?.sessionId || session.runsLoading || (session.runsLoaded && !force)) {
@@ -3097,9 +2770,6 @@ export function useChatClient() {
     if (sectionName === "log") {
       loadLogSettings();
       return;
-    }
-    if (sectionName === "curator") {
-      void refreshCuratorState();
     }
   }
 
@@ -3486,7 +3156,6 @@ export function useChatClient() {
       setNotice(copy.value.notices.connected, "success");
       void loadSessionHistory({ quiet: true });
       scheduleSessionHistoryRefresh();
-      void loadBackgroundProcesses({ quiet: true });
     });
 
     socket.addEventListener("message", (event) => {
@@ -3670,10 +3339,10 @@ export function useChatClient() {
 
     rememberDeletedSessions(targets);
     const targetExternalChatIds = new Set(targets.map((session) => session.externalChatId).filter(Boolean));
-    const targetSessionIds = new Set(targets.map((session) => getCuratorSessionId(session) || session.sessionId).filter(Boolean));
-    const activeSessionId = getCuratorSessionId(currentSession.value) || currentSession.value?.sessionId || "";
+    const targetSessionIds = new Set(targets.map((session) => getSessionOwnerId(session) || session.sessionId).filter(Boolean));
+    const activeSessionId = getSessionOwnerId(currentSession.value) || currentSession.value?.sessionId || "";
     const deletesActiveSession = targets.some((session) => {
-      const sessionId = getCuratorSessionId(session) || session.sessionId || "";
+      const sessionId = getSessionOwnerId(session) || session.sessionId || "";
       return session.externalChatId === state.activeExternalChatId || (activeSessionId && sessionId === activeSessionId);
     });
     removeSessionsFromState((candidate) => sessionMatchesDeleteSets(candidate, targetExternalChatIds, targetSessionIds));
@@ -3688,7 +3357,7 @@ export function useChatClient() {
     let failureCount = 0;
     let lastError = "";
     for (const session of targets) {
-      const sessionId = session.sessionId ? getCuratorSessionId(session) : "";
+      const sessionId = session.sessionId ? getSessionOwnerId(session) : "";
       if (!sessionId) {
         deletedSessions.push(session);
         deletedExternalChatIds.add(session.externalChatId);
@@ -4050,7 +3719,6 @@ export function useChatClient() {
     }
     runSummaryTimers.clear();
     runBackfillTimes.clear();
-    clearCuratorPollTimer();
     clearCodexAuthPollTimer();
     clearCopilotAuthPollTimer();
     clearGatewayReconnectTimer();
@@ -4102,10 +3770,6 @@ export function useChatClient() {
     currentRun,
     currentRunTimeline,
     currentRunSummary,
-    curatorState,
-    currentCuratorStatus,
-    currentSessionApiId,
-    activeBackgroundProcesses,
     settingsTitle,
     sessionMeta,
     runtimeHint,
@@ -4121,7 +3785,6 @@ export function useChatClient() {
     setActiveSession,
     setSessionChannelFilter,
     setShowHiddenSessions,
-    selectBackgroundProcess,
     selectRun,
     selectSettingsSection,
     openSettings,
@@ -4140,7 +3803,6 @@ export function useChatClient() {
     loadSearxngOptions,
     loadBrowserSettings,
     loadLogSettings,
-    loadBackgroundProcesses,
     loadMcpSettings,
     loadCronJobs,
     beginChannelConnect,
@@ -4198,9 +3860,6 @@ export function useChatClient() {
     cancelRun,
     revertRunFileChange,
     cleanupWorktreeSandbox,
-    loadCuratorStatus,
-    refreshCuratorState,
-    runCuratorAction,
     toggleSettingsConnection,
     submitMessage,
     resumeFollowUp,

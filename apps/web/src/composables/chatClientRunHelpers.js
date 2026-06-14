@@ -1,5 +1,4 @@
 import { normalizeTraceEventCounts } from "./runTraceNormalizers";
-import { channelFromSessionId, externalChatIdFromSessionId } from "./chatClientSessionIds";
 
 function coerceNonNegativeInteger(value) {
   const number = Number(value);
@@ -7,14 +6,6 @@ function coerceNonNegativeInteger(value) {
     return 0;
   }
   return Math.trunc(number);
-}
-
-function normalizeEventTimestamp(value) {
-  const numericValue = Number(value);
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return Date.now();
-  }
-  return numericValue > 1_000_000_000_000 ? numericValue : numericValue * 1000;
 }
 
 export function createRunViewState({ runId, sessionId, status = "running", createdAt, updatedAt = createdAt, finishedAt = null }) {
@@ -40,39 +31,6 @@ export function createRunViewState({ runId, sessionId, status = "running", creat
     traceLoaded: false,
     traceLoading: false,
     traceError: "",
-  };
-}
-
-export function normalizeBackgroundProcess(payload) {
-  const processSessionId = String(payload?.process_session_id || payload?.processSessionId || "").trim();
-  if (!processSessionId) {
-    return null;
-  }
-  const ownerSessionId = String(payload?.owner_session_id || payload?.ownerSessionId || "").trim();
-  const ownerChannel = String(payload?.owner_channel || payload?.ownerChannel || channelFromSessionId(ownerSessionId) || "").trim();
-  const ownerExternalChatId = String(payload?.owner_external_chat_id || payload?.ownerExternalChatId || "").trim()
-    || externalChatIdFromSessionId(ownerSessionId);
-  const finishedAt = payload?.finished_at ?? payload?.finishedAt;
-  const exitCode = payload?.exit_code ?? payload?.exitCode;
-  return {
-    processSessionId,
-    ownerSessionId,
-    ownerRunId: String(payload?.owner_run_id || payload?.ownerRunId || "").trim(),
-    ownerChannel,
-    ownerExternalChatId,
-    pid: payload?.pid ?? null,
-    command: String(payload?.command || "").trim(),
-    cwd: String(payload?.cwd || "").trim(),
-    state: String(payload?.state || "unknown").trim() || "unknown",
-    terminationReason: String(payload?.termination_reason || payload?.terminationReason || "").trim(),
-    exitCode: Number.isFinite(Number(exitCode)) ? Number(exitCode) : null,
-    notifyMode: String(payload?.notify_mode || payload?.notifyMode || "").trim(),
-    outputTail: String(payload?.output_tail || payload?.outputTail || "").trim(),
-    outputPath: String(payload?.output_path || payload?.outputPath || "").trim(),
-    metadata: payload?.metadata && typeof payload.metadata === "object" ? payload.metadata : {},
-    startedAt: normalizeEventTimestamp(payload?.started_at ?? payload?.startedAt),
-    updatedAt: normalizeEventTimestamp(payload?.updated_at ?? payload?.updatedAt),
-    finishedAt: finishedAt ? normalizeEventTimestamp(finishedAt) : null,
   };
 }
 

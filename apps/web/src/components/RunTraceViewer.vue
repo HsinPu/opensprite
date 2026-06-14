@@ -444,8 +444,8 @@ const artifactsExpanded = ref(false);
 const partsExpanded = ref(false);
 const debugExpanded = ref(false);
 
-const events = computed(() => props.run?.rawEvents || props.run?.events || []);
-const artifacts = computed(() => props.run?.artifacts || []);
+const events = computed(() => (props.run?.rawEvents || props.run?.events || []).filter((event) => !isCuratorTraceEvent(event)));
+const artifacts = computed(() => (props.run?.artifacts || []).filter((artifact) => !isCuratorTraceArtifact(artifact)));
 const parts = computed(() => props.run?.parts || []);
 const visibleParts = computed(() => parts.value.slice(-8));
 const codeNavigationResults = computed(() => parts.value.map(normalizeCodeNavigationResult).filter(Boolean));
@@ -495,6 +495,16 @@ const retentionCounts = computed(() => {
 });
 
 const showRetentionSummary = computed(() => retentionCounts.value.compacted > 0 || retentionCounts.value.textTotal > retentionCounts.value.textReturned);
+
+function isCuratorTraceEvent(event) {
+  const eventType = String(event?.eventType || event?.event_type || "").trim();
+  return eventType.startsWith("curator.");
+}
+
+function isCuratorTraceArtifact(artifact) {
+  const artifactType = String(artifact?.artifactType || artifact?.artifact_type || "").trim();
+  return artifactType === "curator" || artifactType === "curator_job";
+}
 
 const taskSummaryRows = computed(() => {
   const labels = props.copy.trace.taskLabels || {};
@@ -1555,7 +1565,7 @@ function buildDebugBundle() {
     diff_summary: props.run.diffSummary || null,
     worktree_sandbox: props.run.worktreeSandbox || null,
     file_changes: props.run.fileChanges || [],
-    artifacts: artifacts.value,
+    artifacts: props.run.artifacts || [],
     parts: parts.value,
     events: (props.run.rawEvents || []).length ? props.run.rawEvents : events.value,
     localized_events: props.run.events || [],
